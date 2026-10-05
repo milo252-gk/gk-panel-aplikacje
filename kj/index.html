@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#4E4E4E">
+<!-- Motyw przed arkuszami — inaczej wybrany ciemny motyw mignie bielą przy każdym otwarciu. -->
+<script src="../wspolne/motyw.js"></script>
+<title>GK Kontrola Jakości</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="ikona.svg" type="image/svg+xml">
+<!-- iPhone: ikona PNG (SVG nie bierze), pełny ekran z ekranu początkowego, krótka nazwa pod ikoną.
+     Pasek stanu czarny, nie przezroczysty: przy „black-translucent” strona wchodzi pod wycięcie
+     ekranu, a pasek połączenia, okna i skaner nie mają tam odstępu. -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KJ">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="../wspolne/hala.css">
+<link rel="stylesheet" href="kj.css">
+</head>
+<body>
+<button id="pasek" class="hala-polaczenie ok" type="button" aria-live="polite"></button>
+
+<main id="logowanie" class="hala-logowanie" hidden>
+  <div class="hala-karta-logowania">
+    <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
+    <h1>Kontrola Jakości</h1>
+    <p class="pod">Zaloguj się imieniem i nazwiskiem (albo kartą) i&nbsp;PIN-em</p>
+    <form id="formularz-logowania" autocomplete="off">
+      <label>Imię i nazwisko (albo karta)
+        <span class="rzad">
+          <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Jan Kowalski">
+          <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator">📷</button>
+        </span>
+      </label>
+      <label>PIN
+        <input id="pin" name="pin" type="password" inputmode="numeric">
+      </label>
+      <button class="glowny" type="submit">Zaloguj</button>
+    </form>
+    <p id="blad-logowania" class="blad" role="alert" hidden></p>
+  </div>
+</main>
+
+<div id="aplikacja" class="aplikacja hala-uklad" hidden>
+  <header class="naglowek">
+    <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="logo">
+    <div class="zmiana" id="zmiana"></div>
+    <div class="kto"><span id="kto" class="tylko-telefon"></span><button id="wyjdz" class="maly tylko-telefon" type="button">Wyloguj</button></div>
+  </header>
+
+  <main id="ekran" class="ekran" tabindex="-1"></main>
+
+  <!-- Menu jak w GK Trasy/GK Flota: po lewej na komputerze i tablecie (hala.css → .hala-menu), dolny pasek na telefonie. -->
+  <nav class="nawigacja hala-menu" aria-label="Menu">
+    <div class="hala-menu-naglowek">
+      <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
+      <div class="hala-menu-nazwa" id="menu-kto"></div>
+      <div class="hala-menu-kto">Kontrola Jakości</div>
+    </div>
+    <a href="#plan" data-ekran="plan"><span class="ikona" aria-hidden="true">🗓️</span>Plan</a>
+    <a href="#proba" data-ekran="proba"><span class="ikona" aria-hidden="true">🧪</span>Próba</a>
+    <a href="#alerty" data-ekran="alerty"><span class="ikona" aria-hidden="true">🚨</span>Alerty</a>
+    <a href="#reklamacje" data-ekran="reklamacje"><span class="ikona" aria-hidden="true">📨</span>Reklamacje</a>
+    <a href="#zlecenia" data-ekran="zlecenia"><span class="ikona" aria-hidden="true">📋</span>Zlecenia<b id="licznik-zlecen" class="plakietka" hidden></b></a>
+    <a href="#wiecej" data-ekran="wiecej"><span class="ikona" aria-hidden="true">⚙️</span>Więcej</a>
+    <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj">Wyloguj</button></div>
+  </nav>
+</div>
+
+<dialog id="okno" class="okno"></dialog>
+<div id="komunikaty" class="komunikaty" popover="manual" role="status" aria-live="polite"><div id="komunikat" class="komunikat" hidden></div></div>
+<input id="plik-zdjecia" type="file" accept="image/*" capture="environment" hidden>
+
+<script src="../wspolne/hala.js"></script>
+<script src="../wspolne/aktualizacja.js"></script>
+<script src="../wspolne/konto.js"></script>
+<script src="../wspolne/eksport.js"></script>
+<script src="../wspolne/zlecenia.js"></script>
+<script src="../wspolne/skaner.js"></script>
+<script src="widok.js"></script>
+<script src="kj.js"></script>
+<script src="alerty.js"></script>
+<script src="proba.js"></script>
+<script src="reklamacje.js"></script>
+<script src="analiza.js"></script>
+<script src="katalog.js"></script>
+</body>
+</html>

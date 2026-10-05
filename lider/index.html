@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<!-- Bez maximum-scale: lider w rękawicach i w słabym świetle musi móc powiększyć ekran palcami. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#4E4E4E">
+<!-- Motyw przed arkuszami — inaczej wybrany ciemny motyw mignie bielą przy każdym otwarciu. -->
+<script src="../wspolne/motyw.js"></script>
+<title>GK Lider</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="ikona.svg" type="image/svg+xml">
+<!-- iPhone: ikona PNG (SVG nie bierze), pełny ekran z ekranu początkowego, krótka nazwa pod ikoną.
+     Pasek stanu czarny, nie przezroczysty: przy „black-translucent” strona wchodzi pod wycięcie
+     ekranu, a pasek połączenia, okna i skaner nie mają tam odstępu. -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lider">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="../wspolne/hala.css">
+<link rel="stylesheet" href="lider.css">
+</head>
+<body>
+<button id="pasek" class="hala-polaczenie ok" type="button" aria-live="polite"></button>
+
+<!-- ====================================================== LOGOWANIE -->
+<!-- Standard GK (D22) i identyfikator + PIN (D24). Czytnik kart „pisze” w pole identyfikatora i kończy
+     Enterem — Enter przenosi wtedy do PIN-u. PIN-pad jest dla rękawic; pisze w pole PIN. -->
+<main id="logowanie" class="hala-logowanie" hidden>
+  <div class="hala-karta-logowania">
+    <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
+    <h1>Lider produkcji</h1>
+    <p class="pod">Zaloguj się imieniem i nazwiskiem (albo kartą) i&nbsp;PIN-em</p>
+    <form id="formularz-logowania" autocomplete="off">
+      <label>Imię i nazwisko (albo karta)
+        <span class="rzad">
+          <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Anna Nowak">
+          <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator">📷</button>
+        </span>
+      </label>
+      <label>PIN
+        <input id="pin" name="pin" type="password" inputmode="numeric">
+      </label>
+      <div class="pinpad" aria-label="Klawiatura PIN">
+        <button type="button" data-cyfra="1">1</button><button type="button" data-cyfra="2">2</button><button type="button" data-cyfra="3">3</button>
+        <button type="button" data-cyfra="4">4</button><button type="button" data-cyfra="5">5</button><button type="button" data-cyfra="6">6</button>
+        <button type="button" data-cyfra="7">7</button><button type="button" data-cyfra="8">8</button><button type="button" data-cyfra="9">9</button>
+        <button type="button" data-cyfra="C" aria-label="Usuń cyfrę">⌫</button><button type="button" data-cyfra="0">0</button>
+        <button class="glowny" type="submit">Zaloguj</button>
+      </div>
+    </form>
+    <p id="blad-logowania" class="blad" role="alert" hidden></p>
+    <p id="czeka-na" class="pod czeka-na" hidden></p>
+  </div>
+</main>
+
+<!-- ====================================================== APLIKACJA -->
+<div id="aplikacja" class="aplikacja hala-uklad" hidden>
+  <header class="naglowek">
+    <button id="wybor-linii" class="linia" type="button" aria-label="Zmień linię"></button>
+    <div id="opis-zmiany" class="opis-zmiany"></div>
+    <button id="menu" class="kto" type="button" aria-label="Menu"></button>
+  </header>
+
+  <div id="wezwania" class="wezwania" aria-live="assertive"></div>
+
+  <main class="ekrany">
+    <section id="ekran-zmiana" class="ekran" aria-label="Zmiana"></section>
+    <section id="ekran-awarie" class="ekran" aria-label="Awarie" hidden></section>
+    <section id="ekran-jakosc" class="ekran" aria-label="Jakość" hidden></section>
+    <section id="ekran-koniec" class="ekran" aria-label="Koniec zmiany" hidden></section>
+    <section id="ekran-zlecenia" class="ekran" aria-label="Zlecenia od kierownika" hidden></section>
+  </main>
+
+  <!-- Menu jak w GK Trasy/GK Flota: po lewej na komputerze i tablecie (hala.css → .hala-menu), dolny pasek na telefonie. -->
+  <nav class="dolny hala-menu" aria-label="Ekrany">
+    <div class="hala-menu-naglowek">
+      <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
+      <div class="hala-menu-nazwa" id="menu-kto"></div>
+      <div class="hala-menu-kto">Aplikacja Lidera</div>
+    </div>
+    <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona">✅</span>Zmiana</button>
+    <button type="button" data-ekran="jakosc"><span class="ikona">🔍</span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>
+    <button type="button" id="przycisk-awarii" class="awaria"><span class="ikona">⚠️</span>AWARIA</button>
+    <button type="button" data-ekran="awarie"><span class="ikona">🔧</span>Awarie<span class="plakietka" data-plakietka="awarie" hidden></span></button>
+    <button type="button" data-ekran="zlecenia"><span class="ikona">📋</span>Zlecenia<span class="plakietka" data-plakietka="zlecenia" hidden></span></button>
+    <button type="button" data-ekran="koniec"><span class="ikona">🏁</span>Koniec</button>
+    <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj">Wyloguj</button></div>
+  </nav>
+</div>
+
+<!-- Ekran blokujący Quality Alertu — nad wszystkim oprócz okna awarii i skanera. -->
+<div id="blokada" class="blokada" role="alertdialog" aria-modal="true" aria-labelledby="blokada-tytul" hidden></div>
+
+<!-- Jedno okno na formularze (próba, obsada, BHP, awaria…). -->
+<div id="okno" class="okno" role="dialog" aria-modal="true" aria-labelledby="okno-tytul" hidden>
+  <div class="okno-karta">
+    <header><h2 id="okno-tytul"></h2><button id="okno-zamknij" type="button" class="zamknij" aria-label="Zamknij">✕</button></header>
+    <div id="okno-tresc" class="okno-tresc"></div>
+  </div>
+</div>
+
+<div id="komunikaty" class="komunikaty" role="status" aria-live="polite"></div>
+
+<script src="../wspolne/hala.js"></script>
+<script src="../wspolne/aktualizacja.js"></script>
+<script src="../wspolne/konto.js"></script>
+<script src="../wspolne/zlecenia.js"></script>
+<script src="../wspolne/skaner.js"></script>
+<script src="widok.js"></script>
+<script src="app.js"></script>
+<script src="awarie.js"></script>
+<script src="jakosc.js"></script>
+<script src="zmiana.js"></script>
+<script src="formularze.js"></script>
+</body>
+</html>

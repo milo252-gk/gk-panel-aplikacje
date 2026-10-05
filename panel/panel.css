@@ -1,0 +1,402 @@
+/* GK Panel Kierownika. Wygląd w standardzie GK (jak GK Flota, GK Trasy, Czytnik i KJ): wyłącznie
+   tokeny z hala.css, nazwami GK Flota (--karta, --czerwony, --marka-tlo…), zero kolorów na sztywno —
+   inaczej motyw ciemny rozjeżdża się w miejscu, o którym nikt nie pamięta. Zielony na kafelku ma być
+   tym samym zielonym, który lider widzi u siebie w telefonie.
+
+   Dwa układy:
+   - szeroki ekran (monitor w biurze, 1920×1080, tablet poziomo): wszystko na jednym ekranie BEZ
+     przewijania strony; długie listy przewijają się w sekcji;
+   - wąski (telefon, tablet pionowo): jedna kolumna, zwykłe przewijanie.                          */
+
+.slaby { color: var(--tekst-slaby); }
+.tekst-alarm { color: var(--czerwony); font-weight: 700; }
+
+/* Logowanie: wspólna karta GK (.hala-logowanie w hala.css). */
+
+/* ---------------------------------------------------------------- nagłówek */
+
+.aplikacja { display: flex; flex-direction: column; min-height: 100vh; }
+/* Pasek górny (.naglowek), menu po lewej i dolny pasek: wygląd w hala.css (jak GK Trasy). Tu tylko treść paska Panelu. */
+.naglowek .zmiana .slaby { color: var(--na-marce); opacity: .75; }
+.naglowek .zegar { margin-left: auto; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.naglowek .kto { display: flex; align-items: center; gap: 4px; color: var(--na-marce); }
+/* Dźwięk włączony, ale przeglądarka czeka na kliknięcie — przycisk ma się rzucać w oczy. */
+.naglowek button.maly.czeka { box-shadow: inset 0 0 0 2px var(--pomarancz); }
+@media (max-width: 820px) {
+  .aplikacja { padding-bottom: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); }
+  .zakladki > button.menu-akcja { color: var(--czerwony); }
+}
+@media (min-width: 821px) {
+  .zakladki > button.menu-akcja { margin-top: 10px; color: var(--na-marce); }
+  .zakladki > button.menu-akcja .ikona { color: var(--pomarancz); }
+}
+
+.hala-polaczenie { font-size: .95em; padding: 6px 10px; font-weight: 600; }
+.hala-polaczenie.odrzucone { cursor: pointer; text-decoration: underline; }   /* dotknięcie otwiera konto z listą odrzuconych */
+
+/* ---------------------------------------------------------------- układ „Na żywo” */
+
+.na-zywo {
+  display: grid; gap: 12px; padding: 12px;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-areas: "liczby liczby" "obchody obchody" "awarie jakosc";
+  grid-template-rows: auto auto minmax(0, 1fr);
+  flex: 1;
+}
+/* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. */
+.kafelki-liczb { grid-area: liczby; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.kafelki-liczb > button { cursor: default; }
+.kafelki-liczb > button:is([data-kafel="zlecenia"], [data-kafel="po-terminie"]) { cursor: pointer; }
+.kafelki-liczb > button:hover { filter: none; }
+.obchody { grid-area: obchody; }
+.awarie { grid-area: awarie; }
+.jakosc { grid-area: jakosc; }
+section { background: var(--karta); box-shadow: var(--obrys-gorny), var(--cien); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+section h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--tekst); }
+section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform: none; letter-spacing: 0; }
+.lista { display: flex; flex-direction: column; gap: 8px; overflow: auto; min-height: 0; position: relative; }
+/* „▼ jeszcze N” pod listą, która się nie mieści — monitor nie ma myszy, żeby to zauważyć przewijaniem. */
+.jeszcze { margin: 6px 0 0; text-align: center; font-size: .85em; font-weight: 700; color: var(--tekst-slaby); }
+/* Nowe zatrzymanie / nowy Quality Alert miga przez minutę (panel.js → MIGANIE_MS). */
+.nowy { animation: mignij 1s ease-in-out infinite; }
+@keyframes mignij { 50% { box-shadow: 0 0 0 4px var(--czerwony); } }
+@media (prefers-reduced-motion: reduce) { .nowy { animation: none; box-shadow: 0 0 0 4px var(--czerwony); } }
+.pusto { margin: 16px 0; text-align: center; color: var(--tekst-slaby); font-size: 1.1em; }
+.pusto.ok { color: var(--zielony); font-weight: 600; }
+.wczesniej { margin: 8px 0 0; font-size: .85em; color: var(--tekst-slaby); }
+
+/* Na szerokim ekranie całość mieści się w oknie (monitor bez myszy nie przewinie strony). */
+@media (min-width: 1100px) and (min-height: 600px) {
+  .aplikacja { height: 100vh; min-height: 0; overflow: hidden; }
+  .na-zywo, .raporty, .zlecenia-widok { overflow: hidden; min-height: 0; }
+}
+@media (max-width: 900px) {
+  .na-zywo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "awarie" "jakosc"; grid-template-rows: auto; }
+  .kafelki-liczb { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+}
+/* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
+@media (max-width: 600px) {
+  .naglowek .kto span { display: none; }
+  .naglowek .zegar { font-size: 18px; }
+  .na-zywo { padding: 8px; gap: 8px; }
+  .kafelki-liczb { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .kafelki-liczb b { font-size: 22px; }
+  .kafelki-liczb .etykieta { font-size: 10px; }
+}
+
+/* ---------------------------------------------------------------- kafelki obchodów */
+
+.kafelki { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.kafelek {
+  border: 1px solid var(--ramka); border-top: 8px solid var(--kolor); border-radius: var(--promien);
+  padding: 8px 12px 10px; background: var(--karta);
+}
+.kafelek.kolor-czerwony { background: var(--czerwony-tlo); }
+.kafelek header { display: flex; align-items: center; gap: 8px; }
+.kafelek h3 { margin: 0; font-size: 1.1em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kafelek .stan-zmiany { font-size: .85em; color: var(--tekst-slaby); margin: 2px 0 6px; }
+.kafelek .stan-zmiany.nieotwarta { color: var(--czerwony); font-weight: 600; }
+.postep { height: 10px; border-radius: 5px; background: var(--ramka); overflow: hidden; }
+.postep span { display: block; height: 100%; background: var(--kolor); transition: width .4s; }
+.kafelek .liczby { margin-top: 6px; font-size: .9em; display: flex; gap: 8px; align-items: baseline; }
+.kafelek .liczby b { font-size: 1.3em; font-variant-numeric: tabular-nums; }
+.kafelek .liczby span { color: var(--tekst-slaby); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opoznione { margin: 6px 0 0; padding: 0; list-style: none; font-size: .85em; color: var(--czerwony); font-weight: 600; }
+
+/* ---------------------------------------------------------------- awarie */
+
+.awaria {
+  display: grid; grid-template-columns: 7.5em minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  border: 1px solid var(--ramka); border-left: 8px solid var(--zolty); border-radius: var(--promien); padding: 8px 12px;
+  background: var(--karta);
+}
+.awaria.zatrzymanie { border-left-color: var(--czerwony); }
+.licznik-przestoju { font-size: 1.5em; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.awaria.zatrzymanie .licznik-przestoju { color: var(--czerwony); }
+.awaria .maszyna { font-size: 1.05em; }
+.awaria .szczegoly { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: .9em; }
+.awaria .numer { text-align: right; font-size: .8em; }
+.tekst-opisu { font-size: .85em; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.awaria.alarm-potwierdzenia { outline: 3px solid var(--czerwony); outline-offset: -3px; animation: pulsuj 2s ease-in-out infinite; }
+@keyframes pulsuj { 50% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .awaria.alarm-potwierdzenia { animation: none; } }
+/* Telefon: trzy kolumny zostawiały opisowi ~60 px (nazwa maszyny litera pod literą) — numer schodzi pod opis. */
+@media (max-width: 600px) {
+  .awaria { grid-template-columns: 5.5em minmax(0, 1fr); gap: 4px 10px; padding: 8px 10px; }
+  .awaria .licznik-przestoju { font-size: 1.25em; }
+  .awaria .numer { grid-column: 2; text-align: left; }
+  .awaria .numer br { display: none; }
+}
+
+/* ---------------------------------------------------------------- jakość */
+
+.incydent { border: 1px solid var(--ramka); border-left: 8px solid var(--zolty); border-radius: var(--promien); padding: 8px 12px; }
+.incydent.alert { border-left-color: var(--czerwony); }
+.incydent .tytul { margin-top: 4px; }
+.incydent .potwierdzenia { margin-top: 4px; font-size: .9em; color: var(--czerwony); font-weight: 600; }
+.incydent .potwierdzenia.komplet { color: var(--zielony); }
+
+/* ---------------------------------------------------------------- raporty */
+
+.raporty, .zlecenia-widok { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.raporty section, .zlecenia-widok section { flex: 1; }
+
+/* ---------------------------------------------------------------- zlecenia dla działów */
+
+.chipy { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip { min-height: 40px; border-radius: 999px; padding: 0 16px; }
+.chip[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+.zlecenie {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center;
+  border: 1px solid var(--ramka); border-left: 6px solid var(--niebieski); border-radius: var(--promien); padding: 8px 12px;
+}
+.zlecenie.pilne { border-left-color: var(--czerwony); }
+.zlecenie.po-terminie { background: var(--czerwony-tlo); }
+.zlecenie .szczegoly { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 4px; font-size: .9em; }
+.zlecenie .odpowiedz { margin-top: 4px; font-size: .9em; font-weight: 600; }
+.zlecenie .numer { text-align: right; font-size: .8em; }
+.zlecenie .akcje { display: flex; flex-direction: column; gap: 6px; }
+button.maly { min-height: 36px; padding: 0 12px; }
+@media (max-width: 600px) {
+  .zlecenie { grid-template-columns: minmax(0, 1fr); }
+  .zlecenie .numer { text-align: left; }
+  .zlecenie .akcje { flex-direction: row; }
+}
+
+/* ---------------------------------------------------------------- okna (jak okna GK Flota) */
+
+dialog.okno { width: min(560px, calc(100vw - 24px)); box-sizing: border-box; border: 0; border-radius: 16px; padding: 0;
+              background: var(--karta); color: var(--tekst); box-shadow: var(--cien-mocny); }
+dialog.okno::backdrop { background: var(--zaslona); }
+dialog.okno form { display: grid; gap: 12px; padding: 18px 20px 20px; }
+dialog.okno h2 { margin: 0 0 4px; font-size: 20px; }
+dialog.okno label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+dialog.okno label > :is(input, select, textarea) { font-size: 16px; font-weight: 400; color: var(--tekst); }
+dialog.okno label.zaznacz { display: flex; align-items: center; gap: 10px; font-size: 16px; color: var(--tekst); }
+dialog.okno label.zaznacz input { width: 24px; min-height: 24px; }
+dialog.okno .dwie { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+dialog.okno .przyciski { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+dialog.okno .blad { color: var(--czerwony); font-weight: 600; margin: 0; }
+@media (max-width: 600px) { dialog.okno .dwie { grid-template-columns: 1fr; } }
+.raport { border: 1px solid var(--ramka); border-radius: var(--promien); }
+.raport summary {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 10px 12px;
+  min-height: var(--dotyk); box-sizing: border-box; cursor: pointer;
+}
+.raport .kiedy { font-variant-numeric: tabular-nums; min-width: 9em; }
+.raport .skrot { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+.raport dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; padding: 0 12px 12px; font-size: .95em; }
+.raport dt { color: var(--tekst-slaby); }
+.raport dd { margin: 0; }
+
+/* ---------------------------------------------------------------- tryb ekranu w biurze */
+
+/* Konto „ekran”: czytane z kilku metrów — większe litery i liczniki. */
+body.tryb-ekran { font-size: 19px; }
+/* Monitor czyta się z drugiego końca biura — stałe rozmiary w px z hala.css (jak w GK Trasy) są tu za drobne. */
+body.tryb-ekran .znacznik { font-size: 16px; }
+body.tryb-ekran .hala-kafelki .etykieta { font-size: 14px; }
+body.tryb-ekran .hala-kafelki b { font-size: 40px; }
+body.tryb-ekran section h2 { font-size: 24px; }
+body.tryb-ekran .hala-uklad > .naglowek .zmiana { font-size: 22px; }
+body.tryb-ekran .hala-uklad > .naglowek .zmiana span { font-size: 18px; }
+body.tryb-ekran .licznik-przestoju { font-size: 1.8em; }
+body.tryb-ekran .zakladki button { min-height: 44px; }
+
+/* ---------------------------------------------------------------- administracja (tylko admin) */
+
+.administracja-widok { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.administracja-widok section { flex: 1; overflow: auto; }
+.admin-pasek { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.admin-pasek input[type="search"] { flex: 1 1 220px; width: auto; }
+.admin-pasek .zaznacz, dialog.okno .zaznaczenia .zaznacz { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.admin-pasek .zaznacz input, dialog.okno .zaznaczenia input { width: 22px; min-height: 22px; }
+.admin-osoba { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
+               border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 12px; }
+.admin-osoba.wylaczona { opacity: .6; }
+.admin-osoba.zablokowana { border-left: 6px solid var(--czerwony); }
+.admin-osoba .szczegoly { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: .9em; }
+.admin-osoba .akcje { display: flex; gap: 6px; }
+.admin-linia { margin-bottom: 12px; }
+/* Połączenia GK (D32): klucz programu pokazany raz — pole do skopiowania. Role osoby w grupach (hala, GK Trasy, GK Flota). */
+.nowy-klucz { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; margin-top: 8px; }
+.nowy-klucz b { grid-column: 1 / -1; }
+.nowy-klucz input { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.grupy-rol { display: grid; gap: 10px; }
+#konto-pin:empty { display: none; }
+.admin-linia h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 1em; }
+.admin-maszyna { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--ramka); }
+.admin-maszyna button + button { margin-left: 6px; }
+/* Alarm sieci zakładu (D35) — jak zablokowana osoba: czerwony pasek z lewej, żeby nie zginął wśród kodów QR. */
+.admin-linia.alarm-sieci { border-left: 6px solid var(--czerwony); padding-left: 10px; }
+.admin-alarmy { background: var(--czerwony-tlo); border-left: 6px solid var(--czerwony); border-radius: var(--promien);
+  padding: 10px 14px; margin: 0 0 12px; color: var(--tekst); }
+.admin-alarmy p { margin: 4px 0; }
+.admin-alarmy b { color: var(--czerwony); }
+.admin-ustawienia { display: grid; gap: 14px; max-width: 640px; }
+.admin-ustawienia label { display: grid; gap: 4px; font-weight: 700; font-size: 14px; }
+.admin-ustawienia label input { font-weight: 400; }
+.admin-ustawienia .slaby { font-weight: 400; }
+.admin-ustawienia .ok { color: var(--zielony); font-weight: 700; margin: 0; }
+.admin-ustawienia .blad { color: var(--czerwony); font-weight: 700; margin: 0; }
+.admin-ustawienia .uwaga { color: var(--zolty); font-weight: 700; margin: 0; }
+dialog.okno fieldset { border: 1px solid var(--ramka); border-radius: 10px; padding: 8px 12px; margin: 0; }
+dialog.okno legend { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); padding: 0 4px; }
+dialog.okno .zaznaczenia { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 12px; }
+dialog.okno .zaznaczenia .zaznacz { font-size: 15px; color: var(--tekst); }
+
+/* ---------------------------------------------------------------- szablony checklist */
+
+.opis-widoku { margin: 0 0 10px; font-size: .9em; }
+.szablon { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
+           border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 12px; }
+.szablon .akcje { display: flex; gap: 6px; flex-wrap: wrap; }
+dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
+.pozycje-szablonu { display: grid; gap: 6px; margin-bottom: 8px; }
+.pozycja-szablonu { display: grid; grid-template-columns: 70px 52px minmax(0, 1fr) 190px 110px auto; gap: 6px; align-items: center; }
+/* Krój pola z hala.css (15 px, na telefonie 16 px — inaczej iPhone powiększa stronę przy wpisywaniu). */
+.pozycja-szablonu input, .pozycja-szablonu select { min-height: 44px; font-weight: 400; color: var(--tekst); }
+.pozycja-szablonu .godzina { font-variant-numeric: tabular-nums; font-size: .9em; text-align: center; }
+.pozycja-szablonu .cel[hidden] { display: block !important; visibility: hidden; }
+.pozycja-szablonu .przyciski-wiersza { display: flex; gap: 4px; }
+.pozycja-szablonu .przyciski-wiersza button { min-width: 36px; padding: 0 8px; }
+@media (max-width: 700px) {
+  .pozycja-szablonu { grid-template-columns: 70px 52px minmax(0, 1fr); border-bottom: 1px solid var(--ramka); padding-bottom: 6px; }
+  .pozycja-szablonu .typ, .pozycja-szablonu .cel { grid-column: 1 / -1; }
+  .pozycja-szablonu .cel[hidden] { display: none !important; }
+  .pozycja-szablonu .przyciski-wiersza { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+/* Telefon: wiersze z przyciskami (szablon, osoba) w jednej kolumnie — przyciski pod opisem, a nie obok
+   (inaczej opis dostawał kilka liter szerokości). */
+@media (max-width: 600px) {
+  .szablon, .admin-osoba { grid-template-columns: minmax(0, 1fr); }
+  .szablon .akcje, .admin-osoba .akcje { justify-content: flex-start; }
+  section h2 { flex-wrap: wrap; }
+}
+
+/* ---------------------------------------------------------------- stanowiska, zmiany, etykiety QR */
+
+.admin-stanowisko { font-size: .95em; }
+.admin-ustawienia h3 { margin: 18px 0 0; }
+.admin-ustawienia select { font-weight: 400; }
+/* Dostęp z telefonów (D33): kody QR czterech aplikacji — duże, żeby telefon złapał je z monitora. */
+.dostep-adres { overflow-wrap: anywhere; margin: 4px 0; }
+.dostep-aplikacje { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 10px 0; }
+.dostep-qr { margin: 0; padding: 10px; border: 1px solid var(--ramka); border-radius: 12px; display: grid; gap: 6px; justify-items: center;
+             text-align: center; background: var(--karta); }
+.dostep-kod { width: 180px; height: 180px; display: grid; place-items: center; font-size: 13px; color: var(--tekst-slaby); }
+.dostep-kod svg { width: 100%; height: 100%; display: block; }
+.dostep-qr figcaption { display: grid; gap: 2px; font-size: 13px; overflow-wrap: anywhere; }
+.wiersz-zmiany { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px 90px auto; gap: 6px; margin-bottom: 6px; }
+.wiersz-zmiany input { font-weight: 400; }
+#formularz-etykiet .przyciski { align-items: center; }
+#formularz-etykiet .przyciski .slaby { margin-right: auto; }
+
+/* Arkusz etykiet: na ekranie ukryty, w druku jedyny widoczny. Stałe barwy marki (strefa A w hala.css) —
+   naklejka ma być czarno-biała na białym także wtedy, gdy Panel jest w motywie ciemnym. */
+.etykiety-druk { display: none; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { background: var(--logowanie-karta); }
+  body > *:not(.etykiety-druk) { display: none !important; }
+  .etykiety-druk { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; color: var(--grafit-ciemny); }
+  .etykieta { display: flex; gap: 3mm; align-items: center; padding: 3mm; border: .3mm dashed var(--grafit-jasny);
+              background: var(--logowanie-karta); break-inside: avoid; page-break-inside: avoid; }
+  .etykieta-qr svg { display: block; width: 26mm; height: 26mm; }
+  .etykieta-opis { min-width: 0; font-size: 8pt; line-height: 1.25; }
+  .etykieta-kod { font-size: 14pt; font-weight: 800; }
+  .etykieta-nazwa { font-weight: 700; }
+  .etykieta-tekst { font-family: monospace; font-size: 7pt; }
+}
+
+/* Pola wyboru (role, linie, zmiany, etykiety) — wszędzie w Panelu, nie tylko w oknach: zwykły kwadracik
+   z podpisem obok, a nie pole na całą szerokość (reguła input z hala.css). */
+.zaznaczenia { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 12px; }
+label.zaznacz, .admin-ustawienia label.zaznacz { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; color: var(--tekst); }
+label.zaznacz input[type="checkbox"] { width: 22px; min-height: 22px; height: 22px; flex: 0 0 auto; margin: 0; }
+fieldset { border: 1px solid var(--ramka); border-radius: 10px; padding: 8px 12px; margin: 0; }
+legend { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); padding: 0 4px; }
+
+.zlecenie .zdjecia { display: flex; gap: 6px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
+.zlecenie .zdjecia > .slaby { font-size: .85em; }
+.zlecenie .zdjecia img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); display: block; }
+/* Miniatura to przycisk — dotknięcie pokazuje zdjęcie w dużym oknie (kierownik ocenia wykonanie). */
+.zlecenie .zdjecia button.miniatura { padding: 0; min-height: 0; border: 0; background: none; border-radius: 8px; cursor: zoom-in; }
+
+/* ---------------------------------------------------------------- zlecenia stałe i egzekwowanie (D31) */
+
+.zlecenia-czesc { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.chip.spoznione:not([aria-pressed="true"]) { color: var(--czerwony); border-color: var(--czerwony); font-weight: 700; }
+.zlecenie .akcje:empty { display: none; }
+.staly { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
+         border: 1px solid var(--ramka); border-left: 6px solid var(--niebieski); border-radius: var(--promien); padding: 8px 12px; }
+.staly.wstrzymany { border-left-color: var(--szary); opacity: .75; }
+.staly .szczegoly { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: .9em; }
+.staly .akcje { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 380px; }
+.staly .nastepne { font-weight: 600; }
+@media (max-width: 600px) {
+  .staly { grid-template-columns: minmax(0, 1fr); }
+  .staly .akcje { justify-content: flex-start; max-width: none; }
+}
+dialog.okno.okno-zdjecia { width: min(1000px, calc(100vw - 24px)); }
+dialog.okno.okno-zdjecia img { display: block; width: 100%; max-height: calc(100vh - 160px); object-fit: contain; background: var(--tlo); border-radius: 10px; }
+dialog.okno.okno-zdjecia .przyciski { align-items: center; }
+dialog.okno.okno-zdjecia .przyciski .slaby { margin-right: auto; }
+/* Okno zlecenia stałego jest długie — na niskim ekranie przewija się samo okno, a nie strona pod nim. */
+dialog.okno { max-height: calc(100vh - 24px); overflow: auto; }
+
+/* Monitor w biurze (konto ekranu): menu po lewej tylko z ikonami — miejsce na dane, a nie na napisy,
+   których i tak nikt z daleka nie klika. Podpis zostaje w title/aria (panel.js). */
+@media (min-width: 821px) {
+  body.tryb-ekran { --menu-szer: 72px; }
+  body.tryb-ekran .hala-menu-naglowek { display: none; }
+  /* W wąskim menu monitora nie ma miejsca na „Wyloguj” — jest w oknie konta (👤 w pasku górnym). */
+  body.tryb-ekran .hala-menu-stopka { display: none; }
+  body.tryb-ekran .hala-uklad > .hala-menu > button { justify-content: center; padding: 14px 0; }
+  body.tryb-ekran .hala-uklad > .hala-menu > button > span:not(.ikona):not(.plakietka) { display: none; }
+  body.tryb-ekran .hala-uklad > .hala-menu .ikona { font-size: 24px; flex-basis: auto; width: auto; }
+  body.tryb-ekran .hala-uklad > .hala-menu .plakietka { position: absolute; top: 6px; right: 8px; margin: 0; }
+}
+
+/* ---------------------------------------------------------------- wskaźniki */
+
+.okres-opis { margin: 0 0 10px; }
+/* Osiem kafelków wskaźników w jednym rzędzie na 1366 px (z „Zlecenia w terminie”, D31). */
+#wskazniki-tresc > .hala-kafelki { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.wskazniki-dwa { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 12px; }
+.wskazniki-dwa section { box-shadow: none; }
+.wskazniki-dwa h3 { margin: 0 0 8px; font-size: 1em; }
+.pasek-wsk { display: grid; grid-template-columns: minmax(90px, 1.2fr) minmax(60px, 2fr) auto; gap: 4px 10px; align-items: center; padding: 6px 0;
+             border-top: 1px solid var(--ramka); }
+.pasek-wsk .slaby { grid-column: 1 / -1; font-size: .85em; }
+.pasek-wsk .liczba { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.pasek-wsk .slupek { height: 12px; border-radius: 6px; background: var(--ramka); overflow: hidden; }
+.pasek-wsk .slupek i { display: block; height: 100%; background: var(--czerwony); }
+.pasek-wsk .slupek i.wada { background: var(--zolty); }
+.pasek-wsk .slupek i.dobrze { background: var(--zielony); }
+.wskazniki-dwa h3.podtytul { margin-top: 14px; }
+
+/* ---------------------------------------------------------------- konto (👤, jak „Moje konto” w GK Trasy) */
+
+dialog.okno .konto-kto { margin: 0; font-size: 16px; }
+.konto-drobne { margin: 6px 0 0; font-size: 13px; }
+.konto-push { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 4px; }
+.konto-push p { margin: 0; font-size: 14px; font-weight: 700; }
+.konto-push .ok { color: var(--zielony); }
+.konto-push .uwaga { color: var(--tekst-slaby); font-weight: 400; }
+dialog.okno .chipy { margin: 4px 0 0; }
+.lista-odrzuconych { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.lista-odrzuconych li { border-top: 1px solid var(--ramka); padding-top: 8px; font-size: 14px; }
+dialog.okno .lista-odrzuconych .blad { margin: 2px 0 6px; }
+
+/* Etap 3: zmiany bez raportu końcowego nad listą raportów; błąd przy polu ustawień. */
+.bez-raportu { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--ramka); border-radius: var(--promien); background: var(--karta); }
+.bez-raportu h3 { margin: 0 0 6px; }
+.bez-raportu h3 + ul + details { margin-top: 10px; }
+.bez-raportu summary { cursor: pointer; color: var(--tekst-slaby); font-weight: 600; }
+.lista-bez-raportu { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lista-bez-raportu li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.lista-bez-raportu .kiedy { min-width: 9em; color: var(--tekst-slaby); }
+.blad-pola { display: block; color: var(--czerwony); font-size: .9em; margin-top: 2px; }
+.ostrzezenie-stalego { color: var(--czerwony); font-weight: 600; }

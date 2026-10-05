@@ -1,0 +1,231 @@
+/* Aplikacja Kontroli Jakości. Kolory wyłącznie ze zmiennych hala.css (standard GK,
+   te same nazwy co w GK Flota) — czerwony „brak” u kontrolera ma być tym samym
+   czerwonym, który widzi lider, Panel i kierowca w GK Flota. Ani jednego #hex tutaj.
+
+   Telefon w ręce kontrolera na hali: jedna kolumna, duże pola (min. --dotyk),
+   menu na dole pod kciukiem, liczniki ± zamiast klawiatury. Na tablecie
+   treść zostaje wąską kolumną na środku — łatwiej trafić palcem.            */
+
+.slaby { color: var(--tekst-slaby); }
+.tekst-alarm { color: var(--czerwony); font-weight: 700; }
+.tekst-uwaga { color: var(--zolty); font-weight: 600; }
+.tekst-ok { color: var(--zielony); font-weight: 600; }
+.blad { color: var(--czerwony); font-weight: 600; }
+.przycisk { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box; }
+.szeroki { width: 100%; }
+.duzy { min-height: 54px; font-size: 16px; }   /* jak button.duzy w GK Trasy */
+a.karta, a.stanowisko, .nawigacja a, .wstecz { color: inherit; }
+h1 { font-size: 1.35em; margin: 4px 0 12px; }
+h2 { font-size: 1em; margin: 16px 0 8px; }
+
+/* ---------------------------------------------------------------- pasek, logowanie */
+
+/* Pasek połączenia to przycisk — „Odrzucone: N” prowadzi do listy z powodami. */
+.hala-polaczenie { position: sticky; top: 0; z-index: 50; width: 100%; min-height: 0; border: 0; border-radius: 0;
+  font-size: .9em; padding: 6px 10px; font-weight: 600; }
+.hala-polaczenie.odrzucone { cursor: pointer; }
+.hala-polaczenie:disabled { opacity: 1; cursor: default; filter: none; transform: none; }
+
+/* Logowanie: wspólna karta GK z hala.css (.hala-logowanie). Tu tylko duże cyfry PIN-u. */
+
+/* ---------------------------------------------------------------- szkielet */
+
+.aplikacja { min-height: 100vh; display: flex; flex-direction: column; }
+/* Pasek górny (.naglowek), menu po lewej i dolny pasek: wygląd w hala.css (jak GK Trasy). Tu tylko układ treści paska. */
+.naglowek .kto { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.naglowek .kto span { opacity: .8; }
+
+.ekran { flex: 1; width: 100%; max-width: 720px; margin: 0 auto; box-sizing: border-box; padding: 12px 12px 96px; outline: none;
+         overflow-wrap: anywhere; }   /* długi ciąg bez spacji (numer, wklejony tekst) nie może rozepchać ekranu w bok */
+
+/* Komputer i tablet poziomo: menu po lewej (hala.css → .hala-menu), więc bez zapasu na dolny pasek,
+   a treść szersza niż na telefonie. Logo stoi w menu, nie w nagłówku. */
+@media (min-width: 821px) {
+  .ekran { max-width: none; padding: 22px 26px 40px; }   /* jak main w GK Trasy na komputerze */
+}
+
+@media (max-width: 420px) {
+  .naglowek .kto span { display: none; }
+}
+
+/* ---------------------------------------------------------------- klocki */
+
+.tytul-ekranu { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.tytul-ekranu h1 { margin: 4px 0; }
+.wstecz { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--tekst-slaby); font-weight: 600; }
+.lista { display: flex; flex-direction: column; gap: 8px; }
+.pusto { margin: 16px 0; text-align: center; color: var(--tekst-slaby); }
+.pusto.ok { color: var(--zielony); font-weight: 600; }
+.wiersz { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.tekst { white-space: pre-wrap; }
+.tekst-opisu { font-size: .9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tekst-slaby); }
+.stopka { margin-top: 24px; font-size: .85em; }
+
+.karta {
+  display: block; text-decoration: none; background: var(--karta); border: 1px solid var(--ramka);
+  border-radius: var(--promien); padding: 10px 12px; box-shadow: var(--obrys-gorny), var(--cien);
+}
+a.karta:active { background: var(--tlo); }
+.karta .tytul { display: block; margin: 4px 0; font-size: 1.05em; }
+.karta.alert { border-left: 8px solid var(--czerwony); }
+.karta.partia { border-left: 8px solid var(--czerwony); }
+.karta.reklamacja { border-left: 8px solid var(--zolty); }
+.karta.wycofany, .karta.zwolniona, .karta.zamknieta { border-left-color: var(--neutral); opacity: .8; }
+.archiwum { margin-top: 16px; }
+.archiwum summary { min-height: var(--dotyk); display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--tekst-slaby); }
+
+.grupa { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 4px 12px 12px; margin: 10px 0;
+         box-shadow: var(--obrys-gorny), var(--cien); }
+.grupa h2 { display: flex; gap: 8px; align-items: center; }
+details.grupa { padding: 0 12px; }
+details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+
+.postep { height: 10px; border-radius: 5px; background: var(--tlo-neutralne); overflow: hidden; margin: 6px 0; }
+.postep span { display: block; height: 100%; background: var(--czerwony); transition: width .4s; }
+.postep.komplet span { background: var(--zielony); }
+.potwierdzenia { font-size: .9em; color: var(--czerwony); font-weight: 600; }
+.potwierdzenia.komplet { color: var(--zielony); }
+
+/* Wybór z kilku (linie, okres, źródło): przyciski-przełączniki. */
+.wybor { display: flex; flex-wrap: wrap; gap: 8px; }
+.wybor button { min-height: 44px; padding: 0 14px; font-weight: 600; font-size: 14px; }   /* jak .chip w GK Trasy */
+/* Wybrany = grafit, jak .chip.wybrany w GK Flota. */
+.wybor button { border-radius: 999px; }
+.wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+
+.menu { display: grid; gap: 10px; }
+.menu .przycisk { min-height: 60px; font-size: 1.05em; justify-content: flex-start; padding: 0 16px; }
+
+/* ---------------------------------------------------------------- formularze */
+
+.formularz { display: flex; flex-direction: column; gap: 12px; }
+/* Etykieta jako blok, nie flex — inaczej „(opcjonalnie)” ląduje w osobnej linii. */
+.formularz label, .okno label { display: block; font-weight: 600; }
+.formularz label > :is(input, select, textarea), .okno label > :is(input, select, textarea) { display: block; margin-top: 4px; }
+fieldset { border: 0; padding: 0; margin: 0; }
+legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.przyciski-formularza { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 8px; }
+.przyciski-formularza:has(> :only-child) { grid-template-columns: 1fr; }
+.z-przyciskiem { display: flex; gap: 8px; }
+.z-przyciskiem input { flex: 1; min-width: 0; }
+.bez-skanu { margin-top: 10px; }
+.bez-skanu summary { min-height: 44px; display: flex; align-items: center; color: var(--tekst-slaby); cursor: pointer; }
+.wybrane-stanowisko { flex: 1; }
+#p-stanowisko:has(.wybrane-stanowisko) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#p-stanowisko:has(.wybrane-stanowisko) h2 { width: 100%; }
+
+/* Licznik ±: duże przyciski po bokach, liczba na środku (rękawice). */
+.liczniki { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+.licznik { display: grid; grid-template-columns: var(--dotyk) 1fr var(--dotyk); gap: 6px; align-items: center; }
+.licznik .licznik-opis { grid-column: 1 / -1; font-weight: 600; font-size: .9em; }
+.licznik button { padding: 0; font-size: 1.6em; line-height: 1; }
+.licznik input { text-align: center; font-size: 1.5em; font-weight: 700; padding: 6px 0; -moz-appearance: textfield; }
+.licznik input::-webkit-inner-spin-button, .licznik input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.licznik.male { grid-template-columns: 1fr 44px 70px 44px; margin: 6px 0; }
+.licznik.male .licznik-opis { grid-column: 1; font-weight: 400; }
+.licznik.male button { min-height: 44px; }
+.licznik.male input { min-height: 44px; font-size: 1.15em; }
+@media (max-width: 380px) { .liczniki { grid-template-columns: 1fr; } }
+.zgodne { margin-top: 10px; font-size: 1.05em; }
+
+/* Kafelki wad: dotknięcie nazwy = +1, licznik pod spodem. */
+.wady { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.wada { border: 2px solid var(--ramka); border-radius: var(--promien); overflow: hidden; background: var(--tlo); }
+.wada.wybrana { border-color: var(--czerwony); }
+.wada-nazwa { width: 100%; border: 0; border-radius: 0; background: transparent; min-height: 56px; font-size: 1em; }
+.wada-licznik { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; border-top: 1px solid var(--ramka); }
+.wada-licznik button { border: 0; border-radius: 0; background: transparent; font-size: 1.4em; padding: 0; }
+.wada-licznik .ile { min-width: 2.2em; text-align: center; font-weight: 700; font-size: 1.2em; }
+.wada.wybrana .ile { color: var(--czerwony); }
+
+/* ---------------------------------------------------------------- zdjęcia */
+
+.zdjecia { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.miniatura { position: relative; margin: 0; width: 96px; height: 96px; border-radius: var(--promien); overflow: hidden; background: var(--ramka); }
+.miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+.usun-zdjecie { position: absolute; top: 2px; right: 2px; min-height: 36px; width: 36px; padding: 0; border-radius: 50%;
+  background: var(--nakladka); color: var(--na-nakladce); border: 0; font-size: 1.3em; line-height: 1; }
+.zrob-zdjecie { width: 96px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 4px; font-size: .8em; border-style: dashed; }
+.zrob-zdjecie .ikona { font-size: 1.8em; }
+
+/* Wzór vs wada — obok siebie, z kolorowym podpisem (nie sam kolor: jest też tekst). */
+.porownanie { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.zdjecie-pole, .zdjecie-duze { margin: 0; border: 2px solid var(--ramka); border-radius: var(--promien); padding: 6px; display: flex;
+  flex-direction: column; gap: 6px; align-items: stretch; }
+.zdjecie-pole.ok, .zdjecie-duze.ok { border-color: var(--zielony); }
+.zdjecie-pole.alarm, .zdjecie-duze.alarm { border-color: var(--czerwony); }
+.zdjecie-pole .zrob-zdjecie { width: 100%; height: 120px; font-size: .9em; }
+.zdjecie-pole .miniatura { width: 100%; height: 120px; }
+.zdjecie-pole .podpis, .zdjecie-duze figcaption { font-size: .85em; font-weight: 700; }
+.zdjecie-pole.ok .podpis, .zdjecie-duze.ok figcaption { color: var(--zielony); }
+.zdjecie-pole.alarm .podpis, .zdjecie-duze.alarm figcaption { color: var(--czerwony); }
+.zdjecie-duze img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; cursor: zoom-in; }
+.brak-zdjecia { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; color: var(--tekst-slaby); background: var(--tlo); border-radius: 6px; }
+.podglad-zdjecia { max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; }
+
+/* ---------------------------------------------------------------- szczegóły */
+
+.szczegoly { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 10px 0; }
+.szczegoly dt { color: var(--tekst-slaby); }
+.szczegoly dd { margin: 0; overflow-wrap: anywhere; }
+.instrukcja { font-weight: 600; }
+.potwierdzenia-linii { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.potwierdzenia-linii li { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 10px 12px; border-radius: var(--promien); border: 1px solid var(--ramka); border-left: 8px solid var(--czerwony); }
+.potwierdzenia-linii li.ok { border-left-color: var(--zielony); }
+.potwierdzenia-linii li span { color: var(--tekst-slaby); }
+.potwierdzenia-linii li q { width: 100%; font-style: italic; }
+.liczby-proby, .kafle-liczb { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 10px 0; }
+.liczby-proby > div, .kafle-liczb > div { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 10px; display: flex; flex-direction: column; }
+.liczby-proby span, .kafle-liczb span { font-size: .85em; color: var(--tekst-slaby); }
+.liczby-proby b, .kafle-liczb b { font-size: 1.6em; font-variant-numeric: tabular-nums; }
+.liczby-proby .alarm b { color: var(--czerwony); }
+pre { white-space: pre-wrap; font-size: .8em; background: var(--tlo); padding: 8px; border-radius: 6px; }
+
+/* ---------------------------------------------------------------- plan */
+
+.licznik-planu { font-size: 1.5em; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stanowisko { display: flex; align-items: center; gap: 10px; min-height: var(--dotyk); text-decoration: none; border-top: 1px solid var(--ramka); padding: 4px 0; }
+.stanowisko .nazwa { flex: 1; min-width: 0; }
+.stanowisko .stan { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; padding: 4px 9px; border-radius: 999px; color: var(--czerwony); background: var(--czerwony-tlo); }
+.stanowisko.gotowe .stan { color: var(--zielony); background: var(--zielony-tlo); }
+.karta.proba { margin-bottom: 8px; }
+
+/* ---------------------------------------------------------------- Pareto */
+
+.filtry { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.filtry-listy { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.pareto { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 6px 12px; box-shadow: var(--obrys-gorny), var(--cien); }
+.pareto-wiersz { display: grid; grid-template-columns: minmax(6em, 1.2fr) 2fr minmax(6.5em, 1fr); gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--ramka); }
+.pareto-wiersz.naglowek { border-top: 0; font-size: .8em; color: var(--tekst-slaby); padding: 4px 0; }
+.pareto-wiersz.granica { border-bottom: 2px dashed var(--tekst-slaby); }
+.pareto-wiersz .nazwa { overflow-wrap: anywhere; }
+.pareto-wiersz .slupek { display: flex; align-items: center; gap: 6px; }
+.pareto-wiersz .pasek { height: 18px; min-width: 2px; background: var(--akcent); border-radius: 0 4px 4px 0; }
+.pareto-wiersz .slupek b { font-variant-numeric: tabular-nums; }
+.pareto-wiersz .skumulowany { display: flex; flex-direction: column; gap: 2px; font-size: .85em; color: var(--tekst-slaby); font-variant-numeric: tabular-nums; }
+.pareto-wiersz .tor { height: 4px; background: var(--tlo-neutralne); border-radius: 2px; overflow: hidden; }
+.pareto-wiersz .tor span { display: block; height: 100%; background: var(--tekst-slaby); }
+.legenda-pareto { font-size: .85em; }
+
+/* ---------------------------------------------------------------- katalog */
+
+.zakladki-katalogu { margin-bottom: 10px; }
+.wiersz-katalogu { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; }
+.wiersz-katalogu .akcje { display: flex; gap: 6px; }
+.wiersz-katalogu .akcje button { min-height: 44px; padding: 0 12px; }
+.wiersz-planu { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--ramka); }
+
+/* ---------------------------------------------------------------- okno i komunikat */
+
+.okno { border: 1px solid var(--ramka); border-radius: 16px; padding: 0; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px);
+  background: var(--tlo-podniesione); color: var(--tekst); box-shadow: var(--cien-mocny); }
+.okno::backdrop { background: var(--zaslona); }
+.okno-tresc { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+.okno-tresc h2 { margin: 0; font-size: 1.15em; }
+.okno-cialo { display: flex; flex-direction: column; gap: 10px; }
+.okno-cialo h3 { margin: 6px 0 0; font-size: .95em; }
+.okno-przyciski { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.okno-przyciski button { flex: 1; }
+
+/* Komunikat (toast): wygląd i miejsce wspólne w hala.css (#komunikaty .komunikat), jak w GK Trasy. */

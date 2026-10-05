@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Ikona Aplikacji Lidera. Standard GK jak GK Flota, GK Trasy, KJ i Panel: grafitowy kwadrat,
+       biały piktogram, pomarańczowy akcent. Tu podkładka z checklistą zmiany, a pomarańczowy
+       klips to „ta zmiana” — lider odhacza, co zrobione. Rozpoznawalne w 32 px. -->
+  <rect width="192" height="192" rx="34" fill="#4E4E4E"/>
+  <rect x="44" y="36" width="104" height="128" rx="12" fill="#fff"/>
+  <rect x="74" y="26" width="44" height="22" rx="7" fill="#E0922E"/>
+  <path d="M62 80l10 10 18-20" fill="none" stroke="#4E4E4E" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="98" y="75" width="34" height="9" rx="4.5" fill="#4E4E4E"/>
+  <path d="M62 118l10 10 18-20" fill="none" stroke="#4E4E4E" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="98" y="113" width="34" height="9" rx="4.5" fill="#4E4E4E"/>
+</svg>

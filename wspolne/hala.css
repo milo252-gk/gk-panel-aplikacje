@@ -1,0 +1,444 @@
+/* GK Panel Kierownika — wspólny wygląd czterech aplikacji (plik w kodzie: hala.css). Każda ładuje ten plik PRZED własnym
+   arkuszem i używa zmiennych, zamiast wpisywać kolory na sztywno — zielony „na czas”
+   u lidera to ten sam zielony na panelu kierownika.
+
+   STANDARD GK (decyzja właściciela 2026-09-25): te same tokeny, wartości i zasady co
+   w GK Flota i GK Trasy (GK Flota/_zrodlo/web/style.css). Kto zna jeden program GK,
+   zna wszystkie: grafitowy pasek, grafitowy przycisk główny, pomarańcz jako akcent,
+   promień 12 px, ten sam krój i te same kolory stanów.
+
+   Barwy stoją w DWÓCH strefach:
+   A) STAŁE — te same w obu motywach (znak firmowy). Nie wolno ich powtarzać w motywie ciemnym.
+   B) TOKENY MOTYWU — tylko te motyw ciemny nadpisuje.
+
+   Motyw ciemny: automatycznie za telefonem (prefers-color-scheme) albo wymuszony
+   atrybutem <html data-motyw="ciemny|jasny"> (jak Motyw w GK Flota) — ustawia go
+   ../wspolne/motyw.js w <head>, zanim ten arkusz się narysuje. Wartości ciemne
+   stoją w DWÓCH blokach niżej (media + atrybut), bo CSS nie umie połączyć obu warunków
+   w jednym selektorze. Oba bloki muszą być IDENTYCZNE — pilnuje tego test
+   (kj/testy/testuj.py → Wyglad).
+
+   Nazwy z Hali 1.0 (--ok, --alarm, --tlo-karta, --gk-grafit…) zostają jako aliasy na
+   końcu :root, więc arkusze aplikacji sprzed ujednolicenia działają bez zmian.       */
+
+:root {
+  color-scheme: light;
+
+  /* ---- A) BARWY MARKI (próbkowane z logo, jak w GK Flota) ---------------- */
+  --grafit: #4E4E4E; --grafit-ciemny: #3B3B3B; --grafit-jasny: #6A6A6A;
+  --pomarancz: #E0922E; --pomarancz-ciemny: #C87C1C; --pomarancz-tlo: #FDF2E3;
+  --strefa: #BA212D; --strefa-jasna: #E52022; --strefa-grafit: #45525A;
+  --logowanie-karta: #ffffff;   /* karta logowania zostaje biała w obu motywach — logo jest grafitowe */
+  --podglad-tlo: #0f0f10; --na-podgladzie: #ECEBE9;   /* zdjęcie na cały ekran: ciemnia, nie okno programu */
+  --nakladka: rgba(0, 0, 0, .72); --na-nakladce: #ffffff;   /* „usuń” leży NA zdjęciu — ciemna plamka w obu motywach */
+  /* Pasek górny i menu stoją na --marka-tlo, ciemnym w OBU motywach — rozjaśnienia liczą się od bieli. */
+  --menu-hover: rgba(255, 255, 255, .08); --menu-wybrany: rgba(255, 255, 255, .16); --menu-kreska: rgba(255, 255, 255, .14);
+
+  /* ---- B) POWIERZCHNIE, od najniższej do najwyższej ----------------------- */
+  --tlo: #f5f5f6; --karta: #ffffff; --tlo-podniesione: #ffffff;
+  --marka-tlo: var(--grafit); --pole-tlo: #ffffff;
+  --tlo-neutralne: #eef1f5; --info-tlo: #e7eefb; --nasze-tlo: #FDF2E3;
+  --toast-tlo: #16232f; --toast-tekst: #ffffff;
+  --hover-jasnosc: .97;
+  --zaslona: rgba(9, 20, 32, .5);
+
+  /* ---- B) RAMKI I TEKST --------------------------------------------------- */
+  --ramka: #e2e2e4; --ramka-mocna: #c7c7cb;
+  --tekst: #2b2b2d; --tekst-slaby: #6d6d72;
+  --na-marce: #ffffff;       /* napis na --marka-tlo i na plamie --granat */
+  --na-barwie: #ffffff;      /* napis na plamie stanu (zielony/czerwony/żółty/info) */
+  --na-pomarancz: #2B2B2D;   /* napis na pomarańczu — CIEMNY w obu motywach */
+
+  /* ---- B) MARKA UŻYTA JAKO KOLOR INTERFEJSU ------------------------------- */
+  --granat: var(--grafit);          /* PLAMA: przycisk główny, wybrany chip */
+  --granat-tekst: var(--grafit);    /* ten sam kolor jako ATRAMENT */
+  --granat-jasny: var(--grafit-jasny);
+  --akcent: var(--pomarancz-ciemny);
+
+  /* ---- B) STANY — jedno znaczenie w całym systemie ------------------------- */
+  --zielony: #1d7a45; --zielony-tlo: #e4f4ea;     /* na czas, zgodne, zamknięte */
+  --czerwony: #BA212D; --czerwony-tlo: #fbeaec;   /* opóźnienie, zatrzymanie, brak */
+  --zolty: #9a6512; --zolty-tlo: #fdf2e3;         /* zbliża się termin, praca z ograniczeniem */
+  /* „W toku” — GK Flota ma tylko niebieskie tło (--info-tlo); Hala potrzebuje też plamy,
+     bo na Panelu „naprawa w toku” musi się różnić od „wstrzymana” (szara). */
+  --niebieski: #2f5f9e;
+  --szary: #6d6d72;                               /* brak planu, anulowane, wstrzymane */
+  --stan-ok: #4ade80; --stan-czeka: #f59e0b; --stan-blad: #ef4444;   /* kropka stanu sieci */
+
+  /* ---- B) GŁĘBIA ---------------------------------------------------------- */
+  --cien: 0 1px 2px rgba(40, 40, 42, .06), 0 4px 14px rgba(40, 40, 42, .08);
+  --cien-mocny: 0 18px 50px rgba(0, 0, 0, .28);
+  --obrys-gorny: 0 0 0 0 transparent;
+
+  /* ---- wymiary i krój ---------------------------------------------------- */
+  --promien: 12px;
+  /* Wysokość przycisku: 44 px jak w GK Trasy na komputerze (mysz), 52 px na telefonie (hala, rękawice) — niżej w @media. */
+  --dotyk: 44px;
+  --odstep: 12px;
+  --gora-wys: 56px; --dol-wys: 60px;
+  --czcionka: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* ---- ALIASY Hali 1.0 (nie dodawaj nowych — pisz nazwami GK Flota) ---------- */
+  --gk-grafit: var(--grafit); --gk-pomarancz: var(--pomarancz);
+  --tlo-karta: var(--karta);
+  --akcent-tekst: var(--na-pomarancz);
+  --ok: var(--zielony); --uwaga: var(--zolty); --alarm: var(--czerwony);
+  --info: var(--niebieski); --neutral: var(--szary);
+}
+
+/* ======================================================== MOTYW CIEMNY ===
+   Wartości z GK Flota (kontrasty tam policzone: każda para tekst/tło ≥ 4,5:1).
+   Głębia z JASNOŚCI powierzchni, nie z cienia; plamy stanów jaśnieją, a napis
+   na nich ciemnieje (--na-barwie).  BLOK 1 z 2 — musi być identyczny z blokiem 2. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-motyw="jasny"]) {
+    color-scheme: dark;
+    --marka-tlo: #191817; --pole-tlo: #1A1918; --tlo: #201F1E; --karta: #2A2928; --tlo-podniesione: #333230;
+    --tlo-neutralne: #403F3D; --info-tlo: #36404B; --nasze-tlo: #40331D;
+    --toast-tlo: #403E3C; --toast-tekst: #ECEBE9;
+    --hover-jasnosc: 1.14;
+    --zaslona: rgba(0, 0, 0, .62);
+    --ramka: #3E3D3B; --ramka-mocna: #807E7A;
+    --tekst: #ECEBE9; --tekst-slaby: #ADABA8;
+    --na-marce: #ffffff; --na-barwie: #1A1918; --na-pomarancz: #1A1918;
+    --granat: #757575; --granat-tekst: #DAD8D5; --granat-jasny: #C2C9D2;
+    --akcent: #E0922E;
+    --zielony: #4CC47D; --zielony-tlo: #1E3A26;
+    --czerwony: #F0757C; --czerwony-tlo: #43242A;
+    --zolty: #EBB55A; --zolty-tlo: #43371C;
+    --niebieski: #8FB3E6; --szary: #ADABA8;
+    --cien: 0 1px 2px rgba(0, 0, 0, .55), 0 6px 20px rgba(0, 0, 0, .45);
+    --cien-mocny: 0 18px 50px rgba(0, 0, 0, .6);
+    --obrys-gorny: inset 0 1px 0 rgba(255, 255, 255, .05);
+  }
+}
+/* BLOK 2 z 2 — wymuszony motyw ciemny. Musi być identyczny z blokiem 1. */
+:root[data-motyw="ciemny"] {
+    color-scheme: dark;
+    --marka-tlo: #191817; --pole-tlo: #1A1918; --tlo: #201F1E; --karta: #2A2928; --tlo-podniesione: #333230;
+    --tlo-neutralne: #403F3D; --info-tlo: #36404B; --nasze-tlo: #40331D;
+    --toast-tlo: #403E3C; --toast-tekst: #ECEBE9;
+    --hover-jasnosc: 1.14;
+    --zaslona: rgba(0, 0, 0, .62);
+    --ramka: #3E3D3B; --ramka-mocna: #807E7A;
+    --tekst: #ECEBE9; --tekst-slaby: #ADABA8;
+    --na-marce: #ffffff; --na-barwie: #1A1918; --na-pomarancz: #1A1918;
+    --granat: #757575; --granat-tekst: #DAD8D5; --granat-jasny: #C2C9D2;
+    --akcent: #E0922E;
+    --zielony: #4CC47D; --zielony-tlo: #1E3A26;
+    --czerwony: #F0757C; --czerwony-tlo: #43242A;
+    --zolty: #EBB55A; --zolty-tlo: #43371C;
+    --niebieski: #8FB3E6; --szary: #ADABA8;
+    --cien: 0 1px 2px rgba(0, 0, 0, .55), 0 6px 20px rgba(0, 0, 0, .45);
+    --cien-mocny: 0 18px 50px rgba(0, 0, 0, .6);
+    --obrys-gorny: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+/* Atrybut hidden musi wygrywać z display:flex/grid z arkuszy aplikacji — inaczej
+   element „ukryty” w kodzie dalej widać na ekranie. */
+[hidden] { display: none !important; }
+
+/* ------------------------------------------------------------- podstawy */
+@media (max-width: 820px) { :root { --dotyk: 52px; } }
+html { -webkit-text-size-adjust: 100%; }
+/* Krój i rozmiary jak w GK Trasy i GK Flota (decyzja właściciela 2026-10-01: „nie odbiegaj od stylu UI”).
+   Wcześniej było tu 17 px „na halę” — programy GK wyglądały przez to różnie. */
+body { margin: 0; background: var(--tlo); color: var(--tekst); font-family: var(--czcionka); font-size: 15px; line-height: 1.5;
+       -webkit-tap-highlight-color: transparent; }
+h1, h2, h3 { margin: 0 0 10px; line-height: 1.25; }
+h1 { font-size: 22px; } h2 { font-size: 19px; } h3 { font-size: 16px; }
+a { color: var(--akcent); }
+
+button, .przycisk {
+  min-height: var(--dotyk); padding: 0 15px; border-radius: 10px; border: 1px solid var(--ramka-mocna);
+  background: var(--pole-tlo); color: var(--tekst); font: inherit; font-weight: 600; cursor: pointer;
+  transition: filter .12s, background .12s;
+}
+button:hover, .przycisk:hover { filter: brightness(var(--hover-jasnosc)); }
+button:active, .przycisk:active { transform: translateY(1px); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+/* Przycisk główny jest GRAFITOWY (jak w GK Flota). Pomarańcz to akcent: linki, fokus,
+   znacznik wybranej zakładki — nie plama pod każdym „Zapisz”. */
+button.glowny, .przycisk.glowny { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+/* Mały przycisk (np. „Zmień” w wierszu listy) — button.maly z GK Trasy. */
+button.maly, .przycisk.maly { min-height: 34px; padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+button.zielony, .przycisk.zielony { background: var(--zielony); border-color: var(--zielony); color: var(--na-barwie); }
+button.czerwony, .przycisk.czerwony, button.alarm, .przycisk.alarm { background: var(--czerwony); border-color: var(--czerwony); color: var(--na-barwie); }
+
+input, select, textarea {
+  min-height: var(--dotyk); box-sizing: border-box; width: 100%; padding: 11px 12px; font: inherit;
+  border: 1px solid var(--ramka-mocna); border-radius: 10px; background: var(--pole-tlo); color: var(--tekst);
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); outline-offset: -1px; border-color: var(--akcent); }
+/* iPhone powiększa całą stronę, gdy pole z pismem mniejszym niż 16 px dostaje fokus — i nie oddaje
+   powiększenia po wyjściu z pola. Na telefonie pola mają więc co najmniej 16 px (krój strony 15 px). */
+@media (max-width: 820px) { input, select, textarea { font-size: 16px; } }
+
+/* Tylko na telefonie / tylko na komputerze — np. krótszy podpis w dolnym pasku („Awaria” zamiast
+   „Zgłoś awarię”, które na 360 px łamie się w dwie linie). Granica jak menu: 820/821 px. */
+@media (min-width: 821px) { .tylko-telefon { display: none !important; } }
+@media (max-width: 820px) { .tylko-komputer { display: none !important; } }
+
+/* Znaczniki statusów: class="znacznik ok|uwaga|alarm|info|neutral" — jak .plakietka p-* w GK Trasy:
+   jasne tło stanu i napis w kolorze stanu (nie pełna plama). */
+.znacznik { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font-size: 13px; font-weight: 700;
+            line-height: 1.3; color: var(--tekst-slaby); background: var(--tlo-neutralne); }
+.znacznik.ok { background: var(--zielony-tlo); color: var(--zielony); }
+.znacznik.uwaga { background: var(--zolty-tlo); color: var(--zolty); }
+.znacznik.alarm { background: var(--czerwony-tlo); color: var(--czerwony); }
+.znacznik.info { background: var(--info-tlo); color: var(--granat-jasny); }
+.znacznik.neutral { background: var(--tlo-neutralne); color: var(--tekst-slaby); }
+
+/* Kolory checklisty: class="kolor-zielony|kolor-zolty|kolor-czerwony|kolor-szary" */
+.kolor-zielony { --kolor: var(--zielony); }
+.kolor-zolty { --kolor: var(--zolty); }
+.kolor-czerwony { --kolor: var(--czerwony); }
+.kolor-szary { --kolor: var(--szary); }
+
+/* Pasek stanu połączenia — każda aplikacja pokazuje go w tym samym miejscu (góra ekranu) */
+.hala-polaczenie { font-size: .8em; padding: 2px 10px; text-align: center; color: var(--na-marce); background: var(--grafit-jasny); }
+.hala-polaczenie.ok { display: none; }
+.hala-polaczenie.offline { background: var(--grafit); }
+.hala-polaczenie.kolejka { background: var(--grafit-jasny); }
+.hala-polaczenie.brak-huba, .hala-polaczenie.odrzucone { background: var(--strefa); }
+
+/* ------------------------------------------------ ekran logowania (standard GK) */
+/* Jak w GK Flota: grafit GK z pomarańczowym rozświetleniem, na nim biała karta z logo.
+   <main class="hala-logowanie"><div class="hala-karta-logowania"><img class="hala-logo" …><h1>…</h1><p class="pod">…</p><form>…</form></div></main> */
+.hala-logowanie {
+  min-height: 100vh; min-height: 100dvh; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: linear-gradient(160deg, var(--grafit-ciemny), var(--grafit) 55%, var(--pomarancz-ciemny));
+}
+.hala-karta-logowania {
+  /* Biała w OBU motywach (logo jest grafitowe), więc atrament na niej też zostaje ciemny —
+     te same wartości co w motywie jasnym, jak w .karta-logowania GK Flota. */
+  color-scheme: light;
+  --tekst: #2b2b2d; --tekst-slaby: #6d6d72; --czerwony: #BA212D;
+  --pole-tlo: #ffffff; --ramka: #e2e2e4; --ramka-mocna: #c7c7cb;
+  --granat: var(--grafit); --granat-tekst: var(--grafit); --akcent: var(--pomarancz-ciemny);
+  --na-marce: #ffffff; --hover-jasnosc: .97;
+  color: var(--tekst); width: 100%; max-width: 360px; box-sizing: border-box; background: var(--logowanie-karta);
+  border-radius: 18px; padding: 28px 24px 24px; box-shadow: var(--cien-mocny); text-align: center;
+}
+.hala-logo { width: min(230px, 62vw); height: auto; display: block; margin: 0 auto 6px; }
+.hala-karta-logowania h1 { font-size: 22px; margin: 8px 0 4px; color: var(--grafit); }
+.hala-karta-logowania .pod { margin: 0 0 20px; color: var(--tekst-slaby); font-size: 13px; }
+.hala-karta-logowania form { display: block; }
+/* Jak w GK Trasy: podpis nad polem, wyrównany do lewej; „Zaloguj” na całą szerokość. */
+.hala-karta-logowania label { display: block; text-align: left; margin-bottom: 14px; font-weight: 600; font-size: 13px; }
+.hala-karta-logowania input { margin-top: 5px; }
+.hala-karta-logowania form > button { width: 100%; margin-top: 8px; }
+.hala-karta-logowania form > button[type="submit"] { min-height: 54px; font-size: 16px; margin-top: 6px; }
+.hala-karta-logowania .blad { color: var(--czerwony); font-weight: 600; font-size: 13px; margin: 10px 0 0; }
+/* Pole identyfikatora z przyciskiem 📷 obok (skan karty aparatem) — jeden wzór w Liderze, UR i KJ:
+   <label>Imię i nazwisko (albo karta)<div class="rzad"><input id="identyfikator">
+   <button id="skanuj-karte" aria-label="Skanuj identyfikator">📷</button></div></label> */
+.hala-karta-logowania .rzad { display: flex; gap: 8px; margin-top: 5px; }
+.hala-karta-logowania .rzad input { flex: 1; min-width: 0; margin-top: 0; }
+.hala-karta-logowania .rzad button { flex: 0 0 auto; min-width: var(--dotyk); padding: 0; font-size: 20px; }   /* podpis pola ma 13 px — 1.2em dawało drobny aparat */
+
+/* ------------------------------------------ szkielet GK: menu po lewej (jak GK Trasy i GK Flota) */
+/* Decyzja właściciela 2026-09-28: wszystkie aplikacje jak GK Trasy/GK Flota. Użycie:
+     <div class="hala-uklad"> … <nav class="hala-menu"> <div class="hala-menu-naglowek">…</div> <button>…</button> … </nav> </div>
+   - telefon (≤ 820 px): nawigacja zostaje dolnym paskiem aplikacji (jak pasek dolny GK Trasy), nagłówek menu ukryty;
+   - komputer i tablet poziomo (≥ 821 px): stałe menu po lewej, 224 px, na --marka-tlo; wybrana pozycja
+     (aria-current / aria-selected / .wybrany) jaśniejsza z pomarańczową kreską z lewej, jak w GK Trasy. */
+:root { --menu-szer: 224px; }
+/* Plakietka z liczbą na pozycji menu (nowe awarie, zlecenia…). Aplikacje mogą ją przesunąć na telefonie nad ikonę. */
+.plakietka { display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px;
+             background: var(--czerwony); color: var(--na-barwie); font-size: 12px; font-weight: 800; line-height: 20px; text-align: center; }
+.hala-menu-naglowek, .hala-menu-stopka { display: none; }
+
+/* Górny pasek jak .gora w GK Trasy: 56 px, --marka-tlo, tytuł 17 px pogrubiony, przyciski bez ramek (jak .ikona-btn).
+   Każda aplikacja ma <header class="naglowek"> w .hala-uklad — wygląd ustala TEN plik, aplikacja tylko treść. */
+.hala-uklad > .naglowek {
+  position: sticky; top: 0; z-index: 25; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  min-height: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); margin: 0;
+  padding: env(safe-area-inset-top, 0px) 12px 0; box-sizing: border-box;
+  background: var(--marka-tlo); color: var(--na-marce); border-bottom: 1px solid var(--ramka); font-size: 15px;
+}
+.hala-uklad > .naglowek .logo { display: none; }   /* znak GK stoi w menu (komputer) — w GK Trasy pasek nie ma logo */
+.hala-uklad > .naglowek .zmiana { font-size: 17px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hala-uklad > .naglowek .zmiana :is(span, .slaby) { font-size: 15px; font-weight: 400; opacity: .75; color: inherit; }
+.hala-uklad > .naglowek button {
+  min-height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--na-marce); font-weight: 600; box-shadow: none;
+  font-size: 15px; display: inline-flex; align-items: center; justify-content: center;   /* .maly w pasku nie zmniejsza pisma */
+  gap: .3em;   /* inline-flex zjada spacje między <b> a <span> — „L1 Wtrysk” zlepiało się w „L1Wtrysk” */
+}
+.hala-uklad > .naglowek button:hover { background: var(--menu-hover); filter: none; }
+
+/* Menu: komputer — stałe po lewej (.menu GK Trasy); telefon — dolny pasek (.pasek-dolny GK Trasy). */
+@media (min-width: 821px) {
+  .hala-uklad { padding-left: var(--menu-szer); box-sizing: border-box; }
+  .hala-uklad > .hala-menu {
+    position: fixed; top: 0; bottom: 0; left: 0; right: auto; z-index: 30; width: var(--menu-szer); height: auto;
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0;
+    margin: 0; padding: env(safe-area-inset-top, 0px) 0 0; box-sizing: border-box; overflow-y: auto;
+    background: var(--marka-tlo); color: var(--na-marce); border: 0; border-right: 1px solid var(--ramka); box-shadow: none; grid-template-columns: none;
+  }
+  .hala-uklad > .hala-menu > :is(a, button) {
+    flex: 0 0 auto; position: relative; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px;
+    width: 100%; min-height: 52px; margin: 0; padding: 14px 18px; box-sizing: border-box;
+    border: 0; border-radius: 0; background: none; color: var(--na-marce); box-shadow: none; transform: none; filter: none;
+    font-size: 15px; font-weight: 600; line-height: 1.5; text-align: left; text-decoration: none; opacity: 1;
+  }
+  .hala-uklad > .hala-menu > :is(a, button):hover { background: var(--menu-hover); }
+  .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny) {
+    background: var(--menu-wybrany); box-shadow: inset 3px 0 0 var(--akcent); color: var(--na-marce);
+  }
+  .hala-uklad > .hala-menu .ikona { width: 22px; flex: 0 0 22px; text-align: center; font-size: 15px; margin: 0; }
+  /* Plakietka z liczbą (nowe awarie, zlecenia) — do prawej krawędzi menu, nie nad ikoną jak na telefonie. */
+  .hala-uklad > .hala-menu .plakietka { position: static; margin-left: auto; transform: none; }
+  /* Nagłówek menu jak w GK Trasy: znak GK w bieli na 150 px, pod nim osoba i rola (aplikacja). */
+  .hala-menu-naglowek { display: block; padding: 20px 18px 14px; margin: 0; border-bottom: 1px solid var(--menu-kreska); }
+  .hala-menu-logo { display: block; width: 150px; height: auto; margin-bottom: 14px; filter: brightness(0) invert(1); opacity: .92; }
+  .hala-menu-nazwa { font-weight: 700; font-size: 16px; }
+  .hala-menu-kto { font-size: 12px; opacity: .65; text-transform: uppercase; letter-spacing: .6px; }
+  .hala-menu-stopka { display: block; margin-top: auto; padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .hala-uklad > .hala-menu .hala-menu-stopka button {
+    min-height: 44px; padding: 6px 4px; border: 0; background: none; color: var(--akcent); font-weight: 600; box-shadow: none;
+  }
+  /* Na komputerze „Wyloguj” stoi w stopce menu (jak w GK Trasy), więc w pasku górnym jest zbędne. */
+  .hala-uklad > .naglowek .tylko-telefon { display: none; }
+}
+@media (max-width: 820px) {
+  .hala-uklad > .hala-menu {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 40; display: flex; flex-direction: row; gap: 0; width: auto;
+    height: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); margin: 0; padding: 0 0 env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box; background: var(--tlo-podniesione); border: 0; border-top: 1px solid var(--ramka); box-shadow: none; grid-template-columns: none;
+  }
+  .hala-uklad > .hala-menu > :is(a, button) {
+    flex: 1 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 0; margin: 0; padding: 6px 2px; border: 0; border-radius: 0; background: none; box-shadow: none; filter: none;
+    font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--tekst-slaby); text-decoration: none; text-align: center;
+  }
+  .hala-uklad > .hala-menu .ikona { font-size: 20px; line-height: 1; }
+  .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny) {
+    color: var(--granat-tekst); box-shadow: none;
+  }
+  .hala-uklad > .hala-menu .plakietka { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
+}
+
+/* Kafelki liczb jak pulpit GK Flota: jedna biała karta, w niej szare pola z liczbą.
+   <div class="hala-kafelki"><div class="pilne"><span class="etykieta">Stoi</span><b>2</b></div>…</div> */
+.hala-kafelki { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien);
+                box-shadow: var(--obrys-gorny), var(--cien); padding: 12px; box-sizing: border-box; }
+.hala-kafelki > * { background: var(--tlo); border: 0; border-radius: 10px; padding: 10px 8px; text-align: center;
+                    box-shadow: none; color: inherit; font: inherit; min-height: 0; }
+.hala-kafelki .etykieta { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); margin-bottom: 3px; }
+.hala-kafelki b { display: block; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hala-kafelki .pilne b { color: var(--czerwony); }
+.hala-kafelki .uwaga b { color: var(--zolty); }
+.hala-kafelki .dobrze b { color: var(--zielony); }
+.hala-kafelki .zero b { color: var(--tekst-slaby); }
+
+/* Ekran „Zlecenia od kierownika” (zlecenia.js) — ten sam w Liderze, UR i KJ. */
+.hala-zlecenia h2 { margin: 4px 0 12px; font-size: 19px; }
+.hala-zlecenia h3 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); }   /* jak nagłówki tabel GK Trasy */
+/* Karta zlecenia jak .przystanek w GK Trasy: pasek stanu 5 px z lewej, cień karty. */
+.hala-zlecenie { background: var(--karta); border: 1px solid var(--ramka); border-left: 5px solid var(--niebieski); border-radius: var(--promien);
+                 padding: 13px; margin-bottom: 10px; box-shadow: var(--obrys-gorny), var(--cien); }
+.hala-zlecenie.pilne { border-left-color: var(--czerwony); }
+.hala-zlecenie.po-terminie { background: var(--czerwony-tlo); }
+.hala-zlecenie.wyslane { opacity: .75; border-left-color: var(--szary); }
+.hala-zlecenie-gora { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.hala-zlecenie-szczegoly { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 6px; font-size: .9em; }
+.hala-zlecenie-opis { margin: 8px 0 0; }
+.hala-zlecenie-zwrot { margin: 8px 0 0; font-weight: 700; color: var(--zolty); }
+.hala-zlecenie-kiedy { margin-top: 6px; font-size: .85em; color: var(--tekst-slaby); }
+.hala-zlecenie-kiedy .po-terminie-tekst { color: var(--czerwony); font-weight: 700; }
+.hala-zlecenie-akcje { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.hala-zlecenie-akcje button { flex: 1 1 auto; }
+.hala-zlecenia-pusto { text-align: center; color: var(--tekst-slaby); margin: 24px 0; }
+.hala-zlecenia-naglowek { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.hala-zlecenia-naglowek h2 { margin: 4px 0; }
+.hala-zlecenia-filtr { display: flex; gap: 6px; }
+.hala-zlecenia-filtr button { min-height: 44px; border-radius: 999px; padding: 0 14px; font-size: 14px; }   /* jak .chip w GK Trasy */
+.hala-zlecenia-filtr button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+.hala-zlecenie-zdjecia { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.hala-zlecenie-foto { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); background: var(--tlo); }
+.hala-zlecenie-formularz { display: grid; gap: 8px; margin-top: 10px; }
+.hala-zlecenie-zdjecie { display: flex; align-items: center; justify-content: center; min-height: var(--dotyk); border: 1px dashed var(--ramka-mocna);
+                         border-radius: 10px; font-weight: 600; cursor: pointer; }
+.hala-zlecenie-blad { margin: 0; color: var(--czerwony); font-weight: 700; }
+/* D31: termin po ludzku, zdjęcia i notatka jako dowód wykonania (jak dowód dostawy w GK Trasy). */
+.hala-zlecenie-termin { margin-top: 6px; font-weight: 700; }
+.hala-zlecenie-termin.po-terminie-tekst { color: var(--czerwony); }
+.hala-zlecenie-pole { display: grid; gap: 4px; }
+.hala-zlecenie-etykieta { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.hala-zlecenie-miniatury { display: flex; gap: 9px; flex-wrap: wrap; }
+.hala-zlecenie-miniatury .hala-zlecenie-zdjecie { flex: 1 1 140px; min-height: 92px; }
+.hala-zlecenie-zdjecie.brak { border-color: var(--czerwony); color: var(--czerwony); }
+.hala-zlecenie-miniatura { position: relative; width: 92px; height: 92px; border-radius: 9px; overflow: hidden; border: 1px solid var(--ramka); }
+.hala-zlecenie-miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hala-zlecenie-miniatura button { position: absolute; top: 0; right: 0; width: 36px; height: 36px; min-height: 36px; padding: 0;
+                                  border-radius: 0 9px 0 9px; background: var(--grafit-ciemny); color: var(--na-barwie); border: 0; font-size: 16px; }
+.hala-zlecenie-brakuje { margin: 0; color: var(--czerwony); font-weight: 700; }
+/* Zaległe zlecenia (2026-10-02, jak „Zaległe dostawy” w GK Trasy): osobna sekcja z numerami 1, 2, 3… i czerwona karta
+   na ekranie głównym działu (HalaZlecenia.rysujZalegle). Numer mówi, co zrobić najpierw — sam kolor tego nie mówi. */
+.hala-zlecenie.zalegle { border-left-color: var(--czerwony); background: var(--czerwony-tlo); }
+.hala-zlecenie-gora b { flex: 1 1 auto; }
+.hala-zlecenie-nr { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px;
+                    border-radius: 999px; background: var(--czerwony); color: var(--na-barwie); font-weight: 800; font-size: 14px; align-self: center; }
+.hala-zlecenia h3.hala-zlecenia-zalegle { color: var(--czerwony); display: flex; align-items: center; gap: 8px; }
+.hala-zlecenia-ile { background: var(--czerwony); color: var(--na-barwie); border-radius: 999px; padding: 1px 8px; font-size: 12px; letter-spacing: 0; }
+.hala-zalegle { display: grid; gap: 4px; width: 100%; margin: 0 0 12px; padding: 12px 14px; text-align: left; cursor: pointer; font: inherit;
+                color: var(--tekst); background: var(--czerwony-tlo); border: 1px solid var(--czerwony); border-left: 5px solid var(--czerwony);
+                border-radius: var(--promien); box-shadow: var(--obrys-gorny), var(--cien); min-height: var(--dotyk); }
+.hala-zalegle:hover { filter: brightness(.98); }
+.hala-zalegle-naglowek { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: var(--czerwony); }
+.hala-zalegle-pozycja { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.hala-zalegle-opis { color: var(--czerwony); font-weight: 700; font-size: 14px; }
+.hala-zalegle-wiecej { justify-self: end; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+
+/* ------------------------------------------------ komunikat (toast) — jak .komunikat w GK Trasy */
+/* Jeden wygląd i jedno miejsce we wszystkich aplikacjach: ciemny dymek przy dole, na telefonie NAD dolnym
+   paskiem (inaczej zasłania menu), na komputerze 18 px od dołu. ok = zielony (zapisane), blad/alarm =
+   czerwony, uwaga = żółty, bez rodzaju = ciemny (informacja). Każda aplikacja ma własną funkcję
+   (Lider.komunikat, UR.komunikat, KJ.komunikat, Panel.komunikat), ale ten sam znacznik:
+     <div id="komunikaty" class="komunikaty" popover="manual" role="status" aria-live="polite"> <div class="komunikat ok">…</div> </div>
+   popover="manual": aplikacje z <dialog> (UR, KJ, Panel) wołają showPopover(), bo okno modalne leży
+   w „warstwie górnej” nad każdym z-indexem — bez tego komunikat (np. „Jest nowa wersja”) chowałby się pod
+   zasłoną okna. Popover dostaje od przeglądarki ramkę, tło i inset: 0 — niżej to zdejmujemy; display
+   ustawiamy sami, więc komunikat widać także tam, gdzie popover jeszcze nie jest otwarty albo go nie ma.
+   Skala warstw: pasek górny 25, menu 30/40, pasek połączenia 50, zasłona alertu 900, okno 950, skaner 1000,
+   komunikat 1120 (jak w GK Trasy). */
+.komunikaty {
+  position: fixed; z-index: 1120; top: auto; left: 12px; right: 12px; bottom: calc(var(--dol-wys) + 14px + env(safe-area-inset-bottom, 0px));
+  width: auto; height: auto; margin: 0; padding: 0; border: 0; background: none; color: inherit; overflow: visible;
+  display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none;
+}
+.komunikat { background: var(--toast-tlo); color: var(--toast-tekst); padding: 12px 17px; border-radius: 11px; font-size: 14px;
+             box-shadow: var(--cien-mocny); max-width: 480px; box-sizing: border-box; animation: hala-wjazd .18s; transition: opacity .25s; }
+.komunikat.ok { background: var(--zielony); color: var(--na-barwie); }
+.komunikat.blad, .komunikat.alarm { background: var(--czerwony); color: var(--na-barwie); }
+.komunikat.uwaga { background: var(--zolty); color: var(--na-barwie); }
+.komunikat.znika { opacity: 0; }
+@keyframes hala-wjazd { from { opacity: 0; transform: translateY(10px); } }
+@media (min-width: 821px) { .komunikaty { bottom: 18px; } }
+@media (prefers-reduced-motion: reduce) { .komunikat { animation: none; } }
+
+/* ------------------------------------------------ wspólne okno (konto.js: „Zmień PIN”) i pasek „Pobierz CSV” (eksport.js) — D32 */
+/* Jedno okno we wszystkich czterech aplikacjach — ich własne okna mają różne klasy (.okno w Liderze to nie <dialog>),
+   więc wspólne ma swoją: .hala-okno. <dialog> leży w warstwie górnej — nad menu Lidera i nad oknami UR, KJ, Panelu. */
+dialog.hala-okno { width: min(440px, calc(100vw - 24px)); box-sizing: border-box; border: 0; border-radius: 16px; padding: 0;
+                   background: var(--karta); color: var(--tekst); box-shadow: var(--cien-mocny); }
+dialog.hala-okno::backdrop { background: var(--zaslona); }
+dialog.hala-okno form { display: grid; gap: 12px; padding: 18px 20px 20px; }
+dialog.hala-okno h2 { margin: 0; font-size: 19px; }
+dialog.hala-okno label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+dialog.hala-okno label > input { font-size: 16px; font-weight: 400; color: var(--tekst); }
+.hala-okno-opis { margin: 0; font-size: 13px; color: var(--tekst-slaby); }
+.hala-okno-blad { margin: 0; color: var(--czerwony); font-weight: 600; }
+.hala-okno-przyciski { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.hala-eksport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; margin: 0 0 12px;
+                border: 1px solid var(--ramka); border-radius: var(--promien); background: var(--karta); }
+.hala-eksport label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.hala-eksport input, .hala-eksport select { width: auto; }
+.hala-eksport-uwaga { font-size: 12px; color: var(--tekst-slaby); }
+@media (max-width: 820px) { .hala-eksport > * { flex: 1 1 100%; } .hala-eksport input { flex: 1; } }
+
+.hala-start main { max-width: 480px; margin: 40px auto; padding: 0 16px; }
+.hala-start li { margin: 10px 0; font-size: 1.2em; }
+.hala-start a { color: var(--akcent); }

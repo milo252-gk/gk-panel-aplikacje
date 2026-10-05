@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GK Panel Kierownika — podgląd zdarzeń</title>
+<link rel="stylesheet" href="hala.css">
+<style>
+  body { padding: 12px; }
+  header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  h1 { font-size: 1.2em; margin: 0; }
+  #logowanie { display: flex; gap: 8px; max-width: 480px; }
+  .kolumny { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .kolumny { grid-template-columns: 1fr; } }
+  section { background: var(--tlo-karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 10px; min-width: 0; }
+  h2 { font-size: 1em; margin: 0 0 8px; }
+  .wpis { border-top: 1px solid var(--ramka); padding: 6px 0; font-size: .85em; }
+  .wpis code { font-size: .95em; }
+  .uwaga-konflikt { color: var(--alarm); }
+  pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0 0; font-size: .8em; color: var(--tekst-slaby); }
+  select, button { min-height: 40px; width: auto; }
+</style>
+</head>
+<body>
+<div id="pasek" class="hala-polaczenie"></div>
+<header>
+  <h1>Podgląd zdarzeń</h1>
+  <span id="kto"></span>
+  <form id="logowanie"><input id="identyfikator" autocomplete="off" placeholder="Identyfikator"><input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"><button class="glowny">Wejdź</button></form>
+  <button id="wyjdz" hidden>Wyjdź</button>
+</header>
+<div class="kolumny">
+  <section><h2>Na żywo</h2><div id="zdarzenia"></div></section>
+  <section>
+    <h2>Stan <select id="typ"></select></h2>
+    <div id="obiekty"></div>
+  </section>
+</div>
+<script src="hala.js"></script>
+<script>
+/* Narzędzie dla budujących aplikacje: loguje się jako panel (kierownik, admin
+   albo ekran) i pokazuje, co przepływa przez hub. Nie zapisuje niczego. */
+(async () => {
+  const TYPY = ['awaria', 'zmiana_linii', 'proba', 'partia', 'alert', 'reklamacja'];
+  const hala = Hala.utworz({ aplikacja: 'panel', typy: TYPY, dni: 2 });
+  await hala.start();
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  for (const t of TYPY) $('typ').insertAdjacentHTML('beforeend', `<option>${t}</option>`);
+  $('typ').onchange = rysujObiekty;
+
+  function rysujSesje() {
+    const z = hala.zalogowany();
+    $('logowanie').hidden = z; $('wyjdz').hidden = !z;
+    $('kto').textContent = z && hala.pracownik ? hala.pracownik.nazwa : '';
+  }
+  function rysujObiekty() {
+    const typ = $('typ').value;
+    $('obiekty').innerHTML = hala.obiekty(typ).slice(0, 100).map(o =>
+      `<div class="wpis"><b>${esc(o.numer || o.id)}</b> <span class="znacznik ${o.aktywny ? 'info' : 'neutral'}">${esc(o.etykieta || o.status)}</span>
+       ${o._oczekuje ? '<small>(czeka na wysłanie)</small>' : ''} <small>${esc(o.linia || '')} · ${esc(o.zmieniono)}</small>
+       <pre>${esc(JSON.stringify(o.dane, null, 1))}</pre></div>`).join('') || '<small>brak</small>';
+  }
+  hala.na('zdarzenie', z => {
+    $('zdarzenia').insertAdjacentHTML('afterbegin',
+      `<div class="wpis"><code>#${z.seq}</code> <b>${esc(z.typ)}</b> <small>${esc(z.obiekt)} · ${esc(z.autor)} (${esc(z.aplikacja)}) · ${esc(z.czas)}</small>
+       ${z.uwaga ? `<div class="uwaga-konflikt">${esc(z.uwaga)}</div>` : ''}<pre>${esc(JSON.stringify(z.dane))}</pre></div>`);
+    const w = $('zdarzenia').children; while (w.length > 200) w[w.length - 1].remove();
+  });
+  hala.na('zmiana', rysujObiekty);
+  hala.na('sesja', rysujSesje);
+  hala.na('polaczenie', p => {
+    $('pasek').className = 'hala-polaczenie ' + (p.strumien ? 'ok' : p.online ? '' : 'offline');
+    $('pasek').textContent = p.strumien ? '' : p.online ? 'Łączenie z hubem…' : 'Brak sieci';
+  });
+  $('logowanie').onsubmit = async e => {
+    e.preventDefault();
+    const ident = $('identyfikator').value.trim();
+    try { await hala.zaloguj(ident ? { identyfikator: ident, pin: $('pin').value } : { pin: $('pin').value }); $('pin').value = ''; rysujObiekty(); }
+    catch (err) { alert(err.message); }
+  };
+  $('wyjdz').onclick = async () => { await hala.wyloguj(); rysujSesje(); };
+  rysujSesje(); rysujObiekty();
+})();
+</script>
+</body>
+</html>
