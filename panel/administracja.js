@@ -479,9 +479,15 @@
     if (Date.now() - dostepCzas > 15000) wczytajDostep();
     const s = W.dostepZTelefonow(dostepStan, hala.teraz());
     const lz = W.logowanieZInternetu(dostepStan.logowanie, hala.teraz());
-    // Odcisk: przerysowanie co 20 s (P.narysuj) nie może migać kodami QR ani kasować zaznaczenia adresu.
-    const odcisk = JSON.stringify([s, lz, wysyla]);
-    if (el.dataset.odcisk === odcisk) return;
+    // Odcisk: przerysowanie co 20 s (P.narysuj) nie może migać kodami QR ani kasować zaznaczenia adresu. Godzina
+    // sprawdzenia przez strażnika (co 2 min) zmienia tylko swój akapit — bez niej w odcisku.
+    const straznik = s.tunel.straznik;
+    const odcisk = JSON.stringify([s, lz, wysyla], (k, w) => (k === 'straznik' && w ? w.kolor : w));
+    if (el.dataset.odcisk === odcisk) {
+      const p = el.querySelector('[data-straznik]');
+      if (p && straznik) p.textContent = straznik.tekst;
+      return;
+    }
     el.dataset.odcisk = odcisk;
     const link = a => (a ? `<a href="${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>` : '');
     el.innerHTML = `
@@ -504,6 +510,7 @@
         <h3><span>Tunel <span class="znacznik ${s.tunel.kolor}">${esc(s.tunel.stan)}</span></span>
           <button type="button" class="maly" data-akcja="odswiez-dostep">Odśwież</button></h3>
         ${s.tunel.adres ? `<p class="dostep-adres">Adres huba: ${link(s.tunel.adres)}</p>` : ''}
+        ${straznik ? `<p data-straznik class="${straznik.kolor === 'alarm' ? 'tekst-alarm' : 'slaby'}">${esc(straznik.tekst)}</p>` : ''}
         <p class="slaby">${esc(s.tunel.opis)}</p>
       </section>
       <section class="admin-linia">

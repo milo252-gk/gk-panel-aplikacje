@@ -319,13 +319,8 @@
   global.HalaZlecenia.sledz(hala, () => ({ dzial: 'ur' }), z => UR.komunikat(`Nowe zlecenie od kierownika: ${(z.dane || {}).tytul || ''}`));
   UR.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };
 
-  function adres() {
-    const [nazwa, ...reszta] = (location.hash.replace(/^#/, '') || 'awarie').split('/');
-    // Zepsute „%” w adresie nie może wywrócić nawigacji — wtedy bez parametru.
-    let parametr = null;
-    try { parametr = reszta.map(decodeURIComponent).join('/') || null; } catch (e) { parametr = null; }
-    return { nazwa: UR.ekrany[nazwa] ? nazwa : 'awarie', parametr };
-  }
+  // #awaria/<id> bez tej awarii w telefonie (np. dotknięty push przed synchronizacją) → lista (URWidok.ekranZAdresu).
+  const adres = () => W.ekranZAdresu(location.hash, Object.keys(UR.ekrany), id => !!hala.obiekt('awaria', id));
 
   function pokazEkran() {
     if (!hala.zalogowany()) return;
@@ -370,6 +365,8 @@
       zaplanowane = false;
       const w = wymus; wymus = false;
       if (!hala.zalogowany() || !UR.biezacy) return;
+      // Lista stała zamiast karty z powiadomienia, bo awarii jeszcze nie było — doszła, więc pokazujemy jej kartę.
+      if (UR.biezacy.zastepczy && UR.biezacy.czeka && hala.obiekt('awaria', UR.biezacy.czeka)) { pokazEkran(); return; }
       rysujNaglowek();
       rysujPlakietki();
       const def = UR.biezacy.def, el = $('ekran');

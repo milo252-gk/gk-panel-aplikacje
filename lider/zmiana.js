@@ -40,6 +40,8 @@
 
   async function rozpocznij() {
     const k = L.kontekst();
+    // Ekran rysowany przed raportem z innego telefonu: zamkniętej zmiany nie otwieramy (hub i tak dałby konflikt).
+    if (k.zl && k.zl.status === 'zamknieta') { L.komunikat('Raport tej zmiany już wysłano — zmiana jest zamknięta.', 'uwaga'); L.narysuj(); return; }
     const szablon = Hala.szablonDla(hala.slowniki, k.linia, k.zmiana.nr);
     const pozycje = Hala.pozycjeZSzablonu(szablon, k.zmiana);
     if (!pozycje.length) {
@@ -161,6 +163,16 @@
     if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian. Sprawdź słownik zmian.</p>'; return; }
     const przekazanie = kartaPrzekazania(k);
     const pozycje = (k.zl && k.zl.dane && k.zl.dane.pozycje) || [];
+    if (!pozycje.length && k.zl && k.zl.status === 'zamknieta') {
+      // Raport wysłany bez otwierania zmiany: „Rozpocznij” byłoby konfliktem (kontrakt 1.7.0 — zamkniętej się nie otwiera).
+      el.innerHTML = `${przekazanie}
+        <article class="karta otwarcie">
+          <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
+          <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))} · <span class="znacznik neutral">Raport wysłany</span></p>
+          <p class="slaby">Zmiana zamknięta raportem. Poprawiony raport wyślesz w „Koniec”.</p>
+        </article>`;
+      return;
+    }
     if (!pozycje.length) {
       const szablon = Hala.szablonDla(hala.slowniki, k.linia, k.zmiana.nr);
       const podglad = Hala.pozycjeZSzablonu(szablon, k.zmiana);

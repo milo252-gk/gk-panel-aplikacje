@@ -274,7 +274,7 @@ body.kierownik-ur .tylko-kierownik { display: flex !important; }
 .punkt-edycja .przesun { display: flex; flex-direction: column; gap: 6px; }
 .punkt-edycja .przesun button { min-height: 44px; width: 48px; padding: 0; }
 .wybor-maszyn { display: flex; flex-wrap: wrap; gap: 8px; }
-.wybor-maszyn label { display: flex !important; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--ramka-mocna);
+.wybor-maszyn label { display: flex !important; align-items: center; gap: 6px; min-height: var(--dotyk); padding: 0 12px; border: 1px solid var(--ramka-mocna);
   border-radius: 999px; font-weight: 600; }
 .wybor-maszyn input { width: auto; min-height: 0; margin: 0; }
 .zepsuty { color: var(--czerwony); font-weight: 600; }

@@ -5,10 +5,15 @@
    dostaje w oczy białą kartkę przy każdym otwarciu.
 
    Wybór trzyma URZĄDZENIE, nie konto: ekran logowania rysuje się, zanim wiadomo, kto się loguje,
-   a telefon bywa wspólny. Dlatego wylogowanie go nie kasuje. Klucz jest wspólny (`hala.motyw`,
-   KONTRAKT §9) — cztery aplikacje leżą pod jednym adresem, więc wybór w jednej działa we wszystkich.
-   Stare klucze UR i KJ (`hala.ur.motyw`, `hala.kj.motyw`) przejmujemy raz, żeby nikomu nie zmienił się
-   wygląd po aktualizacji.
+   a telefon bywa wspólny. Dlatego wylogowanie go nie kasuje.
+
+   Klucz `gk.motyw` jest wspólny dla WSZYSTKICH programów GK (recenzja 2026-10-05, KONTRAKT §9): na GitHub Pages
+   cztery aplikacje hali, GK Trasy i GK Flota leżą pod jednym adresem (milo252-gk.github.io), więc osoba z kilkoma
+   programami ustawiała motyw trzy razy (`hala.motyw`, `gk-trasy.motyw`, `gk-flota.motyw`). Wartości jak w programach
+   transportu: 'jasny' | 'ciemny'; „jak w telefonie” = BRAK klucza (nie zapisujemy 'auto').
+   Migracja: przy pierwszym starcie po aktualizacji, gdy `gk.motyw` jeszcze nie ma, przejmujemy stary `hala.motyw`
+   (a przed nim UR/KJ `hala.ur.motyw`, `hala.kj.motyw`) i stare klucze kasujemy. Kasujemy, a nie zapisujemy dalej w obu:
+   gdy ktoś w GK Trasy wybierze „jak w telefonie” (usunie `gk.motyw`), zostawiony `hala.motyw` przywróciłby stary wybór.
 
    „Jak w telefonie” = brak atrybutu data-motyw; wtedy hala.css sam idzie za prefers-color-scheme,
    także gdy telefon przełączy się o zmierzchu przy otwartej aplikacji.
@@ -22,8 +27,9 @@
 (function (global) {
   'use strict';
 
-  var KLUCZ = 'hala.motyw';
-  var STARE_KLUCZE = ['hala.ur.motyw', 'hala.kj.motyw'];
+  var KLUCZ = 'gk.motyw';
+  // Kolejność = pierwszeństwo przy migracji: wspólny klucz hali (D30), potem jeszcze starsze UR i KJ.
+  var STARE_KLUCZE = ['hala.motyw', 'hala.ur.motyw', 'hala.kj.motyw'];
   // Kolor paska przeglądarki = --marka-tlo w danym motywie (hala.css). Tu na sztywno, bo arkusza jeszcze nie ma.
   var PASEK = { jasny: '#4E4E4E', ciemny: '#191817' };
   var wybranyBezPamieci = null;   // tryb prywatny: wybór żyje do zamknięcia karty
@@ -32,10 +38,11 @@
 
   function przejmijStary() {
     try {
-      if (global.localStorage.getItem(KLUCZ) !== null) return;
-      for (var i = 0; i < STARE_KLUCZE.length; i++) {
-        var w = global.localStorage.getItem(STARE_KLUCZE[i]);
-        if (w === 'jasny' || w === 'ciemny') { global.localStorage.setItem(KLUCZ, w); break; }
+      if (global.localStorage.getItem(KLUCZ) === null) {
+        for (var i = 0; i < STARE_KLUCZE.length; i++) {
+          var w = global.localStorage.getItem(STARE_KLUCZE[i]);
+          if (w === 'jasny' || w === 'ciemny') { global.localStorage.setItem(KLUCZ, w); break; }
+        }
       }
       for (var j = 0; j < STARE_KLUCZE.length; j++) global.localStorage.removeItem(STARE_KLUCZE[j]);
     } catch (e) { /* tryb prywatny — zostaje „jak w telefonie” */ }
@@ -83,4 +90,8 @@
     if (czujnik.addEventListener) czujnik.addEventListener('change', M.zastosuj);
     else if (czujnik.addListener) czujnik.addListener(M.zastosuj);
   } catch (e) { /* stara przeglądarka — pasek zostaje w kolorze z chwili otwarcia */ }
+  // Motyw zmieniony w innym programie GK na tym samym adresie (druga karta: GK Trasy, GK Flota, inna aplikacja hali).
+  try {
+    global.addEventListener('storage', function (e) { if (e.key === KLUCZ || e.key === null) M.zastosuj(); });
+  } catch (e) { /* bez tego motyw zmieni się przy następnym otwarciu */ }
 })(window);

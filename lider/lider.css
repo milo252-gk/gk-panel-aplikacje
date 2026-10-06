@@ -9,7 +9,7 @@
 .blad, .tekst-alarm { color: var(--czerwony); font-weight: 600; }
 .tekst-uwaga { color: var(--zolty); font-weight: 600; }
 .ok-tekst, .tekst-ok { color: var(--zielony); font-weight: 600; }   /* tekst-ok: stan powiadomień w menu (jak w UR i KJ) */
-button.maly { min-height: 40px; padding: 0 12px; font-size: .9em; }
+button.maly { min-height: max(40px, var(--dotyk-maly)); padding: 0 12px; font-size: .9em; }   /* telefon: 52 px (D29, --dotyk-maly z hala.css) */
 button.szeroki { width: 100%; }
 button.duzy { min-height: 54px; font-size: 16px; }   /* jak button.duzy w GK Trasy */
 h2 { font-size: 1.1em; margin: 18px 0 8px; }

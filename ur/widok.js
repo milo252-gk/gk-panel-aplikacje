@@ -208,6 +208,15 @@
     { typ: 'awaria.komentarz', tekst: 'Notatka' },
     { typ: 'awaria.anulowana', tekst: 'Fałszywy alarm', alarm: true },
   ];
+  // Kroki, po których awaria jest MOJA (kontrakt wpisuje autora jako mechanika) — przy cudzej awarii najpierw pytanie.
+  const KROKI_PRZEJMUJACE = ['awaria.przyjeta', 'awaria.naprawa_rozpoczeta', 'awaria.wznowiona', 'awaria.zakonczona_ur'];
+
+  /* Okno przed krokiem przejmującym: „Przejąć awarię od Jana Kowalskiego?” — z imieniem, bo mechanik musi wiedzieć,
+     komu zabiera robotę (i do kogo zadzwonić, zanim pojedzie). */
+  function pytaniePrzejecia(pracownicy, prowadzi) {
+    const kto = nazwaPracownika(pracownicy, prowadzi) || 'kolegi';
+    return { tytul: `Przejąć awarię od ${kto}?`, tresc: `Awarię prowadzi ${kto}. Po tym kroku będzie Twoja.`, przycisk: 'Przejmij' };
+  }
   function akcjeAwarii(awaria, { kontrakt, pracownik }) {
     // Zamknięta / anulowana: koniec pracy UR. Notatkę kontrakt by przyjął, ale na hali nikt jej już nie przeczyta.
     if (!awaria || !kontrakt || !pracownik || awaria.aktywny === false) return [];
@@ -218,12 +227,14 @@
     if (st === 'przyjeta' || st === 'zgloszona') lista = lista.filter(k => k.typ !== 'awaria.zakonczona_ur');
     // Awarię prowadzi kolega: „Na miejscu” przejęłoby ją bez słowa (kontrakt nadpisuje mechanika) —
     // krok zostaje, ale nie jako główny i z pytaniem „przejąć?” (pole przejmuje = kto prowadzi).
+    // „Jadę” też: kierownik UR przypisał zgłoszoną awarię koledze, a awaria.przyjeta wpisuje mechanikiem autora
+    // (recenzja 2026-10-05).
     const prowadzi = ((awaria.dane || {}).mechanik) || null;
     const cudza = !!prowadzi && prowadzi !== pracownik.id;
     // Na liście jest tylko jeden główny krok — ten pierwszy.
     let byl = false;
     return lista.map(k => {
-      const przejmuje = cudza && (k.typ === 'awaria.naprawa_rozpoczeta' || k.typ === 'awaria.wznowiona' || k.typ === 'awaria.zakonczona_ur') ? prowadzi : null;
+      const przejmuje = cudza && KROKI_PRZEJMUJACE.includes(k.typ) ? prowadzi : null;
       const g = k.glowny && !byl && !przejmuje;
       if (g) byl = true;
       return Object.assign({}, k, { glowny: g, przejmuje });
@@ -325,6 +336,19 @@
   }
   /* Dokąd prowadzi dotknięcie powiadomienia: jedna awaria → jej karta, kilka naraz → lista. */
   const adresPowiadomienia = p => (p && p.obiekt ? `#awaria/${encodeURIComponent(p.obiekt)}` : '#awarie');
+
+  /* Ekran z adresu: '#awarie', '#awaria/<id>', '#przeglady'… → { nazwa, parametr }. „#awaria/<id>” daje też push z huba
+     (recenzja 2026-10-05). Gdy tej awarii nie ma w telefonie (jeszcze nie doszła po starcie z powiadomienia albo wypadła
+     z okna dni) — lista awarii z `zastepczy` i `czeka` = id: ur.js przełączy na kartę, gdy awaria dojdzie. Pusta karta
+     „Nie ma takiej awarii” była ślepą uliczką. Zepsute „%” w adresie nie może wywrócić nawigacji — wtedy bez parametru. */
+  function ekranZAdresu(hash, ekrany, jestAwaria) {
+    const [nazwa, ...reszta] = (String(hash || '').replace(/^#/, '') || 'awarie').split('/');
+    let parametr = null;
+    try { parametr = reszta.map(decodeURIComponent).join('/') || null; } catch (e) { parametr = null; }
+    if (!(ekrany || []).includes(nazwa)) return { nazwa: 'awarie', parametr };
+    if (nazwa === 'awaria' && !(parametr && jestAwaria(parametr))) return { nazwa: 'awarie', parametr: null, zastepczy: true, czeka: parametr };
+    return { nazwa, parametr };
+  }
 
   /* Historia z huba (zdarzenia obiektu) → wiersze „kto, kiedy, co”. */
   function historiaAwarii(zdarzenia, { kontrakt, pracownicy, stale, teraz }) {
@@ -717,7 +741,7 @@
     statusPrzegladu, kartaDla, kartyDlaMaszyny, wierszPrzegladu, listaPrzegladow, wynikPomiaru, zakres, danePunktu, postepPrzegladu,
     wykonaniePlanu, bledyPlanowania, kluczPrzegladu,
     INTERWALY, opisInterwalu, kartaZFormularza, harmonogramZFormularza, listaHarmonogramu, przykladowyPlan, WZORY_KART,
-    listaLicznikow, bledyLicznika, bladOdczytuPrzegladu, harmonogramPrzegladu, swieze, adresPowiadomienia, SWIEZE_MS,
+    listaLicznikow, bledyLicznika, bladOdczytuPrzegladu, harmonogramPrzegladu, swieze, adresPowiadomienia, ekranZAdresu, pytaniePrzejecia, SWIEZE_MS,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.URWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

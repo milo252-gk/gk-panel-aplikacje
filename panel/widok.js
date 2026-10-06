@@ -702,6 +702,22 @@
     else if (t.stan === 'blad') tunel = { stan: 'Błąd', kolor: 'alarm', opis: t.blad || 'Tunel nie działa.' };
     else tunel = { stan: 'Łączy się', kolor: 'uwaga', opis: 'Za chwilę pojawi się adres (pierwsze włączenie pobiera program tunelu).' };
     tunel.adres = t.stan === 'dziala' ? t.adres || '' : '';
+    // Strażnik tunelu (D39): hub co 2 min pyta siebie przez tunel jak telefon — „działa” cloudflared to jeszcze nie
+    // działający tunel (Cloudflare potrafi skasować nazwę po cichu).
+    const s = (d && d.straznik) || {};
+    const proby = n => `${n} ${n === 1 ? 'próba' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'próby' : 'prób'}`;
+    const godz = iso => kiedy(iso).replace(/^dziś /, '');     // „sprawdzony 11:58”, z innego dnia „04.10 17:00”
+    tunel.straznik = null;
+    if (tunel.stan === 'Wyłączony' || tunel.stan === 'Wstrzymany') { /* strażnik śpi razem z tunelem */ }
+    else if (s.wynik === 'odpowiada') tunel.straznik = { kolor: 'ok', tekst: `Sprawdzony ${godz(s.sprawdzony)} — odpowiada.` };
+    else if (s.wynik === 'brak_internetu') tunel.straznik = { kolor: 'uwaga',
+      tekst: `Brak internetu w biurze (sprawdzony ${godz(s.sprawdzony)}) — nowy tunel hub uruchomi, gdy internet wróci.` };
+    else if (s.wynik === 'nie_odpowiada' || s.nie_odpowiada_od) {
+      tunel.straznik = { kolor: 'alarm', tekst: `Nie odpowiada od ${godz(s.nie_odpowiada_od)} (${proby(s.proby || 0)})` +
+        (s.restarty ? ` — hub uruchomił nowy tunel ${s.restarty}×.` : ' — po 3 próbach hub uruchomi nowy tunel.') +
+        (s.powod ? ` Ostatnio: ${s.powod}.` : '') };
+      if (t.stan === 'dziala') { tunel.stan = 'Nie odpowiada'; tunel.kolor = 'alarm'; }
+    }
 
     const wersje = Object.entries(p.wersje || {});
     const stare = wersje.filter(([, w]) => w.na_pages !== w.biezaca).map(([app]) => (app === 'wspolne' ? 'pliki wspólne' : app));

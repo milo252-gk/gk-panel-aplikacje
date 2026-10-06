@@ -118,6 +118,23 @@
     return null;
   }
 
+  /* Zmiany na tej linii bez raportu, które jeszcze można zamknąć (ekran „Koniec”): otwarte (z migawką pozycji), skończone
+     najwyżej RAPORT_ZALEGLY_MS temu; najnowsze na górze. Wysłać może KAŻDY z rolą z reguły zmiana.raport (lider tej linii,
+     mistrz, kierownik; admin) — nie tylko ten, kto zmianę otworzył, i nie tylko na następnej zmianie: lider poszedł do domu,
+     telefon padł, przyszedł dzień wolny, a kierownik ma dostać raport (recenzja 2026-10-05). Wcześniej warunek
+     `lider === ja` i tylko poprzednia zmiana — raport przepadał. Po 24 h zmianę widać już tylko na Panelu („bez raportu”). */
+  const RAPORT_ZALEGLY_MS = 24 * 60 * MIN;
+  function zalegleRaporty(zmianyLinii, { linia, teraz, zmiany, pracownik, kontrakt }) {
+    const role = (pracownik && pracownik.role) || [];
+    const spec = kontrakt && kontrakt.zdarzenia && kontrakt.zdarzenia['zmiana.raport'];
+    if (!spec || !role.some(r => r === 'admin' || (spec.role || []).includes(r))) return [];
+    return (zmianyLinii || [])
+      .filter(z => z && z.status === 'otwarta' && z.linia === linia && (((z.dane || {}).pozycje) || []).length)
+      .map(zl => ({ zl, zmiana: zmianaPoId((zl.dane || {}).zmiana, zmiany) }))
+      .filter(x => x.zmiana && ms(x.zmiana.do) <= teraz && teraz - ms(x.zmiana.do) <= RAPORT_ZALEGLY_MS)
+      .sort((a, b) => ms(b.zmiana.od) - ms(a.zmiana.od));
+  }
+
   /* Granica zmiany (etap 1, recenzja 2026-10-02): do której zmiany i linii idzie formularz, ustalamy RAZ — przy
      otwarciu — i trzymamy w parametrach okna (brudnopis, przeżywa przeładowanie karty). Wysyłka bierze tylko to.
      Inaczej raport zaczęty 13:55 i wysłany 14:01 trafiłby do zmiany II, a obsada spisana na koniec zmiany — do
@@ -371,7 +388,7 @@
   global.LiderWidok = {
     godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
     maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
-    kluczZmiany, poprzedniaZmiana, zmianaPoId, kontekstFormularza, pozycjaZmiany,
+    kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany,
     checklista, kodDlaLinii, doPrzypomnienia,
     awarie, sprawdzAwarie, aktywnaAwariaMaszyny, pytanieODuplikat,
     alertyDoPotwierdzenia, alertyLinii, proby, reklamacje, sprawdzProbe,

@@ -156,7 +156,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .zlecenie .odpowiedz { margin-top: 4px; font-size: .9em; font-weight: 600; }
 .zlecenie .numer { text-align: right; font-size: .8em; }
 .zlecenie .akcje { display: flex; flex-direction: column; gap: 6px; }
-button.maly { min-height: 36px; padding: 0 12px; }
+button.maly { min-height: max(36px, var(--dotyk-maly)); padding: 0 12px; }   /* telefon: 52 px (D29, --dotyk-maly z hala.css) */
 @media (max-width: 600px) {
   .zlecenie { grid-template-columns: minmax(0, 1fr); }
   .zlecenie .numer { text-align: left; }

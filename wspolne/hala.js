@@ -30,7 +30,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.11.0';
+  const WERSJA_KLIENTA = '0.11.1';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -101,22 +101,21 @@
     const loc = lokalny(ms);
     const lista = zmiany && Object.keys(zmiany).length ? zmiany : ZMIANY_DOMYSLNE;
     for (const [nr, z] of Object.entries(lista)) {
-      const m1 = /^(\d{1,2}):(\d{2})$/.exec(z.od || ''), m2 = /^(\d{1,2}):(\d{2})$/.exec(z.do || '');
+      // Jedna reguła godziny z hubem (hhmm ↔ _hhmm): zła godzina = zmiana pominięta po obu stronach.
+      const m1 = hhmm(z && z.od), m2 = hhmm(z && z.do);
       if (!m1 || !m2) continue;
-      const zla = m => +m[1] > 24 || +m[2] > 59 || (+m[1] === 24 && +m[2] > 0);
-      if (zla(m1) || zla(m2)) continue;
       for (const wstecz of [0, 1]) {
         const dzienMs = Date.UTC(loc.rok, loc.miesiac - 1, loc.dzien - wstecz);
         const d = new Date(dzienMs);
         const [r, mi, dz] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
-        const startN = Date.UTC(r, mi - 1, dz, +m1[1], +m1[2]);
-        let koniecN = Date.UTC(r, mi - 1, dz, +m2[1], +m2[2]);
+        const startN = Date.UTC(r, mi - 1, dz, m1[0], m1[1]);
+        let koniecN = Date.UTC(r, mi - 1, dz, m2[0], m2[1]);
         if (koniecN <= startN) koniecN += 86400000;
         if (startN <= loc.ms && loc.ms < koniecN) {
           const e = new Date(koniecN);
           const data = `${r}-${String(mi).padStart(2, '0')}-${String(dz).padStart(2, '0')}`;
           return { id: `${data}/${nr}`, nr, nazwa: z.nazwa || nr,
-                   od: iso(zLokalnego(r, mi, dz, +m1[1], +m1[2])),
+                   od: iso(zLokalnego(r, mi, dz, m1[0], m1[1])),
                    // godziny z e, nie z m2: '24:00' to już 00:00 następnego dnia
                    do: iso(zLokalnego(e.getUTCFullYear(), e.getUTCMonth() + 1, e.getUTCDate(), e.getUTCHours(), e.getUTCMinutes())) };
         }
@@ -440,9 +439,10 @@
     return { tekst: `do ${kiedy} (za ${formatCzasu(t - tms)})`, po: false, kiedy };
   }
 
-  /* 'HH:MM' -> [g, m]; '24:00' = koniec doby (jak w hubie). */
+  /* 'HH:MM' -> [g, m]; '24:00' = koniec doby. Bliźniak _hhmm w hala.py — ta sama reguła (tylko tekst, 1–2 cyfry ASCII,
+     dwukropek, 2 cyfry; bez spacji i znaków), inaczej hub i telefon liczą różne zmiany (wektory: zmiany). */
   function hhmm(t) {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+    const m = /^(\d{1,2}):(\d{2})$/.exec(typeof t === 'string' ? t : '');
     if (!m || +m[1] > 24 || +m[2] > 59 || (+m[1] === 24 && +m[2] > 0)) return null;
     return [+m[1], +m[2]];
   }

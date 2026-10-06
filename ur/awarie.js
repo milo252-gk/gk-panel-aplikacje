@@ -208,8 +208,10 @@
     // (optymistycznym) stanie — „Jadę, Jadę” nie wysyła dwóch zdarzeń i nie kończy się konfliktem.
     const krok = W.akcjeAwarii(a, UR.kontekst()).find(k => k.typ === typ);
     if (!krok) return;
-    if (krok.przejmuje && !(await UR.potwierdz('Przejąć awarię?',
-      `Awarię prowadzi ${W.nazwaPracownika(hala.pracownicy, krok.przejmuje)}. Po tym kroku będzie Twoja.`, 'Przejmij'))) return;
+    if (krok.przejmuje) {
+      const p = W.pytaniePrzejecia(hala.pracownicy, krok.przejmuje);
+      if (!(await UR.potwierdz(p.tytul, p.tresc, p.przycisk))) return;
+    }
     const maszyna = (a.dane || {}).maszyna;
     const stale = UR.stale();
     switch (typ) {

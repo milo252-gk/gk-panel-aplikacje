@@ -490,9 +490,11 @@
     const d = (k.zl && k.zl.dane) || {};
     const r = zbudujRaport(k, '');
     const zmianaId = k.zmiana.id === (hala.zmianaTeraz() || {}).id ? '' : k.zmiana.id;
+    // Zaległy raport wysyła każdy lider tej linii albo mistrz — niech widzi, czyją zmianę zamyka.
+    const otworzyl = d.lider && d.lider !== (hala.pracownik && hala.pracownik.id) ? W.nazwaPracownika(hala.pracownicy, d.lider) : '';
     return `<article class="karta koniec">
       <h2>${esc(tytul)}</h2>
-      <p class="slaby">${esc(W.opisZmiany(k.zmiana.id, hala.slowniki))} · ${esc(W.nazwaLinii(hala.slowniki, k.linia))}</p>
+      <p class="slaby">${esc(W.opisZmiany(k.zmiana.id, hala.slowniki))} · ${esc(W.nazwaLinii(hala.slowniki, k.linia))}${otworzyl ? ` · otworzył ${esc(otworzyl)}` : ''}</p>
       <ul class="lista">
         <li class="wiersz"><span class="tresc">Checklista</span><span class="znacznik ${r.checklista.zrobione === r.checklista.wszystkie && r.checklista.wszystkie ? 'ok' : 'uwaga'}">${r.checklista.zrobione}/${r.checklista.wszystkie}</span></li>
         <li class="wiersz"><span class="tresc">Awarie</span><span class="znacznik ${r.awarie.length ? 'alarm' : 'ok'}">${r.awarie.length}</span></li>
@@ -501,8 +503,8 @@
         <li class="wiersz"><span class="tresc">Raport</span>${k.zl && k.zl.status === 'zamknieta' ? `<span class="znacznik ok">wysłany ${esc(W.godzina(d.czas_zamkniecia))}</span>` : '<span class="znacznik uwaga">niewysłany</span>'}</li>
       </ul>
       <div class="przyciski-kolumna">
-        <button type="button" data-a="przekazanie" data-zmiana="${esc(zmianaId)}">Przekazanie zmiany</button>
-        <button type="button" class="glowny" data-a="raport" data-zmiana="${esc(zmianaId)}">Raport końcowy</button>
+        <button type="button" data-a="przekazanie" data-zmiana="${esc(zmianaId)}" data-linia="${esc(k.linia)}">Przekazanie zmiany</button>
+        <button type="button" class="glowny" data-a="raport" data-zmiana="${esc(zmianaId)}" data-linia="${esc(k.linia)}">Raport końcowy</button>
       </div>
     </article>`;
   }
@@ -510,19 +512,17 @@
   L.ekrany.koniec = {
     rysuj(el) {
       const k = L.kontekst();
-      if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian.</p>'; return; }
-      // Raport po końcu zmiany: lider, który otworzył poprzednią zmianę i nie zamknął jej raportem, widzi ją tu.
-      const prev = W.poprzedniaZmiana(k.zmiana, hala.slowniki.zmiany);
-      const kp = prev ? L.kontekst(prev) : null;
-      const ja = hala.pracownik && hala.pracownik.id;
-      const zalegla = kp && kp.zl && kp.zl.status === 'otwarta' && ((kp.zl.dane || {}).pozycje || []).length && kp.zl.dane.lider === ja;
-      el.innerHTML = (zalegla ? kartaKonca(kp, 'Poprzednia zmiana bez raportu') : '') + kartaKonca(k, 'Ta zmiana');
+      // Zmiany tej linii bez raportu z ostatnich 24 h — każdy lider tej linii albo mistrz może je zamknąć (W.zalegleRaporty).
+      const zalegle = W.zalegleRaporty(hala.obiekty('zmiana_linii'), { linia: k.linia, teraz: hala.teraz(), zmiany: hala.slowniki.zmiany,
+                                                                        pracownik: hala.pracownik, kontrakt: hala.kontrakt });
+      el.innerHTML = zalegle.map(x => kartaKonca(L.kontekst(x.zmiana, k.linia), 'Zmiana bez raportu')).join('')
+        + (k.zmiana ? kartaKonca(k, 'Ta zmiana') : '<p class="pusto">Poza godzinami zmian.</p>');
     },
   };
   L.$('ekran-koniec').addEventListener('click', ev => {
     const b = ev.target.closest('[data-a]');
     if (!b) return;
-    const o = { zmianaId: b.dataset.zmiana || undefined };
+    const o = { zmianaId: b.dataset.zmiana || undefined, linia: b.dataset.linia || undefined };
     if (b.dataset.a === 'przekazanie') formularzPrzekazania(o); else oknoRaportu(o);
   });
 })();
