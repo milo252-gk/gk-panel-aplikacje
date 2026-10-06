@@ -625,7 +625,7 @@
   const ROLE_BIUROWE = ['trasy_biuro', 'trasy_admin', 'flota_biuro', 'flota_admin'];
   const biuroTransportu = role => [].concat(role || []).some(r => ROLE_BIUROWE.includes(r));
 
-  /* Role w grupach do okna osoby: „Produkcja i jakość”, „GK Trasy”, „GK Flota” (stale.grupy_rol w kontrakcie).
+  /* Role w grupach do okna osoby: „Produkcja i jakość”, „GK Trasy”, „GK Flota”, „Marketing” (stale.grupy_rol w kontrakcie).
      Rola spoza grup (np. nowa w kontrakcie) trafia do pierwszej grupy — żadna nie może zniknąć z okna. */
   function grupyRol(stale) {
     const role = (stale && stale.role) || {};

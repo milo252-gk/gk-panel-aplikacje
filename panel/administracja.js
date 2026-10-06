@@ -10,6 +10,7 @@
    - Nad wszystkim czerwona wstęga alarmów huba (GET /api/v1/admin/alarmy): kopia, adres na Pages, token GitHub, miejsce.
    - Połączenia GK (D32): klucze programów GK Trasy i GK Flota, które biorą konta z huba (wspolne/GK-KONTA.md §3).
      Jedno konto osoby we wszystkich aplikacjach GK — role transportu w oknie osoby, w osobnych grupach.
+     GK Foto i GK Czytnik (D40, GK-KONTA.md §6) logują się samym kontem GK, bez klucza — tu tylko informacja.
    - Dostęp z telefonów (D33): stan tunelu, adresy czterech aplikacji na GitHub Pages z kodami QR, „Wyślij aplikacje na
      GitHub”, wersja na Pages. Ustawienia tunelu i tokenów — Ustawienia → „Tunel i GitHub” (tokeny nigdy nie wracają z huba).
    Co pokazać i czy formularz jest dobry, liczy widok.js (testy: panel/testy/widok-testy.js). */
@@ -616,6 +617,8 @@
             <button type="button" class="maly" data-akcja="kopiuj-klucz">Kopiuj</button></div>` : ''}
         </section>`;
       }).join('')}
+      <p class="slaby">GK Foto i GK Czytnik (Marketing) logują się kontem GK — imieniem i nazwiskiem i PIN-em z listy
+        Pracownicy. Klucza nie potrzebują. Osobie, która pracuje tylko w nich, nadaj rolę „Marketing”.</p>
       <div class="admin-pasek"><button type="button" data-akcja="odswiez-polaczenia">Odśwież stan</button></div>`;
   }
 
