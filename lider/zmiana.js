@@ -180,7 +180,7 @@
         <article class="karta otwarcie">
           <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))} · zmiana jeszcze nie otwarta</p>
-          ${podglad.length ? `<p class="slaby">Plan: ${esc(szablon.nazwa || szablon.kod)} — ${podglad.length} pozycji</p>
+          ${podglad.length ? `<p class="slaby">Plan: ${esc(szablon.nazwa || szablon.kod)} — ${esc(W.liczebnik(podglad.length, 'pozycja', 'pozycje', 'pozycji'))}</p>
             <ul class="lista podglad">${podglad.map(p => `<li class="wiersz"><span class="czas">${esc(W.godzina(p.termin))}</span><span class="tresc">${esc(p.nazwa)}</span></li>`).join('')}</ul>
             <button type="button" class="glowny szeroki duzy" data-a="rozpocznij">Rozpocznij zmianę</button>`
             : '<p class="blad">Brak szablonu checklisty dla tej linii. Poproś kierownika o dodanie szablonu.</p>'}

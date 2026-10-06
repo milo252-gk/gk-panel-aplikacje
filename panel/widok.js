@@ -579,7 +579,9 @@
       if (m) {
         const l = H().lokalny(teraz);
         let ms = H().zLokalnego(l.rok, l.miesiac, l.dzien, +m[1], +m[2]);
-        if (ms <= teraz) { const j = H().lokalny(teraz + 86400000); ms = H().zLokalnego(j.rok, j.miesiac, j.dzien, +m[1], +m[2]); }
+        // Jutro = następny dzień KALENDARZA zakładu, nie „teraz + 24 h”: doba zmiany czasu ma 23 albo 25 h, a wtedy
+        // +24 h trafiało w złą datę (25.10 o 00:30 z terminem 00:15 — termin już miniony; przegląd 2026-10-06).
+        if (ms <= teraz) ms = H().zLokalnego(l.rok, l.miesiac, l.dzien + 1, +m[1], +m[2]);
         return ms;
       }
     }
@@ -1196,6 +1198,39 @@
     return { klasa, tekst };
   }
 
+  // ------------------------------------------------------------ Administracja: ponowne wczytanie po błędzie
+
+  /* Czy część Administracji (pracownicy, Połączenia GK, dostęp z telefonów) wczytać teraz: nic jeszcze nie przyszło
+     i nie było błędu — tak; był błąd (hub chwilowo nie odpowiadał) — ponów co PONOW_PO_BLEDZIE_MS. Wcześniej błąd
+     wstrzymywał wczytywanie na zawsze: „Brak połączenia z hubem” wisiało do przeładowania strony, choć hub już
+     dawno działał, a przycisku „Odśwież” nie było (rysuje się dopiero po udanym wczytaniu; przegląd 2026-10-06). */
+  const PONOW_PO_BLEDZIE_MS = 15000;
+  function wczytacPonownie(blad, czasBledu, teraz) {
+    return !blad || teraz - (czasBledu || 0) >= PONOW_PO_BLEDZIE_MS;
+  }
+
+  // ------------------------------------------------------------ jedno wysłanie naraz
+
+  /* Formularz wysyłany raz (przegląd 2026-10-06): drugie dotknięcie „Wyślij”, zanim pierwszy zapis skończy się w telefonie
+     (zdjęcie się zmniejsza, IndexedDB zapisuje), dawało DRUGIE zdarzenie — dwie awarie tej samej maszyny (dwa liczniki
+     przestoju, mechanik jedzie dwa razy), dwie próby, dwa zlecenia. UR i KJ mają to od dawna (W.raz). preventDefault
+     zawsze od razu — także dla dotknięcia, które zignorujemy (inaczej przeglądarka wysłałaby formularz sama). */
+  function raz(fn) {
+    let trwa = false;
+    return async function (...argumenty) {
+      if (trwa) return undefined;
+      trwa = true;
+      try { return await fn.apply(this, argumenty); } finally { trwa = false; }
+    };
+  }
+  function przyWysylce(fn) {
+    const r = raz(fn);
+    return function (ev) {
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      return r.call(this, ev);
+    };
+  }
+
   // ------------------------------------------------------------ pasek zmiany
 
   function opisBiezacejZmiany(zmiana, teraz) {
@@ -1207,7 +1242,7 @@
   const PanelWidok = { obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;

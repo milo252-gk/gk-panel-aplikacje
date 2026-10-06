@@ -30,7 +30,7 @@
 <main id="logowanie" class="hala-logowanie" hidden>
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
-    <h1>Lider produkcji</h1>
+    <h1>GK Lider</h1>
     <p class="pod">Zaloguj się imieniem i nazwiskiem (albo kartą) i&nbsp;PIN-em</p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko (albo karta)
@@ -40,7 +40,7 @@
         </span>
       </label>
       <label>PIN
-        <input id="pin" name="pin" type="password" inputmode="numeric">
+        <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
       <div class="pinpad" aria-label="Klawiatura PIN">
         <button type="button" data-cyfra="1">1</button><button type="button" data-cyfra="2">2</button><button type="button" data-cyfra="3">3</button>
@@ -51,6 +51,7 @@
       </div>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
+    <p class="hala-konto-skad">Konto zakłada administrator w Panelu Kierownika → Administracja.</p>
     <p id="czeka-na" class="pod czeka-na" hidden></p>
   </div>
 </main>
@@ -60,7 +61,7 @@
   <header class="naglowek">
     <button id="wybor-linii" class="linia" type="button" aria-label="Zmień linię"></button>
     <div id="opis-zmiany" class="opis-zmiany"></div>
-    <button id="menu" class="kto" type="button" aria-label="Menu"></button>
+    <button id="menu" class="kto" type="button" aria-label="Moje konto" title="Moje konto"></button>
   </header>
 
   <div id="wezwania" class="wezwania" aria-live="assertive"></div>
@@ -78,7 +79,7 @@
     <div class="hala-menu-naglowek">
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
-      <div class="hala-menu-kto">Aplikacja Lidera</div>
+      <div class="hala-menu-kto">GK Lider</div>
     </div>
     <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona">✅</span>Zmiana</button>
     <button type="button" data-ekran="jakosc"><span class="ikona">🔍</span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>

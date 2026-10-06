@@ -59,7 +59,7 @@
     const form = el.querySelector('form');
     L.formularz('alert:' + a.id, { uwagi: '' }).then(f => {
       f.powiaz(form);
-      form.addEventListener('submit', async ev => {
+      form.addEventListener('submit', W.przyWysylce(async ev => {
         ev.preventDefault();
         const zd = await L.zapisz('alert.potwierdzony', a.id, L.bezPustych({ linia, uwagi: (f.dane.uwagi || '').trim() }));
         if (!zd) return;
@@ -67,7 +67,7 @@
         pokazany = null;
         L.poZapisie('Alert potwierdzony');
         L.narysuj();
-      });
+      }));
     });
   }
   L.poRysowaniu.push(zaslona);

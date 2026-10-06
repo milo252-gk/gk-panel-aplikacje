@@ -32,12 +32,13 @@
       <label>Imię i nazwisko (albo karta)
         <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Jan Kowalski">
       </label>
-      <label>PIN
-        <input id="pin" name="pin" type="password" inputmode="numeric">
+      <label>PIN / hasło
+        <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
+    <p class="hala-konto-skad">Konto zakłada administrator w Panelu Kierownika → Administracja.</p>
   </div>
 </main>
 
@@ -47,7 +48,7 @@
     <div class="hala-menu-naglowek">
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
-      <div class="hala-menu-kto">Panel Kierownika</div>
+      <div class="hala-menu-kto">GK Panel Kierownika</div>
     </div>
     <button type="button" role="tab" data-widok="na-zywo" aria-selected="true"><span class="ikona" aria-hidden="true">📊</span><span>Na żywo</span></button>
     <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" aria-hidden="true">📋</span><span>Zlecenia</span><span id="plakietka-zlecen" class="plakietka" hidden></span></button>
@@ -62,7 +63,7 @@
   <header class="naglowek">
     <div class="zmiana" id="zmiana"></div>
     <div class="zegar" id="zegar">--:--</div>
-    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false">🔕</button><span id="kto" class="tylko-telefon"></span><button id="konto" class="maly" type="button" aria-label="Konto" title="Konto">👤</button></div>
+    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false">🔕</button><span id="kto" class="tylko-telefon"></span><button id="konto" class="maly" type="button" aria-label="Moje konto" title="Moje konto">👤</button></div>
   </header>
 
   <div id="na-zywo" class="na-zywo">
@@ -337,21 +338,21 @@
   </form>
 </dialog>
 
-<!-- Konto (👤 w pasku górnym, jak „Moje konto” w GK Trasy): kto, motyw, dane w urządzeniu, wersja, Wyloguj. -->
+<!-- Moje konto (👤 w pasku górnym, jak „Moje konto” w GK Trasy, STYL-GK §3): kto, wygląd, PIN, dane w urządzeniu, wersja, Wyloguj. -->
 <dialog id="okno-konta" class="okno" aria-labelledby="t-okno-konta">
   <form method="dialog" class="konto">
-    <h2 id="t-okno-konta">Konto</h2>
-    <p class="konto-kto"><b id="konto-nazwa"></b></p>
-    <!-- Zmiana własnego PIN-u (D32) — wspólne okno z ../wspolne/konto.js, to samo w Liderze, UR i KJ. -->
-    <div id="konto-pin"></div>
-    <fieldset><legend>Motyw</legend>
-      <div class="chipy" id="wybor-motywu" role="group" aria-label="Motyw">
+    <h2 id="t-okno-konta">Moje konto</h2>
+    <p class="konto-kto"><b id="konto-nazwa"></b><br><span id="konto-role" class="slaby konto-drobne"></span></p>
+    <fieldset><legend>Wygląd</legend>
+      <div class="chipy" id="wybor-motywu" role="group" aria-label="Wygląd">
         <button type="button" class="chip" data-motyw="auto" aria-pressed="false">Jak w telefonie</button>
         <button type="button" class="chip" data-motyw="jasny" aria-pressed="false">Jasny</button>
         <button type="button" class="chip" data-motyw="ciemny" aria-pressed="false">Ciemny</button>
       </div>
       <p class="slaby konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
     </fieldset>
+    <!-- Zmiana własnego PIN-u (D32) — wspólne okno z ../wspolne/konto.js; kolejność jak „Moje konto” w Liderze, UR i KJ. -->
+    <div id="konto-pin"></div>
     <!-- Push przy zamkniętym Panelu (2026-10-02): zlecenie, które ta osoba zleciła, jest po terminie. Konto ekranu tego nie ma. -->
     <fieldset id="konto-powiadomienia"><legend>Powiadomienia</legend>
       <div id="konto-push" class="konto-push"></div>

@@ -111,7 +111,10 @@
     const m = /^(\d{4})-(\d{2})-(\d{2})\/(.+)$/.exec(id || '');
     if (!m) return null;
     const polnoc = H().zLokalnego(+m[1], +m[2], +m[3], 0, 0);
-    for (let i = 0; i < 48; i++) {
+    // 27 h, nie 24: doba zmiany czasu ma 25 h (25.10.2026 — 24 h od północy to dopiero 23:00, a zmiana od 22:45 przepadała
+    // i formularz szedł do bieżącej zmiany), a zmiana zaczęta po 23:30 widać dopiero po północy (przegląd 2026-10-06).
+    // Nadmiar nic nie psuje — liczy się tylko zmiana o tym id.
+    for (let i = 0; i < 54; i++) {
       const z = H().zmianaDla(polnoc + i * 30 * MIN, zmiany);
       if (z && z.id === id) return z;
     }
@@ -143,6 +146,13 @@
   function kontekstFormularza(parametry, zmianaTeraz, liniaTeraz) {
     const p = parametry || {};
     return { zmianaId: p.zmianaId || (zmianaTeraz && zmianaTeraz.id) || '', linia: p.linia || liniaTeraz || '' };
+  }
+
+  /* Klucz brudnopisu próby jakościowej — z ZMIANĄ (przegląd 2026-10-06). Id pozycji checklisty powtarzają się co zmianę,
+     a „start” i QR to tylko wartości domyślne: brudnopis porzucony wczoraj (okno zamknięte ✕) wstawał dziś przy tej samej
+     pozycji z wczorajszym czasem rozpoczęcia i wczorajszym skanem — KJ liczyła taką próbę do złej zmiany. */
+  function kluczBrudnopisuProby(linia, zmianaId, pozycja) {
+    return `proba:${linia}:${zmianaId || '-'}:${pozycja || 'dodatkowa'}`;
   }
 
   /* Czy zmiana na linii ma pozycję o tym id — odhaczamy tylko pozycje TEJ zmiany (migawka z jej otwarcia). */
@@ -385,13 +395,35 @@
     };
   }
 
+  // ------------------------------------------------------------ jedno wysłanie naraz
+
+  /* Formularz wysyłany raz (przegląd 2026-10-06): drugie dotknięcie „Wyślij”, zanim pierwszy zapis skończy się w telefonie
+     (zdjęcie się zmniejsza, IndexedDB zapisuje), dawało DRUGIE zdarzenie — dwie awarie tej samej maszyny (dwa liczniki
+     przestoju, mechanik jedzie dwa razy), dwie próby, dwa zlecenia. UR i KJ mają to od dawna (W.raz). preventDefault
+     zawsze od razu — także dla dotknięcia, które zignorujemy (inaczej przeglądarka wysłałaby formularz sama). */
+  function raz(fn) {
+    let trwa = false;
+    return async function (...argumenty) {
+      if (trwa) return undefined;
+      trwa = true;
+      try { return await fn.apply(this, argumenty); } finally { trwa = false; }
+    };
+  }
+  function przyWysylce(fn) {
+    const r = raz(fn);
+    return function (ev) {
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      return r.call(this, ev);
+    };
+  }
+
   global.LiderWidok = {
     godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
     maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
-    kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany,
+    kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodDlaLinii, doPrzypomnienia,
     awarie, sprawdzAwarie, aktywnaAwariaMaszyny, pytanieODuplikat,
     alertyDoPotwierdzenia, alertyLinii, proby, reklamacje, sprawdzProbe,
-    raport,
+    raport, raz, przyWysylce,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

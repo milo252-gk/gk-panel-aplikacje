@@ -10,7 +10,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                    */
 
-const WERSJA = 'ur-73e877cee6a0';
+const WERSJA = 'ur-4c0ca8221fb2';
 
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.
 importScripts('../wspolne/hala-push-sw.js');
@@ -46,7 +46,10 @@ self.addEventListener('fetch', e => {
 
   // Najpierw sieć (poprawki docierają od razu), kopia tylko gdy sieci nie ma.
   e.respondWith(
-    fetch(e.request)
+    // cache: 'no-cache' — pytamy serwer zawsze (304, gdy bez zmian). Bez tego na GitHub Pages (max-age=600) odświeżenie
+    // po nowej wersji brało pliki z pamięci HTTP przeglądarki sprzed wysyłki i zapisywało je do pamięci NOWEJ wersji
+    // (przegląd 2026-10-06).
+    fetch(e.request, { cache: 'no-cache' })
       .then(odp => {
         if (odp && odp.ok) { const kopia = odp.clone(); caches.open(WERSJA).then(c => c.put(e.request, kopia)); }
         return odp;

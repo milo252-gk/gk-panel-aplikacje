@@ -409,7 +409,7 @@
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo kierownika UR.';
-    // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Zły identyfikator albo PIN”, blokada na 5 min).
+    // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Złe imię i nazwisko albo PIN”, blokada na 5 min).
     return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i PIN.';
   }
   UR.komunikatBledu = komunikatBledu;
@@ -421,7 +421,10 @@
     const ident = $('identyfikator').value.trim().replace(/^HALA:P:/i, '');
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
-    if (!pin) { $('identyfikator').focus(); return; }
+    if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('identyfikator').focus(); return;
+    }
     const blad = $('blad-logowania');
     blad.hidden = true;
     for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = true;
@@ -450,13 +453,17 @@
     $('pin').focus();
   });
 
-  $('menu-wyloguj').addEventListener('click', () => $('wyjdz').click());   // stopka menu na komputerze, jak w GK Trasy
-  $('wyjdz').addEventListener('click', async () => {
+  async function wyloguj() {
     const k = hala.stanKolejki().moje;
     if (k && !(await UR.potwierdz('Wylogować?', `Czeka na wysłanie: ${k}. Wyślą się, gdy znowu zalogujesz się na tym urządzeniu.`, 'Wyloguj'))) return;
     await hala.wyloguj();
     pokazSesje();
-  });
+  }
+  $('menu-wyloguj').addEventListener('click', wyloguj);   // stopka menu na komputerze, jak w GK Trasy
+  /* „Moje konto” (👤 w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
+     dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
+  $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
+    aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone') }));
 
   function pokazSesje() {
     const z = hala.zalogowany();
@@ -486,7 +493,8 @@
         czesci.push('Odświeżanie co kilka sekund' + (kolejka.moje ? ` — wysyłam: ${kolejka.moje}` : ''));
       } else if (!p.strumien && !laska) {
         klasa = p.online ? 'brak-huba' : 'offline';
-        czesci.push((p.online ? 'Brak połączenia z hubem' : 'Brak sieci') + (kolejka.moje ? ` — ${kolejka.moje} czeka na wysłanie` : ''));
+        czesci.push(p.online ? 'Brak połączenia z hubem' + (kolejka.moje ? ` — ${kolejka.moje} czeka na wysłanie` : '')
+          : 'Brak sieci — zapisy zostają w telefonie' + (kolejka.moje ? ` (${kolejka.moje})` : ''));   // STYL-GK §6, jak Lider
       } else if (kolejka.moje) {
         klasa = 'kolejka';
         czesci.push(`Wysyłam: ${kolejka.moje}`);
@@ -529,14 +537,6 @@
     return (spec && spec.opis) ? spec.opis.split(/[.—(]/)[0].trim() : typ;
   }
 
-  // ------------------------------------------------------------ motyw (wspólny: ../wspolne/motyw.js)
-
-  /* Wybór i zapamiętanie motywu robi motyw.js (ładowany w <head>, przed arkuszem) — jeden klucz dla
-     czterech aplikacji. Tu tylko komunikat, gdy przeglądarka nie pozwala zapamiętać (tryb prywatny). */
-  UR.motyw = {
-    odczytaj: () => global.HalaMotyw.odczytaj(),
-    ustaw(w) { if (!global.HalaMotyw.ustaw(w)) UR.komunikat('Telefon nie zapamięta wyboru (tryb prywatny?) — działa do zamknięcia karty.', 'uwaga'); },
-  };
 
   // ------------------------------------------------------------ „Więcej”
 
@@ -577,21 +577,8 @@
         <p class="slaby">Dźwięk i wibracja działają, gdy aplikacja jest otwarta (także w tle).</p>
         <div id="push"></div>
         <button type="button" class="szeroki" id="test-dzwieku" style="margin-top:10px">Sprawdź dźwięk</button>
-        <h2>Motyw</h2>
-        <div class="wybor" id="wybor-motywu">${[['auto', 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']].map(([k, n]) =>
-          `<button type="button" data-motyw="${k}" aria-pressed="${UR.motyw.odczytaj() === k}">${n}</button>`).join('')}</div>
-        <h2>PIN</h2>
-        <div id="konto-pin"></div>
         <p class="slaby stopka">Zalogowany: ${esc(hala.pracownik && hala.pracownik.nazwa)} · <span id="wersja">klient ${esc(hala.wersja)}</span></p>`;
       global.HalaAktualizacja.wpiszWersje(el.querySelector('#wersja'), 'ur');
-      // Wspólne okno „Zmień PIN” (../wspolne/konto.js, D32) — ten sam PIN we wszystkich aplikacjach GK.
-      global.HalaKonto.przycisk(el.querySelector('#konto-pin'), hala, { komunikat: (t, r) => UR.komunikat(t, r) });
-      el.querySelector('#wybor-motywu').addEventListener('click', ev => {
-        const b = ev.target.closest('[data-motyw]');
-        if (!b) return;
-        UR.motyw.ustaw(b.dataset.motyw);
-        for (const x of el.querySelectorAll('#wybor-motywu button')) x.setAttribute('aria-pressed', String(x === b));
-      });
       rysujPush(el.querySelector('#push'), t => UR.komunikat(t, 'alarm'), true);
       el.querySelector('#test-dzwieku').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.awaria(true), 150); });
     },

@@ -43,7 +43,11 @@
     const zajety = () => {
       try { return zajetyWspolnie() || !!(o.zajety && o.zajety()); } catch (e) { return false; }
     };
-    const bylJuzWorker = !!nav.serviceWorker.controller;
+    // Czy stronę prowadzi już jakiś worker. NIE stała z chwili startu: strona otwarta bez workera (pierwsze wejście,
+    // Ctrl+Shift+R, wyczyszczone dane) dostaje go przy pierwszym controllerchange — od tej chwili każda następna
+    // zmiana to już nowa wersja. Wcześniej flaga zostawała „false” na zawsze i taka karta (monitor w biurze, telefon
+    // lidera) nie brała żadnej poprawki aż do ręcznego odświeżenia (przegląd 2026-10-06).
+    let prowadzona = !!nav.serviceWorker.controller;
     let czeka = false, przeladowano = false;
 
     function przeladuj() {
@@ -60,7 +64,8 @@
     }
 
     nav.serviceWorker.addEventListener('controllerchange', () => {
-      if (!bylJuzWorker || czeka || przeladowano) return;
+      if (!prowadzona) { prowadzona = true; return; }      // pierwsza instalacja — nic się nie zmieniło
+      if (czeka || przeladowano) return;
       sprobuj();
     });
     nav.serviceWorker.register(o.sw || 'sw.js').then(rejestracja => {

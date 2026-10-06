@@ -121,14 +121,16 @@
     const ident = $('identyfikator').value.trim();
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
-    if (!pin) { $('identyfikator').focus(); return; }
+    if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('identyfikator').focus(); return;
+    }
     const blad = $('blad-logowania');
     blad.hidden = true;
     const przycisk = ev.target.querySelector('button');
     przycisk.disabled = true;
     try {
-      // Bez identyfikatora hub odpowie instrukcją „Zaloguj się identyfikatorem… i PIN-em” — pokazujemy ją wprost.
-      await hala.zaloguj(ident ? { identyfikator: ident, pin } : { pin });
+      await hala.zaloguj({ identyfikator: ident, pin });
       $('identyfikator').value = ''; $('pin').value = '';
       pokazSesje();
     } catch (e) {
@@ -175,6 +177,8 @@
   async function rysujKonto() {
     const p = hala.pracownik || {};
     $('konto-nazwa').textContent = p.nazwa || '—';
+    const nazwyRol = (hala.kontrakt && hala.kontrakt.stale && hala.kontrakt.stale.role) || {};
+    $('konto-role').textContent = (p.role || []).map(r => nazwyRol[r] || r).join(', ');
     // „Zmień PIN” — wspólne okno (../wspolne/konto.js), to samo w Liderze, UR i KJ; konto ekranu go nie ma.
     HalaKonto.przycisk($('konto-pin'), hala, { komunikat });
     // Monitor w biurze nikomu nic nie zleca — nie ma czego mu przypominać.
@@ -667,7 +671,7 @@
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
   fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); });
   fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); });
-  fz.addEventListener('submit', async ev => {
+  fz.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
     const dane = { tytul: fz.tytul.value.trim(), dzial: fz.dzial.value, priorytet: fz.pilne.checked ? 'pilne' : 'normalny',
                    wymagaj_zdjecia: fz.wymagaj_zdjecia.checked, wymagaj_notatki: fz.wymagaj_notatki.checked };
@@ -680,7 +684,7 @@
       komunikat('Zlecone', 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
     } catch (e) { const b = fz.querySelector('.blad'); b.textContent = komunikatBledu(e); b.hidden = false; }
-  });
+  }));
 
   // Zgłoszenie awarii z Panelu — trafia do UR jak od lidera (awaria.zgloszona).
   const fa = $('formularz-awarii');
@@ -692,7 +696,7 @@
     otworzOkno($('okno-awarii'));
   });
   fa.linia.addEventListener('change', () => { fa.maszyna.innerHTML = opcje(maszynyLinii(fa.linia.value)); });
-  fa.addEventListener('submit', async ev => {
+  fa.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
     try {
       await hala.zapisz('awaria.zgloszona', hala.nowyId(),
@@ -700,7 +704,7 @@
       $('okno-awarii').close();
       document.querySelector('.zakladki [data-widok="na-zywo"]').click();
     } catch (e) { const b = fa.querySelector('.blad'); b.textContent = komunikatBledu(e); b.hidden = false; }
-  });
+  }));
 
   // ------------------------------------------------------------ sygnał: nowe zatrzymanie linii albo Quality Alert
 

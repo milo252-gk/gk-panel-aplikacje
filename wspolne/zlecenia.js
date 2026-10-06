@@ -160,7 +160,7 @@
       <p class="hala-zlecenie-blad" ${f.blad ? '' : 'hidden'}>${esc(f.blad || '')}</p>
       <div class="hala-zlecenie-akcje">
         <button type="button" data-akcja="anuluj-formularz">Anuluj</button>
-        <button type="button" class="${zrobione ? 'zielony' : 'czerwony'}" data-akcja="wyslij" ${brak.length ? 'disabled' : ''}>${zrobione ? 'Wyślij: zrobione' : 'Wyślij: nie mogę'}</button>
+        <button type="button" class="${zrobione ? 'zielony' : 'czerwony'}" data-akcja="wyslij" ${brak.length || f.wysyla ? 'disabled' : ''}>${zrobione ? 'Wyślij: zrobione' : 'Wyślij: nie mogę'}</button>
       </div></div>`;
   }
 
@@ -169,7 +169,7 @@
     const brak = brakuje(f.wymagania, f);
     const b = el.querySelector('.hala-zlecenie-formularz [data-akcja="wyslij"]');
     const p = el.querySelector('.hala-zlecenie-formularz [data-brakuje]');
-    if (b) b.disabled = !!brak.length;
+    if (b) b.disabled = !!brak.length || !!f.wysyla;
     if (p) { p.textContent = tekstBraku(brak); p.hidden = !brak.length; }
   }
 
@@ -267,6 +267,11 @@
         const f = s.formularz, tekst = f.tekst.trim();
         const brak = brakuje(f.wymagania, f);
         if (brak.length) { f.blad = tekstBraku(brak); return rysuj(el, hala, opcje); }
+        // Stan „wysyła” w formularzu, a nie tylko na przycisku: zmniejszanie kilku zdjęć trwa sekundy, a każde zdarzenie
+        // z hali w tym czasie przerysowuje ekran (rysuj) — przycisk wracał aktywny i drugie dotknięcie wysyłało zdjęcia
+        // i „zlecenie.wykonane” drugi raz (przegląd 2026-10-06).
+        if (f.wysyla) return;
+        f.wysyla = true;
         b.disabled = true;
         if (f.rodzaj === 'odrzucone') {
           await hala.zapisz('zlecenie.odrzucone', id, { powod: tekst });
@@ -282,7 +287,7 @@
         rysuj(el, hala, opcje);
       }
     } catch (e) {
-      if (s.formularz) { s.formularz.blad = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'; rysuj(el, hala, opcje); }
+      if (s.formularz) { s.formularz.wysyla = false; s.formularz.blad = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'; rysuj(el, hala, opcje); }
       else alert((e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.');
     }
   }
@@ -304,7 +309,7 @@
     zapamietaj();
   }
 
-  const HalaZlecenia = { wiersze, przepadlo, brakuje, tekstBraku, doZrobienia, zalegle, rysujZalegle, rysuj, sledz };
+  const HalaZlecenia = { wiersze, przepadlo, brakuje, tekstBraku, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

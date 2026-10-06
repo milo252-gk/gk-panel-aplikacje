@@ -191,7 +191,7 @@
     if (punkty && edycja) podepnijPunkty(punkty, p.id, karta);
   }
 
-  const opisLicznika = d => [typeof d.motogodziny === 'number' ? `${d.motogodziny} mth` : null, typeof d.cykle === 'number' ? `${d.cykle} cykli` : null].filter(Boolean).join(', ') || '—';
+  const opisLicznika = d => [typeof d.motogodziny === 'number' ? `${d.motogodziny} mth` : null, typeof d.cykle === 'number' ? `${d.cykle} ${W.odmiana(d.cykle, 'cykl', 'cykle', 'cykli')}` : null].filter(Boolean).join(', ') || '—';
 
   /* Punkt zapisuje się sam: przycisk Zgodne/Niezgodne od razu, pomiar i uwagi po wyjściu z pola,
      zdjęcie po zrobieniu. Zapisujemy pełny wpis punktu (mapa w kontrakcie nadpisuje całość). */
@@ -375,7 +375,7 @@
         <p class="slaby">Motogodziny i cykle z licznika na maszynie. Z nich plan liczy przeglądy „co N motogodzin”.</p>
         <div class="lista">${lista.map(m => `<button type="button" class="karta" data-licznik="${esc(m.kod)}" ${moge ? "" : "disabled"}>
           <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)} · ${esc(m.liniaNazwa)}</span><br>
-          <span>${m.motogodziny !== null ? `${esc(m.motogodziny)} mth` : '— mth'} · ${m.cykle !== null ? `${esc(m.cykle)} cykli` : '— cykli'}</span>
+          <span>${m.motogodziny !== null ? `${esc(m.motogodziny)} mth` : '— mth'} · ${m.cykle !== null ? `${esc(m.cykle)} ${W.odmiana(m.cykle, 'cykl', 'cykle', 'cykli')}` : '— cykli'}</span>
           <span class="slaby">${m.kiedy ? ` · odczyt ${esc(m.kiedy)}` : ''}</span></button>`).join('') || '<p class="pusto">Brak maszyn w słowniku.</p>'}</div>`;
       el.querySelector('.lista').addEventListener('click', ev => {
         const b = ev.target.closest('[data-licznik]');

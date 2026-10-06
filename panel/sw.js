@@ -11,7 +11,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej Panel nie wstaje wcale.                        */
 
-const WERSJA = 'panel-60dfa5a04979';
+const WERSJA = 'panel-3d861390656f';
 
 // Powiadomienia przy zamkniętym Panelu (2026-10-02): kierownik, który zlecił, dowiaduje się, że zlecenie jest po
 // terminie (wspólna część z Liderem, UR i KJ — D28). Panel nie ma własnej obsługi dotknięcia: robi to wspólny plik
@@ -48,7 +48,10 @@ self.addEventListener('fetch', e => {
 
   // Najpierw sieć (poprawki docierają od razu), kopia tylko gdy sieci nie ma.
   e.respondWith(
-    fetch(e.request)
+    // cache: 'no-cache' — pytamy serwer zawsze (304, gdy bez zmian). Bez tego na GitHub Pages (max-age=600) odświeżenie
+    // po nowej wersji brało pliki z pamięci HTTP przeglądarki sprzed wysyłki i zapisywało je do pamięci NOWEJ wersji
+    // (przegląd 2026-10-06).
+    fetch(e.request, { cache: 'no-cache' })
       .then(odp => {
         if (odp && odp.ok) { const kopia = odp.clone(); caches.open(WERSJA).then(c => c.put(e.request, kopia)); }
         return odp;

@@ -17,7 +17,10 @@
 
   // ------------------------------------------------------------ drobiazgi (jak w KJ)
 
-  const liczba = v => (typeof v === 'number' && isFinite(v) ? v : (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.'))));
+  // Same spacje to puste pole, nie zero: Number('  ') === 0, a odczyt licznika „0 mth” po cichu zerował licznik maszyny
+  // (przegląd 2026-10-06).
+  const liczba = v => (typeof v === 'number' && isFinite(v) ? v
+    : (v === null || v === undefined || !String(v).trim() ? NaN : Number(String(v).trim().replace(',', '.'))));
 
   const posortowane = slownik =>
     Object.entries(slownik || {})
@@ -718,7 +721,7 @@
   function bledyLicznika(f, poprzedni) {
     const b = [], d = {};
     for (const pole of ['motogodziny', 'cykle']) {
-      if (f[pole] === '' || f[pole] === undefined || f[pole] === null) continue;
+      if (f[pole] === undefined || f[pole] === null || !String(f[pole]).trim()) continue;
       const v = liczba(f[pole]);
       if (isNaN(v) || v < 0) { b.push(`${pole === 'cykle' ? 'Cykle' : 'Motogodziny'}: liczba ≥ 0.`); continue; }
       d[pole] = v;

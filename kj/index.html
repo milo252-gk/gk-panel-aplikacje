@@ -26,7 +26,7 @@
 <main id="logowanie" class="hala-logowanie" hidden>
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
-    <h1>Kontrola Jakości</h1>
+    <h1>GK Kontrola Jakości</h1>
     <p class="pod">Zaloguj się imieniem i nazwiskiem (albo kartą) i&nbsp;PIN-em</p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko (albo karta)
@@ -36,11 +36,12 @@
         </span>
       </label>
       <label>PIN
-        <input id="pin" name="pin" type="password" inputmode="numeric">
+        <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
+    <p class="hala-konto-skad">Konto zakłada administrator w Panelu Kierownika → Administracja.</p>
   </div>
 </main>
 
@@ -48,7 +49,7 @@
   <header class="naglowek">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="logo">
     <div class="zmiana" id="zmiana"></div>
-    <div class="kto"><span id="kto" class="tylko-telefon"></span><button id="wyjdz" class="maly tylko-telefon" type="button">Wyloguj</button></div>
+    <div class="kto"><span id="kto" class="tylko-telefon"></span><button id="konto" class="maly" type="button" aria-label="Moje konto" title="Moje konto">👤</button></div>
   </header>
 
   <main id="ekran" class="ekran" tabindex="-1"></main>
@@ -58,7 +59,7 @@
     <div class="hala-menu-naglowek">
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
-      <div class="hala-menu-kto">Kontrola Jakości</div>
+      <div class="hala-menu-kto">GK Kontrola Jakości</div>
     </div>
     <a href="#plan" data-ekran="plan"><span class="ikona" aria-hidden="true">🗓️</span>Plan</a>
     <a href="#proba" data-ekran="proba"><span class="ikona" aria-hidden="true">🧪</span>Próba</a>

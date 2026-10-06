@@ -57,8 +57,8 @@
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.kod === 403) return 'To konto nie ma dostępu do Aplikacji Lidera. Poproś kierownika o rolę lidera albo mistrza.';
-    // 400/401/429: hub mówi po polsku i wprost, co zrobić (zły identyfikator albo PIN, blokada na 5 minut…).
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś kierownika o rolę lidera albo mistrza.';
+    // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo PIN, blokada na 5 minut…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
   };
 
@@ -356,7 +356,10 @@
     const ident = $('identyfikator').value.trim();
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
-    if (!pin) { $('identyfikator').focus(); return; }
+    if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('identyfikator').focus(); return;
+    }
     zaloguj(ident ? { identyfikator: ident, pin } : { pin });
   });
   $('formularz-logowania').querySelector('.pinpad').addEventListener('click', ev => {
@@ -401,49 +404,24 @@
     });
   }
 
+  /* „Moje konto” (👤 w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
+     dane w tym urządzeniu, wersja, Wyloguj — jak w UR, KJ, Panelu i GK Trasy. Rzeczy Lidera (linia, powiadomienia,
+     ostatnia synchronizacja) dorysowują się w środku (dodatki). Okno to <dialog> w warstwie górnej — przed oknem Lidera
+     (Zmień linię, Odrzucone) zamykamy je, inaczej przykryłoby tamto. */
   $('menu').addEventListener('click', () => {
-    const p = hala.pracownik || {};
-    const k = Lider.stan.kolejka;
-    const powiadomienia = !('Notification' in window) ? 'niedostępne w tej przeglądarce'
-      : Notification.permission === 'granted' ? 'włączone' : Notification.permission === 'denied' ? 'zablokowane w przeglądarce' : 'wyłączone';
-    Lider.okno({
-      tytul: p.nazwa || 'Menu',
-      html: `<dl class="dane">
-          <dt>Linia</dt><dd>${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</dd>
-          <dt>Czeka na wysłanie</dt><dd>${k.moje || 0}${k.oczekuje > (k.moje || 0) ? ` (+${k.oczekuje - (k.moje || 0)} innej osoby)` : ''}</dd>
-          <dt>Odrzucone</dt><dd>${k.odrzucone}</dd>
-          <dt>Powiadomienia</dt><dd>${esc(powiadomienia)}</dd>
-          <dt>Ostatnia synchronizacja</dt><dd>${esc(hala.polaczenie.ostatniaSynchronizacja ? W.godzina(hala.polaczenie.ostatniaSynchronizacja) : '—')}</dd>
-        </dl>
-        <div class="przyciski-kolumna">
-          <button type="button" data-a="linia">Zmień linię</button>
-          <button type="button" data-a="odrzucone">Odrzucone i konflikty</button>
-          <button type="button" data-a="wyloguj">Wyloguj</button>
-        </div>
-        <h3>Powiadomienia</h3>
-        <p class="slaby maly">Przypomnienia z checklisty, Quality Alert i zlecenia od kierownika.</p>
-        <div id="push"></div>
-        <h3>Motyw</h3>
-        <div class="wybor" id="wybor-motywu">${[['auto', 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']].map(([k, n]) =>
-          `<button type="button" data-motyw="${k}" aria-pressed="${HalaMotyw.odczytaj() === k}">${n}</button>`).join('')}</div>
-        <h3>PIN</h3>
-        <div id="konto-pin"></div>
-        <p class="slaby maly">Zalogowany: ${esc(p.nazwa || '—')} · <span id="wersja">klient ${esc(hala.wersja)}</span></p>`,
-      poOtwarciu: el => {
-        el.querySelector('[data-a=linia]').addEventListener('click', wyborLinii);
+    HalaKonto.mojeKonto(hala, {
+      aplikacja: 'lider', komunikat: Lider.komunikat, wyloguj, odrzucone: pokazOdrzucone,
+      dodatki: el => {
+        const ost = hala.polaczenie.ostatniaSynchronizacja;
+        el.innerHTML = `<fieldset><legend>Linia</legend>
+            <p class="hala-konto-drobne">${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</p>
+            <button type="button" data-a="linia">Zmień linię</button></fieldset>
+          <fieldset><legend>Powiadomienia</legend>
+            <p class="hala-konto-drobne">Przypomnienia z checklisty, Quality Alert i zlecenia od kierownika.</p>
+            <div id="push"></div></fieldset>
+          <p class="hala-konto-drobne">Ostatnia synchronizacja: ${esc(ost ? W.godzina(ost) : '—')}</p>`;
+        el.querySelector('[data-a=linia]').addEventListener('click', () => { el.closest('dialog').close(); wyborLinii(); });
         rysujPush(el.querySelector('#push'), t => Lider.komunikat(t, 'blad'), true);
-        el.querySelector('[data-a=odrzucone]').addEventListener('click', pokazOdrzucone);
-        el.querySelector('[data-a=wyloguj]').addEventListener('click', wyloguj);
-        // Motyw robi wspólny ../wspolne/motyw.js (ten sam wybór we wszystkich aplikacjach na tym urządzeniu).
-        el.querySelector('#wybor-motywu').addEventListener('click', ev => {
-          const b = ev.target.closest('[data-motyw]');
-          if (!b) return;
-          if (!HalaMotyw.ustaw(b.dataset.motyw)) Lider.komunikat('Telefon nie zapamięta wyboru (tryb prywatny?) — działa do zamknięcia karty.', 'blad');
-          el.querySelectorAll('#wybor-motywu button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-        });
-        HalaAktualizacja.wpiszWersje(el.querySelector('#wersja'), 'lider');
-        // Wspólne okno „Zmień PIN” (../wspolne/konto.js, D32) — ten sam PIN we wszystkich aplikacjach GK.
-        HalaKonto.przycisk(el.querySelector('#konto-pin'), hala, { komunikat: Lider.komunikat });
       },
     });
   });
@@ -529,7 +507,8 @@
     $('opis-zmiany').innerHTML = z
       ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '<span>Poza zmianą</span>';
     const p = hala.pracownik;
-    $('menu').textContent = p ? p.nazwa.split(' ').map((s, i) => (i ? s[0] + '.' : s)).join(' ') + ' ☰' : '☰';
+    // „Anna N. 👤” — 👤 otwiera „Moje konto” jak w pozostałych aplikacjach GK (wcześniej ☰ i osobne menu).
+    $('menu').textContent = p && p.nazwa ? String(p.nazwa).split(' ').map((s, i) => (i ? s[0] + '.' : s)).join(' ') + ' 👤' : '👤';
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
   }
 

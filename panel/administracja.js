@@ -21,7 +21,7 @@
   const { hala, W, $, esc } = P;
 
   let czesc = 'pracownicy';
-  let lista = null, twojAdres = '', wczytuje = false, bladListy = '';
+  let lista = null, twojAdres = '', wczytuje = false, bladListy = '', bladListyCzas = 0;
   let szukaj = '', nieaktywni = false;
 
   async function wczytajPracownikow() {
@@ -31,7 +31,7 @@
       const r = await hala.admin('GET', '/api/v1/admin/pracownicy');
       lista = r.pracownicy; twojAdres = r.twoj_adres || ''; bladListy = '';
     } catch (e) {
-      bladListy = P.komunikatBledu(e);
+      bladListy = P.komunikatBledu(e); bladListyCzas = Date.now();
     } finally {
       wczytuje = false;
       P.narysuj();
@@ -74,7 +74,7 @@
   // ------------------------------------------------------------ pracownicy
 
   function rysujPracownikow(el) {
-    if (lista === null) { el.innerHTML = `<p class="pusto">${esc(bladListy || 'Wczytuję…')}</p>`; if (!bladListy) wczytajPracownikow(); return; }
+    if (lista === null) { el.innerHTML = `<p class="pusto">${esc(bladListy || 'Wczytuję…')}</p>`; if (W.wczytacPonownie(bladListy, bladListyCzas, Date.now())) wczytajPracownikow(); return; }
     // Pole wyszukiwania rysujemy tylko raz — przerysowanie co 20 s nie może zabierać kursora w trakcie pisania.
     if (!el.querySelector('#admin-szukaj')) {
       el.innerHTML = `
@@ -438,13 +438,13 @@
 
   /* Stan z huba (GET /api/v1/admin/dostep): ustawienia bez wartości tokenów, tunel, wersja na Pages. Odświeżany przy
      wejściu w część i co ~15 s, gdy jest otwarta (tunel łączy się kilka sekund, wysyłka trwa minutę). */
-  let dostepStan = null, dostepCzas = 0, bladDostepu = '', wczytujeDostep = null, wysyla = false;
+  let dostepStan = null, dostepCzas = 0, bladDostepu = '', bladDostepuCzas = 0, wczytujeDostep = null, wysyla = false;
 
   function wczytajDostep() {
     if (wczytujeDostep) return wczytujeDostep;
     wczytujeDostep = hala.admin('GET', '/api/v1/admin/dostep')
       .then(r => { dostepStan = r; bladDostepu = ''; dostepCzas = Date.now(); })
-      .catch(e => { bladDostepu = P.komunikatBledu(e); })
+      .catch(e => { bladDostepu = P.komunikatBledu(e); bladDostepuCzas = Date.now(); })
       .finally(() => { wczytujeDostep = null; if (czesc === 'dostep') rysuj(); });
     return wczytujeDostep;
   }
@@ -476,7 +476,7 @@
   }
 
   function rysujDostep(el) {
-    if (!dostepStan) { el.innerHTML = `<p class="pusto">${esc(bladDostepu || 'Wczytuję…')}</p>`; if (!bladDostepu) wczytajDostep(); return; }
+    if (!dostepStan) { el.innerHTML = `<p class="pusto">${esc(bladDostepu || 'Wczytuję…')}</p>`; if (W.wczytacPonownie(bladDostepu, bladDostepuCzas, Date.now())) wczytajDostep(); return; }
     if (Date.now() - dostepCzas > 15000) wczytajDostep();
     const s = W.dostepZTelefonow(dostepStan, hala.teraz());
     const lz = W.logowanieZInternetu(dostepStan.logowanie, hala.teraz());
@@ -588,16 +588,16 @@
 
   /* Klucz programu pokazujemy RAZ (w hubie jest tylko jego skrót) — po przerysowaniu go nie ma, więc trzymamy go
      w pamięci strony do zamknięcia tej części albo wylogowania. Nowy klucz czyści przypięcie instalacji programu. */
-  let polaczenia = null, bladPolaczen = '', nowyKlucz = null;
+  let polaczenia = null, bladPolaczen = '', bladPolaczenCzas = 0, nowyKlucz = null;
 
   async function wczytajPolaczenia() {
     try { polaczenia = (await hala.admin('GET', '/api/v1/admin/polaczenia')).polaczenia; bladPolaczen = ''; }
-    catch (e) { bladPolaczen = P.komunikatBledu(e); }
+    catch (e) { bladPolaczen = P.komunikatBledu(e); bladPolaczenCzas = Date.now(); }
     if (czesc === 'polaczenia') rysuj();
   }
 
   function rysujPolaczenia(el) {
-    if (polaczenia === null) { el.innerHTML = `<p class="pusto">${esc(bladPolaczen || 'Wczytuję…')}</p>`; if (!bladPolaczen) wczytajPolaczenia(); return; }
+    if (polaczenia === null) { el.innerHTML = `<p class="pusto">${esc(bladPolaczen || 'Wczytuję…')}</p>`; if (W.wczytacPonownie(bladPolaczen, bladPolaczenCzas, Date.now())) wczytajPolaczenia(); return; }
     // Pole z kluczem rysujemy tylko raz — przerysowanie co 20 s nie może kasować zaznaczenia przy kopiowaniu.
     const odcisk = JSON.stringify([polaczenia, nowyKlucz]);
     if (el.dataset.odcisk === odcisk) return;
@@ -693,7 +693,7 @@
       czesc = b.dataset.czesc;
       const el = $('admin-tresc');
       el.innerHTML = ''; delete el.dataset.odcisk;
-      if (czesc === 'polaczenia') polaczenia = null;
+      if (czesc === 'polaczenia') { polaczenia = null; bladPolaczen = ''; }   // wejście w część — od razu nowa próba
       if (czesc === 'dostep') dostepCzas = 0;           // wejście w część — świeży stan tunelu
       rysuj();
     });
@@ -753,7 +753,7 @@
 
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
-    lista = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = '';
+    lista = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
     kopieStan = null; alarmy = []; alarmyCzas = 0;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;
     rysujAlarmy();

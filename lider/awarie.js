@@ -118,7 +118,7 @@
         });
         L.poleZdjec(form.querySelector('.pole-zdjec'), d.zdjecia, () => f.zmieniono(), { maks: 4 });
         zaznacz();
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const bledy = W.sprawdzAwarie(d, stale());
           const ul = form.querySelector('.bledy');
@@ -141,7 +141,7 @@
           L.zamknijOkno();
           L.poZapisie('Awaria zgłoszona do UR');
           L.pokazEkran('awarie');
-        });
+        }));
       },
     });
   }
@@ -169,13 +169,13 @@
         </form>`,
       poOtwarciu: el => {
         const form = el.querySelector('form');
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const zd = await L.zapisz('awaria.potwierdzona', id, L.bezPustych({ uwagi: form.uwagi.value.trim() }));
           if (!zd) return;
           L.zamknijOkno();
           L.poZapisie('Naprawa potwierdzona — przestój zamknięty');
-        });
+        }));
         form.querySelector('[data-nie]').addEventListener('click', () => odrzuc(id));
       },
     });

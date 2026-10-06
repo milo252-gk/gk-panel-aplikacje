@@ -45,7 +45,7 @@
   async function formularzProby(opcje) {
     const o = opcje || {};
     const linia = ustalKontekst(o).linia;
-    const f = await L.formularz(`proba:${linia}:${o.pozycja || 'dodatkowa'}`, {
+    const f = await L.formularz(W.kluczBrudnopisuProby(linia, o.zmianaId, o.pozycja), {
       start: new Date(hala.teraz()).toISOString(), stanowisko: '', qr: o.qr || '', numer: '', zdjecieZlecenia: [], wyrob: '',
       sprawdzone: '', zgodne: '', braki: '', zgodneAuto: true, wady: {}, zdjecia: [], wnioski: '', dzialania: '' });
     const d = f.dane;
@@ -124,7 +124,7 @@
           if (!st || !ok.ok) { L.komunikat(ok.ok ? 'Ten kod nie wskazuje stanowiska. Wybierz je z listy.' : ok.powod, 'blad'); return; }
           d.stanowisko = st; d.qr = t; form.stanowisko.value = st; f.zmieniono();
         }));
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const lista = Object.entries(d.wady).filter(([, n]) => n > 0).map(([kod, ilosc]) => ({ kod, ilosc }));
           const dane = { sprawdzone: liczba(d.sprawdzone), zgodne: liczba(d.zgodne), braki: liczba(d.braki), wady: lista };
@@ -139,7 +139,7 @@
           await f.usun();
           L.zamknijOkno();
           L.poZapisie(`Próba zapisana: ${dane.braki}/${dane.sprawdzone} braków`);
-        });
+        }));
       },
     });
   }
@@ -182,7 +182,7 @@
         };
         form.addEventListener('input', roznica);
         roznica();
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const p = liczba(d.planowana), ob = liczba(d.obecna);
           const bledy = [];
@@ -198,7 +198,7 @@
           await f.usun();
           L.zamknijOkno();
           L.poZapisie(`Obsada: ${ob} z ${p}`);
-        });
+        }));
       },
     });
   }
@@ -237,7 +237,7 @@
           d.rodzaj = b.dataset.wartosc; f.zmieniono(); zaznacz();
         });
         zaznacz();
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           if (!pokazBledy(form, d.rodzaj ? [] : ['Wybierz, co się stało.'])) return;
           const kk = ctx(o);
@@ -248,7 +248,7 @@
           await f.usun();
           L.zamknijOkno();
           L.poZapisie('Zdarzenie obsady zapisane');
-        });
+        }));
       },
     });
   }
@@ -304,7 +304,7 @@
           f.zmieniono();
         });
         rysuj();
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const brak = stanowiska.filter(s => typeof (d.oceny[s.kod] || {}).zgodne !== 'boolean');
           if (!pokazBledy(form, brak.length ? [`Oceń wszystkie stanowiska (brakuje: ${brak.map(s => s.kod).join(', ')}).`] : [])) return;
@@ -321,7 +321,7 @@
             // Odstępstwo z audytu od razu jako zgłoszenie BHP (z numerem BHP-…), żeby ktoś je zamknął.
             formularzBhp({ linia: kk.linia, stanowisko: niezgodne[0].stanowisko, rodzaj: 'odstepstwo', opis: niezgodne.map(p => `${p.stanowisko}: ${p.uwagi || 'niezgodne'}`).join('\n') });
           }
-        });
+        }));
       },
     });
   }
@@ -356,7 +356,7 @@
         });
         zaznacz();
         L.poleZdjec(form.querySelector('.pole-zdjec'), d.zdjecia, () => f.zmieniono());
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const bledy = [];
           if (!d.rodzaj) bledy.push('Wybierz rodzaj zgłoszenia.');
@@ -368,7 +368,7 @@
           await f.usun();
           L.zamknijOkno();
           L.poZapisie('Zgłoszenie BHP zapisane');
-        });
+        }));
       },
     });
   }
@@ -405,7 +405,7 @@
       poOtwarciu: el => {
         const form = el.querySelector('form');
         f.powiaz(form);
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const zd = await L.zapisz('zmiana.przekazanie', k.klucz, Object.assign({ linia: k.linia, zmiana: k.zmiana.id },
             L.bezPustych({ maszyny: d.maszyny.trim(), braki_materialowe: d.braki_materialowe.trim(), do_dokonczenia: d.do_dokonczenia.trim(), inne: d.inne.trim() })));
@@ -414,7 +414,7 @@
           await f.usun();
           L.zamknijOkno();
           L.poZapisie('Przekazanie wysłane');
-        });
+        }));
       },
     });
   }
@@ -469,7 +469,7 @@
         f.powiaz(form);
         const p = el.querySelector('[data-a=przekazanie]');
         if (p) p.addEventListener('click', () => formularzPrzekazania({ zmianaId: o.zmianaId, linia: o.linia }));
-        form.addEventListener('submit', async ev => {
+        form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const kk = ctx(o);
           const zd = await L.zapisz('zmiana.raport', kk.klucz, { linia: kk.linia, zmiana: kk.zmiana.id, podsumowanie: zbudujRaport(kk, f.dane.uwagi) });
@@ -477,7 +477,7 @@
           await f.usun();
           L.zamknijOkno();
           L.poZapisie('Raport wysłany do kierownika');
-        });
+        }));
       },
     });
   }
