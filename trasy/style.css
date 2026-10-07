@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-ef67a483eb73';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-18ba615883a6';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -214,6 +214,17 @@ a{color:var(--akcent)}
    nie ma czego pokazać (STYL-GK §2). */
 .blad-logowania{color:var(--czerwony); font-size:13px; margin-bottom:8px; font-weight:600}
 .blad-logowania:empty{display:none}
+/* „Zaloguj hasłem” / „Zaloguj PIN-em” (D43, STYL-GK §2): maly szary podkreslony
+   link pod polem sekretu, nie przycisk. */
+.link-sekretu{display:block; margin:-8px 0 12px auto; padding:2px 0; min-height:auto; border:0;
+              background:none; color:var(--tekst-slaby); font-size:13px; font-weight:400;
+              text-decoration:underline; cursor:pointer; box-shadow:none}
+.link-sekretu[hidden]{display:none}
+/* Okno „Ustaw hasło i PIN” (D43 §7.4) i formularze zmiany w Moim koncie. */
+.blad-ustawienia{color:var(--czerwony); font-size:13px; font-weight:600}
+.blad-ustawienia:empty{display:none}
+.przyciski-konta{display:flex; flex-wrap:wrap; gap:8px}
+.przyciski-konta button{flex:1 1 160px}
 .wersja-stopka{margin:14px 0 0; text-align:center}
 
 /* ------------------------------------------------------------ formanty */
