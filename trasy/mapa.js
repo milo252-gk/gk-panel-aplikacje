@@ -119,6 +119,11 @@ const Mapa = (() => {
     }, opcje || {})).setView(SRODEK_PL, 6);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      // Strona ma „Referrer-Policy: no-referrer” (adres z tokenem nie może wyciec),
+      // a OpenStreetMap od 2026 odsyła kafelek „Access blocked” (403), gdy przeglądarka
+      // nie poda strony, z której prosi. Kafelkom podajemy samo źródło (bez ścieżki
+      // i tokenu) — tyle wymagają warunki OSM, a reszta strony zostaje bez Referer.
+      referrerPolicy: 'strict-origin-when-cross-origin',
       // Pełna formuła wymagana przez warunki OSM — sam „© OpenStreetMap" to za mało.
       attribution: '© <a href="https://www.openstreetmap.org/copyright" '
         + 'target="_blank" rel="noopener">OpenStreetMap</a> contributors',
