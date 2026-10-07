@@ -214,11 +214,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-polaczenie.brak-huba, .hala-polaczenie.odrzucone { background: var(--strefa); }
 
 /* ------------------------------------------------ ekran logowania (standard GK) */
-/* Jak w GK Flota: grafit GK z pomarańczowym rozświetleniem, na nim biała karta z logo.
+/* Jak w GK Flota: grafit GK z przygaszonym, ciepłym rozświetleniem, na nim biała karta z logo. Gradient dokładnie
+   jak w STYL-GK §2 (runda 2: koniec #8A6A38, nie jaskrawy #C87C1C) — ten sam we wszystkich 8 aplikacjach GK.
    <main class="hala-logowanie"><div class="hala-karta-logowania"><img class="hala-logo" …><h1>…</h1><p class="pod">…</p><form>…</form></div></main> */
 .hala-logowanie {
   min-height: 100vh; min-height: 100dvh; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
-  padding: 24px; background: linear-gradient(160deg, var(--grafit-ciemny), var(--grafit) 55%, var(--pomarancz-ciemny));
+  padding: 24px; background: linear-gradient(160deg, #3B3B3B, #4E4E4E 55%, #8A6A38);
 }
 .hala-karta-logowania {
   /* Biała w OBU motywach (logo jest grafitowe), więc atrament na niej też zostaje ciemny —
@@ -234,6 +235,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-logo { width: min(230px, 62vw); height: auto; display: block; margin: 0 auto 6px; }
 .hala-karta-logowania h1 { font-size: 22px; margin: 8px 0 4px; color: var(--grafit); }
 .hala-karta-logowania .pod { margin: 0 0 20px; color: var(--tekst-slaby); font-size: 13px; }
+/* „PIN-em” nie łamie się na dywizie (STYL-GK §2) — „PIN-” na końcu wiersza i „em” w następnym. */
+.hala-karta-logowania .bez-lamania { white-space: nowrap; }
 .hala-karta-logowania form { display: block; }
 /* Jak w GK Trasy: podpis nad polem, wyrównany do lewej; „Zaloguj” na całą szerokość. */
 .hala-karta-logowania label { display: block; text-align: left; margin-bottom: 14px; font-weight: 600; font-size: 13px; }
@@ -305,10 +308,17 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
   .hala-menu-logo { display: block; width: 150px; height: auto; margin-bottom: 14px; filter: brightness(0) invert(1); opacity: .92; }
   .hala-menu-nazwa { font-weight: 700; font-size: 16px; }
   .hala-menu-kto { font-size: 12px; opacity: .65; text-transform: uppercase; letter-spacing: .6px; }
-  .hala-menu-stopka { display: block; margin-top: auto; padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  /* „Wyloguj” na dole menu (STYL-GK §3, runda 2): zwykły wiersz menu z ikoną, w kolorze tekstu menu — nie goły
+     pomarańczowy napis. Kreska nad nim oddziela go od ekranów aplikacji. */
+  .hala-menu-stopka { display: block; margin-top: auto; padding: 0 0 env(safe-area-inset-bottom, 0px); border-top: 1px solid var(--menu-kreska); }
   .hala-uklad > .hala-menu .hala-menu-stopka button {
-    min-height: 44px; padding: 6px 4px; border: 0; background: none; color: var(--akcent); font-weight: 600; box-shadow: none;
+    display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 52px; margin: 0;
+    padding: 14px 18px; box-sizing: border-box; border: 0; border-radius: 0; background: none; color: var(--na-marce);
+    font-size: 15px; font-weight: 600; line-height: 1.5; text-align: left; box-shadow: none; filter: none;
   }
+  .hala-uklad > .hala-menu .hala-menu-stopka button:hover { background: var(--menu-hover); }
+  .hala-menu-stopka .ikona { display: inline-flex; justify-content: center; }
+  .hala-menu-stopka .ikona svg { display: block; }
   /* Na komputerze „Wyloguj” stoi w stopce menu (jak w GK Trasy), więc w pasku górnym jest zbędne. */
   .hala-uklad > .naglowek .tylko-telefon { display: none; }
 }
@@ -435,9 +445,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
    więc wspólne ma swoją: .hala-okno. <dialog> leży w warstwie górnej — nad menu Lidera i nad oknami UR, KJ, Panelu. */
 dialog.hala-okno { width: min(440px, calc(100vw - 24px)); box-sizing: border-box; border: 0; border-radius: 16px; padding: 0;
                    background: var(--karta); color: var(--tekst); box-shadow: var(--cien-mocny); }
-dialog.hala-okno::backdrop { background: var(--zaslona); }
+dialog.hala-okno::backdrop { background: rgba(0, 0, 0, .45); }   /* STYL-GK §3: czarne przyciemnienie, nie granatowe */
 dialog.hala-okno form { display: grid; gap: 12px; padding: 18px 20px 20px; }
-dialog.hala-okno h2 { margin: 0; font-size: 19px; }
+dialog.hala-okno h2 { margin: 0; font-size: 20px; font-weight: 700; }
 dialog.hala-okno label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 dialog.hala-okno label > input { font-size: 16px; font-weight: 400; color: var(--tekst); }
 .hala-okno-opis { margin: 0; font-size: 13px; color: var(--tekst-slaby); }
@@ -445,14 +455,28 @@ dialog.hala-okno label > input { font-size: 16px; font-weight: 400; color: var(-
 .hala-okno-przyciski { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 /* „Moje konto” (konto.js → mojeKonto, STYL-GK §3): ten sam układ co okno konta Panelu i „Moje konto” GK Trasy. */
 dialog.hala-moje-konto { max-height: calc(100dvh - 24px); overflow: auto; }
+/* Części aplikacji (dodatki: linia, powiadomienia…) w tym samym rytmie co reszta okna; pusta część nie robi przerwy. */
+.hala-moje-konto [data-dodatki] { display: grid; gap: 12px; }
+.hala-moje-konto :is([data-dodatki], [data-pin]):empty { display: none; }
 dialog.hala-okno fieldset { border: 1px solid var(--ramka); border-radius: 10px; padding: 8px 12px 10px; margin: 0; display: grid; gap: 8px; }
 dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .hala-konto-kto { margin: 0; display: grid; gap: 2px; }
-.hala-konto-kto span { font-size: 13px; color: var(--tekst-slaby); }
+.hala-konto-kto b { font-size: 16px; font-weight: 600; }
+.hala-konto-kto span { font-size: 14px; color: var(--tekst-slaby); }
 .hala-konto-drobne { margin: 0; font-size: 12px; color: var(--tekst-slaby); }
 .hala-wybor { display: flex; flex-wrap: wrap; gap: 8px; }
 .hala-wybor button { min-height: 44px; padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
 .hala-wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+/* Powiadomienia (konto.js → powiadomienia): jeden przycisk albo stan; „Zablokowane…” zwykłym tekstem w kolorze ostrzeżenia. */
+.hala-konto-push [data-push-stan] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.hala-konto-push [data-push-stan] > p { flex: 1 1 100%; margin: 0; }
+.hala-push-ok { font-size: 14px; color: var(--zielony); font-weight: 600; }
+.hala-push-uwaga { font-size: 14px; color: var(--uwaga); font-weight: 400; }
+/* Stopka „wersja X” — pełna wersja techniczna w podpowiedzi (title) dla serwisu. */
+.hala-moje-konto [data-wersja] { cursor: help; }
+/* Przycisk „Moje konto” w nagłówku: ikona osoby (konto.js → IKONA_KONTA) w kolorze napisu paska — biała na graficie. */
+.hala-konto-przycisk { min-width: 44px; color: var(--na-marce); }
+.hala-konto-przycisk svg { display: block; flex: 0 0 auto; }
 /* Linia pod przyciskiem „Zaloguj” (STYL-GK §2): skąd się bierze konto. */
 .hala-karta-logowania .hala-konto-skad { margin: 14px 0 0; font-size: 12px; color: var(--tekst-slaby); }
 .hala-eksport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; margin: 0 0 12px;

@@ -15,7 +15,8 @@
 
    Użycie (zamiast navigator.serviceWorker.register('sw.js')):
      HalaAktualizacja.pilnuj({ komunikat: (tekst, rodzaj) => …, zajety: () => czyAplikacjaMaCośOtwartego });
-     HalaAktualizacja.wpiszWersje(element, 'ur');   // „klient 0.5.0 · aplikacja ur-1726f7030f5d”        */
+     HalaAktualizacja.wpiszWersje(element, 'ur');   // „wersja 1726f7030f5d”, w podpowiedzi (title) pełne
+                                                     // „klient 0.5.0 · aplikacja ur-1726f7030f5d” dla serwisu  */
 
 (function (global) {
   'use strict';
@@ -75,22 +76,38 @@
     }).catch(() => { /* http w sieci firmowej — aplikacja działa, tylko bez pracy offline */ });
   }
 
-  /* Wersja do pokazania człowiekowi (serwis pyta „jaką masz wersję?”): klient hala.js i stempel
-     service workera tej aplikacji — to nazwa jego pamięci podręcznej (sw.js: caches.open(WERSJA)). */
+  /* Stempel service workera tej aplikacji — nazwa jego pamięci podręcznej (sw.js: caches.open(WERSJA)). */
+  async function stempel(aplikacja) {
+    try {
+      if (global.caches) return (await global.caches.keys()).filter(k => k.startsWith(aplikacja + '-')).sort().pop() || '';
+    } catch (e) { /* http — bez service workera nie ma stempla */ }
+    return '';
+  }
+
+  /* Pełny opis wersji dla serwisu („jaką masz wersję?”): klient hala.js i stempel service workera. */
   async function opisWersji(aplikacja) {
     const klient = 'klient ' + ((global.Hala && global.Hala.WERSJA) || '?');
-    let stempel = '';
-    try {
-      if (global.caches) stempel = (await global.caches.keys()).filter(k => k.startsWith(aplikacja + '-')).sort().pop() || '';
-    } catch (e) { /* http — bez service workera nie ma stempla */ }
-    return stempel ? `${klient} · aplikacja ${stempel}` : klient;
+    const s = await stempel(aplikacja);
+    return s ? `${klient} · aplikacja ${s}` : klient;
+  }
+
+  /* Stopka „Moje konto” (STYL-GK §3, §5): człowiek widzi krótkie „wersja X” — stempel bez przedrostka aplikacji
+     (`panel-…`), a bez workera (http) wersję klienta. Pełny opis zostaje w podpowiedzi (title) — dla serwisu.
+     Czysta funkcja — test: klient-testy.js. */
+  function wersjaDlaLudzi(klient, stempelAplikacji, aplikacja) {
+    const s = String(stempelAplikacji || '');
+    const k = klient || '?';
+    const krotki = s && aplikacja && s.startsWith(aplikacja + '-') ? s.slice(aplikacja.length + 1) : s;
+    return { tekst: 'wersja ' + (krotki || k), szczegoly: s ? `klient ${k} · aplikacja ${s}` : `klient ${k}` };
   }
 
   function wpiszWersje(element, aplikacja) {
     if (!element) return;
-    element.textContent = 'klient ' + ((global.Hala && global.Hala.WERSJA) || '?');
-    opisWersji(aplikacja).then(t => { element.textContent = t; }, () => {});
+    const klient = (global.Hala && global.Hala.WERSJA) || '?';
+    const wpisz = s => { const w = wersjaDlaLudzi(klient, s, aplikacja); element.textContent = w.tekst; element.title = w.szczegoly; };
+    wpisz('');
+    stempel(aplikacja).then(wpisz, () => {});
   }
 
-  global.HalaAktualizacja = { pilnuj, opisWersji, wpiszWersje, zajetyWspolnie };
+  global.HalaAktualizacja = { pilnuj, opisWersji, wpiszWersje, wersjaDlaLudzi, zajetyWspolnie };
 })(window);

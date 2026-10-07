@@ -31,11 +31,11 @@
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
     <h1>GK Lider</h1>
-    <p class="pod">Zaloguj się imieniem i nazwiskiem (albo kartą) i&nbsp;PIN-em</p>
+    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko (albo karta)
         <span class="rzad">
-          <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Anna Nowak">
+          <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Jan Kowalski">
           <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator">📷</button>
         </span>
       </label>
@@ -61,7 +61,7 @@
   <header class="naglowek">
     <button id="wybor-linii" class="linia" type="button" aria-label="Zmień linię"></button>
     <div id="opis-zmiany" class="opis-zmiany"></div>
-    <button id="menu" class="kto" type="button" aria-label="Moje konto" title="Moje konto"></button>
+    <button id="menu" class="kto hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button>
   </header>
 
   <div id="wezwania" class="wezwania" aria-live="assertive"></div>
@@ -87,7 +87,7 @@
     <button type="button" data-ekran="awarie"><span class="ikona">🔧</span>Awarie<span class="plakietka" data-plakietka="awarie" hidden></span></button>
     <button type="button" data-ekran="zlecenia"><span class="ikona">📋</span>Zlecenia<span class="plakietka" data-plakietka="zlecenia" hidden></span></button>
     <button type="button" data-ekran="koniec"><span class="ikona">🏁</span>Koniec</button>
-    <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj">Wyloguj</button></div>
+    <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 </div>
 

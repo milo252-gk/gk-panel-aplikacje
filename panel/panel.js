@@ -146,22 +146,22 @@
     }
   });
 
-  /* Wyloguj: stopka menu (komputer, jak w GK Trasy) i okno konta (👤). Zapisy, które jeszcze czekają, nie
+  /* Wyloguj: stopka menu (komputer, jak w GK Trasy) i „Moje konto” (ikona osoby w pasku). Zapisy, które jeszcze czekają, nie
      przepadają — wyślą się po ponownym zalogowaniu tej osoby — ale trzeba o nich powiedzieć (jak w UR, KJ, Liderze). */
   async function wyloguj() {
     const ekran = document.body.classList.contains('tryb-ekran');
     const k = hala.stanKolejki().moje;
     if (k && !(await Panel.potwierdz('Wylogować?', `Czeka na wysłanie: ${k}. Wyślą się, gdy znowu zalogujesz się na tym urządzeniu.`, 'Wyloguj'))) return;
     if (!k && ekran && !(await Panel.potwierdz('Wylogować ekran?', 'Trzeba będzie wpisać identyfikator i PIN ekranu ponownie.', 'Wyloguj'))) return;
-    if ($('okno-konta').open) $('okno-konta').close();
+    const konto = document.getElementById('hala-okno-konta');
+    if (konto && konto.open) konto.close();
     await hala.wyloguj();
     if (blokada) blokada.release().catch(() => {});   // następna osoba (kierownik na tablecie) nie potrzebuje wiecznego ekranu
     pokazSesje();
   }
   $('menu-wyloguj').addEventListener('click', wyloguj);
-  $('konto-wyloguj').addEventListener('click', wyloguj);
 
-  // ------------------------------------------------------------ konto (👤): kto, motyw, dane w urządzeniu, wersja
+  // ------------------------------------------------------------ „Moje konto” (ikona osoby w pasku)
 
   const NAZWY_TYPOW = {
     'awaria.zgloszona': 'Zgłoszenie awarii', 'zlecenie.utworzone': 'Nowe zlecenie', 'zlecenie.zamkniete': 'Zamknięcie zlecenia',
@@ -174,68 +174,40 @@
     return (spec && spec.opis) ? spec.opis.split(/[.—(]/)[0].trim() : typ;
   }
 
-  async function rysujKonto() {
-    const p = hala.pracownik || {};
-    $('konto-nazwa').textContent = p.nazwa || '—';
-    const nazwyRol = (hala.kontrakt && hala.kontrakt.stale && hala.kontrakt.stale.role) || {};
-    $('konto-role').textContent = (p.role || []).map(r => nazwyRol[r] || r).join(', ');
-    // „Zmień PIN” — wspólne okno (../wspolne/konto.js), to samo w Liderze, UR i KJ; konto ekranu go nie ma.
-    HalaKonto.przycisk($('konto-pin'), hala, { komunikat });
-    // Monitor w biurze nikomu nic nie zleca — nie ma czego mu przypominać.
-    const ekran = (p.role || []).includes('ekran');
-    $('konto-powiadomienia').hidden = ekran;
-    if (!ekran) rysujPush($('konto-push'));
-    const motyw = HalaMotyw.odczytaj();
-    for (const b of document.querySelectorAll('#wybor-motywu [data-motyw]')) b.setAttribute('aria-pressed', String(b.dataset.motyw === motyw));
-    const k = hala.stanKolejki();
-    $('konto-kolejka').textContent = `Czeka na wysłanie: ${k.moje || 0}` + (k.oczekuje > (k.moje || 0) ? ` (+${k.oczekuje - (k.moje || 0)} innej osoby)` : '');
-    HalaAktualizacja.wpiszWersje($('konto-wersja'), 'panel');
-    // Odrzucone przez hub: nic nie znika samo — kierownik czyta powód i sam usuwa z listy (KONTRAKT §5.2).
-    const lista = await hala.odrzucone();
-    $('konto-odrzucone').innerHTML = lista.length ? `<p class="blad konto-drobne">Odrzucone przez hub: ${lista.length}. Wprowadź je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>
-      <ul class="lista-odrzuconych">${lista.map(o => `<li><b>${esc(nazwaTypu(o.zd.typ))}</b> <span class="slaby">${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}</span>
-        <div class="blad">${esc(o.powod)}</div>
-        <button type="button" class="maly" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>` : '';
-  }
-  /* Jeden przycisk „Powiadomienia”: zgoda przeglądarki i zapis telefonu w hubie naraz (jak UR → Więcej, D28).
-     Panel nie pokazuje powiadomień sam przy otwartej karcie (kafelek „Zlecenia po terminie” i tak świeci), więc
-     tam, gdzie push nie działa, mówimy to wprost zamiast udawać przycisk. Stan pyta przeglądarkę — rysujemy później. */
-  async function rysujPush(el) {
-    let s = 'niedostepne';
-    try { s = await hala.push.stan(); } catch (e) { /* stara przeglądarka — jak niedostępne */ }
-    // Najpierw „niedostępne”: pod http://192.168… przeglądarka zgłasza zgodę „denied”, choć nikt niczego nie zablokował.
-    el.innerHTML = s === 'niedostepne'
-      ? '<p class="uwaga">Niedostępne tutaj: potrzebny adres https, a na iPhonie Panel dodany do ekranu początkowego (iOS 16.4+).</p>'
-      : s === 'wlaczone' ? '<p class="ok">Włączone — także przy zamkniętym Panelu</p><button type="button" data-push="wylacz">Wyłącz</button>'
-      : s === 'zablokowane' ? '<p class="uwaga">Zablokowane — zezwól na powiadomienia w ustawieniach przeglądarki dla tej strony.</p>'
-      : '<button type="button" class="glowny" data-push="wlacz">Włącz powiadomienia</button>';
-    const b = el.querySelector('[data-push]');
-    if (b) b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        await hala.push[b.dataset.push]();
-        komunikat(b.dataset.push === 'wlacz' ? 'Powiadomienia włączone' : 'Powiadomienia wyłączone', 'ok');
-      } catch (e) { komunikat((e && e.message) || 'Nie udało się. Spróbuj jeszcze raz.', 'blad'); }
-      rysujPush(el);
+  /* „Moje konto” — JEDNO okno z Liderem, UR i KJ (../wspolne/konto.js → HalaKonto.mojeKonto, STYL-GK §3 runda 2):
+     ten sam wygląd, szerokość 440 px, Wygląd, Zmień PIN/hasło, Dane w tym urządzeniu, „wersja X”, Zamknij + Wyloguj.
+     Rzecz Panelu (dodatki): Powiadomienia — push, gdy zlecenie tej osoby jest po terminie (wspólna sekcja z Liderem).
+     Monitor w biurze (konto ekranu) nikomu nic nie zleca — nie ma czego mu przypominać, nie ma też Zmień PIN. */
+  function otworzKonto() {
+    const ekran = (hala.pracownik && hala.pracownik.role || []).includes('ekran');
+    HalaKonto.mojeKonto(hala, {
+      aplikacja: 'panel', komunikat, wyloguj, odrzucone: pokazOdrzucone,
+      dodatki: ekran ? null : el => {
+        el.innerHTML = '<div id="konto-powiadomienia"></div>';
+        HalaKonto.powiadomienia(el.firstChild, hala, { opis: 'Gdy Twoje zlecenie jest po terminie — także przy zamkniętym Panelu.', komunikat });
+      },
     });
   }
-
-  function otworzKonto() {
-    rysujKonto();
-    if (!$('okno-konta').open) $('okno-konta').showModal();
-  }
   $('konto').addEventListener('click', otworzKonto);
-  $('wybor-motywu').addEventListener('click', ev => {
-    const b = ev.target.closest('[data-motyw]');
-    if (!b) return;
-    if (!HalaMotyw.ustaw(b.dataset.motyw)) komunikat('Przeglądarka nie zapamięta wyboru (tryb prywatny?) — działa do zamknięcia karty.', 'uwaga');
-    rysujKonto();
-  });
-  $('konto-odrzucone').addEventListener('click', async ev => {
+
+  /* Odrzucone przez hub: nic nie znika samo — kierownik czyta powód i sam usuwa z listy (KONTRAKT §5.2). Osobne okno
+     (jak „Odrzucone” w Liderze) — „Moje konto” ma tylko przycisk „Odrzucone przez hub: N”. */
+  async function rysujOdrzucone() {
+    const lista = await hala.odrzucone();
+    $('lista-odrzuconych').innerHTML = lista.length ? `<p class="slaby">Wprowadź je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>
+      <ul class="lista-odrzuconych">${lista.map(o => `<li><b>${esc(nazwaTypu(o.zd.typ))}</b> <span class="slaby">${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}</span>
+        <div class="blad">${esc(o.powod)}</div>
+        <button type="button" class="maly" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>` : '<p class="slaby">Brak.</p>';
+  }
+  async function pokazOdrzucone() {
+    await rysujOdrzucone();
+    if (!$('okno-odrzucone').open) $('okno-odrzucone').showModal();
+  }
+  $('lista-odrzuconych').addEventListener('click', async ev => {
     const b = ev.target.closest('[data-usun-odrzucone]');
     if (!b) return;
     await hala.usunOdrzucone(b.dataset.usunOdrzucone);
-    rysujKonto();
+    rysujOdrzucone();
   });
 
   // ------------------------------------------------------------ zakładki
@@ -843,7 +815,7 @@
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
   }
-  $('pasek').addEventListener('click', () => { if (hala.zalogowany() && kolejka.odrzucone) otworzKonto(); });
+  $('pasek').addEventListener('click', () => { if (hala.zalogowany() && kolejka.odrzucone) pokazOdrzucone(); });
 
   // ------------------------------------------------------------ monitor w biurze
 
@@ -865,7 +837,12 @@
   hala.na('slowniki', narysuj);
   hala.na('sesja', pokazSesje);
   hala.na('polaczenie', rysujPasek);
-  hala.na('kolejka', k => { kolejka = k; rysujPasek(hala.polaczenie); if ($('okno-konta').open) rysujKonto(); });
+  hala.na('kolejka', k => {
+    kolejka = k; rysujPasek(hala.polaczenie);
+    const konto = document.getElementById('hala-okno-konta');
+    if (konto && konto.open) otworzKonto();          // „Czeka na wysłanie” i „Odrzucone” na bieżąco
+    if ($('okno-odrzucone').open) rysujOdrzucone();
+  });
   /* Hub nie przyjął zapisu kierownika (np. brak uprawnień, zła maszyna) albo przyjął bez zmiany stanu (ktoś był
      szybszy) — wcześniej Panel milczał i kierownik myślał, że zlecenie poszło. */
   hala.na('odrzucone', ({ zdarzenie, powod }) => komunikat(`${zdarzenie ? nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — hub nie przyjął: ${powod}`, 'blad'));

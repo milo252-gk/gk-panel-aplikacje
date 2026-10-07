@@ -1,6 +1,6 @@
 /* GK Panel Kierownika — wspólne okno „Zmień PIN” (D32: jedno konto we wszystkich aplikacjach GK).
 
-   Jedno okno dla Panelu, Lidera, UR i KJ (wszędzie z „Moje konto” 👤 — niżej mojeKonto) — ten sam wygląd i te same
+   Jedno okno dla Panelu, Lidera, UR i KJ (wszędzie z „Moje konto” — ikona osoby w nagłówku, niżej mojeKonto) — ten sam wygląd i te same
    słowa, jak Wygląd (motyw.js). Aplikacja woła:
        HalaKonto.zmienPin(hala, { komunikat: (tekst, rodzaj) => … })   // obietnica: true = zmieniony, false = anulowano
    albo dorysowuje przycisk:  HalaKonto.przycisk(el, hala, { komunikat })   // <button>Zmień PIN</button>
@@ -109,9 +109,15 @@
     return b;
   }
 
+  /* Ikona osoby na przycisku „Moje konto” w nagłówku (STYL-GK §3, runda 2): SVG w kolorze currentColor — biała na
+     grafitowym pasku. Emoji 👤 Windows rysuje fioletowo i ginie na grafitowym pasku. Kształt jest kanoniczny — ten sam
+     we wszystkich aplikacjach webowych GK (GK Trasy, GK Flota) — nie zmieniać tylko tutaj. Aplikacje wstawiają go
+     w index.html; Lider rysuje nagłówek w JS (app.js), więc bierze stałą stąd. */
+  const IKONA_KONTA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg>';
+
   /* ---------------------------------------------------------------- „Moje konto” (STYL-GK §3, 2026-10-06)
 
-     Jedno okno konta dla Lidera, UR i KJ (Panel ma swoje okno o tym samym układzie): 👤 w nagłówku → imię i nazwisko
+     Jedno okno konta dla Panelu, Lidera, UR i KJ: ikona osoby w nagłówku → imię i nazwisko
      (i rola), Wygląd, Zmień PIN, rzeczy tej aplikacji (dodatki), Dane w tym urządzeniu, wersja, Wyloguj. Jak „Moje konto”
      w GK Trasy i GK Flota — osoba z kilkoma programami szuka tego samego w tym samym miejscu.
        HalaKonto.mojeKonto(hala, { aplikacja: 'ur', komunikat, wyloguj: async () => …, odrzucone: () => …,
@@ -181,6 +187,61 @@
     return d;
   }
 
-  global.HalaKonto = { zmienPin, przycisk, bledyPinu, biuro, mojeKonto, trescKonta };
+  /* ---------------------------------------------------------------- Powiadomienia w „Moje konto” (STYL-GK §3, runda 2)
+
+     Jedna sekcja w Panelu i w Liderze — ten sam wygląd i te same słowa: legenda „Powiadomienia”, zdanie, o czym, i
+     jeden przycisk „Włącz powiadomienia” albo stan „Włączone…”. „Zablokowane…” zwykłym tekstem 14 px w kolorze
+     ostrzeżenia (--uwaga), bez natywnego checkboxa i bez drugiego nagłówka.
+       HalaKonto.powiadomienia(el, hala, { opis: 'O czym…', lokalne: true, komunikat })
+     lokalne — aplikacja sama pokazuje powiadomienia przy otwartej karcie (Lider), więc tam, gdzie push nie działa
+     (http, iPhone poza ekranem początkowym), zgoda przeglądarki i tak się przydaje. Panel tego nie robi (kafelek
+     „Zlecenia po terminie” świeci) — tam mówimy wprost, że tutaj nie działa. */
+
+  /* Treść stanu (czysta funkcja — testy: reduktor-testy.js). stan: hala.push.stan(); zgoda: Notification.permission
+     tylko w bezpiecznym kontekście (pod http://192.168… przeglądarka zgłasza „denied”, choć nikt niczego nie zablokował). */
+  function trescPowiadomien({ stan, zgoda, lokalne }) {
+    const ok = t => `<p class="hala-push-ok">${t}</p>`;
+    const przycisk = (co, t, glowny) => `<button type="button"${glowny ? ' class="glowny"' : ''} data-push="${co}">${t}</button>`;
+    const zablokowane = '<p class="hala-push-uwaga">Zablokowane — zezwól na powiadomienia w ustawieniach przeglądarki dla tej strony.</p>';
+    const https = 'potrzebny adres https, a na iPhonie aplikacja dodana do ekranu początkowego (iOS 16.4+).';
+    if (stan === 'wlaczone') return ok('Włączone — także przy zamkniętej aplikacji') + przycisk('wylacz', 'Wyłącz');
+    if (stan === 'zablokowane' || (lokalne && zgoda === 'denied')) return zablokowane;
+    if (stan === 'wylaczone') return lokalne && zgoda === 'granted'
+      ? ok('Włączone, gdy aplikacja jest otwarta') + przycisk('wlacz', 'Włącz też przy zamkniętej aplikacji', true)
+      : przycisk('wlacz', 'Włącz powiadomienia', true);
+    if (!lokalne) return `<p class="hala-konto-drobne">Niedostępne tutaj: ${https}</p>`;
+    return (zgoda === 'granted' ? ok('Włączone, gdy aplikacja jest otwarta') : zgoda === 'default' ? przycisk('zgoda', 'Włącz powiadomienia', true) : '')
+      + `<p class="hala-konto-drobne">Przy zamkniętej aplikacji: ${https}</p>`;
+  }
+
+  async function powiadomienia(el, hala, opcje) {
+    if (!el) return;
+    const o = Object.assign({ opis: '', lokalne: false, komunikat: null }, opcje || {});
+    const powiedz = (t, r) => { if (o.komunikat) o.komunikat(t, r); };
+    el.innerHTML = `<fieldset class="hala-konto-push"><legend>Powiadomienia</legend>
+        ${o.opis ? `<p class="hala-konto-drobne">${esc(o.opis)}</p>` : ''}<div data-push-stan></div></fieldset>`;
+    const miejsce = el.querySelector('[data-push-stan]');
+    const rysuj = async () => {
+      let stan = 'niedostepne';
+      try { stan = await hala.push.stan(); } catch (e) { /* stara przeglądarka — jak niedostępne */ }
+      const zgoda = 'Notification' in global && global.isSecureContext ? global.Notification.permission : 'brak';
+      miejsce.innerHTML = trescPowiadomien({ stan, zgoda, lokalne: o.lokalne });
+      const b = miejsce.querySelector('[data-push]');
+      if (b) b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+          if (b.dataset.push === 'zgoda') await global.Notification.requestPermission();
+          else {
+            await hala.push[b.dataset.push]();
+            powiedz(b.dataset.push === 'wlacz' ? 'Powiadomienia włączone' : 'Powiadomienia wyłączone', 'ok');
+          }
+        } catch (e) { powiedz((e && e.message) || 'Nie udało się. Spróbuj jeszcze raz.', 'blad'); }
+        rysuj();
+      });
+    };
+    await rysuj();
+  }
+
+  global.HalaKonto = { zmienPin, przycisk, bledyPinu, biuro, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

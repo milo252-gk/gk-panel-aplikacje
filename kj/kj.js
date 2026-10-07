@@ -309,7 +309,7 @@
     pokazSesje();
   }
   $('menu-wyloguj').addEventListener('click', wyloguj);   // stopka menu na komputerze, jak w GK Trasy
-  /* „Moje konto” (👤 w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
+  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
      dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
     aplikacja: 'kj', komunikat: (t, r) => KJ.komunikat(t, r), wyloguj, odrzucone: () => KJ.idz('odrzucone') }));

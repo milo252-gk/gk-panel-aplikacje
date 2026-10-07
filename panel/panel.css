@@ -223,7 +223,6 @@ body.tryb-ekran .zakladki button { min-height: 44px; }
 .nowy-klucz b { grid-column: 1 / -1; }
 .nowy-klucz input { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
 .grupy-rol { display: grid; gap: 10px; }
-#konto-pin:empty { display: none; }
 .admin-linia h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 1em; }
 .admin-maszyna { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--ramka); }
 .admin-maszyna button + button { margin-left: 6px; }
@@ -351,7 +350,7 @@ dialog.okno { max-height: calc(100vh - 24px); overflow: auto; }
 @media (min-width: 821px) {
   body.tryb-ekran { --menu-szer: 72px; }
   body.tryb-ekran .hala-menu-naglowek { display: none; }
-  /* W wąskim menu monitora nie ma miejsca na „Wyloguj” — jest w oknie konta (👤 w pasku górnym). */
+  /* W wąskim menu monitora nie ma miejsca na „Wyloguj” — jest w „Moje konto” (ikona osoby w pasku górnym). */
   body.tryb-ekran .hala-menu-stopka { display: none; }
   body.tryb-ekran .hala-uklad > .hala-menu > button { justify-content: center; padding: 14px 0; }
   body.tryb-ekran .hala-uklad > .hala-menu > button > span:not(.ikona):not(.plakietka) { display: none; }
@@ -377,15 +376,10 @@ dialog.okno { max-height: calc(100vh - 24px); overflow: auto; }
 .pasek-wsk .slupek i.dobrze { background: var(--zielony); }
 .wskazniki-dwa h3.podtytul { margin-top: 14px; }
 
-/* ---------------------------------------------------------------- konto (👤, jak „Moje konto” w GK Trasy) */
+/* ---------------------------------------------------------------- drobny opis w oknach; lista odrzuconych przez hub
+   („Moje konto” to wspólne okno z hala.css → dialog.hala-moje-konto — tu go nie stylujemy) */
 
-dialog.okno .konto-kto { margin: 0; font-size: 16px; }
 .konto-drobne { margin: 6px 0 0; font-size: 13px; }
-.konto-push { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 4px; }
-.konto-push p { margin: 0; font-size: 14px; font-weight: 700; }
-.konto-push .ok { color: var(--zielony); }
-.konto-push .uwaga { color: var(--tekst-slaby); font-weight: 400; }
-dialog.okno .chipy { margin: 4px 0 0; }
 .lista-odrzuconych { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .lista-odrzuconych li { border-top: 1px solid var(--ramka); padding-top: 8px; font-size: 14px; }
 dialog.okno .lista-odrzuconych .blad { margin: 2px 0 6px; }

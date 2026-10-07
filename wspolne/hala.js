@@ -30,7 +30,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.12.0';
+  const WERSJA_KLIENTA = '0.12.1';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.

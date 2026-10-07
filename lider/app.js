@@ -401,32 +401,7 @@
 
   // ------------------------------------------------------------ menu
 
-  /* Jeden przycisk na powiadomienia: zgoda przeglądarki i push przy zamkniętej aplikacji (D28) naraz.
-     Gdzie push nie działa (http, iPhone poza ekranem początkowym), zostają powiadomienia przy otwartej aplikacji
-     (`lokalne` — aplikacja sama je pokazuje). Stan pyta przeglądarkę, więc rysujemy później. */
-  async function rysujPush(el, komunikat, lokalne) {
-    const s = await hala.push.stan();
-    const zgoda = 'Notification' in window ? Notification.permission : 'brak';
-    const ok = t => `<p class="tekst-ok">${t}</p>`;
-    const przycisk = (co, t) => `<button type="button" class="glowny szeroki" data-push="${co}">${t}</button>`;
-    el.innerHTML = s === 'wlaczone' ? ok('Włączone — także przy zamkniętej aplikacji') + '<button type="button" class="szeroki" data-push="wylacz">Wyłącz</button>'
-      : s === 'zablokowane' || zgoda === 'denied' ? '<p class="tekst-uwaga">Zablokowane — zezwól na powiadomienia w ustawieniach przeglądarki dla tej strony.</p>'
-      : s === 'wylaczone' ? (lokalne && zgoda === 'granted' ? ok('Włączone, gdy aplikacja jest otwarta') + przycisk('wlacz', 'Włącz też przy zamkniętej aplikacji')
-                                                             : przycisk('wlacz', 'Włącz powiadomienia'))
-      : (lokalne && zgoda === 'granted' ? ok('Włączone, gdy aplikacja jest otwarta') : lokalne && zgoda === 'default' ? przycisk('zgoda', 'Włącz powiadomienia') : '')
-        + '<p class="slaby">Przy zamkniętej aplikacji: potrzebny adres https, a na iPhonie aplikacja dodana do ekranu początkowego (iOS 16.4+).</p>';
-    const b = el.querySelector('[data-push]');
-    if (b) b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        if (b.dataset.push === 'zgoda') await Notification.requestPermission();
-        else await hala.push[b.dataset.push]();
-      } catch (e) { komunikat(e.message || 'Nie udało się. Spróbuj jeszcze raz.'); }
-      rysujPush(el, komunikat, lokalne);
-    });
-  }
-
-  /* „Moje konto” (👤 w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
+  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
      dane w tym urządzeniu, wersja, Wyloguj — jak w UR, KJ, Panelu i GK Trasy. Rzeczy Lidera (linia, powiadomienia,
      ostatnia synchronizacja) dorysowują się w środku (dodatki). Okno to <dialog> w warstwie górnej — przed oknem Lidera
      (Zmień linię, Odrzucone) zamykamy je, inaczej przykryłoby tamto. */
@@ -438,12 +413,13 @@
         el.innerHTML = `<fieldset><legend>Linia</legend>
             <p class="hala-konto-drobne">${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</p>
             <button type="button" data-a="linia">Zmień linię</button></fieldset>
-          <fieldset><legend>Powiadomienia</legend>
-            <p class="hala-konto-drobne">Przypomnienia z checklisty, Quality Alert i zlecenia od kierownika.</p>
-            <div id="push"></div></fieldset>
+          <div data-powiadomienia></div>
           <p class="hala-konto-drobne">Ostatnia synchronizacja: ${esc(ost ? W.godzina(ost) : '—')}</p>`;
         el.querySelector('[data-a=linia]').addEventListener('click', () => { el.closest('dialog').close(); wyborLinii(); });
-        rysujPush(el.querySelector('#push'), t => Lider.komunikat(t, 'blad'), true);
+        /* Jeden przycisk na powiadomienia: zgoda przeglądarki i push przy zamkniętej aplikacji (D28) naraz — wspólna
+           sekcja z Panelem (konto.js → powiadomienia). lokalne: Lider sam pokazuje powiadomienia przy otwartej karcie. */
+        HalaKonto.powiadomienia(el.querySelector('[data-powiadomienia]'), hala, {
+          opis: 'Przypomnienia z checklisty, Quality Alert i zlecenia od kierownika.', lokalne: true, komunikat: Lider.komunikat });
       },
     });
   });
@@ -529,8 +505,7 @@
     $('opis-zmiany').innerHTML = z
       ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '<span>Poza zmianą</span>';
     const p = hala.pracownik;
-    // „Anna N. 👤” — 👤 otwiera „Moje konto” jak w pozostałych aplikacjach GK (wcześniej ☰ i osobne menu).
-    $('menu').textContent = p && p.nazwa ? String(p.nazwa).split(' ').map((s, i) => (i ? s[0] + '.' : s)).join(' ') + ' 👤' : '👤';
+    // Przycisk „Moje konto” to sama ikona osoby (index.html, STYL-GK §3 runda 2) — bez „Anna N.” obok, jak w UR, KJ i Panelu.
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
   }
 
