@@ -99,7 +99,7 @@
         });
         if (b('pomin')) b('pomin').addEventListener('click', async () => {
           const powod = await L.zapytaj({ tytul: 'Pomiń: ' + p.nazwa, pytanie: 'Dlaczego pomijasz? Pominięta pozycja nie liczy się jako opóźnienie.',
-                                          przycisk: 'Pomiń', wymagane: true });
+                                          przycisk: 'Pomiń', wymagane: true, pole: ['checklista.pozycja_pominieta', 'powod'] });
           if (!powod) return;
           if (await L.zapisz('checklista.pozycja_pominieta', k.klucz, { linia: k.linia, zmiana: k.zmiana.id, pozycja: p.id, powod })) L.poZapisie('Pozycja pominięta');
         });
@@ -248,7 +248,7 @@
     if (!nowe.length) return;
     for (const p of nowe) {
       juz.add(p.id);
-      L.powiadom(`${p.godz} · ${p.nazwa}`, `Za ${Math.max(0, p.zaMin)} min — linia ${k.linia}`, { tag: 'poz-' + p.id });
+      L.powiadom(`${p.godz} · ${p.nazwa}`, `Za ${Math.max(0, p.zaMin)} min — linia ${k.linia}`, { tag: 'poz-' + p.id, adres: '#zmiana' });
       L.komunikat(`Za ${Math.max(0, p.zaMin)} min: ${p.nazwa}`, 'info');
     }
     L.pamiec.zapisz('przypomniane', JSON.stringify({ klucz: k.klucz, ids: Array.from(juz) }));

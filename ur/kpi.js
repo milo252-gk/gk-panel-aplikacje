@@ -20,7 +20,7 @@
 
   function kafle(k, plan) {
     return `<div class="kafle-liczb">
-      <div><span>Awarie</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone}</small></div>
+      <div><span>Awarie</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone} · zatrzymania linii ${k.zatrzymania}</small></div>
       <div><span>MTTR</span><b>${esc(czas(k.mttrMs))}</b><small>średni czas naprawy</small></div>
       <div><span>MTBF</span><b>${esc(czas(k.mtbfMs))}</b><small>między awariami maszyny</small></div>
       <div><span>Reakcja</span><b>${esc(czas(k.reakcjaMs))}</b><small>do przyjęcia</small></div>
@@ -63,7 +63,10 @@
       const klucz = `${u.okres}|${u.linia}|${u.maszyna}`;
       let wynik = null, zrodlo = '';
       if (!okres.zHuba) {
-        wynik = W.kpi({ awarie: hala.obiekty('awaria'), od: okres.od, do: okres.do, teraz: k.teraz, linia: u.linia || null, maszyna: u.maszyna || null, slowniki: k.slowniki });
+        // stale (priorytety z „zatrzymuje”) — bez nich telefon liczył 0 zatrzymań, a hub (90 dni, rok) i Panel prawdziwą
+        // liczbę: te same KPI różniły się zależnie od okresu (D37: jedne liczby; przegląd 2026-10-07).
+        wynik = W.kpi({ awarie: hala.obiekty('awaria'), od: okres.od, do: okres.do, teraz: k.teraz, linia: u.linia || null, maszyna: u.maszyna || null,
+                        slowniki: k.slowniki, stale: k.stale });
         zrodlo = 'Policzone w telefonie.';
       } else if (zHuba.has(klucz)) {
         wynik = zHuba.get(klucz).wynik;

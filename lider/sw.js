@@ -12,9 +12,12 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                     */
 
-const WERSJA = 'lider-8cf8c04b516c';
+const WERSJA = 'lider-7e533a6316dc';
 
-// Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.
+// Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ. Dotknięcie też wspólne (jak KJ i Panel):
+// otwarte okno dostaje {typ:'otworz', adres} z data.adres (np. '#zlecenia'), a bez okna otwiera się ./#zlecenia —
+// app.js zamienia adres na ekran. Wcześniej własna obsługa tylko przywracała okno (przegląd 2026-10-07).
+self.HALA_PUSH_OBSLUZ_KLIK = true;
 importScripts('../wspolne/hala-push-sw.js');
 
 const ZASOBY = [
@@ -59,13 +62,4 @@ self.addEventListener('fetch', e => {
         .then(k => k || caches.match(e.request))
         .then(k => k || (e.request.mode === 'navigate' ? caches.match('./index.html') : Promise.reject(new Error('brak kopii')))))
   );
-});
-
-/* Dotknięcie powiadomienia (przypomnienie, alert, naprawa do potwierdzenia) otwiera aplikację. */
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(okna => {
-    const moje = okna.find(o => new URL(o.url).pathname.startsWith(new URL(self.registration.scope).pathname));
-    return moje ? moje.focus() : self.clients.openWindow(self.registration.scope);
-  }));
 });

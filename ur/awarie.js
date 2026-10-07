@@ -306,12 +306,13 @@
           tytul: 'Fałszywy alarm?',
           tresc: `<p class="slaby">Awaria zniknie z listy, a przestój stanie na tej chwili.</p>
             ${UR.chipy('gotowy', W.POWODY_ANULOWANIA.map(p => ({ kod: p, nazwa: p })), [])}
-            <label>Albo opisz<input name="powod" maxlength="1000" data-bez-fokusu></label>`,
+            <label>Albo opisz<input name="powod" maxlength="${W.MAKS_POWODU}" data-bez-fokusu></label>`,
           przyciski: [{ tekst: 'Wróć', wartosc: false }, { tekst: 'Anuluj awarię', wartosc: true, alarm: true,
-            sprawdz: f => (String(f.get('powod') || '').trim() || f.get('gotowy') ? null : 'Wybierz albo wpisz powód.') }],
+            // Limit huba liczy się dla całości (gotowy + opis), nie tylko dla wpisanego pola.
+            sprawdz: f => W.powodAnulowania(f.get('gotowy'), f.get('powod')).blad }],
         });
         if (!w || !w.wartosc) break;
-        const powod = [w.dane.get('gotowy'), String(w.dane.get('powod') || '').trim()].filter(Boolean).join(' — ');
+        const { powod } = W.powodAnulowania(w.dane.get('gotowy'), w.dane.get('powod'));
         await zapisz(typ, id, { powod }, 'Awaria anulowana');
         break;
       }

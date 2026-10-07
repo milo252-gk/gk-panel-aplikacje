@@ -184,20 +184,22 @@
 
   async function odrzuc(id) {
     const powod = await L.zapytaj({ tytul: 'Nadal nie działa', pytanie: 'Co jest nie tak? Awaria wróci do mechanika.',
-                                    podpowiedz: 'Np. dalej cieknie olej', przycisk: 'Odeślij do UR', wymagane: true, klasa: 'alarm' });
+                                    podpowiedz: 'Np. dalej cieknie olej', przycisk: 'Odeślij do UR', wymagane: true, klasa: 'alarm',
+                                    pole: ['awaria.potwierdzenie_odrzucone', 'powod'] });
     if (!powod) return;
     if (await L.zapisz('awaria.potwierdzenie_odrzucone', id, { powod })) L.poZapisie('Awaria wróciła do UR');
   }
 
   async function anuluj(id) {
     const powod = await L.zapytaj({ tytul: 'Anuluj zgłoszenie', pytanie: 'Dlaczego anulujesz? (np. fałszywy alarm)',
-                                    przycisk: 'Anuluj zgłoszenie', wymagane: true, klasa: 'alarm' });
+                                    przycisk: 'Anuluj zgłoszenie', wymagane: true, klasa: 'alarm', pole: ['awaria.anulowana', 'powod'] });
     if (!powod) return;
     if (await L.zapisz('awaria.anulowana', id, { powod })) L.poZapisie('Zgłoszenie anulowane');
   }
 
   async function komentarz(id) {
-    const tekst = await L.zapytaj({ tytul: 'Notatka dla UR', podpowiedz: 'Np. maszyna znowu stanęła o 10:20', przycisk: 'Dodaj', wymagane: true });
+    const tekst = await L.zapytaj({ tytul: 'Notatka dla UR', podpowiedz: 'Np. maszyna znowu stanęła o 10:20', przycisk: 'Dodaj', wymagane: true,
+                                    pole: ['awaria.komentarz', 'tekst'] });
     if (!tekst) return;
     if (await L.zapisz('awaria.komentarz', id, { tekst })) L.poZapisie('Notatka dodana');
   }
@@ -271,11 +273,11 @@
     if (obiekt.linia !== L.linia()) return;
     const m = (obiekt.dane || {}).maszyna || '';
     if (obiekt.status === 'oczekuje_potwierdzenia') {
-      L.powiadom(`${m}: naprawa zakończona`, 'Potwierdź, że linia ruszyła', { tag: 'awaria-' + id });
+      L.powiadom(`${m}: naprawa zakończona`, 'Potwierdź, że linia ruszyła', { tag: 'awaria-' + id, adres: '#awarie' });
       L.komunikat(`${m}: naprawa zakończona — potwierdź`, 'ok', 'awaria-' + id);
     } else {
       L.komunikat(`${m}: ${obiekt.etykieta || obiekt.status}`, 'info', 'awaria-' + id);
-      if (obiekt.status === 'przyjeta') L.powiadom(`${m}: mechanik w drodze`, '', { tag: 'awaria-' + id, wibracja: 100 });
+      if (obiekt.status === 'przyjeta') L.powiadom(`${m}: mechanik w drodze`, '', { tag: 'awaria-' + id, wibracja: 100, adres: '#awarie' });
     }
   });
   hala.na('sesja', () => { statusy.clear(); for (const a of hala.obiekty('awaria')) statusy.set(a.id, a.status); });

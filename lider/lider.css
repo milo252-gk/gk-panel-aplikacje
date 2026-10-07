@@ -139,6 +139,8 @@ dl.dane dd { margin: 0; white-space: pre-wrap; }
 .formularz label { display: grid; gap: 4px; font-weight: 600; font-size: .95em; }
 .formularz fieldset { border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 10px; display: grid; gap: 8px; }
 .formularz legend { font-weight: 600; padding: 0 4px; }
+/* Licznik znaków pod polem L.zapytaj — tuż pod tekstem, przy prawej krawędzi (gap formularza by go odsunął). */
+.formularz .licznik-znakow { justify-self: end; margin-top: -8px; font-size: .85em; }
 .rzad { display: flex; gap: 8px; }
 .rzad > :first-child { flex: 1; }
 .liczby-proby { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }

@@ -203,6 +203,11 @@
     $('ekran').innerHTML = `<p class="pusto blad">Coś poszło nie tak: ${esc(e && e.message)}. Wróć do planu i spróbuj jeszcze raz.</p>`;
   }
   global.addEventListener('hashchange', () => { pokazEkran(); global.scrollTo(0, 0); });
+  // Dotknięty push przy otwartej aplikacji: wspólny hala-push-sw.js wysyła {typ:'otworz', adres} (np. '#zlecenia') —
+  // jak w UR i Panelu; bez tego KJ w tle tylko wracał na wierzch (przegląd 2026-10-07).
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => {
+    if (ev.data && ev.data.typ === 'otworz' && ev.data.adres) { global.focus(); location.hash = ev.data.adres; }
+  });
 
   /* Strumień przyniósł zmianę: ekrany do czytania rysujemy od nowa, a formularze
      tylko odświeżają swoje fragmenty (odswiez) — inaczej kontrolerowi znikałby

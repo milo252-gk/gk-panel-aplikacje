@@ -249,6 +249,19 @@
     'Reset i kalibracja', 'Wymiana bezpiecznika', 'Uszczelnienie', 'Naprawa przewodu', 'Wymiana czujnika'];
   const POWODY_ANULOWANIA = ['Fałszywy alarm', 'Zgłoszenie podwójne', 'Usterka ustąpiła sama', 'Obsługa operatora, nie UR'];
   const MAKS_ZDJEC = 20;             // hub przyjmuje najwyżej 20 plików w jednym polu
+  const MAKS_POWODU = 1000;          // kontrakt: awaria.anulowana → powod.maks (test: widok-testy.js)
+
+  /* Powód „Fałszywy alarm?”: gotowy (dotknięcie) + własny opis, razem „Gotowy — opis”. Pole opisu ma maxlength 1000,
+     ale gotowy dokłada do 26 znaków — 1000 wpisanych + gotowy hub odrzucał („za długie”), a awaria zostawała aktywna
+     (przegląd 2026-10-07). Limit pilnujemy dla całości, przed zapisem. */
+  function powodAnulowania(gotowy, wpisany) {
+    const powod = [gotowy, String(wpisany || '').trim()].filter(Boolean).join(' — ');
+    if (!powod) return { powod, blad: 'Wybierz albo wpisz powód.' };
+    if (powod.length > MAKS_POWODU) {
+      return { powod, blad: `Powód za długi: ${powod.length} znaków${gotowy ? ' razem z „' + gotowy + '”' : ''}, najwyżej ${MAKS_POWODU}. Skróć opis.` };
+    }
+    return { powod, blad: null };
+  }
 
   /* Formularz „Zakończ naprawę”: { gotowe: [..], dopisek, typ_usterki, czesci, zdjecia } */
   function opisNaprawy(f) {
@@ -738,7 +751,7 @@
   global.URWidok = {
     raz, odmiana, liczba, linie, maszyny, nazwaLinii, nazwaMaszyny, nazwaKarty, nazwaPracownika, godzina, data, kiedy, numer,
     dzienZakladu, koniecDnia, dodajDni, mozna, dozwolonyZ, kodZNazwy, priorytetInfo, nazwaZeStalej, zatrzymuje,
-    wierszAwarii, listaAwarii, ostatnioZamkniete, akcjeAwarii, GOTOWE_OPISY, POWODY_ANULOWANIA, MAKS_ZDJEC,
+    wierszAwarii, listaAwarii, ostatnioZamkniete, akcjeAwarii, GOTOWE_OPISY, POWODY_ANULOWANIA, MAKS_POWODU, powodAnulowania, MAKS_ZDJEC,
     opisNaprawy, bledyZakonczenia, daneZakonczenia, sprawdzMaszyne, mechanicy, komunikatKonfliktu, powiadomienie, historiaAwarii,
     kpi, OKRESY, okresKpi,
     statusPrzegladu, kartaDla, kartyDlaMaszyny, wierszPrzegladu, listaPrzegladow, wynikPomiaru, zakres, danePunktu, postepPrzegladu,

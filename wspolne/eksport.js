@@ -3,8 +3,9 @@
    Panel (Raporty), UR (KPI — kierownik UR: awarie) i KJ (Pareto — kierownik KJ: próby, partie) rysują ten sam pasek:
        HalaEksport.rysuj(el, hala, { rodzaje: ['awarie'], komunikat })   // rodzaje: podzbiór HalaEksport.RODZAJE
    Rodzaje, których osoba nie może pobrać, pasek pomija (HalaEksport.dlaRol) — hub i tak sprawdza rolę (403).
-   Okres domyślnie: ten miesiąc w czasie zakładu. Wybór (rodzaj, od, do) pamiętamy w pamięci strony, bo ekrany UR i KJ
-   przerysowują się przy każdym zdarzeniu z hali. Plik pobiera hala.pobierz (token w nagłówku, nie w adresie).
+   Okres domyślnie: ten miesiąc w czasie zakładu, liczony przy KAŻDYM rysowaniu (HalaEksport.wybor). Wybór (rodzaj i daty
+   wpisane ręcznie) pamiętamy w pamięci strony, bo ekrany UR i KJ przerysowują się przy każdym zdarzeniu z hali.
+   Plik pobiera hala.pobierz (token w nagłówku, nie w adresie).
    Bez sieci nie ma czego pobrać — pasek mówi to od razu („Potrzebne połączenie z hubem”). Wygląd: hala.css → .hala-eksport. */
 
 (function (global) {
@@ -39,7 +40,19 @@
     return { sciezka: `/api/v1/eksport/${rodzaj}.csv?od=${od}&do=${do_}`, plik: `gk-${rodzaj}-${od}-${do_}.csv` };
   }
 
-  const stan = new Map();          // klucz paska → { rodzaj, od, do }
+  /* Co pokazać w pasku: zapamiętany wybór + DZISIEJSZY domyślny okres dla dat, których osoba nie wpisała. Wcześniej
+     okres liczony raz przy pierwszym rysowaniu zostawał na zawsze — Panel otwarty przez noc (monitor, sesja 90 dni)
+     albo przez koniec miesiąca dalej podsuwał wczorajsze „do” i stary miesiąc (przegląd 2026-10-07). Datę wpisaną
+     ręcznie (wpisane.od / wpisane.do) zostawiamy — przerysowanie po zdarzeniu z hali nie może jej skasować. */
+  function wybor(zapisany, teraz, moje) {
+    const z = zapisany || {}, wpisane = { od: !!(z.wpisane && z.wpisane.od), do: !!(z.wpisane && z.wpisane.do) };
+    const dzis = okres(teraz);
+    const lista = moje || [];
+    return { rodzaj: lista.includes(z.rodzaj) ? z.rodzaj : lista[0], od: wpisane.od ? z.od : dzis.od,
+             do: wpisane.do ? z.do : dzis.do, wpisane };
+  }
+
+  const stan = new Map();          // klucz paska → { rodzaj, od, do, wpisane: {od, do} }
   const esc = s => String(s === null || s === undefined ? '' : s)
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -49,8 +62,7 @@
     const moje = dlaRol(hala.pracownik && hala.pracownik.role, o.rodzaje);
     if (!moje.length) { el.innerHTML = ''; return; }
     const klucz = o.rodzaje.join(',');
-    const s = Object.assign({ rodzaj: moje[0] }, okres(hala.teraz()), stan.get(klucz) || {});
-    if (!moje.includes(s.rodzaj)) s.rodzaj = moje[0];
+    const s = wybor(stan.get(klucz), hala.teraz(), moje);
     stan.set(klucz, s);
     el.innerHTML = `
       <form class="hala-eksport" aria-label="Pobierz zestawienie CSV">
@@ -64,8 +76,11 @@
         <span class="hala-eksport-uwaga">${hala.polaczenie && hala.polaczenie.online === false ? 'Brak sieci — pobieranie wymaga połączenia z hubem.' : 'Wymaga połączenia z hubem.'}</span>
       </form>`;
     const f = el.querySelector('form');
-    f.addEventListener('change', () => {
-      stan.set(klucz, { rodzaj: f.rodzaj ? f.rodzaj.value : moje[0], od: f.od.value, do: f.do.value });
+    f.addEventListener('change', ev => {
+      const wpisane = Object.assign({}, (stan.get(klucz) || {}).wpisane);
+      const pole = ev && ev.target && ev.target.name;
+      if (pole === 'od' || pole === 'do') wpisane[pole] = true;      // od teraz ta data nie idzie za „dziś”
+      stan.set(klucz, { rodzaj: f.rodzaj ? f.rodzaj.value : moje[0], od: f.od.value, do: f.do.value, wpisane });
     });
     f.addEventListener('submit', async ev => {
       ev.preventDefault();
@@ -86,6 +101,6 @@
     });
   }
 
-  global.HalaEksport = { RODZAJE, dlaRol, okres, adres, rysuj };
+  global.HalaEksport = { RODZAJE, dlaRol, okres, wybor, adres, rysuj };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaEksport;
 })(typeof window !== 'undefined' ? window : globalThis);

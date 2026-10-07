@@ -139,24 +139,31 @@
   // Okna, które umieją wstać po zamknięciu karty (rejestrują je pliki formularzy): klucz -> fn(parametry).
   Lider.oknaPoStarcie = {};
 
-  /* Pytanie z odpowiedzią tekstową (np. powód pominięcia). Zwraca tekst albo null. */
-  Lider.zapytaj = ({ tytul, pytanie, podpowiedz, przycisk, wymagane, klasa }) => new Promise(ok => {
+  /* Pytanie z odpowiedzią tekstową (np. powód pominięcia). Zwraca tekst albo null.
+     pole = [typ zdarzenia, pole] — limit znaków z kontraktu, ten sam co w hubie (W.maksPola): dłuższy tekst hub
+     odrzuca, a lider traci to, co wpisał. maxlength nie pozwala wpisać więcej, licznik pokazuje, ile zostało. */
+  Lider.zapytaj = ({ tytul, pytanie, podpowiedz, przycisk, wymagane, klasa, pole }) => new Promise(ok => {
     let odp = null;
+    const maks = W.maksPola(hala.kontrakt, (pole || [])[0], (pole || [])[1]);
     Lider.okno({
       tytul,
-      html: `<form class="formularz" id="f-pytanie">
+      html: `<form class="formularz" id="f-pytanie" novalidate>
         ${pytanie ? `<p>${esc(pytanie)}</p>` : ''}
-        <textarea name="tekst" rows="3" placeholder="${esc(podpowiedz || '')}" ${wymagane ? 'required' : ''}></textarea>
+        <textarea name="tekst" rows="3" maxlength="${maks}" placeholder="${esc(podpowiedz || '')}" ${wymagane ? 'required' : ''}></textarea>
+        <small class="slaby licznik-znakow" aria-live="polite">${esc(W.licznikZnakow('', maks))}</small>
+        <p class="blad" data-z="blad" hidden></p>
         <button class="${klasa || 'glowny'} szeroki" type="submit">${esc(przycisk || 'OK')}</button>
       </form>`,
       poOtwarciu: el => {
         const f = el.querySelector('form');
+        const licznik = f.querySelector('.licznik-znakow'), blad = f.querySelector('[data-z=blad]');
         f.tekst.focus();
+        f.tekst.addEventListener('input', () => { licznik.textContent = W.licznikZnakow(f.tekst.value, maks); blad.hidden = true; });
         f.addEventListener('submit', ev => {
           ev.preventDefault();
-          const t = f.tekst.value.trim();
-          if (wymagane && !t) { f.tekst.focus(); return; }
-          odp = t;
+          const w = W.sprawdzOdpowiedz(f.tekst.value, { wymagane, maks });
+          if (w.blad) { blad.textContent = w.blad; blad.hidden = false; f.tekst.focus(); return; }
+          odp = w.tekst;
           Lider.zamknijOkno();
         });
       },
@@ -238,19 +245,34 @@
   // ------------------------------------------------------------ powiadomienia
 
   /* Przypomnienia działają przy otwartej aplikacji (także w tle karty). Android Chrome nie
-     pozwala na `new Notification` na stronie — tylko przez service workera, stąd dwie drogi. */
+     pozwala na `new Notification` na stronie — tylko przez service workera, stąd dwie drogi.
+     o.adres (np. '#zlecenia') — ekran, który otworzy dotknięcie, tak samo jak push z huba (sw.js → 'otworz'). */
   Lider.powiadom = async (tytul, tresc, opcje) => {
     const o = opcje || {};
     try { if (navigator.vibrate) navigator.vibrate(o.wibracja || [200, 100, 200]); } catch (e) { /* bez wibracji */ }
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (document.visibilityState === 'visible' && !o.zawsze) return;       // na ekranie i tak widać
-    const op = { body: tresc, tag: o.tag, icon: 'ikona-192.png', renotify: !!o.tag };
+    const op = { body: tresc, tag: o.tag, icon: 'ikona-192.png', renotify: !!o.tag, data: { adres: o.adres || '' } };
     try {
       const rej = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
       if (rej) { await rej.showNotification(tytul, op); return; }
     } catch (e) { /* niżej */ }
-    try { new Notification(tytul, op); } catch (e) { /* przeglądarka nie pozwala */ }
+    try {
+      const n = new Notification(tytul, op);
+      n.onclick = () => { window.focus(); otworzZAdresu(o.adres); n.close(); };
+    } catch (e) { /* przeglądarka nie pozwala */ }
   };
+
+  /* Dotknięte powiadomienie otwiera swój ekran — jak w UR, KJ i Panelu (przegląd 2026-10-07; wcześniej Lider tylko
+     wracał na wierzch). sw.js (wspólny hala-push-sw.js) wysyła otwartemu oknu {typ:'otworz', adres}, a gdy okna nie ma,
+     otwiera ./#adres — ten adres czyta start (niżej) i zaraz go czyści, żeby odświeżenie strony nie wracało na ten ekran. */
+  function otworzZAdresu(adres) {
+    const ekran = W.ekranZAdresu(adres, Object.keys(Lider.ekrany));
+    if (ekran) Lider.pokazEkran(ekran);
+  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => {
+    if (ev.data && ev.data.typ === 'otworz') { window.focus(); otworzZAdresu(ev.data.adres); }
+  });
 
   Lider.poprosOPowiadomienia = () => {
     try {
@@ -557,7 +579,7 @@
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   HalaZlecenia.sledz(hala, Lider.dzialZlecen, z => {
     Lider.komunikat(`Nowe zlecenie od kierownika: ${(z.dane || {}).tytul || ''}`, 'info', 'zlecenie-' + z.id);
-    Lider.powiadom('Nowe zlecenie od kierownika', (z.dane || {}).tytul || '', { tag: 'zlecenie-' + z.id });
+    Lider.powiadom('Nowe zlecenie od kierownika', (z.dane || {}).tytul || '', { tag: 'zlecenie-' + z.id, adres: '#zlecenia' });
   });
 
   Lider.plakietka = (nazwa, liczba) => {
@@ -614,6 +636,11 @@
       document.body.innerHTML = `<p class="blad" style="padding:20px">Telefon nie otworzył pamięci aplikacji (${esc(e.message)}).
         Wyjdź z trybu prywatnego przeglądarki albo zwolnij miejsce i otwórz aplikację ponownie.</p>`;
       return;
+    }
+    // Otwarte dotknięciem powiadomienia (./#zlecenia) — ekran z adresu; bez zalogowania czeka w Lider.stan.ekran.
+    if (location.hash) {
+      otworzZAdresu(location.hash);
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* zostaje w adresie */ }
     }
     pokazSesje();
     setTimeout(rysujPasek, LASKA_MS + 500);   // po okresie łaski pasek mówi prawdę

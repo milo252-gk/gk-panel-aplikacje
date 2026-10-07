@@ -417,7 +417,33 @@
     };
   }
 
+  /* Odpowiedź tekstowa z okna L.zapytaj (powód, notatka, działania BHP). Hub odrzuca pole dłuższe niż `maks` z kontraktu
+     (hala.py: pole bez `maks` — 10000) i zapis wraca jako „odrzucony”, a wpisany tekst przepada. Dlatego okno bierze limit
+     z kontraktu (maxlength + licznik) i sprawdza go przed zapisem (przegląd 2026-10-07). Pola, którego kontrakt nie zna
+     (np. kontrakt jeszcze niewczytany), pilnujemy najmniejszym limitem z kontraktu — 1000. */
+  function maksPola(kontrakt, typ, pole) {
+    const p = ((((kontrakt || {}).zdarzenia || {})[typ] || {}).pola || {})[pole];
+    if (!p) return 1000;
+    return typeof p.maks === 'number' && p.maks > 0 ? p.maks : 10000;
+  }
+  const licznikZnakow = (tekst, maks) => `${String(tekst || '').length} / ${maks}`;
+  function sprawdzOdpowiedz(tekst, { wymagane, maks } = {}) {
+    const t = String(tekst || '').trim();
+    if (wymagane && !t) return { tekst: t, blad: 'Wpisz odpowiedź.' };
+    if (maks && t.length > maks) return { tekst: t, blad: `Za długie: ${liczebnik(t.length, 'znak', 'znaki', 'znaków')}, najwyżej ${maks}. Skróć tekst.` };
+    return { tekst: t, blad: null };
+  }
+
+  /* Ekran z adresu dotkniętego powiadomienia (data.adres z huba, np. '#zlecenia', '#jakosc') — jak w UR, KJ i Panelu.
+     Lider nie trzyma ekranu w adresie strony, więc '#…' zamieniamy na nazwę ekranu; pusty albo nieznany → null (ekran
+     zostaje). Przegląd 2026-10-07: dotknięcie pusha „Zlecenie od kierownika” tylko otwierało aplikację. */
+  function ekranZAdresu(adres, ekrany) {
+    const nazwa = String(adres || '').replace(/^#/, '').split('/')[0];
+    return nazwa && (ekrany || []).includes(nazwa) ? nazwa : null;
+  }
+
   global.LiderWidok = {
+    maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
     godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
     maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,

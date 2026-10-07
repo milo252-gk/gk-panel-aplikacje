@@ -30,7 +30,7 @@
       if (!widziane.has(x.id)) {
         widziane.add(x.id);
         L.powiadom('Quality Alert: ' + ((x.dane || {}).tytul || ''), 'Potwierdź zapoznanie się na linii ' + linia,
-                   { tag: 'alert-' + x.id, wibracja: [300, 100, 300, 100, 300] });
+                   { tag: 'alert-' + x.id, wibracja: [300, 100, 300, 100, 300], adres: '#jakosc' });
       }
     }
     if (pokazany === a.id && !el.hidden) return;         // nie przerysowujemy w trakcie pisania uwag
@@ -144,7 +144,8 @@
   }
 
   async function zamknijBhp(id) {
-    const dzialania = await L.zapytaj({ tytul: 'Zamknij zgłoszenie BHP', pytanie: 'Jakie działania podjęto?', przycisk: 'Zamknij zgłoszenie', wymagane: true });
+    const dzialania = await L.zapytaj({ tytul: 'Zamknij zgłoszenie BHP', pytanie: 'Jakie działania podjęto?', przycisk: 'Zamknij zgłoszenie', wymagane: true,
+                                        pole: ['bhp.zamkniete', 'dzialania'] });
     if (!dzialania) return;
     if (await L.zapisz('bhp.zamkniete', id, { dzialania })) L.poZapisie('Zgłoszenie BHP zamknięte');
   }
@@ -216,7 +217,7 @@
     const ja = hala.pracownik && hala.pracownik.id;
     for (const r of W.reklamacje(hala.obiekty('reklamacja'), L.linia(), ja)) {
       if (znaneReklamacje.has(r.id)) continue;
-      if (znaneReklamacje.size && !r.przeczytana) L.powiadom('Nowa reklamacja ' + r.numer, r.opis.slice(0, 100), { tag: 'rk-' + r.id });
+      if (znaneReklamacje.size && !r.przeczytana) L.powiadom('Nowa reklamacja ' + r.numer, r.opis.slice(0, 100), { tag: 'rk-' + r.id, adres: '#jakosc' });
       znaneReklamacje.add(r.id);
     }
     if (!znaneReklamacje.size) znaneReklamacje.add('-');     // pierwsze rysowanie: tylko zapamiętujemy

@@ -1,11 +1,11 @@
 {
   "hub": "https://footage-import-toolbar-cart.trycloudflare.com",
-  "zmieniono": "2026-10-07T00:00:13.609Z",
+  "zmieniono": "2026-10-07T00:00:25.000Z",
   "wersje": {
-    "wspolne": "wspolne-648c915c7a45",
-    "panel": "panel-3d861390656f",
-    "lider": "lider-8cf8c04b516c",
-    "ur": "ur-4c0ca8221fb2",
-    "kj": "kj-860001a4f0fb"
+    "wspolne": "wspolne-ab7fd534c74c",
+    "panel": "panel-b13017e62673",
+    "lider": "lider-7e533a6316dc",
+    "ur": "ur-9cc34506dcb4",
+    "kj": "kj-078129d42f44"
   }
 }
