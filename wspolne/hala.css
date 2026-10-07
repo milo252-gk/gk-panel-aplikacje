@@ -241,6 +241,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 /* Jak w GK Trasy: podpis nad polem, wyrównany do lewej; „Zaloguj” na całą szerokość. */
 .hala-karta-logowania label { display: block; text-align: left; margin-bottom: 14px; font-weight: 600; font-size: 13px; }
 .hala-karta-logowania input { margin-top: 5px; }
+/* „np. Jan Kowalski” jednym kolorem we wszystkich aplikacjach GK (STYL-GK §2): --tekst-slaby karty (#6d6d72), nie
+   domyślny przeglądarki; opacity 1 — Firefox inaczej dodatkowo przygasza placeholder. */
+.hala-karta-logowania input::placeholder { color: var(--tekst-slaby); opacity: 1; }
 .hala-karta-logowania form > button { width: 100%; margin-top: 8px; }
 .hala-karta-logowania form > button[type="submit"] { min-height: 54px; font-size: 16px; margin-top: 6px; }
 .hala-karta-logowania .blad { color: var(--czerwony); font-weight: 600; font-size: 13px; margin: 10px 0 0; }

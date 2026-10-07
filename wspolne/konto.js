@@ -125,17 +125,23 @@
      wyloguj — wylogowanie aplikacji (pyta o kolejkę, rysuje ekran logowania); odrzucone — otwiera listę odrzuconych
      (przycisk widać, gdy coś jest); dodatki(el) — dorysowuje części tej aplikacji (Lider: linia, powiadomienia). */
 
-  const WYGLAD = [['auto', 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']];
+  /* Wygląd: ta sama reguła (brak wyboru = jak urządzenie), inne słowo — na telefonie „Jak w telefonie”, na komputerze
+     „Jak w systemie” (STYL-GK §4; §6: na komputerze nie piszemy „telefon”). Próg jak w GK Trasy / GK Flota
+     (app.js → wyborWygladu) i w hala.css: komputer od 821 px szerokości. Słowo ustala się przy otwarciu okna. */
+  function naKomputerze() {
+    return typeof global.matchMedia === 'function' && global.matchMedia('(min-width:821px)').matches;
+  }
+  const wyglady = komputer => [['auto', komputer ? 'Jak w systemie' : 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']];
 
-  /* Treść okna (czysta funkcja — testy: reduktor-testy.js). dane: {nazwa, role: [nazwy], wyglad, czeka, cudze,
-     odrzucone, zOdrzuconymi, pin} → HTML. */
+  /* Treść okna (czysta funkcja — testy: reduktor-testy.js). dane: {nazwa, role: [nazwy], wyglad, komputer, czeka, cudze,
+     odrzucone, zOdrzuconymi, pin} → HTML. komputer — szerokość komputera (naKomputerze()); bez niego słowa telefonu. */
   function trescKonta(dane) {
     const d = dane || {};
     return `<form method="dialog" autocomplete="off">
         <h2 id="hala-okno-konta-tytul">Moje konto</h2>
         <p class="hala-konto-kto"><b>${esc(d.nazwa || '—')}</b>${(d.role || []).length ? `<span>${esc(d.role.join(', '))}</span>` : ''}</p>
         <fieldset><legend>Wygląd</legend>
-          <div class="hala-wybor" role="group" aria-label="Wygląd">${WYGLAD.map(([k, n]) =>
+          <div class="hala-wybor" role="group" aria-label="Wygląd">${wyglady(d.komputer).map(([k, n]) =>
             `<button type="button" data-wyglad="${k}" aria-pressed="${d.wyglad === k}">${n}</button>`).join('')}</div>
           <p class="hala-konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
         </fieldset>
@@ -168,7 +174,7 @@
     const ekran = (p.role || []).length === 1 && p.role[0] === 'ekran';
     const motyw = global.HalaMotyw;
     d.innerHTML = trescKonta({ nazwa: p.nazwa, role: (p.role || []).map(r => nazwyRol[r] || r), wyglad: motyw ? motyw.odczytaj() : 'auto',
-                               czeka: k.moje || 0, cudze: Math.max(0, (k.oczekuje || 0) - (k.moje || 0)), odrzucone,
+                               komputer: naKomputerze(), czeka: k.moje || 0, cudze: Math.max(0, (k.oczekuje || 0) - (k.moje || 0)), odrzucone,
                                zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran });
     if (!ekran) przycisk(d.querySelector('[data-pin]'), hala, { komunikat: o.komunikat });
     if (typeof o.dodatki === 'function') o.dodatki(d.querySelector('[data-dodatki]'));
