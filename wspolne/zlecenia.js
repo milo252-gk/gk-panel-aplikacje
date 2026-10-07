@@ -32,6 +32,9 @@
     return DO_ZROBIENIA.has(z.status) && !isNaN(wazne) && typeof teraz === 'number' && wazne <= teraz;
   }
 
+  /* Zlecenie bez linii widzą wszyscy w dziale; z linią — gdy pasuje do `linia` (lider) i do listy `linie` (mistrz). */
+  const naLinii = (d, o) => !d.linia || ((!o.linia || d.linia === o.linia) && (!o.linie || !o.linie.length || o.linie.includes(d.linia)));
+
   /* Czysta funkcja (testy: wspolne/testy/reduktor-testy.js): zlecenia działu, dla produkcji tylko tej linii
      (albo bez linii); moje = id osoby → tylko przypisane jej albo przez nią przyjęte. Najpierw ZALEGŁE (od
      najstarszego terminu — jak „Zaległe dostawy” w GK Trasy: to, co miało być zrobione, idzie przed nowym),
@@ -40,14 +43,15 @@
      ms), czyli przeszło z poprzedniej zmiany albo dnia i nikt go nie zamknął.
      D35: zadanie zmianowe (`wazne_do` = koniec jego zmiany) PRZEPADA z końcem zmiany — dział go już nie widzi, nawet
      zanim hub (automat co minutę) wyśle „zlecenie.przepadlo”, i nie dostaje go jako zaległe na następnej zmianie.
-     zostaw = id zlecenia z otwartym formularzem „Zrobione”: zostaje do wysłania (zrobione przed końcem zmiany). */
-  function wiersze(lista, { dzial, linia, moje, pracownicy, teraz, H, poczatekZmiany, zostaw }) {
+     zostaw = id zlecenia z otwartym formularzem „Zrobione”: zostaje do wysłania (zrobione przed końcem zmiany).
+     linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich. */
+  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms)) return null; const l = H.lokalny(ms);
       return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
     return (lista || [])
       .filter(z => z && (z.aktywny || (z.id === zostaw && z.status === 'przepadlo')) && (!przepadlo(z, teraz) || z.id === zostaw))
-      .filter(z => (z.dane || {}).dzial === dzial && (!linia || !(z.dane || {}).linia || z.dane.linia === linia))
+      .filter(z => (z.dane || {}).dzial === dzial && naLinii(z.dane || {}, { linia, linie }))
       .filter(z => !moje || (z.dane || {}).wykonawca === moje || (z.dane || {}).przyjal === moje)
       .map(z => {
         const d = z.dane || {};
@@ -304,7 +308,7 @@
       znane.add(id);
       const o = opcje(), d = obiekt.dane || {};
       if (obiekt.status === 'nowe' && !obiekt._oczekuje && !przepadlo(obiekt, hala.teraz()) && d.dzial === o.dzial
-          && (!o.linia || !d.linia || d.linia === o.linia)) fn(obiekt);
+          && naLinii(d, o)) fn(obiekt);
     });
     zapamietaj();
   }

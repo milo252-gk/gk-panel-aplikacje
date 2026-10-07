@@ -64,18 +64,49 @@
       .map(([kod, w]) => ({ kod, nazwa: (w && w.nazwa) || kod, moja: moje.includes(kod) }));
   }
 
-  /* Linia na starcie: zapamiętana (przesunięcie), inaczej pierwsza z przypisanych, inaczej pierwsza w zakładzie. */
-  /* Czyje zlecenia pokazuje aplikacja (D34): mistrz — dział „mistrz”, bez zawężenia do linii (przełożony
-     wszystkich liderów); lider i każdy inny — „produkcja” na wybranej linii. Osoba z obiema rolami jest mistrzem:
-     jego zadań nikt inny nie zrobi, a zlecenia linii mają swojego lidera. */
-  function dzialZlecen(pracownik, linia) {
+  /* Linie mistrza (decyzja właściciela 2026-10-07, D34): mistrz z liniami zaznaczonymi w Panelu → Administracja widzi
+     w GK Lider TYLKO te linie — wybór linii, a za wybraną linią obchody (checklista), awarie i jakość — i tylko zlecenia
+     tych linii (albo bez linii). Bez zaznaczenia — wszystkie (null), jak dotąd. Lider i każdy inny → null: lider wybiera
+     dowolną linię (przesunięcie) jak dotąd. Push hub kieruje tą samą regułą (na_linii w hala.py). Linie spoza słownika
+     (usunięte) się nie liczą. */
+  function linieMistrza(pracownik, slowniki) {
     const role = (pracownik && pracownik.role) || [];
-    return role.includes('mistrz') ? { dzial: 'mistrz' } : { dzial: 'produkcja', linia };
+    if (!role.includes('mistrz')) return null;
+    const sl = slowniki && slowniki.linie;
+    const linie = ((pracownik && pracownik.linie) || []).filter(l => !sl || sl[l]);
+    return linie.length ? linie : null;
   }
 
+  const liniaWidoczna = (slowniki, pracownik, linia) => {
+    const lm = linieMistrza(pracownik, slowniki);
+    return !lm || lm.includes(linia);
+  };
+
+  /* Lista „Na której linii pracujesz?”: moje pierwsze; mistrz z liniami — tylko one; mistrz bez linii — wszystkie jako
+     jego (bez dopisku „przesunięcie”: cały zakład to jego teren). */
+  function linieDoWyboru(slowniki, pracownik) {
+    const lm = linieMistrza(pracownik, slowniki);
+    const role = (pracownik && pracownik.role) || [];
+    const lista = liniePosortowane(slowniki, (pracownik && pracownik.linie) || []).filter(l => !lm || lm.includes(l.kod));
+    return role.includes('mistrz') && !lm ? lista.map(l => Object.assign(l, { moja: true })) : lista;
+  }
+
+  /* Czyje zlecenia pokazuje aplikacja (D34): mistrz — dział „mistrz”, bez zawężenia do wybranej linii (przełożony
+     liderów), ale tylko swoich linii, gdy ma je zaznaczone (`linie`, 2026-10-07); lider i każdy inny — „produkcja”
+     na wybranej linii. Osoba z obiema rolami jest mistrzem: jego zadań nikt inny nie zrobi, a zlecenia linii mają
+     swojego lidera. */
+  function dzialZlecen(pracownik, linia, slowniki) {
+    const role = (pracownik && pracownik.role) || [];
+    if (!role.includes('mistrz')) return { dzial: 'produkcja', linia };
+    const lm = linieMistrza(pracownik, slowniki);
+    return lm ? { dzial: 'mistrz', linie: lm } : { dzial: 'mistrz' };
+  }
+
+  /* Linia na starcie: zapamiętana (przesunięcie), inaczej pierwsza z przypisanych, inaczej pierwsza w zakładzie.
+     Mistrz z liniami: zapamiętana spoza nich się nie liczy (np. zostało z czasu, gdy jeszcze nie miał linii). */
   function liniaStartowa(slowniki, pracownik, zapamietana) {
     const linie = (slowniki && slowniki.linie) || {};
-    if (zapamietana && linie[zapamietana]) return zapamietana;
+    if (zapamietana && linie[zapamietana] && liniaWidoczna(slowniki, pracownik, zapamietana)) return zapamietana;
     const moje = ((pracownik && pracownik.linie) || []).filter(l => linie[l]);
     if (moje.length) return moje[0];
     const wszystkie = liniePosortowane(slowniki);
@@ -445,7 +476,7 @@
   global.LiderWidok = {
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
     godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
-    maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
+    linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodDlaLinii, doPrzypomnienia,
     awarie, sprawdzAwarie, aktywnaAwariaMaszyny, pytanieODuplikat,

@@ -255,8 +255,9 @@
   /* Wiersze zleceń. filtr: 'otwarte' (dział jeszcze robi) | 'po-terminie' (otwarte, termin minął — egzekwowanie, D31)
      | 'do-zamkniecia' (dział skończył albo nie może — kierownik przyjmuje albo zwraca) | 'przepadle' (zadanie zmianowe,
      którego dział nie zrobił do końca swojej zmiany — D35) | 'zamkniete' (także przepadłe).
-     Najpierw po terminie (najdłużej spóźnione), potem pilne, potem najstarsze. */
-  function zlecenia({ zlecenia: lista, slowniki, pracownicy, stale, teraz, filtr }) {
+     Najpierw po terminie (najdłużej spóźnione), potem pilne, potem najstarsze.
+     ja = zalogowana osoba: moznaAnulowac — zlecenia kierownika zakładu nie anuluje kierownik UR/KJ (D45, Hala.moznaAnulowacZlecenie). */
+  function zlecenia({ zlecenia: lista, slowniki, pracownicy, stale, teraz, filtr, ja }) {
     const dzialy = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
     const maszyny = (slowniki && slowniki.maszyny) || {};
     const szablony = (slowniki && slowniki.zlecenia_stale) || {};
@@ -299,6 +300,7 @@
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [].concat(d.zdjecia_wykonania || []),
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
+        moznaAnulowac: OTWARTE.has(z.status) && H().moznaAnulowacZlecenie(z, ja, pracownicy),
         czas: d.czas_zlecenia || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
       };
     }).sort((a, b) => (b.poTerminie - a.poTerminie) || (a.poTerminie && b.poTerminie ? a.terminMs - b.terminMs : 0)
@@ -1208,7 +1210,7 @@
     };
     const ogolem = policz(zl, () => '*', () => 'Wszystkie')[0] || { wTerminie: 0, poTerminie: 0, proc: null };
     return {
-      awarie: k.liczba, zatrzymania: k.zatrzymania, przestojMs: k.przestojMs, mttrMs: k.mttrMs, reakcjaMs: k.reakcjaMs,
+      awarie: k.liczba, zatrzymania: k.zatrzymania, przestojMs: k.przestojMs, mttrMs: k.mttrMs, reakcjaMs: k.reakcjaMs, mtbfMs: k.mtbfMs,
       linie, maksPrzestojMs: Math.max(0, ...linie.map(x => x.przestojMs)),
       proby: pr.length, sprawdzone, braki, brakiProc: sprawdzone ? Math.round(braki * 1000 / sprawdzone) / 10 : null, pareto,
       zlecenia: zl.length, zleceniaWykonane: zl.filter(z => ['wykonane', 'zamkniete'].includes(z.status)).length,

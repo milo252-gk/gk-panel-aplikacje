@@ -488,7 +488,8 @@
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     if (trybZlecen === 'stale') { if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d); return; }
-    const wiersze = W.zlecenia({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: filtrZlecen });
+    const wiersze = W.zlecenia({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: filtrZlecen,
+                                 ja: hala.pracownik });
     // Liczby na chipach — kierownik widzi od razu, ile jest po terminie i ile czeka na niego.
     for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) {
       const n = W.zlecenia({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: b.dataset.filtr }).length;
@@ -524,7 +525,7 @@
         <div class="akcje">
           ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
             <button type="button" class="maly" data-akcja="zwroc">Zwróć</button>` : ''}
-          ${kier && z.otwarte ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
+          ${kier && z.moznaAnulowac ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
           ${stale && !z.stale ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz jako zlecenie stałe">🔁 Jako stałe</button>' : ''}
         </div>
       </article>`).join('') || `<p class="pusto ${filtrZlecen === 'po-terminie' || filtrZlecen === 'przepadle' ? 'ok' : ''}">${PUSTE_ZLECENIA[filtrZlecen]}</p>`;

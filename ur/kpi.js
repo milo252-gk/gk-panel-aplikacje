@@ -22,7 +22,7 @@
     return `<div class="kafle-liczb">
       <div><span>Awarie</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone} · zatrzymania linii ${k.zatrzymania}</small></div>
       <div><span>MTTR</span><b>${esc(czas(k.mttrMs))}</b><small>średni czas naprawy</small></div>
-      <div><span>MTBF</span><b>${esc(czas(k.mtbfMs))}</b><small>między awariami maszyny</small></div>
+      <div title="${esc(Hala.OPIS_MTBF)}"><span>MTBF</span><b>${esc(czas(k.mtbfMs))}</b><small>średni czas pracy między awariami zatrzymującymi</small></div>
       <div><span>Reakcja</span><b>${esc(czas(k.reakcjaMs))}</b><small>do przyjęcia</small></div>
       <div class="${k.przestojMs ? 'alarm' : ''}"><span>Przestój</span><b>${esc(czas(k.przestojMs))}</b><small>łącznie</small></div>
       ${plan ? `<div class="${plan.proc !== null && plan.proc < 90 ? 'uwaga' : ''}"><span>Plan przeglądów${plan.tylko30 ? ' (30 dni)' : ''}</span><b>${plan.proc === null ? '—' : plan.proc + ' %'}</b><small>w terminie ${plan.wTerminie}/${plan.wTerminie + plan.poTerminie + plan.opoznione + plan.usunietePoTerminie}${plan.usunietePoTerminie ? ` · usunięte po terminie ${plan.usunietePoTerminie}` : ''}</small></div>` : ''}
@@ -32,7 +32,7 @@
   function tabelaMaszyn(lista) {
     if (!lista.length) return '<p class="pusto ok">Brak awarii w tym okresie</p>';
     const maks = Math.max(1, ...lista.map(m => m.przestojMs));
-    return `<table class="tabela"><thead><tr><th>Maszyna</th><th class="liczba">Awarie</th><th class="liczba">Przestój</th><th class="liczba">MTTR</th><th class="liczba">MTBF</th></tr></thead>
+    return `<table class="tabela"><thead><tr><th>Maszyna</th><th class="liczba">Awarie</th><th class="liczba">Przestój</th><th class="liczba">MTTR</th><th class="liczba" title="${esc(Hala.OPIS_MTBF)}">MTBF</th></tr></thead>
       <tbody>${lista.slice(0, 10).map(m => `<tr><td><b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)}</span>
         <div class="slupek-poziomy" style="width:${Math.round(m.przestojMs * 100 / maks)}%"></div></td>
         <td class="liczba">${m.liczba}</td><td class="liczba">${esc(czas(m.przestojMs))}</td><td class="liczba">${esc(czas(m.mttrMs))}</td><td class="liczba">${esc(czas(m.mtbfMs))}</td></tr>`).join('')}</tbody></table>`;

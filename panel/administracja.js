@@ -149,6 +149,8 @@
   function polePinu() {
     const role = [...fp.querySelectorAll('input[name="role"]:checked')].map(x => x.value);
     const ekran = role.length === 1 && role[0] === 'ekran';
+    // D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie — podpowiedź przy liniach, gdy ma tę rolę.
+    $('osoba-linie-mistrz').hidden = !role.includes('mistrz');
     $('osoba-pin-etykieta').textContent = ekran ? 'PIN ekranu (4–8 cyfr)' : 'PIN (4 cyfry, nieobowiązkowy)';
     fp.pin.maxLength = ekran ? 8 : 4;
     fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : ekran ? '4–8 cyfr' : 'osoba ustawi sama';

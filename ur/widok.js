@@ -396,8 +396,8 @@
   /* KPI awarii w [od, do) liczy JEDNA wspólna funkcja Hala.kpiAwarii (bliźniak kpi_awarii w hubie, wektory
      wspolne/testy/wektory-reduktora.json → kpi_awarii) — te same liczby co Panel i raport zmiany lidera (D37).
      Definicje (KONTRAKT §6.1): anulowane się nie liczą; MTTR — od zgłoszenia do „Zakończona przez UR” (D8);
-     reakcja — do przyjęcia; MTBF — średni odstęp między przerwami tej samej maszyny (ponowne zgłoszenie w trakcie
-     awarii to ta sama przerwa); przestój — przycięty do okresu, nakładające się awarie maszyny/linii liczą się raz.
+     reakcja — do przyjęcia; MTBF — średni czas pracy maszyny między awariami zatrzymującymi, od potwierdzenia naprawy
+     do następnego zgłoszenia (D44; ponowne zgłoszenie w trakcie awarii to ta sama przerwa); przestój — przycięty do okresu, nakładające się awarie maszyny/linii liczą się raz.
      Tu dokładamy tylko nazwy ze słowników (rozszerzenie.py → kpi robi to samo w hubie). */
   function kpi({ awarie, od, do: do_, teraz, maszyna, linia, slowniki, stale }) {
     const zatrzymujace = ((stale && stale.priorytety) || []).filter(p => p.zatrzymuje).map(p => p.kod);

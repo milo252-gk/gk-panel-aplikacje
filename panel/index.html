@@ -305,7 +305,9 @@
     <label>Imię i nazwisko (to jest login)<input name="nazwa" required maxlength="120" placeholder="np. Krzysztof Hamrol"></label>
     <!-- Role w grupach (D32): hala oraz programy transportu — jedno konto we wszystkich aplikacjach GK (GK-KONTA.md). -->
     <div id="osoba-role" class="grupy-rol"></div>
-    <fieldset><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div></fieldset>
+    <fieldset><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div>
+      <!-- D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie; pokazywane, gdy zaznaczona rola mistrza. -->
+      <p class="slaby konto-drobne" id="osoba-linie-mistrz" hidden>Mistrz widzi tylko zaznaczone linie; bez zaznaczenia — wszystkie.</p></fieldset>
     <!-- D43: hasło (raz na 12 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
          tutaj) i przy pierwszym logowaniu ustawia własne hasło i PIN. Konto samego ekranu — jeden PIN 4–8 cyfr. -->
     <div class="dwie">

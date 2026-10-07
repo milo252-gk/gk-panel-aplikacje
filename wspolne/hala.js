@@ -24,13 +24,14 @@
      zmianaDla           <-> zmiana_dla
      wystapieniaStale    <-> wystapienia_stale
      jestKonflikt        <-> jest_konflikt
-     kpiAwarii           <-> kpi_awarii   (etap 3: jedne liczby awarii)
-     alertAktywny        <-> alert_aktywny                                     */
+     kpiAwarii           <-> kpi_awarii   (etap 3: jedne liczby awarii; MTBF klasyczne — D44)
+     alertAktywny        <-> alert_aktywny
+     moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)                  */
 
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.13.0';
+  const WERSJA_KLIENTA = '0.14.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -299,8 +300,10 @@
          zamkniętej i dla zgłoszonej przed oknem (noc, która przeszła na ranną zmianę, liczy się rannej zmianie od 6:00);
        * dwie nakładające się awarie tej samej maszyny nie dublują przestoju — suma przedziałów bez nakładania, osobno
          na maszynę i na linię (linia stoi raz, nawet gdy stoją na niej dwie maszyny); przestój ogółem = suma po liniach;
-       * MTBF — średni odstęp między kolejnymi zgłoszeniami tej samej maszyny (definicja bez zmian — decyzja O10);
-         zgłoszenie, które przyszło, gdy poprzednia awaria tej maszyny jeszcze trwała, to ta sama przerwa — liczy się raz;
+       * MTBF (klasyczne, D44 — decyzja właściciela 2026-10-07) — średni czas PRACY maszyny między awariami
+         ZATRZYMUJĄCYMI (priorytet z zatrzymuje: true): od potwierdzenia naprawy jednej do zgłoszenia następnej;
+         zgłoszenie, które przyszło, gdy poprzednia awaria zatrzymująca tej maszyny jeszcze trwała, to ta sama przerwa;
+         awarie bez zatrzymania nie przerywają czasu pracy;
        * czasy w ms, średnie z ułamkiem w dół; na minuty ekran zamienia RAZ, też w dół (formatCzasu, raport lidera).
      od / do / teraz: ISO albo ms; brak od/do = bez granicy. zatrzymujace: kody priorytetów z zatrzymuje: true.   */
   const msChwili = v => (v === null || v === undefined || v === '' ? null : typeof v === 'number' ? v : Date.parse(v));
@@ -336,6 +339,9 @@
     return p ? sumaPrzedzialow([p], msChwili(od), msChwili(do_)) : 0;
   }
 
+  /* Jeden podpis MTBF na każdym ekranie (Panel → Wskaźniki, UR → KPI) — D44. */
+  const OPIS_MTBF = 'MTBF — średni czas pracy między awariami zatrzymującymi';
+
   function kpiAwarii(awarie, opcje) {
     const o = opcje || {};
     const od = msChwili(o.od), do_ = msChwili(o.do);
@@ -354,15 +360,16 @@
     const naprawa = x => (x.d.czas_zakonczenia_ur ? msChwili(x.d.czas_zakonczenia_ur) - x.p[0] : null);
     const reakcja = x => (x.d.czas_przyjecia ? msChwili(x.d.czas_przyjecia) - x.p[0] : null);
     const liczby = (lista, f) => lista.map(f).filter(v => v !== null && !isNaN(v));
-    // Odstępy między przerwami jednej maszyny: zgłoszenie w trakcie poprzedniej awarii = ta sama przerwa.
-    const odstepy = lista => {
-      const p = lista.map(x => x.p).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
-      const starty = [];
-      let koniec = null;
+    // Czas pracy między przerwami jednej maszyny (D44): tylko awarie zatrzymujące; od potwierdzenia naprawy do
+    // następnego zgłoszenia; zgłoszenie w trakcie trwającej przerwy = ta sama przerwa.
+    const czasyPracy = lista => {
+      const p = lista.filter(x => zatrzymuje.has(x.d.priorytet)).map(x => x.p).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+      const przerwy = [];
       for (const [s, k] of p) {
-        if (koniec === null || s >= koniec) { starty.push(s); koniec = k; } else if (k > koniec) koniec = k;
+        const ost = przerwy[przerwy.length - 1];
+        if (ost && s < ost[1]) ost[1] = Math.max(ost[1], k); else przerwy.push([s, k]);
       }
-      return starty.slice(1).map((s, i) => s - starty[i]);
+      return przerwy.slice(1).map((b, i) => b[0] - przerwy[i][1]);
     };
     const grupy = klucz => {
       const g = new Map();
@@ -374,7 +381,7 @@
 
     const maszyny = [], wszystkieOdstepy = [];
     for (const [kod, lista] of grupy(maszynaAw)) {
-      const zgl = lista.filter(x => x.zgloszona), o2 = odstepy(zgl);
+      const zgl = lista.filter(x => x.zgloszona), o2 = czasyPracy(zgl);
       const przestojMs = sumaPrzedzialow(lista.map(x => x.p), od, do_);
       wszystkieOdstepy.push(...o2);
       if (!zgl.length && !przestojMs) continue;
@@ -410,6 +417,18 @@
     if (!alert || alert.status !== 'aktywny') return false;
     const wd = msChwili(((alert.dane || {}).wazny_do) || null);
     return wd === null || isNaN(wd) || wd > (msChwili(teraz) === null ? Date.now() : msChwili(teraz));
+  }
+
+  /* D45 (O9, decyzja właściciela 2026-10-07): zlecenie wydane przez kierownika zakładu (rola `kierownik`) albo admina
+     anuluje tylko kierownik albo admin — kierownik UR/KJ nie (hub i tak odrzuci: ODMOWA_ANULOWANIA). Role tego, kto zlecił,
+     z hala.pracownicy (także osoba usunięta). Tylko reguła „kto” — status (nowe/przyjęte) sprawdza ekran. Bliźniak:
+     blad_anulowania_zlecenia w hala.py. */
+  const ROLE_ZAKLADU = ['kierownik', 'admin'];
+  function moznaAnulowacZlecenie(zlecenie, pracownik, pracownicy) {
+    const zlecil = ((zlecenie && zlecenie.dane) || {}).zlecil;
+    const osoba = (pracownicy || []).find(p => p && p.id === zlecil);
+    const zZakladu = role => (role || []).some(r => ROLE_ZAKLADU.includes(r));
+    return !zZakladu(osoba && osoba.role) || zZakladu(pracownik && pracownik.role);
   }
 
   /* Licznik, który tyka na ekranie (przestój, czekanie na lidera): do godziny z sekundami („4:07”),
@@ -1435,7 +1454,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
-    kpiAwarii, przestojWOknieMs, alertAktywny, loginZNazwy,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

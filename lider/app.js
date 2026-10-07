@@ -305,8 +305,8 @@
   };
 
   function wyborLinii() {
-    const moje = (hala.pracownik && hala.pracownik.linie) || [];
-    const linie = W.liniePosortowane(hala.slowniki, moje);
+    // Mistrz z liniami z Panelu → Administracja widzi tylko je (D34, 2026-10-07); lider — wszystkie, obce jako przesunięcie.
+    const linie = W.linieDoWyboru(hala.slowniki, hala.pracownik);
     Lider.okno({
       tytul: 'Na której linii pracujesz?',
       html: `<div class="lista-wyboru">${linie.map(l => `<button type="button" data-linia="${esc(l.kod)}"
@@ -538,7 +538,8 @@
     requestAnimationFrame(() => {
       zaplanowane = false;
       if (!hala.zalogowany()) return;
-      if (!Lider.stan.linia) ustalLinie();
+      // Admin w Panelu mógł zawęzić linie mistrza w trakcie pracy — linia spoza nich przestaje być wybrana.
+      if (!Lider.stan.linia || !W.liniaWidoczna(hala.slowniki, hala.pracownik, Lider.stan.linia)) ustalLinie();
       rysujNaglowek();
       rysujWezwania();
       for (const [nazwa, e] of Object.entries(Lider.ekrany)) {
@@ -561,8 +562,9 @@
   for (const b of document.querySelectorAll('.dolny [data-ekran]')) b.addEventListener('click', () => Lider.pokazEkran(b.dataset.ekran));
 
   /* Zlecenia od kierownika: wspólny ekran z wspolne/zlecenia.js. Lider — dział „produkcja”, tylko jego linia;
-     mistrz (przełożony liderów, D34) — dział „mistrz”, wszystkie linie: to dwa stanowiska z osobnymi zadaniami. */
-  Lider.dzialZlecen = () => W.dzialZlecen(hala.pracownik, Lider.stan.linia);
+     mistrz (przełożony liderów, D34) — dział „mistrz”, jego linie (bez zaznaczonych — wszystkie): to dwa stanowiska
+     z osobnymi zadaniami. */
+  Lider.dzialZlecen = () => W.dzialZlecen(hala.pracownik, Lider.stan.linia, hala.slowniki);
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.dzialZlecen()) };
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   HalaZlecenia.sledz(hala, Lider.dzialZlecen, z => {

@@ -1,4 +1,4 @@
-/* Panel Kierownika — wskaźniki (2026-09-28, decyzja właściciela): awarie, przestój na linię, MTTR i czas reakcji,
+/* Panel Kierownika — wskaźniki (2026-09-28, decyzja właściciela): awarie, przestój na linię, MTTR, MTBF (D44) i czas reakcji,
    braki w próbach i najczęstsze wady, zlecenia — za bieżącą zmianę, dziś albo wczoraj. Liczy widok.js
    (W.wskazniki — testowane) z danych, które Panel trzyma w pamięci (2 doby), więc działa też bez sieci. */
 
@@ -25,7 +25,7 @@
             <span class="liczba">${g.proc} %</span>
             <span class="slaby">w terminie ${g.wTerminie} z ${g.wTerminie + g.poTerminie}${g.poTerminie ? ` · po terminie ${g.poTerminie}` : ''}</span>
           </div>`;
-    const kafel = (etykieta, wartosc, klasa) => `<div class="${klasa || ''}"><span class="etykieta">${esc(etykieta)}</span><b>${esc(wartosc)}</b></div>`;
+    const kafel = (etykieta, wartosc, klasa, podpowiedz) => `<div class="${klasa || ''}"${podpowiedz ? ` title="${esc(podpowiedz)}"` : ''}><span class="etykieta">${esc(etykieta)}</span><b>${esc(wartosc)}</b></div>`;
     el.innerHTML = `
       <p class="slaby okres-opis">${esc(okno.nazwa || '')} · ${esc(W.dataKrotka(okno.od))} ${esc(W.godzina(okno.od))} – ${esc(W.dataKrotka(okno.do))} ${esc(W.godzina(okno.do))}</p>
       <div class="hala-kafelki">
@@ -34,6 +34,7 @@
         ${kafel('Przestój łącznie', czas(w.przestojMs), w.przestojMs ? 'pilne' : 'zero')}
         ${kafel('Reakcja UR (średnio)', czas(w.reakcjaMs), w.reakcjaMs === null ? 'zero' : '')}
         ${kafel('MTTR (średnio)', czas(w.mttrMs), w.mttrMs === null ? 'zero' : '')}
+        ${kafel('MTBF', czas(w.mtbfMs), w.mtbfMs === null ? 'zero' : '', Hala.OPIS_MTBF)}
         ${kafel('Braki w próbach', w.brakiProc === null ? '—' : `${w.brakiProc} %`, w.brakiProc ? 'uwaga' : 'zero')}
         ${kafel('Zlecenia wykonane', `${w.zleceniaWykonane}/${w.zlecenia}`, w.zlecenia ? 'dobrze' : 'zero')}
         ${kafel('Zlecenia w terminie', tw.proc === null ? '—' : `${tw.proc} %`, tw.proc === null ? 'zero' : tw.proc >= 80 ? 'dobrze' : 'pilne')}
