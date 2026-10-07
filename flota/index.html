@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<!-- Bez maximum-scale: kierowca w słońcu musi móc rozsunąć ekran palcami.
+     Na placu czyta się rejestrację z miniatury zdjęcia i stan licznika,
+     a to bywa sześć cyfr na tle rozmazanego szkła. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4E4E4E">
+<script>
+/* Motyw rozstrzygamy PRZED arkuszem. Inaczej pierwszy obraz jest zawsze jasny,
+   a kierowca otwierający aplikację o świcie na placu dostaje w oczy białą kartkę.
+
+   Bez osobnego pliku, i to nie z lenistwa: index.html serwer oddaje z „no-store”,
+   więc ten kawałek NIGDY nie bywa starą kopią. Osobny motyw.js trzeba by dopisywać
+   w dwóch ręcznych listach (tu i ZASOBY w sw.js), a pominięcie tej w sw.js
+   oznacza program, który nie wstaje bez zasięgu.
+
+   Ta sama reguła co Motyw.policz w app.js. Dwie kopie jednej reguły to dług —
+   automatycznego testu, który by je porównywał, NIE MA (testy programu nie
+   mają silnika JavaScriptu). Zmieniasz jedną — zmień obie.
+
+   Dwa osobne try/catch, bo w Safari w trybie prywatnym sam DOSTĘP do
+   localStorage potrafi rzucić wyjątkiem, a wyjątek w skrypcie w head zatrzymuje
+   parsowanie strony — telefon pokazałby wtedy biały ekran zamiast logowania.
+
+   Pierwszeństwo ma wspólny 'gk.motyw' — jeden motyw dla wszystkich aplikacji
+   GK na wspólnym źródle GitHub Pages (D33; zasada i znacznik 'motyw-wspolny'
+   opisane przy wybranyMotyw() w app.js). Własny 'gk-flota.motyw' czytamy tylko
+   do chwili, gdy app.js przeniesie go do wspólnego, a goły 'motyw' — tylko do
+   chwili, gdy app.js przeniesie go pod przedrostek; potem może należeć do
+   innej aplikacji GK. */
+(function () {
+  var wybor = null;
+  try {
+    wybor = localStorage.getItem('gk.motyw');
+    if (wybor === null && localStorage.getItem('gk-flota.motyw-wspolny') !== '1') {
+      wybor = localStorage.getItem('gk-flota.motyw');
+      if (wybor === null && localStorage.getItem('gk-flota.przeniesiono') !== '1') {
+        wybor = localStorage.getItem('motyw');
+      }
+    }
+  } catch (e) { /* tryb prywatny */ }
+  var systemCiemny = false;
+  try {
+    systemCiemny = !!(window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  } catch (e) { /* starsza przeglądarka */ }
+  var motyw = (wybor === 'ciemny' || (wybor !== 'jasny' && systemCiemny)) ? 'ciemny' : 'jasny';
+  var korzen = document.documentElement;
+  korzen.setAttribute('data-motyw', motyw);
+  /* Styl wpisany wprost działa od razu; ta sama deklaracja z arkusza dopiero
+     po jego wczytaniu. Po wolnym łączu to widoczna różnica: pola dat, listy
+     rozwijane i autouzupełnianie zdążyłyby mrugnąć bielą. */
+  korzen.style.colorScheme = motyw === 'ciemny' ? 'dark' : 'light';
+  var pasek = document.querySelector('meta[name=theme-color]');
+  if (pasek) pasek.setAttribute('content', motyw === 'ciemny' ? '#191817' : '#4E4E4E');
+})();
+</script>
+<title>GK Flota</title>
+<link rel="manifest" href="manifest.webmanifest?v=flotex-13c24540a2ce">
+<link rel="icon" href="ikona.svg?v=flotex-13c24540a2ce">
+<!-- iPhone nie bierze ikony z manifestu ani z SVG: na ekran początkowy
+     dodaje to, co wskazuje apple-touch-icon, i to musi być PNG. -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-13c24540a2ce">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GK Flota">
+<!-- black, jak w pozostałych aplikacjach GK (STYL-GK): pasek stanu nad aplikacją,
+     nie pod nią. Odstępy env(safe-area-inset-top) w .gora i podglądzie zdjęcia
+     zostają — przy „black” są po prostu zerowe. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="style.css?v=flotex-13c24540a2ce">
+</head>
+<body>
+
+<!-- ===================================================== EKRAN LOGOWANIA -->
+<!-- Zaczyna ukryty, bo uruchom() potrafi wejść do aplikacji z zapisanego
+     tokenu. Bez klasy 'ukryty' formularz mrugałby przy każdym wejściu. -->
+<div id="ekran-logowania" class="logowanie ukryty">
+  <form class="karta-logowania" id="form-logowania">
+    <img class="znak-logo" src="logo-gkf.png?v=flotex-13c24540a2ce"
+         alt="GK Factory" width="666" height="374">
+    <h1>GK Flota</h1>
+    <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
+    <!-- Te same słowa co GK Trasy i aplikacje hali (GK-KONTA.md, punkt 4,
+         STYL-GK punkt 2): jedna osoba loguje się wszędzie tak samo. Stary
+         login („marek") działa dalej — serwer go zna — ale ekran go nie podsuwa.
+         Imię i nazwisko to dwa słowa („daniel zwolinski"), więc telefon
+         musi trzymać ręce przy sobie: bez wielkiej litery po spacji, bez
+         autopoprawiania nazwiska na słowo ze słownika i bez podkreślania
+         go na czerwono. Serwer i tak sprowadza odstępy do jednej spacji. -->
+    <label>Imię i nazwisko
+      <input name="login" autocomplete="username" autocapitalize="none"
+             autocorrect="off" spellcheck="false" required placeholder="np. Jan Kowalski">
+    </label>
+    <!-- Bez inputmode="numeric": biuro i administrator maja haslo z liter (min. 8 znakow),
+         a telefon z klawiatura cyfrowa nie dalby go wpisac. -->
+    <label>PIN / hasło
+      <input name="pin" type="password" autocomplete="current-password" required>
+    </label>
+    <div class="blad-logowania" id="blad-logowania"></div>
+    <button class="glowny duzy" type="submit">Zaloguj</button>
+    <!-- Tylko gdy konta przychodza z Panelu (GET /api/zyje → konta_z_panelu). -->
+    <p class="info-kont" id="info-kont" hidden>Konto zakłada administrator w Panelu Kierownika
+      → Administracja.</p>
+  </form>
+</div>
+
+<!-- ============================================================ APLIKACJA -->
+<div id="aplikacja" class="ukryty">
+
+  <header class="gora">
+    <button class="ikona-btn tylko-telefon" id="btn-menu" aria-label="Menu">☰</button>
+    <div class="tytul" id="tytul-ekranu">Pulpit</div>
+    <div class="gora-prawo">
+      <button class="ikona-btn stan-sieci-btn" id="stan-sieci-btn" aria-label="Stan połączenia">
+        <span class="stan-sieci" id="stan-sieci"></span></button>
+      <button class="ikona-btn tylko-biuro" id="btn-szukaj" aria-label="Szukaj pojazdu">🔍</button>
+      <!-- Ikona osoby w SVG, nie emoji 👤: Windows rysuje emoji na fioletowo i ginie ono
+           na grafitowym pasku. currentColor = biel paska (STYL-GK §3). -->
+      <button class="ikona-btn" id="btn-konto" aria-label="Moje konto" title="Moje konto"><svg
+        viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"
+        fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button>
+    </div>
+  </header>
+
+  <!-- Jedno menu na wszystkie role. Widoczność robią klasy tylko-biuro /
+       tylko-kierowca / tylko-administrator, przestawiane w menuDlaRoli().
+       Emoji jest częścią napisu, a nie ikoną z fonta — żadnej biblioteki
+       ikon, bo program musi wstać bez internetu. -->
+  <nav class="menu" id="menu">
+    <div class="menu-naglowek">
+      <img class="menu-logo" src="logo-gkf.png?v=flotex-13c24540a2ce" alt="GK Factory"
+           width="666" height="374">
+      <div class="menu-imie" id="menu-imie"></div>
+      <div class="menu-rola" id="menu-rola"></div>
+    </div>
+    <!-- Powrót do GK Trasy (GK Transport). Bez data-ekran i bez klasy roli:
+         napis i widoczność ustawia menuDlaRoli(), bo przycisk ma sens tylko
+         u kierowcy, który przyszedł linkiem „Moje auto" z GK Trasy. -->
+    <button id="menu-powrot" class="ukryty"></button>
+    <button data-ekran="pulpit"     class="tylko-biuro">📊 <span>Pulpit</span></button>
+    <button data-ekran="pojazdy"><span class="ikona-menu">🚗</span>
+      <span class="tylko-biuro">Flota</span><span class="tylko-kierowca">Moje pojazdy</span></button>
+    <button data-ekran="moj"        class="tylko-kierowca">🔧 <span>Moje auto</span></button>
+    <button data-ekran="przeglad"   class="tylko-kierowca">📷 <span>Przegląd</span></button>
+    <button data-ekran="terminy"    class="tylko-biuro">📅 <span>Badania techniczne</span></button>
+    <button data-ekran="przeglady"><span class="ikona-menu">🧾</span>
+      <span class="tylko-biuro">Przeglądy</span><span class="tylko-kierowca">Moje przeglądy</span></button>
+    <button data-ekran="usterki"><span class="ikona-menu">⚠️</span>
+      <span class="tylko-biuro">Usterki</span><span class="tylko-kierowca">Zgłoś usterkę</span></button>
+    <button data-ekran="awaria">🆘 <span>Instrukcja w razie awarii</span></button>
+    <button data-ekran="zaproszenie" class="tylko-biuro">📱 <span>Dla kierowców</span></button>
+    <button data-ekran="konta"      class="tylko-administrator">👥 <span>Konta</span></button>
+    <button data-ekran="ustawienia" class="tylko-administrator">⚙️ <span>Ustawienia</span></button>
+    <div class="menu-stopka">
+      <!-- Ikona „wyjście” w SVG, ta sama co #menu-wyloguj w aplikacjach hali
+           (STYL-GK §3): currentColor = biel menu, nie brązowe emoji drzwi. -->
+      <button id="btn-wyloguj"><span class="ikona-menu" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span> <span>Wyloguj</span></button>
+    </div>
+  </nav>
+  <div class="zaslona" id="zaslona"></div>
+
+  <!-- <main> zostaje PUSTY. Wypełnia go pokazEkran() jednym przypisaniem do
+       innerHTML; cokolwiek wpisanego tutaj i tak zniknie po pierwszym wejściu. -->
+  <main id="tresc"></main>
+
+  <!-- Pasek dolny buduje menuDlaRoli() w JS: cztery pozycje inne dla biura
+       i inne dla kierowcy, więc trzymanie obu kompletów w HTML-u znaczyłoby
+       osiem przycisków, z których połowa zawsze jest schowana. -->
+  <nav class="pasek-dolny tylko-telefon" id="pasek-dolny"></nav>
+</div>
+
+<!-- ============================================================== OKIENKA -->
+<div class="okno-tlo ukryty" id="okno-tlo">
+  <div class="okno" id="okno">
+    <div class="okno-gora">
+      <div class="okno-tytul" id="okno-tytul"></div>
+      <button class="ikona-btn" id="okno-zamknij" aria-label="Zamknij">✕</button>
+    </div>
+    <div class="okno-tresc" id="okno-tresc"></div>
+    <div class="okno-stopka" id="okno-stopka"></div>
+  </div>
+</div>
+
+<!-- Pytanie "na pewno?" ma WŁASNĄ warstwę nad oknem. Wcześniej korzystało
+     z tego samego okna co formularze, więc zadanie pytania kasowało formularz,
+     w którym padło — kierowca kasujący jedno rozmazane zdjęcie tracił cały
+     protokół i wracał na plac po komplet od nowa. Bez przycisku X: z pytania
+     wychodzi się odpowiedzią albo Escape, nigdy „w bok". -->
+<div class="okno-tlo pytanie-tlo ukryty" id="pytanie-tlo">
+  <div class="okno pytanie">
+    <div class="okno-gora"><div class="okno-tytul" id="pytanie-tytul"></div></div>
+    <div class="okno-tresc" id="pytanie-tresc"></div>
+    <div class="okno-stopka" id="pytanie-stopka"></div>
+  </div>
+</div>
+
+<div id="komunikaty" class="komunikaty"></div>
+<div id="zajetosc" class="zajetosc ukryty"><div class="kolo"></div></div>
+
+<!-- Skrypty na końcu <body>, bez defer i bez type=module — pliki widzą się
+     nawzajem przez wspólne globalne nazwy, a kolejność tagów jest kolejnością
+     wykonania. Stempel ?v= przy każdym: to jedyne, czego żadna pamięć
+     podręczna nie obejdzie, bo po zmianie pliku zmienia się adres.
+
+     Najpierw moduły bezstanowe (nic nie robią same z siebie), potem app.js,
+     który zakłada wspólny 'stan' i rejestr EKRANY, a na końcu pliki ekranów,
+     które do tego rejestru dopisują swoje wpisy.
+
+     KAŻDY nowy plik .js trzeba dopisać w DWÓCH listach: tutaj i w ZASOBY
+     w sw.js. Pominięcie w sw.js daje program, który działa przy zasięgu,
+     a bez zasięgu nie wstaje wcale. -->
+<script src="kolejka.js?v=flotex-13c24540a2ce"></script>
+<script src="zdjecia.js?v=flotex-13c24540a2ce"></script>
+<script src="podpis.js?v=flotex-13c24540a2ce"></script>
+<script src="skrot.js?v=flotex-13c24540a2ce"></script>
+<script src="app.js?v=flotex-13c24540a2ce"></script>
+<script src="pojazdy.js?v=flotex-13c24540a2ce"></script>
+<script src="przeglady.js?v=flotex-13c24540a2ce"></script>
+<script src="awaria.js?v=flotex-13c24540a2ce"></script>
+<script src="zaproszenie.js?v=flotex-13c24540a2ce"></script>
+<script src="kierowca.js?v=flotex-13c24540a2ce"></script>
+<script src="ustawienia.js?v=flotex-13c24540a2ce"></script>
+<script src="konta.js?v=flotex-13c24540a2ce"></script>
+</body>
+</html>

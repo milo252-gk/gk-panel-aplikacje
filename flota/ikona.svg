@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Ikona GK Flota. Ta sama paleta co program tras (grafit i pomarancz
+       GK Factory), ale INNY ksztalt — oba programy stoja obok siebie na tym
+       samym pulpicie i na tym samym telefonie. Tam byl bus z boku, tu jest
+       auto od przodu z pomaranczowym znaczkiem odhaczenia: ten program
+       nie wozi, tylko pilnuje i odhacza. Rozpoznawalne w 32 px. -->
+  <rect width="192" height="192" rx="34" fill="#4E4E4E"/>
+  <path d="M46 108l10-28a10 10 0 0 1 9-7h62a10 10 0 0 1 9 7l10 28z" fill="#fff"/>
+  <rect x="40" y="106" width="112" height="34" rx="10" fill="#fff"/>
+  <circle cx="62" cy="140" r="7" fill="#4E4E4E"/>
+  <circle cx="130" cy="140" r="7" fill="#4E4E4E"/>
+  <path d="M62 120h16M114 120h16" stroke="#4E4E4E" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="140" cy="56" r="30" fill="#E0922E"/>
+  <path d="M127 56l9 10 18-20" stroke="#fff" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
