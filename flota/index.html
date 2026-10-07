@@ -58,11 +58,11 @@
 })();
 </script>
 <title>GK Flota</title>
-<link rel="manifest" href="manifest.webmanifest?v=flotex-13c24540a2ce">
-<link rel="icon" href="ikona.svg?v=flotex-13c24540a2ce">
+<link rel="manifest" href="manifest.webmanifest?v=flotex-8e0c51a3f11f">
+<link rel="icon" href="ikona.svg?v=flotex-8e0c51a3f11f">
 <!-- iPhone nie bierze ikony z manifestu ani z SVG: na ekran początkowy
      dodaje to, co wskazuje apple-touch-icon, i to musi być PNG. -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-13c24540a2ce">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-8e0c51a3f11f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GK Flota">
@@ -70,7 +70,7 @@
      nie pod nią. Odstępy env(safe-area-inset-top) w .gora i podglądzie zdjęcia
      zostają — przy „black” są po prostu zerowe. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="style.css?v=flotex-13c24540a2ce">
+<link rel="stylesheet" href="style.css?v=flotex-8e0c51a3f11f">
 </head>
 <body>
 
@@ -79,7 +79,7 @@
      tokenu. Bez klasy 'ukryty' formularz mrugałby przy każdym wejściu. -->
 <div id="ekran-logowania" class="logowanie ukryty">
   <form class="karta-logowania" id="form-logowania">
-    <img class="znak-logo" src="logo-gkf.png?v=flotex-13c24540a2ce"
+    <img class="znak-logo" src="logo-gkf.png?v=flotex-8e0c51a3f11f"
          alt="GK Factory" width="666" height="374">
     <h1>GK Flota</h1>
     <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
@@ -91,14 +91,17 @@
          autopoprawiania nazwiska na słowo ze słownika i bez podkreślania
          go na czerwono. Serwer i tak sprowadza odstępy do jednej spacji. -->
     <label>Imię i nazwisko
-      <input name="login" autocomplete="username" autocapitalize="none"
+      <input name="login" id="pole-loginu" autocomplete="username" autocapitalize="none"
              autocorrect="off" spellcheck="false" required placeholder="np. Jan Kowalski">
     </label>
-    <!-- Bez inputmode="numeric": biuro i administrator maja haslo z liter (min. 8 znakow),
-         a telefon z klawiatura cyfrowa nie dalby go wpisac. -->
-    <label>PIN / hasło
-      <input name="pin" type="password" autocomplete="current-password" required>
+    <!-- D43 (GK-KONTA.md §7.3, STYL-GK §2): podpis i klawiatura zaleza od osoby z pola 1
+         (app.js → poleSekretu). Osoba ze znacznikiem tego urzadzenia → „PIN (4 cyfry)”
+         z klawiatura cyfr; inaczej „Hasło (raz na 12 godzin na tym urządzeniu)” z pelna
+         klawiatura. Program bez kont D43 (konta tutejsze, z GK Trasy) — „PIN / hasło”. -->
+    <label><span id="etykieta-sekretu">PIN / hasło</span>
+      <input name="pin" id="pole-sekretu" type="password" autocomplete="current-password" required>
     </label>
+    <button type="button" class="link-sekretu" id="przelacz-sekret" hidden>Zaloguj hasłem</button>
     <div class="blad-logowania" id="blad-logowania"></div>
     <button class="glowny duzy" type="submit">Zaloguj</button>
     <!-- Tylko gdy konta przychodza z Panelu (GET /api/zyje → konta_z_panelu). -->
@@ -131,7 +134,7 @@
        ikon, bo program musi wstać bez internetu. -->
   <nav class="menu" id="menu">
     <div class="menu-naglowek">
-      <img class="menu-logo" src="logo-gkf.png?v=flotex-13c24540a2ce" alt="GK Factory"
+      <img class="menu-logo" src="logo-gkf.png?v=flotex-8e0c51a3f11f" alt="GK Factory"
            width="666" height="374">
       <div class="menu-imie" id="menu-imie"></div>
       <div class="menu-rola" id="menu-rola"></div>
@@ -212,17 +215,17 @@
      KAŻDY nowy plik .js trzeba dopisać w DWÓCH listach: tutaj i w ZASOBY
      w sw.js. Pominięcie w sw.js daje program, który działa przy zasięgu,
      a bez zasięgu nie wstaje wcale. -->
-<script src="kolejka.js?v=flotex-13c24540a2ce"></script>
-<script src="zdjecia.js?v=flotex-13c24540a2ce"></script>
-<script src="podpis.js?v=flotex-13c24540a2ce"></script>
-<script src="skrot.js?v=flotex-13c24540a2ce"></script>
-<script src="app.js?v=flotex-13c24540a2ce"></script>
-<script src="pojazdy.js?v=flotex-13c24540a2ce"></script>
-<script src="przeglady.js?v=flotex-13c24540a2ce"></script>
-<script src="awaria.js?v=flotex-13c24540a2ce"></script>
-<script src="zaproszenie.js?v=flotex-13c24540a2ce"></script>
-<script src="kierowca.js?v=flotex-13c24540a2ce"></script>
-<script src="ustawienia.js?v=flotex-13c24540a2ce"></script>
-<script src="konta.js?v=flotex-13c24540a2ce"></script>
+<script src="kolejka.js?v=flotex-8e0c51a3f11f"></script>
+<script src="zdjecia.js?v=flotex-8e0c51a3f11f"></script>
+<script src="podpis.js?v=flotex-8e0c51a3f11f"></script>
+<script src="skrot.js?v=flotex-8e0c51a3f11f"></script>
+<script src="app.js?v=flotex-8e0c51a3f11f"></script>
+<script src="pojazdy.js?v=flotex-8e0c51a3f11f"></script>
+<script src="przeglady.js?v=flotex-8e0c51a3f11f"></script>
+<script src="awaria.js?v=flotex-8e0c51a3f11f"></script>
+<script src="zaproszenie.js?v=flotex-8e0c51a3f11f"></script>
+<script src="kierowca.js?v=flotex-8e0c51a3f11f"></script>
+<script src="ustawienia.js?v=flotex-8e0c51a3f11f"></script>
+<script src="konta.js?v=flotex-8e0c51a3f11f"></script>
 </body>
 </html>

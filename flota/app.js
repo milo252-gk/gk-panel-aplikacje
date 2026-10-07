@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-13c24540a2ce';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-8e0c51a3f11f';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -132,6 +132,8 @@ const stan = {
   odrzucone: 0,             // zapisy, ktorych serwer nie przyjal
   bezPamieci: false,        // IndexedDB nie odpowiada — tryb offline nie dziala
   synchronizuje: false,
+  // D43: konta z Panelu maja haslo + PIN (z /api/zyje; zapamietane na start bez sieci).
+  trybD43: przypomnijSobie('d43') === '1',
 };
 
 const EKRANY = {};          // wypelniaja go pojazdy.js, przeglady.js, kierowca.js,
@@ -796,23 +798,173 @@ async function odswiezStanSieci() {
    odpowiedział czymś, czego program nie rozumie" i nie miał jak wejść,
    choć program stał i odpowiadał. Dlatego czekamy na adres tak samo,
    jak robi to API.zadanie.                                                  */
-async function zaloguj(login, pin) {
-  await adresDanychGotowy();
-  const odp = await zapytajProgram('/api/logowanie', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ login, pin, urzadzenie: navigator.userAgent.slice(0, 110) }),
-  });
-  let wynik;
+/* Login osoby tak jak w hubie (login_z_nazwy, GK-KONTA.md §1): małe litery, bez
+   polskich znaków, kropki/podkreślenia/myślniki jak spacje, pojedyncze spacje.
+   „Krzysztof  Hamrol” = „krzysztof.hamrol” = „krzysztof hamrol”. */
+function loginZNazwy(t) {
+  return String(t || '').toLowerCase().replace(/ł/g, 'l').normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[._-]+/g, ' ').split(/\s+/).filter(Boolean).join(' ');
+}
+
+/* Znaczniki urządzenia (D43, GK-KONTA.md §7.2). Po dobrym haśle program daje
+   temu urządzeniu znacznik ważny 12 godzin — z nim wystarcza PIN. Trzymamy go
+   PER OSOBA (na wspólnym telefonie loguje się kilka osób): mapa login → {z, do}
+   pod kluczem 'znaczniki' (przedrostek gk-flota.). Klucze po loginZNazwy:
+   wpisane imię i nazwisko, login i imię z konta. Wylogowanie znacznika NIE
+   kasuje — po to jest: następne logowanie tej osoby PIN-em. Kasuje go
+   odpowiedź „wymagane_haslo”. */
+const Znaczniki = {
+  wszystkie() {
+    try {
+      const m = JSON.parse(przypomnijSobie('znaczniki') || '{}');
+      return m && typeof m === 'object' && !Array.isArray(m) ? m : {};
+    } catch (e) { return {}; }
+  },
+  dla(ident) {
+    const w = this.wszystkie()[loginZNazwy(ident)];
+    return w && w.z && Date.parse(w.do) > Date.now() ? w : null;
+  },
+  zapamietaj(klucze, z, doKiedy) {
+    if (!z) return;
+    const m = this.wszystkie();
+    const teraz = Date.now();
+    Object.keys(m).forEach(k => { if (!(Date.parse((m[k] || {}).do) > teraz)) delete m[k]; });
+    klucze.map(loginZNazwy).filter(Boolean).forEach(k => { m[k] = { z, do: doKiedy }; });
+    pamietaj('znaczniki', JSON.stringify(m));
+  },
+  zapomnij(ident) {
+    const m = this.wszystkie();
+    const w = m[loginZNazwy(ident)];
+    if (!w) return;
+    Object.keys(m).forEach(k => { if ((m[k] || {}).z === w.z) delete m[k]; });
+    pamietaj('znaczniki', JSON.stringify(m));
+  },
+};
+
+/* Pole sekretu (D43, STYL-GK §2): osoba ze znacznikiem tego urządzenia → „PIN
+   (4 cyfry)” z klawiaturą cyfr; inaczej „Hasło (raz na 12 godzin na tym
+   urządzeniu)” z pełną klawiaturą. Program bez kont D43 (konta tutejsze,
+   z GK Trasy, Panel sprzed D43) — „PIN / hasło” jak dawniej (stan.trybD43
+   z /api/zyje). Link pod polem: „Zaloguj hasłem” (zapomniany PIN), przy haśle
+   ze znacznikiem — „Zaloguj PIN-em”; bez znacznika linku nie ma. */
+const ETYKIETY_SEKRETU = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 12 godzin na tym urządzeniu)',
+                           stary: 'PIN / hasło' };
+function poleSekretu({ ident, sekret, etykieta, przelacz }) {
+  let reczny = null;
+  const auto = () => (Znaczniki.dla(ident.value) ? 'pin' : (stan.trybD43 ? 'haslo' : 'stary'));
+  function rysuj() {
+    const a = auto();
+    if (reczny === 'pin' && a !== 'pin') reczny = null;     // PIN-em tylko ze znacznikiem
+    const tryb = reczny || a;
+    if (etykieta) etykieta.textContent = ETYKIETY_SEKRETU[tryb];
+    sekret.inputMode = tryb === 'pin' ? 'numeric' : 'text';
+    sekret.maxLength = tryb === 'pin' ? 4 : 128;
+    sekret.autocomplete = tryb === 'pin' ? 'off' : 'current-password';
+    sekret.dataset.tryb = tryb;
+    if (przelacz) {
+      przelacz.hidden = a !== 'pin';
+      przelacz.textContent = tryb === 'pin' ? 'Zaloguj hasłem' : 'Zaloguj PIN-em';
+    }
+    return tryb;
+  }
+  ident.addEventListener('input', () => { reczny = null; rysuj(); });
+  if (przelacz) {
+    przelacz.addEventListener('click', () => {
+      reczny = (reczny || auto()) === 'pin' ? 'haslo' : 'pin';
+      sekret.value = '';
+      rysuj();
+      sekret.focus();
+    });
+  }
+  rysuj();
+  return { odswiez: () => { reczny = null; return rysuj(); }, tryb: () => sekret.dataset.tryb };
+}
+
+/* Reguły nowego hasła i PIN-u (D43 §7.1) — te same co w programie i w hubie
+   (blad_hasla, blad_pinu); tu tylko podpowiadamy od razu, serwer sprawdza sam. */
+const HASLA_OCZYWISTE = ['12345678', '87654321', '123456789', '1234567890', '0987654321', 'qwertyui',
+  'qwertyuiop', 'qwerty123', 'password', 'password1', 'haslo123', 'hasło123', 'haslo1234', 'abcdefgh',
+  'asdfghjk', 'zaq12wsx', '11223344', '12341234', 'abcd1234', '1q2w3e4r', 'q1w2e3r4'];
+const PINY_OCZYWISTE = ['1234', '4321', '1122', '2580'];
+function bledyHasla({ stare, nowe, powtorz, nazwa, wymagajStarego }) {
+  const b = [];
+  stare = String(stare || '').trim(); nowe = String(nowe || '').trim(); powtorz = String(powtorz || '').trim();
+  if (wymagajStarego && !stare) b.push('Wpisz obecne hasło.');
+  const niskie = nowe.toLowerCase();
+  if (nowe.length < 8) b.push('Nowe hasło: min. 8 znaków (litery, cyfry, znaki).');
+  else if (niskie === 'haslo123') b.push('„haslo123” to hasło startowe — wpisz nowe.');
+  else if (HASLA_OCZYWISTE.includes(niskie) || new Set(niskie).size === 1) {
+    b.push('To hasło jest zbyt oczywiste — wybierz inne.');
+  } else {
+    const zwarte = loginZNazwy(nowe).replace(/ /g, '');
+    const l = loginZNazwy(nazwa);
+    if (l && (zwarte === l.replace(/ /g, '') || l.split(' ').includes(zwarte))) {
+      b.push('Hasło nie może być imieniem, nazwiskiem ani loginem — wybierz inne.');
+    }
+  }
+  if (nowe && stare && nowe === stare) b.push('Nowe hasło musi być inne niż obecne.');
+  if (nowe && powtorz !== nowe) b.push('Powtórzone hasło nie zgadza się z nowym.');
+  return b;
+}
+function bledyPinu({ stary, nowy, powtorz, wymagajStarego }) {
+  const b = [];
+  stary = String(stary || '').trim(); nowy = String(nowy || '').trim(); powtorz = String(powtorz || '').trim();
+  if (wymagajStarego && !stary) b.push('Wpisz obecne hasło albo obecny PIN.');
+  if (!/^\d{4}$/.test(nowy)) b.push('PIN to dokładnie 4 cyfry.');
+  else if (/^(\d)\1{3}$/.test(nowy) || PINY_OCZYWISTE.includes(nowy)) b.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
+  if (nowy && stary && nowy === stary) b.push('Nowy PIN musi być inny niż obecny.');
+  if (nowy && powtorz !== nowy) b.push('Powtórzony PIN nie zgadza się z nowym.');
+  return b;
+}
+
+/* Odpowiedź programu na logowanie albo ustawienie konta. Tunel albo firmowe
+   proxy potrafi oddać stronę błędu w HTML-u zamiast JSON-a — wtedy zdanie po
+   polsku zamiast angielskiego wyrzutu parsera. */
+async function odpowiedzLogowania(odp) {
   try {
-    // Tunel albo firmowe proxy potrafi oddać stronę błędu w HTML-u zamiast
-    // JSON-a. Bez tego kierowca dostawał w polu logowania angielski wyrzut
-    // parsera zamiast zdania, z którym da się cokolwiek zrobić.
-    wynik = await odp.json();
+    return await odp.json();
   } catch (e) {
     throw new Error('Serwer odpowiedział czymś, czego program nie rozumie. '
       + 'Sprawdź adres albo spróbuj za chwilę.');
   }
-  if (!odp.ok) throw new Error(wynik.blad || 'Nie udało się zalogować');
+}
+
+async function zaloguj(login, pin) {
+  await adresDanychGotowy();
+  // D43: pole „znacznik” idzie ZAWSZE (null, gdy go nie ma) — po nim program
+  // poznaje, że ta wersja umie PIN i okno „Ustaw hasło i PIN”.
+  const zn = Znaczniki.dla(login);
+  const odp = await zapytajProgram('/api/logowanie', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ login, pin, znacznik: zn ? zn.z : null,
+                           urzadzenie: navigator.userAgent.slice(0, 110) }),
+  });
+  const wynik = await odpowiedzLogowania(odp);
+  if (!odp.ok) {
+    const blad = new Error(wynik.blad || 'Nie udało się zalogować');
+    blad.kodBledu = wynik.kod || '';
+    blad.kod = odp.status;
+    // PIN bez ważnego znacznika albo 5 złych PIN-ów: ten znacznik już nic nie
+    // znaczy — pole wraca do hasła.
+    if (blad.kodBledu === 'wymagane_haslo') Znaczniki.zapomnij(login);
+    throw blad;
+  }
+  if (wynik.do_ustawienia && wynik.do_ustawienia.length) {
+    // Hasło startowe albo brak PIN-u: sesja tylko do okna „Ustaw hasło i PIN”.
+    const blad = new Error('Ustaw nowe hasło i PIN, żeby wejść.');
+    blad.kodBledu = 'do_ustawienia';
+    blad.ustawienie = Object.assign({}, wynik, { wpisany: login });
+    throw blad;
+  }
+  return przyjmijLogowanie(wynik, login);
+}
+
+/* Zalogowano (logowanie albo „Ustaw hasło i PIN”): znacznik do Znaczniki,
+   token i profil do pamięci. */
+async function przyjmijLogowanie(odpowiedz, wpisany) {
+  const wynik = Object.assign({}, odpowiedz);
+  if (wynik.znacznik) Znaczniki.zapamietaj([wpisany, wynik.login, wynik.imie], wynik.znacznik, wynik.znacznik_do);
+  delete wynik.znacznik;                     // znacznik nie idzie do profilu w IndexedDB
   stan.token = wynik.token;
   // Zapis tokenu ZAWSZE w try/catch — tryb prywatny nie może zablokować wejścia.
   pamietaj('token', wynik.token);
@@ -916,6 +1068,7 @@ function pokazLogowanie() {
   document.getElementById('ekran-logowania').classList.remove('ukryty');
   document.getElementById('blad-logowania').textContent = '';
   document.getElementById('form-logowania').reset();
+  if (stan.poleLogowania) stan.poleLogowania.odswiez();
   pokazInfoKont();
 }
 
@@ -924,13 +1077,85 @@ function pokazLogowanie() {
    brak odpowiedzi = brak linii, logowanie na to nie czeka. */
 async function pokazInfoKont() {
   const linia = document.getElementById('info-kont');
-  if (!linia) return;
   try {
     await adresDanychGotowy();
     const odp = await zapytajProgram('/api/zyje');
     const w = odp.ok ? await odp.json() : {};
-    linia.hidden = !(w && w.konta_z_panelu);
-  } catch (e) { linia.hidden = true; }
+    if (linia) linia.hidden = !(w && w.konta_z_panelu);
+    // Ta sama odpowiedź mówi, czy konta są już w D43 (hasło + PIN) — wtedy pole
+    // sekretu pisze „Hasło (raz na 12 godzin…)” zamiast „PIN / hasło”.
+    stan.trybD43 = !!(w && w.d43);
+    pamietaj('d43', stan.trybD43 ? '1' : '');
+  } catch (e) { if (linia) linia.hidden = true; }
+  if (stan.poleLogowania) stan.poleLogowania.odswiez();
+}
+
+/* Okno „Ustaw hasło i PIN” (D43 §7.4, STYL-GK §2): pierwsze logowanie hasłem
+   startowym (albo konto bez PIN-u). Tylko brakujące pola. Sesja z logowania
+   służy wyłącznie temu oknu; po zapisie osoba jest zalogowana i idzie dalej(). */
+function oknoUstawieniaKonta(u, dalej, bladNaStart) {
+  const haslo = (u.do_ustawienia || []).includes('haslo');
+  const pin = (u.do_ustawienia || []).includes('pin');
+  const tytul = haslo && pin ? 'Ustaw hasło i PIN' : haslo ? 'Ustaw nowe hasło' : 'Ustaw PIN';
+  okno({
+    tytul, konto: true,
+    tresc: `
+      <p class="konto-kto"><b>${escHtml(u.imie)}</b></p>
+      <p class="konto-drobne">${haslo ? 'Hasło startowe działa tylko przy pierwszym logowaniu. ' : ''}Hasło
+        wpiszesz raz na 12 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich
+        aplikacjach GK.</p>
+      ${haslo ? `<label>Nowe hasło (min. 8 znaków)<input id="us-haslo" type="password"
+          autocomplete="new-password" maxlength="128"></label>
+        <label>Powtórz nowe hasło<input id="us-haslo2" type="password" autocomplete="new-password"
+          maxlength="128"></label>` : ''}
+      ${pin ? `<label>PIN (4 cyfry)<input id="us-pin" type="password" inputmode="numeric"
+          autocomplete="new-password" maxlength="4"></label>
+        <label>Powtórz PIN<input id="us-pin2" type="password" inputmode="numeric"
+          autocomplete="new-password" maxlength="4"></label>` : ''}
+      <p class="blad-ustawienia" id="us-blad" role="alert">${escHtml(bladNaStart || '')}</p>`,
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: 'Zapisz i wejdź', klasa: 'glowny', klik: async z => {
+        const blad = document.getElementById('us-blad');
+        const v = id => (document.getElementById(id) || {}).value || '';
+        const bledy = [
+          ...(haslo ? bledyHasla({ nowe: v('us-haslo'), powtorz: v('us-haslo2'), nazwa: u.imie }) : []),
+          ...(pin ? bledyPinu({ nowy: v('us-pin'), powtorz: v('us-pin2') }) : []),
+        ];
+        if (bledy.length) { blad.textContent = bledy.join(' '); return; }
+        blad.textContent = '';
+        zajety(true);
+        try {
+          await adresDanychGotowy();
+          const odp = await zapytajProgram('/api/ustaw-konto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + u.token },
+            body: JSON.stringify({ haslo: v('us-haslo').trim(), pin: v('us-pin').trim(),
+                                   urzadzenie: navigator.userAgent.slice(0, 110) }),
+          });
+          const w = await odpowiedzLogowania(odp);
+          if (!odp.ok) {
+            if (w.do_ustawienia && w.do_ustawienia.length) {
+              // Hasło przeszło, PIN nie — zostaje okno z samym PIN-em.
+              oknoUstawieniaKonta(Object.assign({}, u, { do_ustawienia: w.do_ustawienia }), dalej, w.blad);
+              return;
+            }
+            blad.textContent = w.blad || 'Nie udało się zapisać — spróbuj jeszcze raz.';
+            return;
+          }
+          await przyjmijLogowanie(w, u.wpisany);
+          z();
+          komunikat('Hasło i PIN ustawione — działają we wszystkich aplikacjach GK.', 'ok');
+          if (dalej) await dalej();
+        } catch (e) {
+          blad.textContent = poLudzku(e);
+        } finally {
+          zajety(false);
+        }
+      } },
+    ],
+    poOtwarciu: pole => { const p = pole.querySelector('input'); if (p) p.focus(); },
+  });
 }
 
 /* --------------------------------------------------------------- ekrany */
@@ -1328,6 +1553,7 @@ function oknoKonta() {
       ${stan.uz.zrodlo === 'trasex'
         ? `<p class="konto-drobne">Twoje konto prowadzi GK Trasy — tam zmieniasz PIN.
              Nowy zadziała tutaj sam po kilku minutach.</p>`
+        : stan.uz.d43 ? trescZmianD43()
         : `<div><button type="button" id="btn-pokaz-zmiane">${zmien}</button></div>
       <fieldset id="zmiana-pinu" class="ukryty"><legend>${zmien}</legend>
         <label>${jestBiuro() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
@@ -1379,10 +1605,11 @@ function oknoKonta() {
            która pracowała na tym urządzeniu. Wyślą się, gdy ta osoba się tu zaloguje —
            nie kasuj danych aplikacji, bo przepadną.`;
       }
+      if (stan.uz.d43 && stan.uz.zrodlo !== 'trasex') podepnijZmianyD43(pole);
       // „Zmień hasło” to przycisk; formularz rozwija się dopiero po nim (jak w hali).
       const formularz = pole.querySelector('#zmiana-pinu');
       const pokaz = pole.querySelector('#btn-pokaz-zmiane');
-      if (pokaz) {
+      if (pokaz && !stan.uz.d43) {
         pokaz.onclick = () => {
           pokaz.parentNode.classList.add('ukryty');
           formularz.classList.remove('ukryty');
@@ -1395,7 +1622,7 @@ function oknoKonta() {
         };
       }
       const zmienPin = pole.querySelector('#btn-zmien-pin');
-      if (zmienPin) zmienPin.onclick = async () => {
+      if (zmienPin && !stan.uz.d43) zmienPin.onclick = async () => {
         const stary = pole.querySelector('#pin-stary').value;
         const nowy = pole.querySelector('#pin-nowy').value;
         const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }),
@@ -1415,6 +1642,95 @@ function oknoKonta() {
       if (odswiez) odswiez.onclick = odswiezProgram;
     },
   });
+}
+
+/* Moje konto, konto z Panelu w D43 (hasło + PIN, GK-KONTA.md §7, STYL-GK §3):
+   dwa przyciski „Zmień hasło” i „Zmień PIN”, każdy rozwija swój formularz. */
+function trescZmianD43() {
+  return `<div class="przyciski-konta" id="zmiany-d43">
+        <button type="button" id="btn-pokaz-haslo">Zmień hasło</button>
+        <button type="button" id="btn-pokaz-pin">Zmień PIN</button>
+      </div>
+      <fieldset id="zmiana-hasla" class="ukryty"><legend>Zmień hasło</legend>
+        <p class="konto-drobne">To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 12 godzin
+          na urządzeniu, na co dzień — PIN. Inne urządzenia poproszą o nowe hasło.</p>
+        <label>Obecne hasło<input id="zh-stare" type="password" autocomplete="current-password" maxlength="128"></label>
+        <label>Nowe hasło (min. 8 znaków)<input id="zh-nowe" type="password" autocomplete="new-password" maxlength="128"></label>
+        <label>Powtórz nowe hasło<input id="zh-powtorz" type="password" autocomplete="new-password" maxlength="128"></label>
+        <p class="blad-ustawienia" id="zh-blad" role="alert"></p>
+        <div class="przyciski">
+          <button type="button" data-anuluj>Anuluj</button>
+          <button type="button" class="glowny" id="btn-zmien-haslo">Zmień hasło</button>
+        </div>
+      </fieldset>
+      <fieldset id="zmiana-pinu-d43" class="ukryty"><legend>Zmień PIN</legend>
+        <p class="konto-drobne">Ten PIN działa we wszystkich aplikacjach GK — na urządzeniu, na którym w ciągu
+          12 godzin wpisano hasło. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
+        <label>Obecne hasło albo PIN<input id="zp-stary" type="password" autocomplete="current-password" maxlength="128"></label>
+        <label>Nowy PIN (4 cyfry)<input id="zp-nowy" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
+        <label>Powtórz nowy PIN<input id="zp-powtorz" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
+        <p class="blad-ustawienia" id="zp-blad" role="alert"></p>
+        <div class="przyciski">
+          <button type="button" data-anuluj>Anuluj</button>
+          <button type="button" class="glowny" id="btn-zmien-pin-d43">Zmień PIN</button>
+        </div>
+      </fieldset>`;
+}
+
+/* Nowy token (i znacznik) po zmianie sekretu — stare sesje przepadły, także ta. */
+function przejmijPoZmianie(w) {
+  if (w.token) { stan.token = w.token; pamietaj('token', w.token); }
+  if (w.znacznik) Znaczniki.zapamietaj([stan.uz.login, stan.uz.imie], w.znacznik, w.znacznik_do);
+}
+
+function podepnijZmianyD43(pole) {
+  const przyciski = pole.querySelector('#zmiany-d43');
+  const formularze = { haslo: pole.querySelector('#zmiana-hasla'), pin: pole.querySelector('#zmiana-pinu-d43') };
+  const zwin = () => {
+    Object.values(formularze).forEach(f => {
+      f.classList.add('ukryty');
+      f.querySelectorAll('input').forEach(i => { i.value = ''; });
+      f.querySelector('.blad-ustawienia').textContent = '';
+    });
+    przyciski.classList.remove('ukryty');
+  };
+  const rozwin = co => {
+    przyciski.classList.add('ukryty');
+    formularze[co].classList.remove('ukryty');
+    formularze[co].querySelector('input').focus();
+  };
+  pole.querySelector('#btn-pokaz-haslo').onclick = () => rozwin('haslo');
+  pole.querySelector('#btn-pokaz-pin').onclick = () => rozwin('pin');
+  pole.querySelectorAll('[data-anuluj]').forEach(b => { b.onclick = zwin; });
+  const v = id => pole.querySelector(id).value;
+  pole.querySelector('#btn-zmien-haslo').onclick = async () => {
+    const blad = pole.querySelector('#zh-blad');
+    const bledy = bledyHasla({ stare: v('#zh-stare'), nowe: v('#zh-nowe'), powtorz: v('#zh-powtorz'),
+                               nazwa: stan.uz.imie, wymagajStarego: true });
+    blad.textContent = bledy.join(' ');
+    if (bledy.length) return;
+    const w = await sprobuj(() => API.post('/api/zmien-haslo', { stare: v('#zh-stare').trim(), nowe: v('#zh-nowe').trim(),
+                                                              urzadzenie: navigator.userAgent.slice(0, 110) }),
+      'Hasło zmienione — działa we wszystkich aplikacjach GK. Inne urządzenia poproszą o nowe hasło.');
+    if (!w) return;
+    przejmijPoZmianie(w);
+    zamknijOkno();
+  };
+  pole.querySelector('#btn-zmien-pin-d43').onclick = async () => {
+    const blad = pole.querySelector('#zp-blad');
+    const bledy = bledyPinu({ stary: v('#zp-stary'), nowy: v('#zp-nowy'), powtorz: v('#zp-powtorz'),
+                              wymagajStarego: true });
+    blad.textContent = bledy.join(' ');
+    if (bledy.length) return;
+    const zn = Znaczniki.dla(stan.uz.login);
+    const w = await sprobuj(() => API.post('/api/zmien-pin', { stary: v('#zp-stary').trim(), nowy: v('#zp-nowy').trim(),
+                                                            znacznik: zn ? zn.z : null,
+                                                            urzadzenie: navigator.userAgent.slice(0, 110) }),
+      'PIN zmieniony — działa we wszystkich aplikacjach GK.');
+    if (!w) return;
+    przejmijPoZmianie(w);
+    zamknijOkno();
+  };
 }
 
 /* --------------------------------------------------------- powiadomienia */
@@ -1637,6 +1953,10 @@ function oknoStartowegoHasla() {
 /* ----------------------------------------------------------------- start */
 
 async function uruchom() {
+  stan.poleLogowania = poleSekretu({ ident: document.getElementById('pole-loginu'),
+                                     sekret: document.getElementById('pole-sekretu'),
+                                     etykieta: document.getElementById('etykieta-sekretu'),
+                                     przelacz: document.getElementById('przelacz-sekret') });
   document.getElementById('form-logowania').onsubmit = async e => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -1647,9 +1967,20 @@ async function uruchom() {
       await zaloguj(f.get('login').trim(), f.get('pin'));
       await wejdzDoAplikacji();
     } catch (blad) {
-      // Błąd logowania zostaje POD FORMULARZEM, a nie w toaście: toast gaśnie
-      // po pięciu sekundach, a człowiek w tym czasie patrzy na klawiaturę.
-      pole.textContent = poLudzku(blad);
+      if (blad && blad.kodBledu === 'do_ustawienia') {
+        // Hasło startowe: od razu okno „Ustaw hasło i PIN” (D43 §7.4).
+        document.getElementById('pole-sekretu').value = '';
+        oknoUstawieniaKonta(blad.ustawienie, wejdzDoAplikacji);
+      } else {
+        // Błąd logowania zostaje POD FORMULARZEM, a nie w toaście: toast gaśnie
+        // po pięciu sekundach, a człowiek w tym czasie patrzy na klawiaturę.
+        pole.textContent = poLudzku(blad);
+        if (blad && blad.kodBledu === 'wymagane_haslo') {
+          document.getElementById('pole-sekretu').value = '';
+          stan.poleLogowania.odswiez();          // pole wraca do hasła
+          document.getElementById('pole-sekretu').focus();
+        }
+      }
     } finally {
       zajety(false);
     }
