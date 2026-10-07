@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-8e0c51a3f11f';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-c881afcccacf';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -1532,6 +1532,17 @@ function wyborWygladu() {
     .join('');
 }
 
+/* „Dane w tym urządzeniu” w Moim koncie: licznik i „Wyślij teraz” tylko wtedy,
+   gdy coś czeka (STYL-GK §3, jak w hali — przy zerze sam przycisk tylko mylił).
+   Po wysyłce z tego przycisku licznik odświeża się w otwartym oknie. */
+function pokazKolejkeWKoncie(pole) {
+  const ile = pole.querySelector('#ile-w-kolejce');
+  const wyslij = pole.querySelector('#btn-wyslij-teraz');
+  if (!ile || !wyslij) return;
+  ile.textContent = stan.bezPamieci ? 'pamięć przeglądarki nie odpowiada' : stan.wKolejce;
+  wyslij.parentNode.classList.toggle('ukryty', !(stan.wKolejce > 0));
+}
+
 /* „Moje konto” w układzie okna konta aplikacji hali (konto.js → HalaKonto.mojeKonto),
    tak samo jak w GK Trasy: osoba i rola → Wygląd → Zmień hasło/PIN (formularz
    rozwija się w oknie) → Powiadomienia → Dane w tym urządzeniu → wersja →
@@ -1580,7 +1591,7 @@ function oknoKonta() {
         <p class="konto-drobne ${stan.obceWKolejce ? '' : 'ukryty'}" id="obce-w-kolejce"></p>
         <div id="odrzucone-zapisy"></div>
         <p class="konto-drobne">${escHtml(trybOffline().wyjasnienie)}</p>
-        <div><button type="button" id="btn-wyslij-teraz">Wyślij teraz</button></div>
+        <div class="ukryty"><button type="button" id="btn-wyslij-teraz">Wyślij teraz</button></div>
       </fieldset>
       ${stopkaWersji()}
       ${stempelWersji()}`,
@@ -1596,8 +1607,7 @@ function oknoKonta() {
         Motyw.ustaw(b.dataset.wyglad);
         pigulki.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       });
-      pole.querySelector('#ile-w-kolejce').textContent = stan.bezPamieci
-        ? 'pamięć przeglądarki nie odpowiada' : stan.wKolejce;
+      pokazKolejkeWKoncie(pole);
       if (stan.obceWKolejce) {
         pole.querySelector('#obce-w-kolejce').innerHTML =
           `⚠️ Dodatkowo <b>${stan.obceWKolejce}</b> ${odmiana(stan.obceWKolejce,
@@ -1637,7 +1647,10 @@ function oknoKonta() {
       };
       rysujPowiadomienia(pole.querySelector('#push-konto'));
       rysujOdrzucone(pole.querySelector('#odrzucone-zapisy'));
-      pole.querySelector('#btn-wyslij-teraz').onclick = () => synchronizuj(false);
+      pole.querySelector('#btn-wyslij-teraz').onclick = async () => {
+        await synchronizuj(false);
+        pokazKolejkeWKoncie(pole);
+      };
       const odswiez = pole.querySelector('#btn-odswiez-program');
       if (odswiez) odswiez.onclick = odswiezProgram;
     },
