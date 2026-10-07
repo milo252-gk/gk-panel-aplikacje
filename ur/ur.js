@@ -408,15 +408,18 @@
   function komunikatBledu(e) {
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
+    if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
     if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo kierownika UR.';
     // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Złe imię i nazwisko albo PIN”, blokada na 5 min).
     return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i PIN.';
   }
   UR.komunikatBledu = komunikatBledu;
 
-  /* Logowanie identyfikatorem i PIN-em (D24): identyfikator to kod z karty (aparat albo czytnik „piszący”
-     jak klawiatura i kończący Enterem) albo login. Enter z czytnika przenosi do PIN-u, zamiast wysyłać
-     pusty PIN. Sam PIN (bez identyfikatora) przechodzi tylko w trybie przejściowym huba. */
+  /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (aparat albo czytnik
+     „piszący” jak klawiatura i kończący Enterem) albo login. Enter z czytnika przenosi do drugiego pola, zamiast
+     wysyłać pusty sekret. Drugie pole: hasło (raz na 12 godzin na tym urządzeniu) albo PIN (4 cyfry) — konto.js. */
+  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
+                                                przelacz: $('przelacz-sekret') });
   async function zaloguj() {
     const ident = $('identyfikator').value.trim().replace(/^HALA:P:/i, '');
     const pin = $('pin').value.trim();
@@ -429,15 +432,16 @@
     blad.hidden = true;
     for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = true;
     try {
-      await hala.zaloguj(ident ? { identyfikator: ident, pin } : { pin });
-      $('identyfikator').value = ''; $('pin').value = '';
+      await HalaKonto.zaloguj(hala, { identyfikator: ident, pin }, { komunikat: UR.komunikat });
+      $('identyfikator').value = ''; $('pin').value = ''; poleSekretu.odswiez();
       pokazSesje();
     } catch (e) {
       // Hub przyjął logowanie, a potknęło się wczytywanie stanu — sesja jest, resztę dociągnie synchronizacja.
-      if (hala.zalogowany()) { $('identyfikator').value = ''; $('pin').value = ''; pokazSesje(); return; }
+      if (hala.zalogowany()) { $('identyfikator').value = ''; $('pin').value = ''; poleSekretu.odswiez(); pokazSesje(); return; }
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 12 h minęło albo 5 złych PIN-ów
       $('pin').focus();
     } finally {
       for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = false;
@@ -450,6 +454,7 @@
     const t = await UR.skanuj('Zeskanuj identyfikator', 'Numer karty');
     if (!t) return;
     $('identyfikator').value = t.replace(/^HALA:P:/i, '');
+    poleSekretu.odswiez();
     $('pin').focus();
   });
 

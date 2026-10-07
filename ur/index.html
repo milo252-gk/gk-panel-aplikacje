@@ -35,9 +35,10 @@
           <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator">📷</button>
         </span>
       </label>
-      <label>PIN
+      <label><span id="pin-etykieta">Hasło (raz na 12 godzin na tym urządzeniu)</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
+      <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>Zaloguj hasłem</button>
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>

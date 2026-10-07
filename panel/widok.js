@@ -652,23 +652,59 @@
     if (!istniejacy && id) { const baza = id; let i = 2; while (inni.some(p => p.id === id)) id = `${baza}${i++}`; }
     const role = [].concat(f.role || []).filter(Boolean);
     if (!role.length) bledy.push('Zaznacz co najmniej jedną rolę.');
+    // D43: człowiek — hasło (startowe haslo123 albo wpisane przez administratora) + PIN 4 cyfry (nieobowiązkowy);
+    // konto samego ekranu — jeden PIN 4–8 cyfr (bez hasła).
+    const ekran = role.length === 1 && role[0] === 'ekran';
     const pin = String(f.pin || '').trim();
-    const biuro = biuroTransportu(role);
-    if (!istniejacy && !pin) bledy.push(biuro ? 'Nowa osoba potrzebuje hasła (min. 8 znaków).' : 'Nowa osoba potrzebuje PIN-u (4–8 cyfr).');
-    if (biuro) {
-      if (pin && pin.length < 8) bledy.push('Biuro GK Trasy / GK Flota: hasło min. 8 znaków (litery, cyfry, znaki).');
-      // Hub nie zna długości zapisanego PIN-u — rola biura dochodzi tylko z nowym hasłem (albo przy znanym długim).
-      else if (!pin && istniejacy && !istniejacy.dlugie_haslo)
-        bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — wpisz nowe hasło.');
-    } else if (pin && !/^\d{4,8}$/.test(pin)) bledy.push('PIN to 4–8 cyfr.');
-    if (pin && oczywistyPin(pin.toLowerCase())) bledy.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
+    const haslo = String(f.haslo || '').trim();
+    if (ekran) {
+      if (!pin && (!istniejacy || !istniejacy.ekran)) bledy.push('Konto ekranu potrzebuje PIN-u (4–8 cyfr).');
+      if (pin && !/^\d{4,8}$/.test(pin)) bledy.push('PIN ekranu to 4–8 cyfr.');
+    } else if (pin && !/^\d{4}$/.test(pin)) bledy.push('PIN to dokładnie 4 cyfry.');
+    if (pin && oczywistyPin(pin)) bledy.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
+    const startowe = !ekran && (!istniejacy || f.haslo_startowe === true);
+    if (startowe && haslo) {
+      const b = bladHasla(haslo, nazwa, true);
+      if (b) bledy.push('Hasło startowe: ' + b);
+    }
+    // Hub nie zna długości hasła sprzed D43 (import z programu) — rola biura dochodzi tylko z hasłem startowym.
+    if (biuroTransportu(role) && istniejacy && !startowe && !istniejacy.dlugie_haslo)
+      bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — kliknij „Ustaw hasło startowe”.');
     const telefon = String(f.telefon || '').trim();
     if (!/^[0-9+()\- ]{0,30}$/.test(telefon)) bledy.push('Telefon: cyfry, spacje, + i myślnik, np. 600 100 200.');
     const dane = { id, nazwa, role, linie: [].concat(f.linie || []).filter(Boolean), aktywny: f.aktywny !== false, telefon };
     if (pin) dane.pin = pin;
+    if (startowe && haslo) dane.haslo = haslo;
+    if (istniejacy && startowe) dane.haslo_startowe = true;
     const karta = String(f.karta || '').trim();
     if (karta) dane.karta = karta; else if (f.usun_karte) dane.usun_karte = true;
     return { bledy, dane };
+  }
+
+  /* Hasło według reguł huba (hala.py → blad_hasla, D43 §1) — tekst błędu albo null. startowe: wolno samo haslo123. */
+  const HASLA_OCZYWISTE = new Set(['12345678', '87654321', '123456789', '1234567890', '0987654321', 'qwertyui', 'qwertyuiop',
+    'qwerty123', 'password', 'password1', 'haslo123', 'hasło123', 'haslo1234', 'abcdefgh', 'asdfghjk', 'zaq12wsx', '11223344',
+    '12341234', 'abcd1234', '1q2w3e4r', 'q1w2e3r4']);
+  function bladHasla(haslo, nazwa, startowe) {
+    const h = String(haslo || '').trim(), n = h.toLowerCase();
+    if (h.length < 8) return 'min. 8 znaków (litery, cyfry, znaki) — albo zostaw puste (haslo123).';
+    if (startowe && n === 'haslo123') return null;
+    if (HASLA_OCZYWISTE.has(n) || new Set(n).size === 1) return 'zbyt oczywiste — wybierz inne.';
+    const z = loginZNazwy(h).replace(/ /g, ''), l = loginZNazwy(nazwa);
+    if (l && (z === l.replace(/ /g, '') || l.split(' ').includes(z))) return 'nie może być imieniem, nazwiskiem ani loginem.';
+    return null;
+  }
+
+  /* Stan hasła i PIN-u osoby w Administracji (D43): znacznik na liście (pusty = nic do zrobienia) i zdanie w oknie osoby.
+     p: wiersz GET /admin/pracownicy ({ekran, haslo_do_zmiany, ma_pin, ma_haslo}). */
+  function stanHasla(p) {
+    if (!p) return { znacznik: '', klasa: '', opis: '' };
+    if (p.ekran) return p.ma_pin ? { znacznik: '', klasa: '', opis: 'Konto ekranu — jeden PIN (4–8 cyfr).' }
+      : { znacznik: 'bez PIN-u', klasa: 'tekst-alarm', opis: 'Konto ekranu bez PIN-u — wpisz go i zapisz.' };
+    if (p.haslo_do_zmiany) return { znacznik: 'hasło startowe', klasa: 'slaby',
+      opis: 'Hasło startowe — przy pierwszym logowaniu osoba ustawi własne hasło' + (p.ma_pin ? ' (PIN już jest).' : ' i PIN.') };
+    if (!p.ma_pin) return { znacznik: 'bez PIN-u', klasa: 'slaby', opis: 'Hasło ustawione, PIN-u jeszcze nie ma — osoba ustawi go przy logowaniu.' };
+    return { znacznik: '', klasa: '', opis: 'Hasło i PIN ustawione.' };
   }
 
   /* Status połączenia programu (Administracja → Połączenia GK) po ludzku. lokalny (D42): klucz zrobił hub dla programu
@@ -1264,7 +1300,7 @@
   const PanelWidok = { obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;

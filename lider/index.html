@@ -39,9 +39,12 @@
           <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator">📷</button>
         </span>
       </label>
-      <label>PIN
+      <label><span id="pin-etykieta">Hasło (raz na 12 godzin na tym urządzeniu)</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
+      <!-- D43: „abc” — hasło z pełnej klawiatury (zapomniany PIN), „123” — z powrotem PIN z klawiatury cyfr. -->
+      <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>abc</button>
+      <button class="glowny" type="submit" id="zaloguj-haslem" hidden>Zaloguj</button>
       <div class="pinpad" aria-label="Klawiatura PIN">
         <button type="button" data-cyfra="1">1</button><button type="button" data-cyfra="2">2</button><button type="button" data-cyfra="3">3</button>
         <button type="button" data-cyfra="4">4</button><button type="button" data-cyfra="5">5</button><button type="button" data-cyfra="6">6</button>

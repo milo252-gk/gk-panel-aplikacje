@@ -108,14 +108,19 @@
   function komunikatBledu(e) {
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
+    if (e.ustawione) return e.message;               // D43: hasło i PIN ustawione, ale rola nie otwiera Panelu
+    if (e.kod === 403 && e.powod) return e.message;  // np. stara_wersja — tekst huba mówi, co zrobić
     if (e.kod === 403) return 'To konto nie ma dostępu do Panelu. Zaloguj się kontem kierownika albo ekranu.';
     if (e.kod === 429) return e.message || 'Za dużo prób. Odczekaj 5 minut i spróbuj ponownie.';
     return e.message;
   }
 
-  /* Logowanie identyfikatorem i PIN-em (D24): identyfikator to kod z karty (czytnik „pisze” go jak
+  /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (czytnik „pisze” go jak
      klawiatura i kończy Enterem) albo login — konto monitora w biurze nie ma karty. Enter z czytnika
-     przenosi do PIN-u, zamiast wysyłać pusty PIN. */
+     przenosi do drugiego pola, zamiast wysyłać pusty sekret. Drugie pole: „Hasło (raz na 12 godzin na tym
+     urządzeniu)” albo „PIN (4 cyfry)” — zależnie od tego, czy ta osoba ma na tym urządzeniu ważny znacznik (konto.js). */
+  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
+                                                przelacz: $('przelacz-sekret') });
   $('formularz-logowania').addEventListener('submit', async ev => {
     ev.preventDefault();
     const ident = $('identyfikator').value.trim();
@@ -127,19 +132,21 @@
     }
     const blad = $('blad-logowania');
     blad.hidden = true;
-    const przycisk = ev.target.querySelector('button');
+    const przycisk = ev.target.querySelector('button[type="submit"]');
     przycisk.disabled = true;
     try {
-      await hala.zaloguj({ identyfikator: ident, pin });
-      $('identyfikator').value = ''; $('pin').value = '';
+      await HalaKonto.zaloguj(hala, { identyfikator: ident, pin }, { komunikat });
+      $('identyfikator').value = ''; $('pin').value = ''; poleSekretu.odswiez();
       pokazSesje();
     } catch (e) {
-      // Hub przyjął PIN, a potknęło się dopiero wczytywanie stanu (sieć mrugnęła): sesja jest,
+      // Hub przyjął sekret, a potknęło się dopiero wczytywanie stanu (sieć mrugnęła): sesja jest,
       // a resztę dociągnie synchronizacja w tle — nie trzymamy kierownika na ekranie logowania.
-      if (hala.zalogowany()) { $('identyfikator').value = ''; $('pin').value = ''; pokazSesje(); return; }
+      if (hala.zalogowany()) { $('identyfikator').value = ''; $('pin').value = ''; poleSekretu.odswiez(); pokazSesje(); return; }
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
+      // D43: 12 h minęło albo 5 złych PIN-ów — hala.js zapomniał znacznik, pole wraca do hasła.
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();
       $('pin').focus();
     } finally {
       przycisk.disabled = false;

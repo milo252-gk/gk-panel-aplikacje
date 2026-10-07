@@ -28,6 +28,7 @@ body.z-oknem, body.z-blokada { overflow: hidden; }
 
 /* Pole identyfikatora z 📷 (.rzad): wspólne w hala.css — ten sam wzór w UR i KJ. */
 .pinpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pinpad[hidden] { display: none; }   /* D43: przy haśle klawiatura cyfr schowana (pełna klawiatura telefonu) */
 .pinpad button { min-height: 60px; font-size: 1.4em; padding: 0; }
 .hala-karta-logowania .czeka-na { margin: 12px 0 0; }
 body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }

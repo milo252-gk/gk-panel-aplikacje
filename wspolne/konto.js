@@ -1,110 +1,282 @@
-/* GK Panel Kierownika — wspólne okno „Zmień PIN” (D32: jedno konto we wszystkich aplikacjach GK).
+/* GK Panel Kierownika — wspólne okna konta: „Zmień hasło”, „Zmień PIN”, „Ustaw hasło i PIN” po pierwszym logowaniu
+   i pole sekretu na ekranie logowania (D32: jedno konto we wszystkich aplikacjach GK; D43: hasło raz na 12 godzin na
+   urządzeniu, na co dzień PIN 4 cyfry).
 
    Jedno okno dla Panelu, Lidera, UR i KJ (wszędzie z „Moje konto” — ikona osoby w nagłówku, niżej mojeKonto) — ten sam wygląd i te same
    słowa, jak Wygląd (motyw.js). Aplikacja woła:
-       HalaKonto.zmienPin(hala, { komunikat: (tekst, rodzaj) => … })   // obietnica: true = zmieniony, false = anulowano
-   albo dorysowuje przycisk:  HalaKonto.przycisk(el, hala, { komunikat })   // <button>Zmień PIN</button>
+       HalaKonto.zaloguj(hala, { identyfikator, pin }, { komunikat })   // jak hala.zaloguj; hasło startowe → okno „Ustaw hasło i PIN”
+       HalaKonto.poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane })   // „Hasło (raz na 12 godzin…)” / „PIN (4 cyfry)”
+       HalaKonto.zmienHaslo(hala, { komunikat }) / HalaKonto.zmienPin(hala, { komunikat })   // true = zmienione, false = anulowano
+   albo dorysowuje przyciski:  HalaKonto.przycisk(el, hala, { komunikat })   // „Zmień hasło” i „Zmień PIN”
 
-   Reguły (te same co w hubie — hala.py → blad_sekretu): PIN 4–8 cyfr; osoba z rolą biura GK Trasy / GK Flota —
-   hasło min. 8 znaków (litery też). Hub i tak sprawdza wszystko jeszcze raz; tu tylko podpowiadamy od razu.
-   Okno to <dialog> w warstwie górnej — działa nad każdym ekranem aplikacji (także nad oknem menu Lidera).
-   Wygląd: hala.css → .hala-okno. Bez sieci zmiany nie ma (hub musi sprawdzić obecny PIN) — mówimy to wprost. */
+   Reguły (te same co w hubie — hala.py → blad_hasla, blad_pinu): hasło min. 8 znaków, nie oczywiste, nie imię/nazwisko/
+   login; PIN dokładnie 4 cyfry, nie oczywisty. Hub i tak sprawdza wszystko jeszcze raz; tu tylko podpowiadamy od razu.
+   Okna to <dialog> w warstwie górnej — działają nad każdym ekranem aplikacji (także nad oknem menu Lidera).
+   Wygląd: hala.css → .hala-okno. Bez sieci zmiany nie ma (hub musi sprawdzić obecny sekret) — mówimy to wprost. */
 
 (function (global) {
   'use strict';
 
   const ROLE_BIUROWE = ['trasy_biuro', 'trasy_admin', 'flota_biuro', 'flota_admin'];
-  // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona 4–8 razy i proste ciągi.
+  // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona i proste ciągi; PIN osoby ma 4 cyfry (D43).
   const OCZYWISTE = ['1234', '4321', '1122', '2580', '123456', '654321', '12345678', '87654321'];
   const oczywisty = p => /^(\d)\1{3,7}$/.test(p) || OCZYWISTE.includes(p);
+  // Ta sama lista co hub (hala.py → HASLA_ODRZUCANE, D43 §1) — plus każdy znak powtórzony (sprawdzane osobno).
+  const HASLA_OCZYWISTE = ['12345678', '87654321', '123456789', '1234567890', '0987654321', 'qwertyui', 'qwertyuiop',
+    'qwerty123', 'password', 'password1', 'haslo123', 'hasło123', 'haslo1234', 'abcdefgh', 'asdfghjk', 'zaq12wsx',
+    '11223344', '12341234', 'abcd1234', '1q2w3e4r', 'q1w2e3r4'];
+  const HASLO_STARTOWE = 'haslo123';
 
   const biuro = pracownik => !!pracownik && (pracownik.role || []).some(r => ROLE_BIUROWE.includes(r));
+  const ekran = pracownik => !!pracownik && (pracownik.role || []).length === 1 && pracownik.role[0] === 'ekran';
+  const login = t => (global.Hala && global.Hala.loginZNazwy ? global.Hala.loginZNazwy(t)
+    : String(t || '').toLowerCase().replace(/ł/g, 'l').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[._-]+/g, ' ')
+      .split(/\s+/).filter(Boolean).join(' '));
 
-  /* Błędy formularza po polsku (pusta lista = można wysłać). Czysta funkcja — testy: reduktor-testy.js. */
-  function bledyPinu({ stary, nowy, powtorz, biuro: jestBiuro }) {
+  /* Błędy nowego hasła po polsku (pusta lista = można wysłać). Czysta funkcja — testy: reduktor-testy.js.
+     { stare (gdy wymagane), nowe, powtorz, nazwa (imię i nazwisko osoby), wymagajStarego } */
+  function bledyHasla({ stare, nowe, powtorz, nazwa, wymagajStarego }) {
+    const b = [];
+    stare = String(stare || '').trim(); nowe = String(nowe || '').trim(); powtorz = String(powtorz || '').trim();
+    if (wymagajStarego && !stare) b.push('Wpisz obecne hasło.');
+    const niskie = nowe.toLowerCase();
+    if (nowe.length < 8) b.push('Nowe hasło: min. 8 znaków (litery, cyfry, znaki).');
+    else if (niskie === HASLO_STARTOWE) b.push(`„${HASLO_STARTOWE}” to hasło startowe — wpisz nowe.`);
+    else if (HASLA_OCZYWISTE.includes(niskie) || new Set(niskie).size === 1) b.push('To hasło jest zbyt oczywiste — wybierz inne.');
+    else {
+      const zwarte = login(nowe).replace(/ /g, '');
+      const l = login(nazwa);
+      if (l && (zwarte === l.replace(/ /g, '') || l.split(' ').includes(zwarte)))
+        b.push('Hasło nie może być imieniem, nazwiskiem ani loginem — wybierz inne.');
+    }
+    if (nowe && stare && nowe === stare) b.push('Nowe hasło musi być inne niż obecne.');
+    if (nowe && powtorz !== nowe) b.push('Powtórzone hasło nie zgadza się z nowym.');
+    return b;
+  }
+
+  /* Błędy nowego PIN-u (D43: dokładnie 4 cyfry). { stary (obecne hasło albo PIN, gdy wymagany), nowy, powtorz,
+     wymagajStarego } — czysta funkcja, testy: reduktor-testy.js. */
+  function bledyPinu({ stary, nowy, powtorz, wymagajStarego }) {
     const b = [];
     stary = String(stary || '').trim(); nowy = String(nowy || '').trim(); powtorz = String(powtorz || '').trim();
-    if (!stary) b.push(jestBiuro ? 'Wpisz obecne hasło.' : 'Wpisz obecny PIN.');
-    if (jestBiuro) {
-      if (nowy.length < 8) b.push('Nowe hasło: min. 8 znaków (litery, cyfry, znaki) — masz rolę biura GK Trasy albo GK Flota.');
-    } else if (!/^\d{4,8}$/.test(nowy)) b.push('Nowy PIN to 4–8 cyfr.');
-    if (nowy && oczywisty(nowy.toLowerCase())) b.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
-    if (nowy && stary && nowy === stary) b.push('Nowy musi być inny niż obecny.');
-    if (nowy && powtorz !== nowy) b.push('Powtórzony nie zgadza się z nowym.');
+    if (wymagajStarego !== false && !stary) b.push('Wpisz obecne hasło albo obecny PIN.');
+    if (!/^\d{4}$/.test(nowy)) b.push('PIN to dokładnie 4 cyfry.');
+    else if (oczywisty(nowy)) b.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
+    if (nowy && stary && nowy === stary) b.push('Nowy PIN musi być inny niż obecny.');
+    if (nowy && powtorz !== nowy) b.push('Powtórzony PIN nie zgadza się z nowym.');
     return b;
   }
 
   const esc = s => String(s === null || s === undefined ? '' : s)
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  function okno() {
-    let o = document.getElementById('hala-okno-pinu');
+  function okno(id) {
+    let o = document.getElementById(id);
     if (o) return o;
     o = document.createElement('dialog');
-    o.id = 'hala-okno-pinu';
+    o.id = id;
     o.className = 'hala-okno';
-    o.setAttribute('aria-labelledby', 'hala-okno-pinu-tytul');
+    o.setAttribute('aria-labelledby', id + '-tytul');
     document.body.appendChild(o);
     return o;
   }
 
-  function zmienPin(hala, opcje) {
-    const o = Object.assign({ komunikat: null }, opcje || {});
-    const jestBiuro = biuro(hala.pracownik);
-    const slowo = jestBiuro ? 'hasło' : 'PIN';
-    // Biuro: zwykła klawiatura (litery); reszta: klawiatura cyfr, ale pole przyjmie też litery z klawiatury komputera.
-    const tryb = jestBiuro ? 'text' : 'numeric';
-    const d = okno();
-    d.innerHTML = `
-      <form method="dialog" autocomplete="off">
-        <h2 id="hala-okno-pinu-tytul">Zmień ${slowo}</h2>
-        <p class="hala-okno-opis">${esc(hala.pracownik ? hala.pracownik.nazwa : '')} · ten sam ${slowo} we wszystkich aplikacjach GK.
-          ${jestBiuro ? 'Hasło min. 8 znaków.' : 'PIN 4–8 cyfr.'} Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
-        <label>Obecny ${slowo}<input name="stary" type="password" inputmode="${tryb}" autocomplete="current-password" maxlength="128"></label>
-        <label>Nowy ${slowo}<input name="nowy" type="password" inputmode="${tryb}" autocomplete="new-password" maxlength="128"></label>
-        <label>Powtórz nowy<input name="powtorz" type="password" inputmode="${tryb}" autocomplete="new-password" maxlength="128"></label>
-        <p class="hala-okno-blad" role="alert" hidden></p>
-        <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zmień ${slowo}</button></div>
-      </form>`;
+  const bezSieci = e => !e || e instanceof TypeError || !e.kod;
+
+  /* Wspólny przebieg okna: formularz → sprawdzenie → zapytanie do huba → komunikat. wyslij(f) zwraca obietnicę;
+     bledy(f) — lista błędów formularza. Obietnica okna: true = zrobione, false = anulowano. */
+  function prowadzOkno(d, { bledy, wyslij, poBledzie, komunikatOk, komunikat, bezSieciTekst }) {
     const f = d.querySelector('form');
     const blad = d.querySelector('.hala-okno-blad');
     const pokaz = t => { blad.textContent = t; blad.hidden = !t; };
     return new Promise(gotowe => {
-      let zmieniony = false;
+      let zrobione = false;
       d.querySelector('[data-anuluj]').addEventListener('click', () => d.close());
-      d.addEventListener('close', () => { f.reset(); gotowe(zmieniony); }, { once: true });
+      d.addEventListener('close', () => { f.reset(); gotowe(zrobione); }, { once: true });
       f.addEventListener('submit', async ev => {
         ev.preventDefault();
-        const w = { stary: f.stary.value, nowy: f.nowy.value, powtorz: f.powtorz.value, biuro: jestBiuro };
-        const bledy = bledyPinu(w);
-        if (bledy.length) { pokaz(bledy.join(' ')); return; }
+        const b = bledy(f);
+        if (b.length) { pokaz(b.join(' ')); return; }
         const przycisk = f.querySelector('button[type=submit]');
         przycisk.disabled = true;
         try {
-          await hala.zmienPin(w.stary.trim(), w.nowy.trim());
-          zmieniony = true;
+          await wyslij(f);
+          zrobione = true;
           d.close();
-          if (o.komunikat) o.komunikat(`${jestBiuro ? 'Hasło zmienione' : 'PIN zmieniony'} — działa we wszystkich aplikacjach GK.`, 'ok');
+          if (komunikat && komunikatOk) komunikat(komunikatOk, 'ok');
         } catch (e) {
-          pokaz(!e || e instanceof TypeError || !e.kod ? 'Zmiana PIN-u wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.'
-            : e.message);
-          if (e && e.kod === 403) { f.stary.value = ''; f.stary.focus(); }
+          pokaz(bezSieci(e) ? bezSieciTekst : e.message);
+          if (poBledzie) poBledzie(e, f);
         } finally {
           przycisk.disabled = false;
         }
       });
       d.showModal();
+      const pierwsze = f.querySelector('input');
+      if (pierwsze) pierwsze.focus();
     });
   }
 
-  /* Przycisk „Zmień PIN” (albo „Zmień hasło”) do wstawienia obok Motywu. Konto ekranu go nie dostaje —
+  /* Moje konto → „Zmień hasło” (D43 §4): obecne hasło + nowe ×2. To urządzenie dostaje nowy znacznik (hala.zmienHaslo). */
+  function zmienHaslo(hala, opcje) {
+    const o = Object.assign({ komunikat: null }, opcje || {});
+    const p = hala.pracownik || {};
+    const d = okno('hala-okno-hasla');
+    d.innerHTML = `
+      <form method="dialog" autocomplete="off">
+        <h2 id="hala-okno-hasla-tytul">Zmień hasło</h2>
+        <p class="hala-okno-opis">${esc(p.nazwa || '')} · To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 12 godzin
+          na urządzeniu, na co dzień — PIN. Min. 8 znaków. Inne urządzenia poproszą o nowe hasło.</p>
+        <label>Obecne hasło<input name="stare" type="password" autocomplete="current-password" maxlength="128"></label>
+        <label>Nowe hasło (min. 8 znaków)<input name="nowe" type="password" autocomplete="new-password" maxlength="128"></label>
+        <label>Powtórz nowe hasło<input name="powtorz" type="password" autocomplete="new-password" maxlength="128"></label>
+        <p class="hala-okno-blad" role="alert" hidden></p>
+        <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zmień hasło</button></div>
+      </form>`;
+    return prowadzOkno(d, {
+      bledy: f => bledyHasla({ stare: f.stare.value, nowe: f.nowe.value, powtorz: f.powtorz.value, nazwa: p.nazwa, wymagajStarego: true }),
+      wyslij: f => hala.zmienHaslo(f.stare.value.trim(), f.nowe.value.trim()),
+      poBledzie: (e, f) => { if (e && e.kod === 403) { f.stare.value = ''; f.stare.focus(); } },
+      komunikatOk: 'Hasło zmienione — działa we wszystkich aplikacjach GK.', komunikat: o.komunikat,
+      bezSieciTekst: 'Zmiana hasła wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.',
+    });
+  }
+
+  /* Moje konto → „Zmień PIN” (D43 §4): obecne hasło albo PIN + nowy PIN ×2 (4 cyfry). */
+  function zmienPin(hala, opcje) {
+    const o = Object.assign({ komunikat: null }, opcje || {});
+    const p = hala.pracownik || {};
+    const d = okno('hala-okno-pinu');
+    d.innerHTML = `
+      <form method="dialog" autocomplete="off">
+        <h2 id="hala-okno-pinu-tytul">Zmień PIN</h2>
+        <p class="hala-okno-opis">${esc(p.nazwa || '')} · Ten PIN działa we wszystkich aplikacjach GK — na urządzeniu, na którym
+          w ciągu 12 godzin wpisano hasło. PIN to 4 cyfry. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
+        <label>Obecne hasło albo PIN<input name="stary" type="password" autocomplete="current-password" maxlength="128"></label>
+        <label>Nowy PIN (4 cyfry)<input name="nowy" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
+        <label>Powtórz nowy PIN<input name="powtorz" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
+        <p class="hala-okno-blad" role="alert" hidden></p>
+        <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zmień PIN</button></div>
+      </form>`;
+    return prowadzOkno(d, {
+      bledy: f => bledyPinu({ stary: f.stary.value, nowy: f.nowy.value, powtorz: f.powtorz.value }),
+      wyslij: f => hala.zmienPin(f.stary.value.trim(), f.nowy.value.trim()),
+      poBledzie: (e, f) => { if (e && e.kod === 403) { f.stary.value = ''; f.stary.focus(); } },
+      komunikatOk: 'PIN zmieniony — działa we wszystkich aplikacjach GK.', komunikat: o.komunikat,
+      bezSieciTekst: 'Zmiana PIN-u wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.',
+    });
+  }
+
+  /* Treść okna „Ustaw hasło i PIN” (D43 §3a) — czysta funkcja, testy: reduktor-testy.js. doUstawienia: ['haslo','pin']. */
+  function trescUstawienia({ nazwa, doUstawienia }) {
+    const haslo = (doUstawienia || []).includes('haslo'), pin = (doUstawienia || []).includes('pin');
+    const tytul = haslo && pin ? 'Ustaw hasło i PIN' : haslo ? 'Ustaw nowe hasło' : 'Ustaw PIN';
+    return `<form method="dialog" autocomplete="off">
+        <h2 id="hala-okno-ustaw-tytul">${tytul}</h2>
+        <p class="hala-okno-opis">${esc(nazwa || '')} · ${haslo ? 'Hasło startowe działa tylko przy pierwszym logowaniu. ' : ''}Hasło
+          wpiszesz raz na 12 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich aplikacjach GK.</p>
+        ${haslo ? `<label>Nowe hasło (min. 8 znaków)<input name="haslo" type="password" autocomplete="new-password" maxlength="128"></label>
+        <label>Powtórz nowe hasło<input name="haslo2" type="password" autocomplete="new-password" maxlength="128"></label>` : ''}
+        ${pin ? `<label>PIN (4 cyfry)<input name="pin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
+        <label>Powtórz PIN<input name="pin2" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>` : ''}
+        <p class="hala-okno-blad" role="alert" hidden></p>
+        <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zapisz i wejdź</button></div>
+      </form>`;
+  }
+
+  /* Okno „Ustaw hasło i PIN” po logowaniu hasłem startowym (albo bez PIN-u). Obietnica: pracownik (zalogowany),
+     false — anulowano. Błąd „brak dostępu” (konto bez roli tej aplikacji) — odrzucenie z tekstem huba. */
+  function ustawKonto(hala, opcje) {
+    const o = Object.assign({ komunikat: null }, opcje || {});
+    const u = hala.ustawienieKonta ? hala.ustawienieKonta() : null;
+    if (!u) return Promise.resolve(false);
+    const d = okno('hala-okno-ustaw');
+    d.innerHTML = trescUstawienia({ nazwa: u.pracownik && u.pracownik.nazwa, doUstawienia: u.doUstawienia });
+    let wynik = false, bladDostepu = null;
+    const nazwa = u.pracownik && u.pracownik.nazwa;
+    return prowadzOkno(d, {
+      bledy: f => [
+        ...(f.haslo ? bledyHasla({ nowe: f.haslo.value, powtorz: f.haslo2.value, nazwa }) : []),
+        ...(f.pin ? bledyPinu({ nowy: f.pin.value, powtorz: f.pin2.value, wymagajStarego: false }) : []),
+      ],
+      wyslij: async f => {
+        try {
+          wynik = await hala.ustawKonto({ haslo: f.haslo ? f.haslo.value.trim() : '', pin: f.pin ? f.pin.value.trim() : '' });
+        } catch (e) {
+          if (e && e.ustawione) { bladDostepu = e; return; }     // hasło i PIN zapisane — tylko ta aplikacja nie dla tej osoby
+          throw e;
+        }
+      },
+      komunikatOk: null, komunikat: o.komunikat,
+      bezSieciTekst: 'Ustawienie hasła i PIN-u wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.',
+    }).then(zrobione => {
+      if (!zrobione && hala.anulujUstawienie) hala.anulujUstawienie();
+      if (bladDostepu) throw bladDostepu;
+      if (zrobione && o.komunikat) o.komunikat('Hasło i PIN ustawione — działają we wszystkich aplikacjach GK.', 'ok');
+      return zrobione ? wynik : false;
+    });
+  }
+
+  /* Logowanie z oknem pierwszego logowania (D43): jak hala.zaloguj, ale hasło startowe (albo brak PIN-u) otwiera okno
+     „Ustaw hasło i PIN”; po zapisie osoba jest zalogowana. Anulowane okno → błąd „Ustaw hasło i PIN, żeby wejść.” */
+  async function zaloguj(hala, dane, opcje) {
+    try {
+      return await hala.zaloguj(dane);
+    } catch (e) {
+      if (!e || e.kod !== 'do_ustawienia') throw e;
+      const p = await ustawKonto(hala, opcje);
+      if (!p) { const b = new Error('Ustaw nowe hasło i PIN, żeby wejść.'); b.kod = 400; throw b; }
+      return p;
+    }
+  }
+
+  /* Pole sekretu na ekranie logowania (D43, STYL-GK §2): osoba z ważnym znacznikiem na tym urządzeniu → „PIN (4 cyfry)”
+     z klawiaturą cyfr, inaczej „Hasło (raz na 12 godzin na tym urządzeniu)” z pełną klawiaturą. Tryb liczy się przy
+     każdej zmianie pola identyfikatora; przycisk przelacz (opcjonalny) zmienia go ręcznie („Zaloguj hasłem” — zapomniany
+     PIN; „Zaloguj PIN-em” tylko, gdy znacznik jest). naZmiane(tryb) — np. Lider chowa klawiaturę cyfr przy haśle.
+     Zwraca { tryb(), odswiez(), haslo() } — odswiez() po błędzie „wymagane_haslo” (znacznik już zapomniany). */
+  const ETYKIETY = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 12 godzin na tym urządzeniu)' };
+  function poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane, slowaPrzelacznika }) {
+    const slowa = Object.assign({ pin: 'Zaloguj hasłem', haslo: 'Zaloguj PIN-em' }, slowaPrzelacznika || {});
+    let reczny = null, ostatni = null;
+    const auto = () => (hala.trybLogowania ? hala.trybLogowania(ident.value) : 'haslo');
+    function rysuj() {
+      const a = auto();
+      if (reczny === 'pin' && a !== 'pin') reczny = null;        // PIN-em tylko z ważnym znacznikiem
+      const tryb = reczny || a;
+      if (etykieta) etykieta.textContent = ETYKIETY[tryb];
+      sekret.inputMode = tryb === 'pin' ? 'numeric' : 'text';
+      sekret.maxLength = tryb === 'pin' ? 4 : 128;
+      sekret.autocomplete = tryb === 'pin' ? 'off' : 'current-password';
+      sekret.dataset.tryb = tryb;
+      if (przelacz) {
+        przelacz.hidden = a !== 'pin';                            // bez znacznika nie ma czego przełączać
+        przelacz.textContent = tryb === 'pin' ? slowa.pin : slowa.haslo;
+      }
+      if (tryb !== ostatni) { ostatni = tryb; if (naZmiane) naZmiane(tryb); }
+      return tryb;
+    }
+    ident.addEventListener('input', () => { reczny = null; rysuj(); });
+    if (przelacz) przelacz.addEventListener('click', () => {
+      reczny = (reczny || auto()) === 'pin' ? 'haslo' : 'pin';
+      sekret.value = '';
+      rysuj();
+      sekret.focus();
+    });
+    rysuj();
+    return { tryb: () => sekret.dataset.tryb, odswiez: () => { reczny = null; return rysuj(); },
+             haslo: () => { reczny = 'haslo'; return rysuj(); } };
+  }
+
+  /* Przyciski „Zmień hasło” i „Zmień PIN” (D43 §4) do wstawienia w „Moje konto”. Konto ekranu ich nie dostaje —
      PIN monitora zmienia administrator. */
   function przycisk(el, hala, opcje) {
     if (!el) return null;
     const p = hala.pracownik;
-    if (!p || ((p.role || []).length === 1 && p.role[0] === 'ekran')) { el.innerHTML = ''; return null; }
-    el.innerHTML = `<button type="button" class="hala-zmien-pin">${biuro(p) ? 'Zmień hasło' : 'Zmień PIN'}</button>`;
-    const b = el.querySelector('button');
+    if (!p || ekran(p)) { el.innerHTML = ''; return null; }
+    el.innerHTML = '<button type="button" class="hala-zmien-haslo">Zmień hasło</button><button type="button" class="hala-zmien-pin">Zmień PIN</button>';
+    el.querySelector('.hala-zmien-haslo').addEventListener('click', () => zmienHaslo(hala, opcje));
+    const b = el.querySelector('.hala-zmien-pin');
     b.addEventListener('click', () => zmienPin(hala, opcje));
     return b;
   }
@@ -118,7 +290,7 @@
   /* ---------------------------------------------------------------- „Moje konto” (STYL-GK §3, 2026-10-06)
 
      Jedno okno konta dla Panelu, Lidera, UR i KJ: ikona osoby w nagłówku → imię i nazwisko
-     (i rola), Wygląd, Zmień PIN, rzeczy tej aplikacji (dodatki), Dane w tym urządzeniu, wersja, Wyloguj. Jak „Moje konto”
+     (i rola), Wygląd, Zmień hasło i Zmień PIN (D43), rzeczy tej aplikacji (dodatki), Dane w tym urządzeniu, wersja, Wyloguj. Jak „Moje konto”
      w GK Trasy i GK Flota — osoba z kilkoma programami szuka tego samego w tym samym miejscu.
        HalaKonto.mojeKonto(hala, { aplikacja: 'ur', komunikat, wyloguj: async () => …, odrzucone: () => …,
                                    dodatki: el => … })
@@ -248,6 +420,7 @@
     await rysuj();
   }
 
-  global.HalaKonto = { zmienPin, przycisk, bledyPinu, biuro, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien };
+  global.HalaKonto = { zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
+                       biuro, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

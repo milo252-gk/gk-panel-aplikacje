@@ -32,9 +32,10 @@
       <label>Imię i nazwisko
         <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Jan Kowalski">
       </label>
-      <label>PIN / hasło
+      <label><span id="pin-etykieta">Hasło (raz na 12 godzin na tym urządzeniu)</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
+      <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>Zaloguj hasłem</button>
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
@@ -305,8 +306,14 @@
     <!-- Role w grupach (D32): hala oraz programy transportu — jedno konto we wszystkich aplikacjach GK (GK-KONTA.md). -->
     <div id="osoba-role" class="grupy-rol"></div>
     <fieldset><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div></fieldset>
+    <!-- D43: hasło (raz na 12 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
+         tutaj) i przy pierwszym logowaniu ustawia własne hasło i PIN. Konto samego ekranu — jeden PIN 4–8 cyfr. -->
     <div class="dwie">
-      <label><span id="osoba-pin-etykieta">PIN</span><input name="pin" type="password" inputmode="numeric" maxlength="128" autocomplete="new-password"></label>
+      <label id="osoba-haslo"><span>Hasło startowe (nieobowiązkowe)</span><input name="haslo" type="password" maxlength="128" autocomplete="new-password" placeholder="puste — haslo123"></label>
+      <label><span id="osoba-pin-etykieta">PIN (4 cyfry, nieobowiązkowy)</span><input name="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+    </div>
+    <p class="slaby konto-drobne" id="osoba-o-hasle"></p>
+    <div class="dwie">
       <label>Karta (zeskanuj czytnikiem)<input name="karta" autocapitalize="off" spellcheck="false" placeholder="zostaw puste — bez zmian"></label>
     </div>
     <div class="dwie">
@@ -315,8 +322,28 @@
     </div>
     <label class="zaznacz" id="osoba-usun-karte" hidden><input type="checkbox" name="usun_karte"> Karta zgubiona — usuń (stary kod przestanie działać)</label>
     <label class="zaznacz"><input type="checkbox" name="aktywny" checked> Konto aktywne (odznacz, gdy osoba odchodzi)</label>
+    <!-- D43: działania na koncie istniejącej osoby — od razu w hubie, bez „Zapisz”. -->
+    <fieldset id="osoba-konto" hidden><legend>Hasło i dostęp</legend>
+      <p class="slaby konto-drobne" id="osoba-stan-hasla"></p>
+      <div class="konto-akcje">
+        <button type="button" id="osoba-reset">Ustaw hasło startowe</button>
+        <button type="button" id="osoba-wyloguj">Wyloguj wszędzie</button>
+        <button type="button" id="osoba-usun" class="czerwony">Usuń osobę</button>
+      </div>
+    </fieldset>
     <p class="blad" role="alert" hidden></p>
     <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz</button></div>
+  </form>
+</dialog>
+
+<!-- D43 §3b: usunięcie osoby — potwierdzenie wpisaniem imienia i nazwiska (hub sprawdza je jeszcze raz). -->
+<dialog id="okno-usun-osobe" class="okno" aria-labelledby="t-okno-usun-osobe">
+  <form method="dialog" id="formularz-usun-osobe" autocomplete="off">
+    <h2 id="t-okno-usun-osobe">Usunąć osobę?</h2>
+    <p id="usun-osobe-tresc"></p>
+    <label>Wpisz imię i nazwisko, żeby potwierdzić<input name="nazwa" autocapitalize="off" spellcheck="false"></label>
+    <p class="blad" role="alert" hidden></p>
+    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="czerwony">Usuń osobę</button></div>
   </form>
 </dialog>
 

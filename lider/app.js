@@ -356,23 +356,35 @@
     przyciski.forEach(b => { b.disabled = true; });
     Lider.poprosOPowiadomienia();         // gest użytkownika — jedyna chwila, gdy przeglądarka pozwala zapytać
     try {
-      await hala.zaloguj(dane);
-      $('identyfikator').value = ''; $('pin').value = '';
+      await HalaKonto.zaloguj(hala, dane, { komunikat: Lider.komunikat });
+      $('identyfikator').value = ''; $('pin').value = ''; poleSekretu.odswiez();
       pokazSesje();
     } catch (e) {
-      // PIN przyjęty, potknęło się dopiero wczytywanie stanu — sesja jest, resztę dociągnie synchronizacja.
-      if (hala.zalogowany()) { $('identyfikator').value = ''; $('pin').value = ''; pokazSesje(); return; }
-      blad.textContent = Lider.poLudzku(e);
+      // Sekret przyjęty, potknęło się dopiero wczytywanie stanu — sesja jest, resztę dociągnie synchronizacja.
+      if (hala.zalogowany()) { $('identyfikator').value = ''; $('pin').value = ''; poleSekretu.odswiez(); pokazSesje(); return; }
+      blad.textContent = e && (e.ustawione || (e.kod === 403 && e.powod)) ? e.message : Lider.poLudzku(e);
       blad.hidden = false;
       $('pin').value = '';
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 12 h minęło albo 5 złych PIN-ów
       $('pin').focus();
     } finally {
       przyciski.forEach(b => { b.disabled = false; });
     }
   }
 
-  /* Identyfikator + PIN (D24). Enter z czytnika w polu identyfikatora przenosi do PIN-u, zamiast wysyłać
-     pusty PIN. Sam PIN przechodzi tylko w trybie przejściowym huba — w ścisłym hub odpowie, czego brakuje. */
+  /* Identyfikator + hasło albo PIN (D24, D43). Enter z czytnika w polu identyfikatora przenosi do drugiego pola,
+     zamiast wysyłać pusty sekret. Osoba z ważnym znacznikiem na tym telefonie → „PIN (4 cyfry)” i klawiatura cyfr
+     (rękawice); inaczej „Hasło (raz na 12 godzin…)” — zwykłe pole z pełną klawiaturą, klawiatura cyfr schowana.
+     „abc” przełącza na hasło (zapomniany PIN), „123” — z powrotem na PIN (konto.js → poleLogowania). */
+  const poleSekretu = HalaKonto.poleLogowania({
+    hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'), przelacz: $('przelacz-sekret'),
+    slowaPrzelacznika: { pin: 'abc', haslo: '123' },
+    naZmiane: tryb => {
+      $('formularz-logowania').querySelector('.pinpad').hidden = tryb !== 'pin';
+      $('zaloguj-haslem').hidden = tryb === 'pin';
+      $('przelacz-sekret').title = tryb === 'pin' ? 'Hasło z pełnej klawiatury' : 'PIN z klawiatury cyfr';
+    },
+  });
   $('formularz-logowania').addEventListener('submit', ev => {
     ev.preventDefault();
     const ident = $('identyfikator').value.trim();
@@ -382,13 +394,13 @@
       $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
       $('identyfikator').focus(); return;
     }
-    zaloguj(ident ? { identyfikator: ident, pin } : { pin });
+    zaloguj({ identyfikator: ident, pin });
   });
   $('formularz-logowania').querySelector('.pinpad').addEventListener('click', ev => {
     const c = ev.target.dataset && ev.target.dataset.cyfra;
     if (!c) return;
     const pole = $('pin');
-    pole.value = c === 'C' ? pole.value.slice(0, -1) : (pole.value + c).slice(0, 32);
+    pole.value = c === 'C' ? pole.value.slice(0, -1) : (pole.value + c).slice(0, pole.maxLength > 0 ? pole.maxLength : 32);
   });
   // Skan karty tylko wpisuje identyfikator — PIN i tak trzeba podać (D24).
   $('skanuj-karte').addEventListener('click', async () => {
@@ -396,6 +408,7 @@
     if (!t) return;
     const kod = Hala.odczytajKod(t, hala.slowniki);
     $('identyfikator').value = kod.rodzaj === 'pracownik' ? kod.kod : t;
+    poleSekretu.odswiez();
     $('pin').focus();
   });
 

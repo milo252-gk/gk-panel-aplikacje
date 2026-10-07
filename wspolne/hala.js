@@ -30,7 +30,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.12.2';
+  const WERSJA_KLIENTA = '0.13.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -54,6 +54,13 @@
   const kopia = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
   function iso(d) { return new Date(d).toISOString(); }
+
+  /* Login jak w hubie (hala.py → login_z_nazwy, GK-KONTA §1): „Krzysztof  Hamrol”, „krzysztof.hamrol” → „krzysztof hamrol”.
+     Tu tylko klucz mapy znaczników urządzenia (D43) — osobę i tak wskazuje hub. */
+  function loginZNazwy(tekst) {
+    return String(tekst === null || tekst === undefined ? '' : tekst).toLowerCase().replace(/ł/g, 'l')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[._-]+/g, ' ').split(/\s+/).filter(Boolean).join(' ');
+  }
 
   function bezpiecznyLocalStorage() {
     // Safari w trybie prywatnym rzuca już przy samym dotknięciu localStorage.
@@ -703,7 +710,9 @@
       if (r.status === 401 && tokenZapytania && token === tokenZapytania && !(extra && extra.bezSesji)) { await utracSesje(); }
       // odHuba: odpowiedź to JSON huba ({"blad": …}). 4xx BEZ niego to bramka po drodze (Cloudflare, proxy), nie decyzja
       // huba — wysyłka pliku traktuje to jak błąd sieci i ponawia, zamiast odrzucić plik na zawsze.
-      if (!r.ok) { const e = new Error((dane && dane.blad) || `HTTP ${r.status}`); e.kod = r.status; e.odHuba = !!(dane && typeof dane === 'object'); throw e; }
+      // powod: pole „kod” huba (D43: wymagane_haslo, zly_pin, stara_wersja…) — e.kod zostaje kodem HTTP jak dotąd.
+      if (!r.ok) { const e = new Error((dane && dane.blad) || `HTTP ${r.status}`); e.kod = r.status; e.odHuba = !!(dane && typeof dane === 'object');
+        e.powod = (dane && typeof dane.kod === 'string') ? dane.kod : null; throw e; }
       return dane;
     }
 
@@ -756,10 +765,25 @@
         return Promise.reject(new Error('hala.admin: tylko trasy /api/v1/admin/…'));
       return api(metoda, sciezka, cialo);
     };
-    /* Zmiana własnego PIN-u (D32): hub sprawdza obecny PIN i reguły nowego (4–8 cyfr; biuro GK Trasy / GK Flota —
-       hasło min. 8 znaków), kończy INNE sesje tej osoby, ta zostaje. Tylko z siecią. Zły obecny PIN to 403
-       (nie 401 — sesja trwa), błąd ma tekst po polsku do pokazania wprost. */
-    h.zmienPin = (stary, nowy) => api('POST', '/api/v1/zmien-pin', { stary: String(stary || ''), nowy: String(nowy || '') });
+    /* Zmiana własnego PIN-u (D32, D43 §4): obecne hasło ALBO obecny PIN + nowy PIN (4 cyfry). Hub kończy INNE sesje tej
+       osoby i zaufanie urządzeń (po PIN-ie — oprócz tego: wysyłamy jego znacznik; po haśle — to dostaje nowy). Tylko
+       z siecią. Zły obecny sekret to 403 (nie 401 — sesja trwa), błąd ma tekst po polsku do pokazania wprost. */
+    h.zmienPin = async (stary, nowy) => {
+      const z = h.pracownik ? znacznikDla(h.pracownik.nazwa) : null;
+      const r = await api('POST', '/api/v1/zmien-pin', { stary: String(stary || ''), nowy: String(nowy || ''), znacznik: z ? z.znacznik : null });
+      if (r && r.znacznik) zapamietajZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
+      return r;
+    };
+    /* Zmiana własnego hasła (D43 §4): obecne hasło + nowe. Hub kończy inne sesje i zaufanie WSZYSTKICH urządzeń osoby,
+       a to urządzenie dostaje nowy znacznik (12 h) — zapisujemy go od razu. */
+    h.zmienHaslo = async (stare, nowe) => {
+      const r = await api('POST', '/api/v1/zmien-haslo', { stare: String(stare || ''), nowe: String(nowe || '') });
+      if (r && r.znacznik && h.pracownik) {
+        zapomnijOsobe(h.pracownik);
+        zapamietajZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
+      }
+      return r;
+    };
     /* Zestawienie CSV z huba (GET /api/v1/eksport/<rodzaj>.csv?od=&do=) jako plik w urządzeniu. Plik idzie z tokenem
        w nagłówku (nie w adresie — adres zostaje w historii i dziennikach), więc fetch → blob → link „download”.
        Tylko z siecią: bez niej rzuca błąd jak każde zapytanie (aplikacja mówi „potrzebne połączenie z hubem”). */
@@ -1135,12 +1159,91 @@
       strumienAktywny = false;
     }
 
+    // --- znaczniki urządzenia (D43 §2): hasło raz na 12 godzin na tym urządzeniu, na co dzień PIN 4 cyfry
+    /* Hub po dobrym haśle wydaje znacznik (losowy, 12 h). Trzymamy go per osoba — na wspólnym telefonie lidera loguje
+       się kilka osób — w localStorage TEJ aplikacji (klucz hala.<app>.znaczniki; na Pages wszystkie aplikacje dzielą
+       źródło, więc przedrostek aplikacji, D33). Mapa: login (imię i nazwisko, karta, id — po loginZNazwy) → {znacznik, do}.
+       Wylogowanie go nie kasuje — po to jest: następne logowanie tej osoby PIN-em. */
+    // Klucz zawsze z przedrostkiem 'hala.' (t_dostep.py → WspolneZrodlo sprawdza wszystkie getItem/setItem).
+    function czytajZnaczniki() {
+      try { const m = JSON.parse((ls && ls.getItem('hala.' + o.aplikacja + '.znaczniki')) || '{}'); return m && typeof m === 'object' ? m : {}; }
+      catch (e) { return {}; }
+    }
+    function zapiszZnaczniki(m) {
+      try { if (ls) ls.setItem('hala.' + o.aplikacja + '.znaczniki', JSON.stringify(m)); } catch (e) { /* pełna pamięć — następnym razem hasło */ }
+    }
+    function znacznikDla(ident) {
+      const k = loginZNazwy(ident);
+      const w = k ? czytajZnaczniki()[k] : null;
+      return w && typeof w.znacznik === 'string' && Date.parse(w.do) > h.teraz() ? w : null;
+    }
+    function zapamietajZnacznik(r, klucze) {
+      const m = czytajZnaczniki();
+      const teraz = h.teraz();
+      for (const k of Object.keys(m)) if (!(Date.parse(m[k] && m[k].do) > teraz)) delete m[k];   // sprzątanie wygasłych
+      for (const k of klucze.map(loginZNazwy).filter(Boolean)) m[k] = { znacznik: r.znacznik, do: r.znacznik_do };
+      zapiszZnaczniki(m);
+    }
+    function zapomnijZnacznik(znacznik) {
+      if (!znacznik) return;
+      const m = czytajZnaczniki();
+      for (const k of Object.keys(m)) if (m[k] && m[k].znacznik === znacznik) delete m[k];
+      zapiszZnaczniki(m);
+    }
+    function zapomnijOsobe(p) {
+      for (const k of [p && p.nazwa, p && p.id]) { const z = znacznikDla(k); if (z) zapomnijZnacznik(z.znacznik); }
+    }
+    /* 'pin' — ta osoba ma na tym urządzeniu ważny znacznik (pole „PIN (4 cyfry)”), inaczej 'haslo'. */
+    h.trybLogowania = ident => (znacznikDla(ident) ? 'pin' : 'haslo');
+    h.loginZNazwy = loginZNazwy;
+
     // --- sesja
     h.zalogowany = () => !!token;
-    /* dane: { identyfikator, pin } (D24; identyfikator = kod z karty albo login). Hub przyjmuje tylko to —
-       sam PIN albo sama karta dostają 400 z instrukcją, którą aplikacja pokazuje wprost. */
+    let ustawienie = null;           // sesja „tylko do ustawienia hasła i PIN-u” (D43 §3a) — tylko w pamięci
+    /* dane: { identyfikator, pin } (D24; identyfikator = kod z karty albo login; „pin” to sekret — hasło albo PIN).
+       D43: dokładamy znacznik urządzenia tej osoby (null, gdy go nie ma — hub wie wtedy, że klient zna D43).
+       Błąd 401 „wymagane_haslo” — znacznik nieważny (12 h minęło, 5 złych PIN-ów): zapominamy go, aplikacja
+       przełącza pole na hasło (HalaKonto.poleLogowania). Hasło startowe / brak PIN-u: hub daje sesję tylko do okna
+       „Ustaw hasło i PIN” — rzucamy błąd z kod 'do_ustawienia' (HalaKonto.zaloguj otwiera okno i woła ustawKonto). */
     h.zaloguj = async dane => {
-      const r = await api('POST', '/api/v1/logowanie', Object.assign({ aplikacja: o.aplikacja }, dane), { bezSesji: true });
+      const ident = String((dane && dane.identyfikator) || '');
+      const z = znacznikDla(ident);
+      let r;
+      try {
+        r = await api('POST', '/api/v1/logowanie', Object.assign({ aplikacja: o.aplikacja, znacznik: z ? z.znacznik : null }, dane),
+                      { bezSesji: true });
+      } catch (e) {
+        if (e && e.powod === 'wymagane_haslo' && z) zapomnijZnacznik(z.znacznik);
+        throw e;
+      }
+      if (r.znacznik) zapamietajZnacznik(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
+      if (r.do_ustawienia && r.do_ustawienia.length) {
+        ustawienie = { token: r.token, pracownik: r.pracownik, doUstawienia: r.do_ustawienia.slice(), ident };
+        const e = new Error('Ustaw nowe hasło i PIN.');
+        e.kod = 'do_ustawienia'; e.doUstawienia = ustawienie.doUstawienia; e.pracownik = r.pracownik;
+        throw e;
+      }
+      return zakonczLogowanie(r);
+    };
+    /* Okno „Ustaw hasło i PIN” po pierwszym logowaniu (D43 §3a): { haslo?, pin? } → POST /ustaw-konto tokenem sesji
+       ustawienia. Hub ustawia, kończy wszystkie sesje i znaczniki osoby, daje znacznik tego urządzenia i pełną sesję
+       (albo brak_dostepu, gdy rola nie otwiera tej aplikacji — wtedy błąd 403 z tekstem huba). */
+    h.ustawienieKonta = () => (ustawienie ? { pracownik: ustawienie.pracownik, doUstawienia: ustawienie.doUstawienia.slice() } : null);
+    h.ustawKonto = async dane => {
+      if (!ustawienie) { const e = new Error('Zaloguj się ponownie'); e.kod = 401; throw e; }
+      const u = ustawienie;
+      const r = await api('POST', '/api/v1/ustaw-konto', { haslo: String((dane && dane.haslo) || ''), pin: String((dane && dane.pin) || '') },
+                          { bezSesji: true, naglowki: { Authorization: 'Bearer ' + u.token } });
+      ustawienie = null;
+      if (r.znacznik) {
+        zapomnijOsobe(r.pracownik);
+        zapamietajZnacznik(r, [u.ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
+      }
+      if (!r.token) { const e = new Error(r.brak_dostepu || 'Brak dostępu do tej aplikacji'); e.kod = 403; e.ustawione = true; throw e; }
+      return zakonczLogowanie(r);
+    };
+    h.anulujUstawienie = () => { ustawienie = null; };
+    async function zakonczLogowanie(r) {
       h.pracownik = r.pracownik;
       await pamiec.zapisz('pracownik', h.pracownik);     // najpierw osoba, potem token (patrz start)
       token = r.token;
@@ -1157,7 +1260,7 @@
         odnowPush();
       }
       return h.pracownik;
-    };
+    }
     h.wyloguj = async () => {
       const stary = token;
       token = null;
@@ -1332,7 +1435,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
-    kpiAwarii, przestojWOknieMs, alertAktywny,
+    kpiAwarii, przestojWOknieMs, alertAktywny, loginZNazwy,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

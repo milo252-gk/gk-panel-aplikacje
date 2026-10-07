@@ -94,7 +94,7 @@
           <div class="szczegoly">
             ${p.roleNazwy.map(r => `<span class="znacznik neutral">${esc(r)}</span>`).join('')}
             ${(p.linie || []).map(l => `<span>${esc((linie[l] || {}).nazwa || l)}</span>`).join('')}
-            ${p.ma_karte ? '<span class="slaby">karta ✓</span>' : ''}${p.ma_pin ? '' : '<span class="tekst-alarm">bez PIN-u</span>'}
+            ${p.ma_karte ? '<span class="slaby">karta ✓</span>' : ''}${W.stanHasla(p).znacznik ? `<span class="${W.stanHasla(p).klasa}">${esc(W.stanHasla(p).znacznik)}</span>` : ''}
             ${p.telefon ? `<span class="slaby">☎ ${esc(p.telefon)}</span>` : ''}
             ${p.aktywny === false ? '<span class="znacznik neutral">Wyłączone</span>' : ''}
             ${p.zablokowany ? `<span class="znacznik alarm">${p.blokada_internet && p.blokada_internet.rodzaj === 'konto'
@@ -133,25 +133,107 @@
     $('osoba-usun-karte').hidden = !(osoba && osoba.ma_karte);
     fp.aktywny.checked = !osoba || osoba.aktywny !== false;
     fp.querySelector('.blad').hidden = true;
+    // D43: działania na koncie istniejącej osoby (hasło startowe, wyloguj wszędzie, usuń) — nie dla siebie samego.
+    $('osoba-konto').hidden = !osoba;
+    if (osoba) {
+      $('osoba-stan-hasla').textContent = W.stanHasla(osoba).opis;
+      const ja = hala.pracownik && osoba.id === hala.pracownik.id;
+      $('osoba-usun').hidden = ja;
+    }
     $('okno-osoby').showModal();
     fp.nazwa.focus();
   }
 
-  /* Biuro GK Trasy / GK Flota ma hasło (min. 8 znaków, litery też) — pole i podpis idą za zaznaczonymi rolami. */
+  /* D43: człowiek — hasło startowe (nowa osoba; pole zostaje do „Ustaw hasło startowe”) i PIN 4 cyfry (nieobowiązkowy);
+     konto samego ekranu — jeden PIN 4–8 cyfr, bez hasła. Pola i podpisy idą za zaznaczonymi rolami. */
   function polePinu() {
-    const biuro = W.biuroTransportu([...fp.querySelectorAll('input[name="role"]:checked')].map(x => x.value));
-    $('osoba-pin-etykieta').textContent = biuro ? 'Hasło (min. 8 znaków)' : 'PIN';
-    fp.pin.inputMode = biuro ? 'text' : 'numeric';
-    fp.pin.placeholder = edytowany ? `zostaw puste — ${biuro ? 'hasło' : 'PIN'} bez zmian` : biuro ? 'min. 8 znaków' : '4–8 cyfr';
+    const role = [...fp.querySelectorAll('input[name="role"]:checked')].map(x => x.value);
+    const ekran = role.length === 1 && role[0] === 'ekran';
+    $('osoba-pin-etykieta').textContent = ekran ? 'PIN ekranu (4–8 cyfr)' : 'PIN (4 cyfry, nieobowiązkowy)';
+    fp.pin.maxLength = ekran ? 8 : 4;
+    fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : ekran ? '4–8 cyfr' : 'osoba ustawi sama';
+    $('osoba-haslo').hidden = ekran;
+    $('osoba-reset').hidden = ekran;
+    $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jeden PIN — bez hasła i bez PIN-u osoby.'
+      : edytowany ? 'Hasło zmienia sama osoba (Moje konto). „Ustaw hasło startowe” niżej — gdy zapomniała hasła.'
+        : 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.';
   }
   $('osoba-role').addEventListener('change', polePinu);
+
+  /* „Ustaw hasło startowe” (D43 §3a) = reset konta: haslo123 albo wpisane w polu, PIN skasowany, sesje i zaufanie
+     urządzeń zakończone. Osoba przy następnym logowaniu ustawi nowe hasło i PIN. */
+  $('osoba-reset').addEventListener('click', async () => {
+    const o = edytowany;
+    if (!o) return;
+    const wlasne = fp.haslo.value.trim();
+    const w = W.pracownikZFormularza({ nazwa: o.nazwa, role: o.role, linie: o.linie, aktywny: o.aktywny !== false, telefon: o.telefon,
+                                       haslo: wlasne, haslo_startowe: true }, o, lista);
+    const blad = fp.querySelector('.blad');
+    if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
+    if (!(await P.potwierdz('Ustawić hasło startowe?', `${o.nazwa} dostanie hasło ${wlasne ? 'wpisane w polu „Hasło startowe”' : '„haslo123”'}, `
+          + 'PIN zostanie skasowany, a wszystkie urządzenia wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło i PIN.', 'Ustaw'))) return;
+    try {
+      await hala.admin('POST', '/api/v1/admin/pracownik', w.dane);
+      $('okno-osoby').close();
+      P.komunikat(`${o.nazwa}: hasło startowe ${wlasne ? 'ustawione' : '„haslo123”'} — przy logowaniu ustawi nowe hasło i PIN.`, 'ok');
+      await wczytajPracownikow();
+    } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+  });
+
+  /* „Wyloguj wszędzie” (D43 §2): wszystkie sesje i zaufanie urządzeń tej osoby — następne logowanie wszędzie hasłem. */
+  $('osoba-wyloguj').addEventListener('click', async () => {
+    const o = edytowany;
+    if (!o || !(await P.potwierdz('Wylogować wszędzie?', `${o.nazwa} zostanie wylogowana we wszystkich aplikacjach i na wszystkich `
+          + 'urządzeniach. Następne logowanie — hasłem.', 'Wyloguj wszędzie'))) return;
+    try {
+      await hala.admin('POST', '/api/v1/admin/wyloguj-wszedzie', { pracownik: o.id });
+      P.komunikat(`${o.nazwa}: wylogowana wszędzie.`, 'ok');
+    } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+  });
+
+  /* „Usuń osobę” (D43 §3b): potwierdzenie wpisaniem imienia i nazwiska. Historia zdarzeń zostaje (z „(usunięty)”),
+     sesje, urządzenia i powiadomienia przepadają, GK Trasy i GK Flota wyłączą jej konto. */
+  const fu = $('formularz-usun-osobe');
+  $('osoba-usun').addEventListener('click', async () => {
+    const o = edytowany;
+    if (!o) return;
+    // Etap 3: osoba zleca zlecenia stałe — po usunięciu hub przestanie je zlecać (jak po wyłączeniu).
+    const ostrz = W.ostrzezenieAutora(hala.slowniki, o, Object.assign({}, o, { aktywny: false }),
+                                      ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || []);
+    $('usun-osobe-tresc').textContent = `${o.nazwa} zniknie z list, logowania i programów GK Trasy i GK Flota. Historia `
+      + `(awarie, zlecenia, raporty) zostaje z dopiskiem „(usunięty)”. Tego nie da się cofnąć — tę samą osobę można później `
+      + `założyć od nowa.${ostrz ? ' ' + ostrz : ''}`;
+    fu.reset();
+    fu.querySelector('.blad').hidden = true;
+    $('okno-osoby').close();
+    $('okno-usun-osobe').showModal();
+    fu.nazwa.focus();
+  });
+  fu.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const o = edytowany;
+    const blad = fu.querySelector('.blad');
+    if (!o) return;
+    if (W.loginZNazwy(fu.nazwa.value) !== W.loginZNazwy(o.nazwa)) {
+      blad.textContent = `Wpisz „${o.nazwa}”, żeby potwierdzić.`; blad.hidden = false; return;
+    }
+    try {
+      await hala.admin('POST', '/api/v1/admin/usun-pracownika', { pracownik: o.id, nazwa: fu.nazwa.value });
+      $('okno-usun-osobe').close();
+      P.komunikat(`${o.nazwa}: usunięta. Historia zostaje.`, 'ok');
+      edytowany = null;
+      await wczytajPracownikow();
+    } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+  });
+  $('okno-usun-osobe').querySelector('[data-zamknij]').addEventListener('click', () => $('okno-usun-osobe').close());
 
   fp.addEventListener('submit', async ev => {
     ev.preventDefault();
     const wybrane = n => [...fp.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
+    // Hasło z pola idzie przy zapisie tylko dla nowej osoby — u istniejącej wysyła je „Ustaw hasło startowe” (reset).
     const w = W.pracownikZFormularza({ nazwa: fp.nazwa.value, role: wybrane('role'), linie: wybrane('linie'), pin: fp.pin.value,
-                                       karta: fp.karta.value, usun_karte: fp.usun_karte.checked, aktywny: fp.aktywny.checked,
-                                       telefon: fp.telefon.value }, edytowany, lista);
+                                       haslo: edytowany ? '' : fp.haslo.value, karta: fp.karta.value, usun_karte: fp.usun_karte.checked,
+                                       aktywny: fp.aktywny.checked, telefon: fp.telefon.value }, edytowany, lista);
     const blad = fp.querySelector('.blad');
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     // Własna rola administratora (D35): po zapisie Administracja znika z menu — pytamy, zanim to się stanie.
