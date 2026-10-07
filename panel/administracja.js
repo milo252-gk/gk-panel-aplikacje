@@ -480,10 +480,11 @@
     if (Date.now() - dostepCzas > 15000) wczytajDostep();
     const s = W.dostepZTelefonow(dostepStan, hala.teraz());
     const lz = W.logowanieZInternetu(dostepStan.logowanie, hala.teraz());
+    const programy = W.programyNaPages(dostepStan, hala.teraz());
     // Odcisk: przerysowanie co 20 s (P.narysuj) nie może migać kodami QR ani kasować zaznaczenia adresu. Godzina
     // sprawdzenia przez strażnika (co 2 min) zmienia tylko swój akapit — bez niej w odcisku.
     const straznik = s.tunel.straznik;
-    const odcisk = JSON.stringify([s, lz, wysyla], (k, w) => (k === 'straznik' && w ? w.kolor : w));
+    const odcisk = JSON.stringify([s, lz, wysyla, programy], (k, w) => (k === 'straznik' && w ? w.kolor : w));
     if (el.dataset.odcisk === odcisk) {
       const p = el.querySelector('[data-straznik]');
       if (p && straznik) p.textContent = straznik.tekst;
@@ -492,8 +493,9 @@
     el.dataset.odcisk = odcisk;
     const link = a => (a ? `<a href="${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>` : '');
     el.innerHTML = `
-      <p class="slaby opis-widoku">Telefony otwierają aplikacje ze stałych adresów na GitHub Pages (sam wygląd, bez danych),
-        a dane idą do huba przez tunel. Pokaż kod QR albo wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
+      <p class="slaby opis-widoku">Telefony otwierają aplikacje ze stałych adresów na jednej stronie GitHub Pages (sam wygląd, bez danych):
+        cztery aplikacje hali oraz GK Trasy i GK Flota. Dane idą tunelem do huba i do programów w biurze. Pokaż kod QR albo
+        wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
       ${lz.alarm ? `<section class="admin-linia alarm-sieci" role="alert">
         <h3><span>Sieć zakładu <span class="znacznik alarm">Ustaw</span></span>
           ${lz.alarm.wpis ? '<button type="button" class="maly glowny" data-akcja="wpisz-moj-adres">Wpisz mój adres</button>' : ''}</h3>
@@ -527,6 +529,15 @@
             <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}</figcaption>
           </figure>`).join('')}</div>
         ${s.aplikacje.some(a => a.adres) ? '<div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj kody aplikacji</button></div>' : ''}
+      </section>
+      <section class="admin-linia">
+        <h3><span>GK Trasy i GK Flota</span></h3>
+        <p class="slaby">Programy na tym komputerze same mówią hubowi swój adres tunelu, a hub wysyła ich aplikacje na tę samą
+          stronę tym samym tokenem. W programach nic nie trzeba ustawiać.</p>
+        ${programy.map(p => `<div class="admin-maszyna"><span><b>${esc(p.nazwa)}</b> <span class="znacznik ${p.kolor}">${esc(p.stan)}</span>
+          <span class="${p.kolor === 'alarm' ? 'tekst-alarm' : 'slaby'}">${esc(p.opis)}</span>
+          ${p.adres ? `<span class="dostep-adres">Dla telefonów: ${link(p.adres)}</span>` : ''}
+          ${p.adres_danych ? `<span class="slaby">Adres danych programu: ${esc(p.adres_danych)}</span>` : ''}</span></div>`).join('')}
       </section>`;
     rysujKodyQR(el);
   }
@@ -557,8 +568,8 @@
   }
 
   async function wyslijNaPages() {
-    if (!(await P.potwierdz('Wysłać aplikacje na GitHub?', 'Na publiczną stronę GitHub Pages trafia sam wygląd czterech aplikacji i adres '
-      + 'tunelu — bez danych firmy. Telefony wezmą nową wersję same.', 'Wyślij'))) return;
+    if (!(await P.potwierdz('Wysłać aplikacje na GitHub?', 'Na publiczną stronę GitHub Pages trafia sam wygląd czterech aplikacji hali i adres '
+      + 'tunelu — bez danych firmy. Telefony wezmą nową wersję same. GK Trasy i GK Flota hub wysyła sam, bez tego przycisku.', 'Wyślij'))) return;
     wysyla = true; rysuj();
     try {
       const r = await hala.admin('POST', '/api/v1/admin/dostep/publikuj', {});
@@ -588,10 +599,13 @@
 
   /* Klucz programu pokazujemy RAZ (w hubie jest tylko jego skrót) — po przerysowaniu go nie ma, więc trzymamy go
      w pamięci strony do zamknięcia tej części albo wylogowania. Nowy klucz czyści przypięcie instalacji programu. */
-  let polaczenia = null, bladPolaczen = '', bladPolaczenCzas = 0, nowyKlucz = null;
+  let polaczenia = null, bladPolaczen = '', bladPolaczenCzas = 0, nowyKlucz = null, polaczeniaLokalne = false;
 
   async function wczytajPolaczenia() {
-    try { polaczenia = (await hala.admin('GET', '/api/v1/admin/polaczenia')).polaczenia; bladPolaczen = ''; }
+    try {
+      const r = await hala.admin('GET', '/api/v1/admin/polaczenia');
+      polaczenia = r.polaczenia; polaczeniaLokalne = !!r.lokalne; bladPolaczen = '';
+    }
     catch (e) { bladPolaczen = P.komunikatBledu(e); bladPolaczenCzas = Date.now(); }
     if (czesc === 'polaczenia') rysuj();
   }
@@ -599,17 +613,20 @@
   function rysujPolaczenia(el) {
     if (polaczenia === null) { el.innerHTML = `<p class="pusto">${esc(bladPolaczen || 'Wczytuję…')}</p>`; if (W.wczytacPonownie(bladPolaczen, bladPolaczenCzas, Date.now())) wczytajPolaczenia(); return; }
     // Pole z kluczem rysujemy tylko raz — przerysowanie co 20 s nie może kasować zaznaczenia przy kopiowaniu.
-    const odcisk = JSON.stringify([polaczenia, nowyKlucz]);
+    const odcisk = JSON.stringify([polaczenia, nowyKlucz, polaczeniaLokalne]);
     if (el.dataset.odcisk === odcisk) return;
     el.dataset.odcisk = odcisk;
     el.innerHTML = `
-      <p class="slaby opis-widoku">Konta wszystkich aplikacji GK zakłada się tutaj (Pracownicy). GK Trasy i GK Flota pobierają je
-        kluczem — wpisz go w ustawieniach programu razem z adresem huba. Klucz widać tylko raz.</p>
+      <p class="slaby opis-widoku">Konta wszystkich aplikacji GK zakłada się tutaj (Pracownicy). <b>Programy na tym komputerze łączą
+        się same</b> — hub robi dla nich klucz i podaje go przez plik w profilu Windows, nic nie trzeba wklejać. Klucz ręczny
+        („Utwórz klucz”) jest dla programu na innym komputerze: wpisz go tam razem z adresem huba. Klucz widać tylko raz.</p>
       ${polaczenia.map(p => {
         const s = W.polaczenieGK(p, hala.teraz());
+        const tutaj = polaczeniaLokalne && (!p.wlaczone || !p.lokalny);
         return `<section class="admin-linia" data-program="${esc(p.program)}">
           <h3><span>${esc(p.nazwa)} <span class="znacznik ${s.kolor}">${esc(s.stan)}</span></span>
-            <span><button type="button" class="maly glowny" data-akcja="nowy-klucz">${p.klucz ? 'Nowy klucz' : 'Utwórz klucz'}</button>
+            <span>${tutaj ? '<button type="button" class="maly glowny" data-akcja="polacz-lokalnie">Połącz na tym komputerze</button>' : ''}
+            <button type="button" class="maly ${tutaj ? '' : 'glowny'}" data-akcja="nowy-klucz">${p.klucz ? 'Nowy klucz' : 'Utwórz klucz'}</button>
             ${p.wlaczone ? '<button type="button" class="maly" data-akcja="wylacz-polaczenie">Wyłącz</button>' : ''}</span></h3>
           <p class="slaby">${esc(s.opis)}</p>
           ${nowyKlucz && nowyKlucz.program === p.program ? `<div class="nowy-klucz"><b>Klucz — skopiuj teraz, więcej go nie zobaczysz:</b>
@@ -625,7 +642,8 @@
   async function nowyKluczProgramu(program, nazwa) {
     const byl = (polaczenia || []).find(p => p.program === program);
     if (byl && byl.klucz && !(await P.potwierdz(`Nowy klucz ${nazwa}?`,
-      'Stary klucz przestanie działać od razu — wpisz nowy w ustawieniach programu.', 'Utwórz nowy'))) return;
+      'Stary klucz przestanie działać od razu — wpisz nowy w ustawieniach programu. Program na tym komputerze połączysz bez '
+      + 'klucza przyciskiem „Połącz na tym komputerze”.', 'Utwórz nowy'))) return;
     const r = await hala.admin('POST', '/api/v1/admin/polaczenia', { program, akcja: 'nowy_klucz' });
     nowyKlucz = { program, klucz: r.klucz };
     await wczytajPolaczenia();
@@ -728,8 +746,15 @@
       const program = (b.closest('[data-program]') || {}).dataset?.program;
       const nazwaProgramu = program && ((polaczenia || []).find(p => p.program === program) || {}).nazwa;
       if (akcja === 'nowy-klucz') await nowyKluczProgramu(program, nazwaProgramu);
+      if (akcja === 'polacz-lokalnie') {
+        await hala.admin('POST', '/api/v1/admin/polaczenia', { program, akcja: 'lokalnie' });
+        if (nowyKlucz && nowyKlucz.program === program) nowyKlucz = null;
+        P.komunikat(`${nazwaProgramu} połączy się sam w ciągu minuty.`, 'ok');
+        await wczytajPolaczenia();
+      }
       if (akcja === 'wylacz-polaczenie' && await P.potwierdz(`Wyłączyć ${nazwaProgramu}?`,
-        'Program przestanie pobierać konta (zostaną mu ostatnio pobrane). Nowy klucz włącza połączenie.', 'Wyłącz')) {
+        'Program przestanie pobierać konta (zostaną mu ostatnio pobrane) i nie połączy się sam od nowa. Włącza je '
+        + '„Połącz na tym komputerze” albo nowy klucz.', 'Wyłącz')) {
         await hala.admin('POST', '/api/v1/admin/polaczenia', { program, akcja: 'wylacz' });
         if (nowyKlucz && nowyKlucz.program === program) nowyKlucz = null;
         await wczytajPolaczenia();

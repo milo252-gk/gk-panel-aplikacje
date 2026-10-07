@@ -671,15 +671,37 @@
     return { bledy, dane };
   }
 
-  /* Status połączenia programu (Administracja → Połączenia GK) po ludzku. */
+  /* Status połączenia programu (Administracja → Połączenia GK) po ludzku. lokalny (D42): klucz zrobił hub dla programu
+     na tym komputerze i położył go w pliku połączenia — nikt go nie wkleja. */
   function polaczenieGK(p, teraz) {
-    if (!p || !p.klucz) return { stan: 'Brak klucza', kolor: 'neutral', opis: 'Utwórz klucz i wpisz go w ustawieniach programu.' };
-    if (!p.wlaczone) return { stan: 'Wyłączone', kolor: 'neutral', opis: 'Program nie pobiera kont. Nowy klucz włącza połączenie.' };
-    if (!p.ostatnio) return { stan: 'Czeka na program', kolor: 'uwaga', opis: 'Klucz utworzony — program jeszcze się nie odezwał.' };
+    if (!p || !p.klucz) return { stan: 'Brak klucza', kolor: 'neutral', opis: 'Program na tym komputerze połączy się sam, gdy ruszy. '
+      + 'Na innym komputerze: utwórz klucz i wpisz go w ustawieniach programu.' };
+    if (!p.wlaczone) return { stan: 'Wyłączone', kolor: 'neutral', opis: 'Program nie pobiera kont i nie połączy się sam. '
+      + 'Włącza je „Połącz na tym komputerze” albo nowy klucz.' };
+    const skad = p.lokalny ? 'Program na tym komputerze — połączony sam (bez klucza do wklejania)' : 'Klucz wpisany ręcznie';
+    if (!p.ostatnio) return { stan: 'Czeka na program', kolor: 'uwaga', opis: `${skad}. Program jeszcze się nie odezwał.` };
     const min = Math.round((teraz - Date.parse(p.ostatnio)) / 60000);
     return { stan: min <= 15 ? 'Działa' : 'Cisza', kolor: min <= 15 ? 'ok' : 'uwaga',
-             opis: `Ostatnio ${min < 1 ? 'przed chwilą' : min < 120 ? `${min} min temu` : `${Math.round(min / 60)} h temu`}` +
+             opis: `${skad} · ostatnio ${min < 1 ? 'przed chwilą' : min < 120 ? `${min} min temu` : `${Math.round(min / 60)} h temu`}` +
                    ` · instalacja ${p.instancja ? 'przypięta' : 'nieprzypięta'} · kont: ${p.konta}` };
+  }
+
+  /* GK Trasy i GK Flota na stronie telefonów (D42): hub wysyła ich aplikacje i adres.json na Pages z plików, które programy
+     zapisują na tym komputerze. d.programy = GET /api/v1/admin/dostep → programy. */
+  function programyNaPages(d, teraz) {
+    const kiedy = iso => kiedyKrotko(iso, teraz);
+    return ((d && d.programy) || []).map(p => {
+      const n = p.na_pages || {}, plik = p.plik || {};
+      let stan, kolor, opis;
+      if (p.stan === 'wylaczone') { stan = 'Nie dotyczy'; kolor = 'neutral'; opis = 'Ten hub nie widzi programów z tego komputera (dane testowe).'; }
+      else if (p.stan === 'brak' || !p.plik) { stan = 'Brak programu'; kolor = 'neutral'; opis = `${p.nazwa} nie działa na tym komputerze albo jeszcze się nie zgłosił (zgłasza się sam przy starcie).`; }
+      else if (p.stan === 'bez_tunelu') { stan = 'Bez tunelu'; kolor = 'uwaga'; opis = `${p.nazwa} nie ma tunelu — telefony spoza firmy go nie znajdą. Włącz tunel w ustawieniach programu.`; }
+      else if (p.blad) { stan = p.stan === 'bez_tokenu' ? 'Bez tokenu' : 'Błąd'; kolor = 'alarm'; opis = p.blad; }
+      else if (p.stan === 'aktualne') { stan = 'Aktualne'; kolor = 'ok'; opis = `Na Pages wersja ${n.wersja_aplikacji || '?'} (wysłana ${kiedy(n.opublikowano)}), adres danych wpisany ${kiedy(n.adres_zmieniono)}.`; }
+      else { stan = 'Wysyłam'; kolor = 'uwaga'; opis = 'Nowy adres albo nowa wersja programu — hub wysyła je na Pages sam, chwilę to trwa.'; }
+      return { program: p.program, nazwa: p.nazwa, stan, kolor, opis, adres: p.adres || '', adres_danych: plik.adres || '',
+               na_pages: !!n.opublikowano };
+    });
   }
 
   /* Dostęp z telefonów (D33): stan tunelu, wersji na GitHub Pages i adresu w konfiguracja.json po ludzku —
@@ -802,7 +824,7 @@
   /* Alarmy huba dla administratora (GET /api/v1/admin/alarmy) → wstęga nad Administracją. Kolejność: najpierw to,
      co odcina telefony (adres huba, token), potem kopie i miejsce. */
   function alarmyAdmina(lista) {
-    const waga = { pages: 0, token: 1, kopia: 2, miejsce: 3 };
+    const waga = { pages: 0, pages_trasy: 0, pages_flota: 0, token: 1, kopia: 2, miejsce: 3 };
     return (lista || []).slice().sort((a, b) => (waga[a.kod] ?? 9) - (waga[b.kod] ?? 9))
       .map(a => ({ kod: a.kod, tytul: a.tytul || 'Alarm', opis: a.opis || '' }));
   }
@@ -1242,7 +1264,7 @@
   const PanelWidok = { obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
