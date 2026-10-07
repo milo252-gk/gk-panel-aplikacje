@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-307a33d3532a';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-424d94905af2';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -224,7 +224,9 @@ a{color:var(--akcent)}
 .blad-ustawienia{color:var(--czerwony); font-size:13px; font-weight:600}
 .blad-ustawienia:empty{display:none}
 .przyciski-konta{display:flex; flex-wrap:wrap; gap:8px}
-.przyciski-konta button{flex:1 1 160px}
+/* 140 px jak w hali (hala.css → .hala-moje-konto [data-pin]): „Zmień hasło” i „Zmień PIN”
+   obok siebie już na telefonie 360 px, jeden pod drugim dopiero na węższym. */
+.przyciski-konta button{flex:1 1 140px}
 .wersja-stopka{margin:14px 0 0; text-align:center}
 
 /* ------------------------------------------------------------ formanty */
@@ -476,13 +478,18 @@ tbody tr:hover{background:var(--hover-tlo)}
    — z klasą .okno-konta na tle — więc chowanie map, warstwy i przewijanie
    treści działają tak samo jak w każdym innym oknie.
    Blok jest IDENTYCZNY w GK Trasy i GK Flota.                               */
-.okno-tlo.okno-konta{align-items:center; padding:12px}
+/* Margines i przyciemnienie jak <dialog> hali: przeglądarka trzyma dialog
+   (6 px + 2em) od brzegów, czyli 19 px z każdej strony — karta na środku, także
+   na telefonie, a nie arkusz od góry do dołu. Przyciemnienie .45 w OBU motywach
+   (STYL-GK §3, hala.css → dialog.hala-okno::backdrop) — --zaslona w ciemnym ma .62
+   dla menu, a pod oknem konta wyglądało to ciemniej niż w hali. */
+.okno-tlo.okno-konta{align-items:center; padding:19px; background:rgba(0,0,0,.45)}
 /* Tło karty (--karta), jak dialog.hala-okno w hali: w motywie ciemnym #2A2928,
    nie jaśniejsze --tlo-podniesione (#333230) zwykłych okien — także pod tytułem
    i przyciskami (bez tego tytuł i stopka odcinały się jaśniejszymi pasami). */
 .okno-konta .okno{max-width:440px; border:0; border-radius:16px; box-shadow:var(--cien-mocny);
                   background:var(--karta);
-                  max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px)}
+                  max-height:calc(100vh - 38px); max-height:calc(100dvh - 38px)}
 .okno-konta .okno-gora{border-bottom:0; padding:18px 20px 6px; background:none}
 .okno-konta .okno-tytul{font-size:20px}
 .okno-konta #okno-zamknij{display:none}

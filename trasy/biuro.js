@@ -2251,7 +2251,8 @@ function kartaKopii(u) {
              placeholder="np. E:\\GK-kopie albo C:\\Users\\biuro\\OneDrive\\GK-kopie"></label>
     <div class="male slaby">Drugi dysk, pendrive na stałe w komputerze albo folder OneDrive.
       <b>Tylko na kopie — nigdy nie przenoś tam samego programu ani żywej bazy</b>
-      (synchronizacja w chmurze psuje otwartą bazę). Trzymamy 7 kopii dziennych,
+      (synchronizacja w chmurze psuje otwartą bazę). Kopie idą do podfolderu
+      <code>GK-Trasy</code> (baza i pliki — jak w Panelu i GK Flota). Trzymamy 7 kopii dziennych,
       4 tygodniowe i 12 miesięcznych. W kopii nie ma haseł ani kluczy (tokeny GitHuba
       i tunelu, klucze GK Flota i Panelu, hasła poczty i IKOL-a) — po przywróceniu wpisuje
       się je od nowa.</div>
