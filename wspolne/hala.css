@@ -490,6 +490,25 @@ dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; col
 .hala-karta-logowania .hala-przelacz-sekret[hidden] { display: none; }
 /* Linia pod przyciskiem „Zaloguj” (STYL-GK §2): skąd się bierze konto. */
 .hala-karta-logowania .hala-konto-skad { margin: 14px 0 0; font-size: 12px; color: var(--tekst-slaby); }
+/* „Mój zespół” (zespol.js, D49): lista osób zespołu i okno osoby — ten sam rytm co „Moje konto”. */
+dialog.hala-zespol, dialog.hala-zespol-osoba-okno { max-height: calc(100dvh - 24px); overflow: auto; }
+.hala-zespol-lista { display: grid; gap: 8px; }
+.hala-zespol-osoba { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--ramka);
+                     border-radius: 10px; }
+.hala-zespol-osoba.wylaczona { opacity: .6; }
+.hala-zespol-kto { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.hala-zespol-kto b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.hala-zespol-kto span { font-size: 13px; color: var(--tekst-slaby); }
+.hala-zespol-kto .hala-zespol-stan { font-size: 12px; font-weight: 600; }
+.hala-zespol-kto .hala-zespol-stan.alarm { color: var(--czerwony); }
+.hala-zespol-akcje { flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.hala-zespol-akcje button { min-height: var(--dotyk-maly); padding: 5px 12px; font-size: 13px; }
+.hala-zespol-wybor { display: flex; flex-wrap: wrap; gap: 8px; }
+.hala-zespol-wybor > button { flex: 1 1 140px; }
+dialog.hala-okno label.hala-zespol-zaznacz { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 400;
+                                             color: var(--tekst); }
+dialog.hala-okno label.hala-zespol-zaznacz > input { width: 20px; height: 20px; min-height: 0; margin: 0; flex: 0 0 auto; }
+.hala-zespol-info { margin: 0; font-size: 14px; font-weight: 600; color: var(--zielony); }
 .hala-eksport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; margin: 0 0 12px;
                 border: 1px solid var(--ramka); border-radius: var(--promien); background: var(--karta); }
 .hala-eksport label { display: flex; align-items: center; gap: 6px; font-weight: 600; }

@@ -146,7 +146,9 @@
       <h2 id="t-administracja">Administracja</h2>
       <!-- Alarmy huba (etap 2): kopia poza komputerem, adres huba na Pages, token GitHub, miejsce na dysku. -->
       <div id="admin-alarmy" class="admin-alarmy" role="alert" hidden></div>
-      <div class="chipy" role="group" aria-label="Część administracji">
+      <!-- D49: kierownik zakładu / UR / KJ widzi tylko „Pracownicy” ze swoim zespołem — zdanie o zakresie rysuje administracja.js. -->
+      <p id="admin-zespol" class="slaby opis-widoku" hidden></p>
+      <div class="chipy" id="admin-chipy" role="group" aria-label="Część administracji">
         <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true">Pracownicy</button>
         <button type="button" class="chip" data-czesc="linie" aria-pressed="false">Linie, stanowiska, maszyny</button>
         <button type="button" class="chip" data-czesc="etykiety" aria-pressed="false">Etykiety QR</button>
@@ -329,12 +331,12 @@
       <p class="slaby konto-drobne" id="osoba-linie-mistrz" hidden>Mistrz widzi tylko zaznaczone linie; bez zaznaczenia — wszystkie.</p></fieldset>
     <!-- D43: hasło (raz na 12 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
          tutaj) i przy pierwszym logowaniu ustawia własne hasło i PIN. Konto samego ekranu — jeden PIN 4–8 cyfr. -->
-    <div class="dwie">
+    <div class="dwie" id="osoba-sekrety">
       <label id="osoba-haslo"><span>Hasło startowe (nieobowiązkowe)</span><input name="haslo" type="password" maxlength="128" autocomplete="new-password" placeholder="puste — haslo123"></label>
       <label id="osoba-pin-pole"><span id="osoba-pin-etykieta">PIN (4 cyfry, nieobowiązkowy)</span><input name="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
     </div>
     <p class="slaby konto-drobne" id="osoba-o-hasle"></p>
-    <div class="dwie">
+    <div class="dwie" id="osoba-karta-pole">
       <label>Karta (zeskanuj czytnikiem)<input name="karta" autocapitalize="off" spellcheck="false" placeholder="zostaw puste — bez zmian"></label>
     </div>
     <div class="dwie">
@@ -416,6 +418,7 @@
 <script src="../wspolne/konto.js"></script>
 <script src="../wspolne/eksport.js"></script>
 <script src="../wspolne/miary.js"></script>
+<script src="../wspolne/zespol.js"></script>
 <script src="widok.js"></script>
 <script src="panel.js"></script>
 <script src="etykiety.js"></script>

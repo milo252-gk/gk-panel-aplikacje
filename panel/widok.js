@@ -711,13 +711,17 @@
   const biuroTransportu = role => [].concat(role || []).some(r => ROLE_BIUROWE.includes(r));
 
   /* Role w grupach do okna osoby: „Produkcja i jakość”, „GK Trasy”, „GK Flota”, „Marketing” (stale.grupy_rol w kontrakcie).
-     Rola spoza grup (np. nowa w kontrakcie) trafia do pierwszej grupy — żadna nie może zniknąć z okna. */
-  function grupyRol(stale) {
+     Rola spoza grup (np. nowa w kontrakcie) trafia do pierwszej grupy — żadna nie może zniknąć z okna.
+     dozwolone (D49): role, które nadaje zarządzający zespołem (zakres z huba) — tylko one; null = administrator, wszystkie.
+     Opisy grup (hierarchia, hasło biura) są dla administratora — zarządzający widzi same swoje role. */
+  function grupyRol(stale, dozwolone) {
     const role = (stale && stale.role) || {};
     const grupy = ((stale && stale.grupy_rol) || [{ nazwa: 'Role', role: Object.keys(role) }])
       .map(g => ({ nazwa: g.nazwa, opis: g.opis || '', role: (g.role || []).filter(r => role[r]).map(r => ({ kod: r, nazwa: role[r] })) }));
     const w = new Set(grupy.flatMap(g => g.role.map(r => r.kod)));
     for (const [kod, nazwa] of Object.entries(role)) if (!w.has(kod) && grupy.length) grupy[0].role.push({ kod, nazwa });
+    if (Array.isArray(dozwolone))
+      for (const g of grupy) { g.role = g.role.filter(r => dozwolone.includes(r.kod)); g.opis = ''; }
     return grupy.filter(g => g.role.length);
   }
 

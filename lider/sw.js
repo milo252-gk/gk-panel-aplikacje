@@ -12,7 +12,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                     */
 
-const WERSJA = 'lider-95af899623e8';
+const WERSJA = 'lider-79a67015377b';
 
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ. Dotknięcie też wspólne (jak KJ i Panel):
 // otwarte okno dostaje {typ:'otworz', adres} z data.adres (np. '#zlecenia'), a bez okna otwiera się ./#zlecenia —
@@ -23,7 +23,7 @@ importScripts('../wspolne/hala-push-sw.js');
 const ZASOBY = [
   './', './index.html', './lider.css', './app.js', './widok.js', './awarie.js', './jakosc.js', './zmiana.js', './formularze.js',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
-  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/hala-push-sw.js', '../wspolne/zlecenia.js', '../wspolne/hala.css', '../wspolne/skaner.js', '../wspolne/logo-gkf.png',
+  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/zespol.js', '../wspolne/hala-push-sw.js', '../wspolne/zlecenia.js', '../wspolne/hala.css', '../wspolne/skaner.js', '../wspolne/logo-gkf.png',
   '../wspolne/skaner-zxing.js',          // zapasowy dekoder (iPhone) — obchód z QR musi działać bez sieci
 ];
 

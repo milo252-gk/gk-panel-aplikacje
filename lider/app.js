@@ -423,12 +423,21 @@
       aplikacja: 'lider', komunikat: Lider.komunikat, wyloguj, odrzucone: pokazOdrzucone,
       dodatki: el => {
         const ost = hala.polaczenie.ostatniaSynchronizacja;
+        // D49: mistrz (i kierownik zakładu) prowadzi tu konta swoich liderów — Panelu mistrz nie otwiera (wspolne/zespol.js).
+        const zespol = HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale);
         el.innerHTML = `<fieldset><legend>Linia</legend>
             <p class="hala-konto-drobne">${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</p>
             <button type="button" data-a="linia">Zmień linię</button></fieldset>
+          ${zespol ? `<fieldset><legend>Mój zespół</legend>
+            <p class="hala-konto-drobne">Dodaj lidera, przypisz linie, ustaw hasło startowe albo zresetuj PIN.</p>
+            <button type="button" data-a="zespol">Mój zespół</button></fieldset>` : ''}
           <div data-powiadomienia></div>
           <p class="hala-konto-drobne">Ostatnia synchronizacja: ${esc(ost ? W.godzina(ost) : '—')}</p>`;
         el.querySelector('[data-a=linia]').addEventListener('click', () => { el.closest('dialog').close(); wyborLinii(); });
+        if (zespol) el.querySelector('[data-a=zespol]').addEventListener('click', () => {
+          el.closest('dialog').close();
+          HalaZespol.otworz(hala, { komunikat: Lider.komunikat });
+        });
         /* Jeden przycisk na powiadomienia: zgoda przeglądarki i push przy zamkniętej aplikacji (D28) naraz — wspólna
            sekcja z Panelem (konto.js → powiadomienia). lokalne: Lider sam pokazuje powiadomienia przy otwartej karcie. */
         HalaKonto.powiadomienia(el.querySelector('[data-powiadomienia]'), hala, {

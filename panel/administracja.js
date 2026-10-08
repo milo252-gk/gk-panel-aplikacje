@@ -1,4 +1,5 @@
-/* Panel Kierownika — ekran administracji (tylko rola admin). 2026-09-28: login to imię i nazwisko (D26),
+/* Panel Kierownika — ekran administracji (rola admin; D49: kierownik zakładu, kierownik UR i KJ — tylko Pracownicy
+   ze swoim zespołem, zakres z huba, wspolne/klient/zespol.js). 2026-09-28: login to imię i nazwisko (D26),
    więc pracowników, PIN-y i karty prowadzi się tutaj, a nie tylko plikiem wspolne/narzedzia/zaladuj.py.
 
    Trzy części:
@@ -22,6 +23,11 @@
 
   let czesc = 'pracownicy';
   let lista = null, twojAdres = '', wczytuje = false, bladListy = '', bladListyCzas = 0;
+  // D49: zakres zarządzającego z huba (GET /admin/pracownicy → zakres): role do nadania, linie (mistrz), czy usuwa.
+  let zakres = null;
+  const jestAdmin = () => !!(hala.pracownik && (hala.pracownik.role || []).includes('admin'));
+  const uprawnienia = osoba => HalaZespol.uprawnieniaOsoby(jestAdmin() ? null : (zakres || { admin: false, role: [], linie: null }),
+                                                  osoba, hala.pracownik && hala.pracownik.id);
   let szukaj = '', nieaktywni = false;
 
   async function wczytajPracownikow() {
@@ -29,7 +35,7 @@
     wczytuje = true;
     try {
       const r = await hala.admin('GET', '/api/v1/admin/pracownicy');
-      lista = r.pracownicy; twojAdres = r.twoj_adres || ''; bladListy = '';
+      lista = r.pracownicy; twojAdres = r.twoj_adres || ''; zakres = r.zakres || null; bladListy = '';
     } catch (e) {
       bladListy = P.komunikatBledu(e); bladListyCzas = Date.now();
     } finally {
@@ -60,8 +66,14 @@
   }
 
   function rysuj() {
+    // D49: kierownik zakładu / UR / KJ — tylko Pracownicy (jego zespół); bez chipów, alarmów huba i ustawień.
+    const admin = jestAdmin();
+    if (!admin) czesc = 'pracownicy';
+    $('admin-chipy').hidden = !admin;
+    rysujZespol(admin);
     for (const b of document.querySelectorAll('#administracja .chip')) b.setAttribute('aria-pressed', String(b.dataset.czesc === czesc));
-    if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();
+    if (!admin) { alarmy = []; rysujAlarmy(); }
+    else if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();
     const el = $('admin-tresc');
     if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'linie') rysujLinie(el);
@@ -72,6 +84,14 @@
   }
 
   // ------------------------------------------------------------ pracownicy
+
+  /* D49: zdanie nad listą dla zarządzającego — kogo widzi i czego nie może (usunąć, wpisać hasła ani PIN-u). */
+  function rysujZespol(admin) {
+    const el = $('admin-zespol');
+    const tekst = admin || !zakres ? '' : HalaZespol.opisZespolu(zakres, hala.kontrakt && hala.kontrakt.stale, hala.slowniki);
+    el.hidden = !tekst;
+    if (el.textContent !== tekst) el.textContent = tekst;
+  }
 
   function rysujPracownikow(el) {
     if (lista === null) { el.innerHTML = `<p class="pusto">${esc(bladListy || 'Wczytuję…')}</p>`; if (W.wczytacPonownie(bladListy, bladListyCzas, Date.now())) wczytajPracownikow(); return; }
@@ -117,12 +137,14 @@
     $('t-okno-osoby').textContent = osoba ? osoba.nazwa : 'Nowa osoba';
     fp.nazwa.value = osoba ? osoba.nazwa : '';
     // Role w grupach: hala oraz GK Trasy / GK Flota (D32) — jedno konto osoby we wszystkich aplikacjach GK.
-    $('osoba-role').innerHTML = W.grupyRol(hala.kontrakt && hala.kontrakt.stale).map(g => `
+    const u = uprawnienia(osoba);
+    $('osoba-role').innerHTML = W.grupyRol(hala.kontrakt && hala.kontrakt.stale, u.role).map(g => `
       <fieldset><legend>${esc(g.nazwa)}</legend>${g.opis ? `<p class="slaby konto-drobne">${esc(g.opis)}</p>` : ''}
         <div class="zaznaczenia">${g.role.map(r =>
-          `<label class="zaznacz"><input type="checkbox" name="role" value="${esc(r.kod)}" ${osoba && osoba.role.includes(r.kod) ? 'checked' : ''}> ${esc(r.nazwa)}</label>`).join('')}</div>
+          `<label class="zaznacz"><input type="checkbox" name="role" value="${esc(r.kod)}" ${(osoba ? osoba.role.includes(r.kod) : (u.role || []).length === 1) ? 'checked' : ''}> ${esc(r.nazwa)}</label>`).join('')}</div>
       </fieldset>`).join('');
-    const linie = Object.entries((hala.slowniki && hala.slowniki.linie) || {});
+    // D49: mistrz z liniami przypisuje tylko swoje (hub sprawdza to samo).
+    const linie = Object.entries((hala.slowniki && hala.slowniki.linie) || {}).filter(([kod]) => !u.linie || u.linie.includes(kod));
     $('osoba-linie').innerHTML = linie.map(([kod, l]) =>
       `<label class="zaznacz"><input type="checkbox" name="linie" value="${esc(kod)}" ${osoba && (osoba.linie || []).includes(kod) ? 'checked' : ''}> ${esc((l && l.nazwa) || kod)}</label>`).join('')
       || '<span class="slaby">Najpierw dodaj linie</span>';
@@ -130,15 +152,16 @@
     $('osoba-loginy').textContent = osoba && (osoba.loginy || []).length
       ? `Stare loginy z programów (też logują): ${osoba.loginy.join(', ')}` : '';
     polePinu();
-    $('osoba-usun-karte').hidden = !(osoba && osoba.ma_karte);
+    $('osoba-usun-karte').hidden = !(u.karta && osoba && osoba.ma_karte);
+    $('osoba-karta-pole').hidden = !u.karta;
     fp.aktywny.checked = !osoba || osoba.aktywny !== false;
     fp.querySelector('.blad').hidden = true;
     // D43: działania na koncie istniejącej osoby (hasło startowe, wyloguj wszędzie, usuń) — nie dla siebie samego.
     $('osoba-konto').hidden = !osoba;
     if (osoba) {
       $('osoba-stan-hasla').textContent = W.stanHasla(osoba).opis;
-      const ja = hala.pracownik && osoba.id === hala.pracownik.id;
-      $('osoba-usun').hidden = ja;
+      $('osoba-usun').hidden = !u.usun;
+      $('osoba-wyloguj').hidden = !u.wyloguj;
     }
     $('okno-osoby').showModal();
     fp.nazwa.focus();
@@ -153,18 +176,23 @@
     $('osoba-linie-mistrz').hidden = !role.includes('mistrz');
     // D46 (właściciel 2026-10-08): administrator nie wpisuje nikomu PIN-u — tylko „Resetuj PIN” (startowy 1234).
     // Pole zostaje wyłącznie dla konta ekranu (monitor), które ma jeden sekret 4–8 cyfr.
-    $('osoba-pin-pole').hidden = !ekran;
+    const u = uprawnienia(edytowany);
+    $('osoba-pin-pole').hidden = !ekran || !u.pin;
     if (!ekran) fp.pin.value = '';
     $('osoba-pin-etykieta').textContent = ekran ? 'PIN ekranu (4–8 cyfr)' : 'PIN (4 cyfry, nieobowiązkowy)';
     fp.pin.maxLength = ekran ? 8 : 4;
     fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : ekran ? '4–8 cyfr' : 'osoba ustawi sama';
-    $('osoba-haslo').hidden = ekran;
-    $('osoba-reset').hidden = ekran;
+    // D49: zarządzający zespołem nie wpisuje hasła startowego — nowa osoba dostaje zawsze haslo123.
+    $('osoba-haslo').hidden = ekran || !u.haslo;
+    $('osoba-sekrety').hidden = $('osoba-haslo').hidden && $('osoba-pin-pole').hidden;   // pusty rząd nie robi przerwy
+    if (!u.haslo) fp.haslo.value = '';
+    $('osoba-reset').hidden = ekran || !u.resetHasla;
     // D46: konto ekranu nie ma PIN-u osoby; własny PIN administrator zmienia w Moim koncie (reset wylogowałby go od razu).
-    $('osoba-resetuj-pin').hidden = ekran || !!(edytowany && hala.pracownik && edytowany.id === hala.pracownik.id);
+    $('osoba-resetuj-pin').hidden = ekran || !u.resetPinu;
     $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jeden PIN — bez hasła i bez PIN-u osoby.'
       : edytowany ? 'Hasło zmienia sama osoba (Moje konto). „Ustaw hasło startowe” niżej — gdy zapomniała hasła.'
-        : 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.';
+        : u.haslo ? 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.'
+          : 'Hasło startowe: haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.';
   }
   $('osoba-role').addEventListener('change', polePinu);
 
@@ -173,7 +201,7 @@
   $('osoba-reset').addEventListener('click', async () => {
     const o = edytowany;
     if (!o) return;
-    const wlasne = fp.haslo.value.trim();
+    const wlasne = uprawnienia(o).haslo ? fp.haslo.value.trim() : '';
     const w = W.pracownikZFormularza({ nazwa: o.nazwa, role: o.role, linie: o.linie, aktywny: o.aktywny !== false, telefon: o.telefon,
                                        haslo: wlasne, haslo_startowe: true }, o, lista);
     const blad = fp.querySelector('.blad');
@@ -251,12 +279,18 @@
   fp.addEventListener('submit', async ev => {
     ev.preventDefault();
     const wybrane = n => [...fp.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
+    const u = uprawnienia(edytowany);
     // Hasło z pola idzie przy zapisie tylko dla nowej osoby — u istniejącej wysyła je „Ustaw hasło startowe” (reset).
-    const w = W.pracownikZFormularza({ nazwa: fp.nazwa.value, role: wybrane('role'), linie: wybrane('linie'), pin: fp.pin.value,
-                                       haslo: edytowany ? '' : fp.haslo.value, karta: fp.karta.value, usun_karte: fp.usun_karte.checked,
+    // D49: zarządzający zespołem nie wysyła hasła, PIN-u ani karty (pola są ukryte; hub odrzuciłby je 403).
+    const w = W.pracownikZFormularza({ nazwa: fp.nazwa.value, role: wybrane('role'), linie: wybrane('linie'),
+                                       pin: u.pin ? fp.pin.value : '', haslo: edytowany || !u.haslo ? '' : fp.haslo.value,
+                                       karta: u.karta ? fp.karta.value : '', usun_karte: u.karta && fp.usun_karte.checked,
                                        aktywny: fp.aktywny.checked, telefon: fp.telefon.value }, edytowany, lista);
     const blad = fp.querySelector('.blad');
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
+    // D49: zarządzający widzi tylko swój zespół, więc login techniczny z imienia mógłby trafić na osobę spoza listy
+    // (hub uznałby to za zmianę cudzej osoby) — nowej osobie id nadaje hub („p-…”).
+    if (!u.admin && !edytowany) delete w.dane.id;
     // Własna rola administratora (D35): po zapisie Administracja znika z menu — pytamy, zanim to się stanie.
     // Ostatniego administratora hub i tak nie odda (409); tu chodzi o pomyłkę przy własnym koncie.
     const ja = hala.pracownik && edytowany && edytowany.id === hala.pracownik.id;
@@ -881,10 +915,11 @@
 
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
-    lista = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
+    lista = null; zakres = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
     kopieStan = null; alarmy = []; alarmyCzas = 0;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;
     rysujAlarmy();
+    $('admin-zespol').hidden = true; $('admin-zespol').textContent = '';
   });
 
   P.widoki.administracja = { rysuj };

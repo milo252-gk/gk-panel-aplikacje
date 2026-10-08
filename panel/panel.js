@@ -89,7 +89,8 @@
     // Zapis tylko tam, gdzie kontrakt pozwala roli (konto ekranu i kierownik KJ nie zgłaszają awarii).
     $('menu-awaria').hidden = !(z && mozeWyslac('awaria.zgloszona'));
     $('nowe-zlecenie').hidden = !(z && mozeWyslac('zlecenie.utworzone'));
-    $('menu-administracja').hidden = !(z && (hala.pracownik.role || []).includes('admin'));
+    // D49: kierownik zakładu, kierownik UR i KJ też — ale tylko „Pracownicy” ze swoim zespołem (administracja.js).
+    $('menu-administracja').hidden = !(z && HalaZespol.zarzadzaKontami(hala.pracownik.role, (hala.kontrakt || {}).stale));
     // Szablony checklist może zmieniać, komu kontrakt pozwala zapisywać ten słownik (kierownik, admin).
     const zapisSzablonow = (((hala.kontrakt || {}).slowniki || {}).szablony_checklist || {}).zapis || [];
     $('menu-checklisty').hidden = !(z && (hala.pracownik.role || []).some(r => r === 'admin' || zapisSzablonow.includes(r)));
