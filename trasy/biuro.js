@@ -2651,6 +2651,7 @@ function kartaKontGK(u) {
   const w = s.wynik || {};
   const imp = s.import;
   const lok = s.lokalne || {};
+  const adm = s.admin || {};              // D48: kto jest teraz loginem „admin”
   const plakietka = !u.hub_klucz_ustawiony || !u.hub_adres
     ? '<span class="plakietka p-oczekuje">niepołączony</span>'
     : s.uwaga ? '<span class="plakietka p-nieudane">wymaga uwagi</span>'
@@ -2665,6 +2666,10 @@ function kartaKontGK(u) {
     <p class="male slaby"><b>Panel na tym komputerze łączy się sam</b> — hub robi klucz i podaje go
       programowi przez plik w profilu Windows, nic nie trzeba wklejać. Ręcznie (Panel na innym
       komputerze): adres <b>https://…</b> i klucz z Panelu → Administracja → Połączenia GK.</p>
+    <p class="male slaby"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
+      co w Panelu (ustawia się je w aplikacji hali). Tutejszy awaryjny „admin” z tutejszym hasłem
+      wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
+      ponad ${Number(adm.po_godz) || 24} godzin. Inni administratorzy Panelu logują się imieniem i nazwiskiem.</p>
     ${lok.auto ? `<div class="wstega ok">✓ Połączono samo z Panelem na tym komputerze (${escHtml(u.hub_adres || '')}).</div>`
       : lok.plik === 'wylaczone' ? `<div class="wstega uwaga">Połączenie jest wyłączone w Panelu → Administracja →
         Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
@@ -2701,6 +2706,10 @@ function kartaKontGK(u) {
            wyłączone ${w.wylaczone || 0}).`
         : s.kiedy ? `Ostatnia próba ${escHtml(s.kiedy)}.` : 'Jeszcze nie pobrane — pójdą za chwilę.'}
         Kont z Panelu tutaj: <b>${s.z_panelu || 0}</b> · tutejszych czynnych: ${s.tutejsze || 0}.</div>
+      <div class="male" style="margin-top:6px">${adm.z_panelu
+        ? `Login <b>admin</b> = konto z Panelu <b>${escHtml(adm.z_panelu)}</b> — tutejszy awaryjny „admin” teraz nie wpuszcza.`
+        : `Login <b>admin</b> = tutejsze konto awaryjne${adm.w_panelu && !adm.swiezy
+          ? ` — konta z Panelu nie pobrały się od ponad ${Number(adm.po_godz) || 24} h` : ''}.`}</div>
       ${(s.bez_pinu || []).length ? `<div class="wstega uwaga" style="margin-top:8px">
         Bez PIN-u (ustaw go w Panelu albo niech ta osoba zaloguje się raz w aplikacji GK na hali):
         <b>${s.bez_pinu.map(escHtml).join(', ')}</b></div>` : ''}
