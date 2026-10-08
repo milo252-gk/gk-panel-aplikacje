@@ -182,6 +182,17 @@
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
+  /* „Resetuj PIN” (D46): PIN startowy 1234 — osoba ustawia nowy przy pierwszym logowaniu. Nikt nie zna niczyjego PIN-u. */
+  $('osoba-resetuj-pin').addEventListener('click', async () => {
+    const o = edytowany;
+    if (!o || !(await P.potwierdz('Zresetować PIN?', `${o.nazwa} dostanie PIN startowy 1234 — przy pierwszym logowaniu `
+          + 'ustawi nowy.', 'Resetuj PIN'))) return;
+    try {
+      await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: o.id });
+      P.komunikat(`${o.nazwa}: PIN startowy 1234 — przy logowaniu ustawi nowy.`, 'ok');
+    } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+  });
+
   /* „Wyloguj wszędzie” (D43 §2): wszystkie sesje i zaufanie urządzeń tej osoby — następne logowanie wszędzie hasłem. */
   $('osoba-wyloguj').addEventListener('click', async () => {
     const o = edytowany;
