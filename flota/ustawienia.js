@@ -320,6 +320,7 @@ function sekcjaKontGk(u) {
   const [klasa, opis] = STANY_KONT_GK[s.stan] || STANY_KONT_GK.wylaczone;
   const polaczone = !!(u.hub_adres && u.hub_klucz_ustawiony);
   const lok = s.lokalne || {};
+  const adm = s.admin || {};              // D48: kto jest teraz loginem „admin”
   const lista = (tytul, pozycje) => (pozycje || []).length ? `<p class="male"><b>${tytul}</b></p>
     <ul class="male">${pozycje.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>` : '';
   return `
@@ -333,6 +334,10 @@ function sekcjaKontGk(u) {
         Bez połączenia GK Flota prowadzi konta sama, jak dotąd.
         <b>Panel na tym komputerze łączy się sam</b> — hub robi klucz i podaje go programowi
         przez plik w profilu Windows, nic nie trzeba wklejać.</div>
+      <p class="slaby male"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
+        co w Panelu (ustawia się je w aplikacji hali). Lokalny awaryjny „admin” z lokalnym hasłem
+        wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
+        ponad ${Number(adm.po_godz) || 24} godzin. Inni administratorzy Panelu logują się imieniem i nazwiskiem.</p>
 
       ${lok.auto ? `<div class="wstega ok">Połączono samo z Panelem na tym komputerze
         (<code>${escHtml(u.hub_adres || '')}</code>).</div>`
@@ -346,6 +351,10 @@ function sekcjaKontGk(u) {
       ${s.stan === 'ok' ? `<p class="slaby male">Ostatnio pobrano ${escHtml(s.ostatnio || '')}:
         ${Number(s.konta) || 0} ${odmiana(Number(s.konta) || 0, 'osoba', 'osoby', 'osób')}
         z rolą GK Flota.${u.konta_z_huba ? ' Konta prowadzi Panel.' : ''}</p>` : ''}
+      ${polaczone ? `<p class="male">${adm.z_panelu
+        ? `Login <b>admin</b> = konto z Panelu <b>${escHtml(adm.z_panelu)}</b> — lokalny awaryjny „admin” teraz nie wpuszcza.`
+        : `Login <b>admin</b> = lokalne konto awaryjne${adm.w_panelu && !adm.swiezy
+          ? ` — konta z Panelu nie pobrały się od ponad ${Number(adm.po_godz) || 24} h` : ''}.`}</p>` : ''}
       ${lista('Bez konta — PIN do ustawienia w Panelu albo niech zaloguje się raz w aplikacji GK:',
               s.bez_pinu)}
       ${lista('Do wyjaśnienia:', s.konflikty)}
