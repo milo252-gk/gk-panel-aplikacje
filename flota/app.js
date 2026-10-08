@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-c881afcccacf';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-9ffe45fc9d88';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -882,26 +882,15 @@ function poleSekretu({ ident, sekret, etykieta, przelacz }) {
 
 /* Reguły nowego hasła i PIN-u (D43 §7.1) — te same co w programie i w hubie
    (blad_hasla, blad_pinu); tu tylko podpowiadamy od razu, serwer sprawdza sam. */
-const HASLA_OCZYWISTE = ['12345678', '87654321', '123456789', '1234567890', '0987654321', 'qwertyui',
-  'qwertyuiop', 'qwerty123', 'password', 'password1', 'haslo123', 'hasło123', 'haslo1234', 'abcdefgh',
-  'asdfghjk', 'zaq12wsx', '11223344', '12341234', 'abcd1234', '1q2w3e4r', 'q1w2e3r4'];
-const PINY_OCZYWISTE = ['1234', '4321', '1122', '2580'];
+// Hasło: min. 8 znaków, byle nie haslo123; PIN: dowolne 4 cyfry (D46, właściciel 2026-10-08).
 function bledyHasla({ stare, nowe, powtorz, nazwa, wymagajStarego }) {
   const b = [];
   stare = String(stare || '').trim(); nowe = String(nowe || '').trim(); powtorz = String(powtorz || '').trim();
   if (wymagajStarego && !stare) b.push('Wpisz obecne hasło.');
-  const niskie = nowe.toLowerCase();
+  // D46: oczywiste hasło, powtórzony znak, imię i nazwisko wolno — tylko długość i nie hasło startowe.
   if (nowe.length < 8) b.push('Nowe hasło: min. 8 znaków (litery, cyfry, znaki).');
-  else if (niskie === 'haslo123') b.push('„haslo123” to hasło startowe — wpisz nowe.');
-  else if (HASLA_OCZYWISTE.includes(niskie) || new Set(niskie).size === 1) {
-    b.push('To hasło jest zbyt oczywiste — wybierz inne.');
-  } else {
-    const zwarte = loginZNazwy(nowe).replace(/ /g, '');
-    const l = loginZNazwy(nazwa);
-    if (l && (zwarte === l.replace(/ /g, '') || l.split(' ').includes(zwarte))) {
-      b.push('Hasło nie może być imieniem, nazwiskiem ani loginem — wybierz inne.');
-    }
-  }
+  else if (nowe.length > 128) b.push('Hasło może mieć najwyżej 128 znaków.');
+  else if (nowe.toLowerCase() === 'haslo123') b.push('„haslo123” to hasło startowe — wpisz nowe.');
   if (nowe && stare && nowe === stare) b.push('Nowe hasło musi być inne niż obecne.');
   if (nowe && powtorz !== nowe) b.push('Powtórzone hasło nie zgadza się z nowym.');
   return b;
@@ -911,7 +900,6 @@ function bledyPinu({ stary, nowy, powtorz, wymagajStarego }) {
   stary = String(stary || '').trim(); nowy = String(nowy || '').trim(); powtorz = String(powtorz || '').trim();
   if (wymagajStarego && !stary) b.push('Wpisz obecne hasło albo obecny PIN.');
   if (!/^\d{4}$/.test(nowy)) b.push('PIN to dokładnie 4 cyfry.');
-  else if (/^(\d)\1{3}$/.test(nowy) || PINY_OCZYWISTE.includes(nowy)) b.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
   if (nowy && stary && nowy === stary) b.push('Nowy PIN musi być inny niż obecny.');
   if (nowy && powtorz !== nowy) b.push('Powtórzony PIN nie zgadza się z nowym.');
   return b;
