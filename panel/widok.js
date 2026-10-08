@@ -622,7 +622,8 @@
       .sort((a, b) => (b.zablokowany - a.zablokowany) || (b.aktywny !== false) - (a.aktywny !== false) || a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
 
-  // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona 4–8 razy i proste ciągi.
+  // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona 4–8 razy i proste ciągi. Od D46 tylko dla
+  // konta samego ekranu — PIN osoby (4 cyfry) może być dowolny, także 1234 i 0000 (właściciel 2026-10-08).
   const OCZYWISTE_PINY = new Set(['1234', '4321', '1122', '2580', '123456', '654321', '12345678', '87654321']);
   const oczywistyPin = p => /^(\d)\1{3,7}$/.test(p) || OCZYWISTE_PINY.has(p);
   // Biuro i administrator GK Trasy / GK Flota (D32, GK-KONTA.md §1): hasło min. 8 znaków zamiast PIN-u.
@@ -663,7 +664,7 @@
       if (!pin && (!istniejacy || !istniejacy.ekran)) bledy.push('Konto ekranu potrzebuje PIN-u (4–8 cyfr).');
       if (pin && !/^\d{4,8}$/.test(pin)) bledy.push('PIN ekranu to 4–8 cyfr.');
     } else if (pin && !/^\d{4}$/.test(pin)) bledy.push('PIN to dokładnie 4 cyfry.');
-    if (pin && oczywistyPin(pin)) bledy.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
+    if (ekran && pin && oczywistyPin(pin)) bledy.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
     const startowe = !ekran && (!istniejacy || f.haslo_startowe === true);
     if (startowe && haslo) {
       const b = bladHasla(haslo, nazwa, true);
@@ -683,22 +684,19 @@
     return { bledy, dane };
   }
 
-  /* Hasło według reguł huba (hala.py → blad_hasla, D43 §1) — tekst błędu albo null. startowe: wolno samo haslo123. */
-  const HASLA_OCZYWISTE = new Set(['12345678', '87654321', '123456789', '1234567890', '0987654321', 'qwertyui', 'qwertyuiop',
-    'qwerty123', 'password', 'password1', 'haslo123', 'hasło123', 'haslo1234', 'abcdefgh', 'asdfghjk', 'zaq12wsx', '11223344',
-    '12341234', 'abcd1234', '1q2w3e4r', 'q1w2e3r4']);
+  /* Hasło według reguł huba (hala.py → blad_hasla, D43 §1, D46) — tekst błędu albo null: min. 8 znaków (najwyżej 128), nie
+     haslo123 (startowe: wolno samo haslo123). Oczywiste, powtórzony znak i imię/nazwisko wolno (D46, właściciel 2026-10-08). */
   function bladHasla(haslo, nazwa, startowe) {
-    const h = String(haslo || '').trim(), n = h.toLowerCase();
+    const h = String(haslo || '').trim();
     if (h.length < 8) return 'min. 8 znaków (litery, cyfry, znaki) — albo zostaw puste (haslo123).';
-    if (startowe && n === 'haslo123') return null;
-    if (HASLA_OCZYWISTE.has(n) || new Set(n).size === 1) return 'zbyt oczywiste — wybierz inne.';
-    const z = loginZNazwy(h).replace(/ /g, ''), l = loginZNazwy(nazwa);
-    if (l && (z === l.replace(/ /g, '') || l.split(' ').includes(z))) return 'nie może być imieniem, nazwiskiem ani loginem.';
+    if (h.length > 128) return 'najwyżej 128 znaków.';
+    if (!startowe && h.toLowerCase() === 'haslo123') return '„haslo123” to hasło startowe — wpisz inne.';
     return null;
   }
 
   /* Stan hasła i PIN-u osoby w Administracji (D43): znacznik na liście (pusty = nic do zrobienia) i zdanie w oknie osoby.
-     p: wiersz GET /admin/pracownicy ({ekran, haslo_do_zmiany, ma_pin, ma_haslo}). */
+     p: wiersz GET /admin/pracownicy ({ekran, haslo_do_zmiany, pin_do_zmiany, ma_pin, ma_haslo}). D46: po „Resetuj PIN”
+     — PIN startowy 1234, osoba ustawi nowy przy logowaniu. */
   function stanHasla(p) {
     if (!p) return { znacznik: '', klasa: '', opis: '' };
     if (p.ekran) return p.ma_pin ? { znacznik: '', klasa: '', opis: 'Konto ekranu — jeden PIN (4–8 cyfr).' }
@@ -706,6 +704,8 @@
     if (p.haslo_do_zmiany) return { znacznik: 'hasło startowe', klasa: 'slaby',
       opis: 'Hasło startowe — przy pierwszym logowaniu osoba ustawi własne hasło' + (p.ma_pin ? ' (PIN już jest).' : ' i PIN.') };
     if (!p.ma_pin) return { znacznik: 'bez PIN-u', klasa: 'slaby', opis: 'Hasło ustawione, PIN-u jeszcze nie ma — osoba ustawi go przy logowaniu.' };
+    if (p.pin_do_zmiany) return { znacznik: 'PIN startowy', klasa: 'slaby',
+      opis: 'PIN zresetowany (startowy 1234) — przy następnym logowaniu osoba ustawi nowy.' };
     return { znacznik: '', klasa: '', opis: 'Hasło i PIN ustawione.' };
   }
 

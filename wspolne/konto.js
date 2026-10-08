@@ -9,8 +9,8 @@
        HalaKonto.zmienHaslo(hala, { komunikat }) / HalaKonto.zmienPin(hala, { komunikat })   // true = zmienione, false = anulowano
    albo dorysowuje przyciski:  HalaKonto.przycisk(el, hala, { komunikat })   // „Zmień hasło” i „Zmień PIN”
 
-   Reguły (te same co w hubie — hala.py → blad_hasla, blad_pinu): hasło min. 8 znaków, nie oczywiste, nie imię/nazwisko/
-   login; PIN dokładnie 4 cyfry, nie oczywisty. Hub i tak sprawdza wszystko jeszcze raz; tu tylko podpowiadamy od razu.
+   Reguły (te same co w hubie — hala.py → blad_hasla, blad_pinu): hasło min. 8 znaków (najwyżej 128), byle nie hasło startowe
+   haslo123 — oczywiste wolno (D46); PIN dokładnie 4 cyfry, dowolne (D46 — także 1234, 0000). Hub i tak sprawdza wszystko jeszcze raz; tu tylko podpowiadamy od razu.
    Okna to <dialog> w warstwie górnej — działają nad każdym ekranem aplikacji (także nad oknem menu Lidera).
    Wygląd: hala.css → .hala-okno. Bez sieci zmiany nie ma (hub musi sprawdzić obecny sekret) — mówimy to wprost. */
 
@@ -18,20 +18,10 @@
   'use strict';
 
   const ROLE_BIUROWE = ['trasy_biuro', 'trasy_admin', 'flota_biuro', 'flota_admin'];
-  // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona i proste ciągi; PIN osoby ma 4 cyfry (D43).
-  const OCZYWISTE = ['1234', '4321', '1122', '2580', '123456', '654321', '12345678', '87654321'];
-  const oczywisty = p => /^(\d)\1{3,7}$/.test(p) || OCZYWISTE.includes(p);
-  // Ta sama lista co hub (hala.py → HASLA_ODRZUCANE, D43 §1) — plus każdy znak powtórzony (sprawdzane osobno).
-  const HASLA_OCZYWISTE = ['12345678', '87654321', '123456789', '1234567890', '0987654321', 'qwertyui', 'qwertyuiop',
-    'qwerty123', 'password', 'password1', 'haslo123', 'hasło123', 'haslo1234', 'abcdefgh', 'asdfghjk', 'zaq12wsx',
-    '11223344', '12341234', 'abcd1234', '1q2w3e4r', 'q1w2e3r4'];
   const HASLO_STARTOWE = 'haslo123';
 
   const biuro = pracownik => !!pracownik && (pracownik.role || []).some(r => ROLE_BIUROWE.includes(r));
   const ekran = pracownik => !!pracownik && (pracownik.role || []).length === 1 && pracownik.role[0] === 'ekran';
-  const login = t => (global.Hala && global.Hala.loginZNazwy ? global.Hala.loginZNazwy(t)
-    : String(t || '').toLowerCase().replace(/ł/g, 'l').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[._-]+/g, ' ')
-      .split(/\s+/).filter(Boolean).join(' '));
 
   /* Błędy nowego hasła po polsku (pusta lista = można wysłać). Czysta funkcja — testy: reduktor-testy.js.
      { stare (gdy wymagane), nowe, powtorz, nazwa (imię i nazwisko osoby), wymagajStarego } */
@@ -39,16 +29,10 @@
     const b = [];
     stare = String(stare || '').trim(); nowe = String(nowe || '').trim(); powtorz = String(powtorz || '').trim();
     if (wymagajStarego && !stare) b.push('Wpisz obecne hasło.');
-    const niskie = nowe.toLowerCase();
+    // D46: oczywiste hasło, jeden powtórzony znak, imię i nazwisko wolno — tylko długość i nie hasło startowe.
     if (nowe.length < 8) b.push('Nowe hasło: min. 8 znaków (litery, cyfry, znaki).');
-    else if (niskie === HASLO_STARTOWE) b.push(`„${HASLO_STARTOWE}” to hasło startowe — wpisz nowe.`);
-    else if (HASLA_OCZYWISTE.includes(niskie) || new Set(niskie).size === 1) b.push('To hasło jest zbyt oczywiste — wybierz inne.');
-    else {
-      const zwarte = login(nowe).replace(/ /g, '');
-      const l = login(nazwa);
-      if (l && (zwarte === l.replace(/ /g, '') || l.split(' ').includes(zwarte)))
-        b.push('Hasło nie może być imieniem, nazwiskiem ani loginem — wybierz inne.');
-    }
+    else if (nowe.length > 128) b.push('Hasło może mieć najwyżej 128 znaków.');
+    else if (nowe.toLowerCase() === HASLO_STARTOWE) b.push(`„${HASLO_STARTOWE}” to hasło startowe — wpisz nowe.`);
     if (nowe && stare && nowe === stare) b.push('Nowe hasło musi być inne niż obecne.');
     if (nowe && powtorz !== nowe) b.push('Powtórzone hasło nie zgadza się z nowym.');
     return b;

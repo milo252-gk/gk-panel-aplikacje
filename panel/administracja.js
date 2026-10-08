@@ -156,6 +156,8 @@
     fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : ekran ? '4–8 cyfr' : 'osoba ustawi sama';
     $('osoba-haslo').hidden = ekran;
     $('osoba-reset').hidden = ekran;
+    // D46: konto ekranu nie ma PIN-u osoby; własny PIN administrator zmienia w Moim koncie (reset wylogowałby go od razu).
+    $('osoba-resetuj-pin').hidden = ekran || !!(edytowany && hala.pracownik && edytowany.id === hala.pracownik.id);
     $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jeden PIN — bez hasła i bez PIN-u osoby.'
       : edytowany ? 'Hasło zmienia sama osoba (Moje konto). „Ustaw hasło startowe” niżej — gdy zapomniała hasła.'
         : 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.';
@@ -189,7 +191,9 @@
           + 'ustawi nowy.', 'Resetuj PIN'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: o.id });
+      $('okno-osoby').close();
       P.komunikat(`${o.nazwa}: PIN startowy 1234 — przy logowaniu ustawi nowy.`, 'ok');
+      await wczytajPracownikow();         // znacznik „PIN startowy” na liście
     } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
