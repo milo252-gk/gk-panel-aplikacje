@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-da9880044ce2';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-2452ca532d9f';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -550,6 +550,18 @@ td.liczba,th.liczba{text-align:right; font-variant-numeric:tabular-nums; white-s
 /* Tabela floty ma kilkanaście kolumn i na telefonie nie zmieści się nigdy.
    Przewija się SAMA, w swoim pojemniku — cała strona zostaje nieruchoma.    */
 .tabela-przewijana{overflow-x:auto; -webkit-overflow-scrolling:touch}
+/* Plakietka w tabeli nie łamie się na litery („ki/er/ow/ca” w wąskiej kolumnie roli
+   na telefonie) — kolumna bierze jej szerokość, a tabela przewija się w bok. */
+.tabela-przewijana .plakietka{white-space:nowrap}
+/* D49: konto biura/kierowcy zakładane przez Panel (konta.js → oknoKontaZespolu). Działania
+   na koncie jak w Panelu → Administracja: rząd przycisków, na wąskim telefonie zawija się.
+   Poza blokiem logowania i „Moje konto” — ten jest wspólny z GK Trasy (t_web.py). */
+.konto-akcje{display:flex; flex-wrap:wrap; gap:8px}
+.konto-akcje button{flex:1 1 auto; white-space:nowrap}
+.kz-role label.plaska{align-items:flex-start; margin:8px 0}
+.kz-role label.plaska input{margin-top:3px}
+.kz-role label.plaska span{font-weight:400}
+.kz-podpowiedz{margin:-4px 0 4px 30px}
 
 /* ------------------------------------------------ miniatury w formularzu */
 .miniatury{display:flex; gap:9px; flex-wrap:wrap; margin-top:9px}

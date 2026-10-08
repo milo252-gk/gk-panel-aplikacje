@@ -28,7 +28,8 @@ function oknoKontaZPanelu(u) {
       <div class="wstega info">Konto prowadzi <b>Panel Kierownika</b> — imię i nazwisko,
         rolę, telefon i wyłączenie zmieniasz w Panelu → <b>Administracja</b>. PIN osoba
         zmienia sama w „Moje konto”. Auto przypisujesz tutaj: Flota → karta auta →
-        <b>Kierowca</b>.</div>
+        <b>Kierowca</b>.${stan.zespolGk ? `<br>Ta osoba ma też role spoza GK Floty
+        (albo jest administratorem), więc jej konta nie zmienisz tutaj.` : ''}</div>
       <div class="dwie-kolumny">
         <label class="pole">Imię i nazwisko
           <input value="${escHtml(u.imie)}" disabled></label>
@@ -84,6 +85,11 @@ EKRANY.konta = {
       API.get('/api/blokady').catch(() => null),
     ]);
     stan.kontaZPanelu = !!(ustawienia && ustawienia.konta_z_huba);
+    // D49 (GK-KONTA.md §3.5): administrator GK Floty z kontem z Panelu zakłada tu
+    // konta biura i kierowców — zapis idzie do Panelu. Serwer mówi, czy TEN
+    // zalogowany może (konto z Panelu, rola admin, działające połączenie) i czemu nie.
+    const zespol = (stan.kontaZPanelu && ustawienia.konta_gk && ustawienia.konta_gk.zespol) || {};
+    stan.zespolGk = !!zespol.mozna;
     const konta = lista || [];
     const czynnych = konta.filter(u => u.aktywny);
     const adminow = czynnych.filter(u => u.rola === 'admin').length;
@@ -95,11 +101,14 @@ EKRANY.konta = {
     pole.innerHTML = `
       ${stan.kontaZPanelu ? `<div class="wstega info">Konta zakłada się w <b>Panelu
         Kierownika → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
-        GK. GK Flota pobiera je sama co kilka minut (Ustawienia → Konta GK). Tutaj zostaje
-        tylko awaryjny administrator.</div>` : ''}
+        GK. GK Flota pobiera je sama co kilka minut (Ustawienia → Konta GK). ${stan.zespolGk
+          ? `Konta <b>biura i kierowców</b> zakładasz też tutaj — „+ Dodaj konto” zapisuje
+            je w Panelu.` : `Tutaj zostaje tylko awaryjny administrator.${zespol.powod
+            ? `<br>${escHtml(zespol.powod)}` : ''}`}</div>` : ''}
       <div class="pasek-narzedzi">
-        <button class="glowny${nowyUkryty ? ' ukryty' : ''}" id="k-nowy">${stan.kontaZPanelu
-          ? 'Awaryjny administrator' : 'Nowe konto'}</button>
+        ${stan.zespolGk ? '<button class="glowny" id="k-zespol">+ Dodaj konto</button>' : ''}
+        <button class="${stan.zespolGk ? '' : 'glowny'}${nowyUkryty ? ' ukryty' : ''}" id="k-nowy">${
+          stan.kontaZPanelu ? 'Awaryjny administrator' : 'Nowe konto'}</button>
         <span class="slaby male">${czynnych.length} ${odmiana(czynnych.length,
           'czynne konto', 'czynne konta', 'czynnych kont')} · ${adminow} ${odmiana(adminow,
           'administrator', 'administratorów', 'administratorów')}</span>
@@ -126,11 +135,14 @@ EKRANY.konta = {
             <td>${u.pojazdy ? escHtml(u.pojazdy) : '<span class="slaby">—</span>'}</td>
             <td>${u.ostatnio ? escHtml(polskaData(u.ostatnio))
               : '<span class="slaby">nigdy</span>'}</td>
-            <td><button data-konto="${u.id}">${tylkoDoOdczytu(u) ? 'Pokaż' : 'Zmień'}</button></td>
+            <td><button data-konto="${u.id}">${tylkoDoOdczytu(u) && !zmianaPrzezPanel(u)
+              ? 'Pokaż' : 'Zmień'}</button></td>
           </tr>`).join('')}
         </tbody></table></div></div>`;
 
     pole.querySelector('#k-nowy').onclick = () => oknoEdycjiKonta(null, adminow);
+    const przyciskZespolu = pole.querySelector('#k-zespol');
+    if (przyciskZespolu) przyciskZespolu.onclick = () => oknoKontaZespolu(null);
     pole.querySelectorAll('[data-odblokuj]').forEach(b => {
       b.onclick = async () => {
         if (await sprobuj(() => API.post(`/api/uzytkownicy/${b.dataset.odblokuj}/odblokuj`, {}),
@@ -171,6 +183,13 @@ function tylkoDoOdczytu(u) {
   return u.zrodlo === 'trasex' || (u.zrodlo === 'gk' && !!stan.kontaZPanelu);
 }
 
+/* D49: konto z Panelu, które administrator GK Floty zmienia tutaj (przez hub) — wszystkie
+   role osoby są w jego zakresie (Biuro, Kierowca). Osoba z rolą spoza zakresu (kierownik,
+   biuro GK Trasy, administrator) zostaje przy „Zmień w Panelu → Administracja”. */
+function zmianaPrzezPanel(u) {
+  return !!u && u.zrodlo === 'gk' && !!stan.kontaZPanelu && !!stan.zespolGk && !!u.edycja_w_programie;
+}
+
 /* Nazwa inna niż oknoKonta() z app.js, i to nie jest kosmetyka: funkcje
    z kilku zwykłych <script> dzielą jedną przestrzeń nazw, a późniejsza
    deklaracja nadpisuje wcześniejszą. Przy wspólnej nazwie przycisk 👤
@@ -178,6 +197,7 @@ function tylkoDoOdczytu(u) {
 function oknoEdycjiKonta(u, adminow) {
   const nowy = !u;
   if (!nowy && u.zrodlo === 'trasex') return oknoKontaZTrasexu(u);
+  if (!nowy && zmianaPrzezPanel(u)) return oknoKontaZespolu(u);
   if (!nowy && tylkoDoOdczytu(u)) return oknoKontaZPanelu(u);
   const ostatniAdmin = !nowy && u.rola === 'admin' && u.aktywny && adminow === 1;
 
@@ -264,4 +284,126 @@ function oknoEdycjiKonta(u, adminow) {
       } },
     ],
   });
+}
+
+/* Konto biura albo kierowcy zakładane i zmieniane PRZEZ PANEL (D49, GK-KONTA.md §3.5).
+   Zapis idzie do huba (POST /api/panel/osoba), a konto wraca do GK Flota zwykłym
+   pobraniem kont — od razu, serwer pobiera je po każdym zapisie. Hasła ani PIN-u nikt
+   tu nie wpisuje (nikt nie zna niczyjego PIN-u): nowa osoba dostaje hasło startowe
+   haslo123, a „Ustaw hasło startowe” / „Resetuj PIN” działają jak w Panelu. Usuwa
+   tylko administrator w Panelu — tutaj konto się wyłącza.                         */
+const ROLE_ZESPOLU = [
+  ['flota_biuro', 'Biuro', 'cała flota: pojazdy, terminy, przeglądy, usterki'],
+  ['trasy_kierowca', 'Kierowca', 'swoje auto, przeglądy i usterki'],
+];
+
+function oknoKontaZespolu(u) {
+  const nowy = !u;
+  const role = new Set(nowy ? [] : (u.role_zespolu || []));
+  okno({
+    tytul: nowy ? 'Nowe konto' : 'Konto ' + u.imie,
+    tresc: `
+      <div class="wstega info">${nowy ? 'Konto powstaje' : 'Konto jest'} w <b>Panelu
+        Kierownika</b> — jedno konto we wszystkich aplikacjach GK.</div>
+      <div class="dwie-kolumny">
+        <label>Imię i nazwisko *
+          <input id="kz-imie" maxlength="120" autocomplete="off" placeholder="np. Jan Kowalski"
+                 value="${escHtml(u ? u.imie : '')}"></label>
+        <label>Telefon
+          <input id="kz-telefon" maxlength="30" inputmode="tel" autocomplete="off"
+                 value="${escHtml(u ? u.telefon || '' : '')}"></label>
+      </div>
+      <fieldset class="kz-role"><legend>Rola *</legend>
+        ${ROLE_ZESPOLU.map(([kod, nazwa, opis]) => `
+          <label class="plaska"><input type="checkbox" data-rola="${kod}"${role.has(kod)
+            ? ' checked' : ''}> <span><b>${nazwa}</b> <span class="slaby">— ${opis}</span></span></label>
+          ${kod === 'trasy_kierowca' ? '<p class="slaby male kz-podpowiedz">Kierowca jest też '
+            + 'kierowcą w GK Trasy.</p>' : ''}`).join('')}
+      </fieldset>
+      ${nowy ? `<p class="wstega ok">Hasło startowe: <b>haslo123</b> — przy pierwszym logowaniu
+          osoba ustawi własne hasło i PIN.</p>` : `
+        <label class="plaska"><input type="checkbox" id="kz-aktywny"${u.aktywny ? ' checked' : ''}>
+          Konto aktywne</label>
+        <p class="slaby male">Wyłączone konto nie zaloguje się w żadnej aplikacji GK.
+          Usuwa administrator w Panelu → Administracja — tu możesz wyłączyć konto.${u.pojazdy
+          ? ` Auta <b>${escHtml(u.pojazdy)}</b> zostaną wtedy bez opiekuna.` : ''}</p>
+        <fieldset><legend>Hasło i dostęp</legend>
+          <p class="slaby male">Hasła ani PIN-u nikt tu nie wpisuje — osoba ustawia je sama
+            przy logowaniu. Działa od razu, bez „Zapisz”.</p>
+          <div class="konto-akcje">
+            <button type="button" id="kz-haslo">Ustaw hasło startowe</button>
+            <button type="button" id="kz-pin">Resetuj PIN</button>
+            <button type="button" id="kz-wyloguj">Wyloguj wszędzie</button>
+          </div>
+        </fieldset>`}
+      <p class="blad-ustawienia" id="kz-blad" role="alert"></p>`,
+
+    poOtwarciu: (tresc) => {
+      const blad = tresc.querySelector('#kz-blad');
+      // Działania na koncie od razu w Panelu (jak przyciski w Panelu → Administracja).
+      const dzialanie = (id, akcja, pytanie, opis, tak) => {
+        const b = tresc.querySelector(id);
+        if (!b) return;
+        b.onclick = async () => {
+          if (!await potwierdz(pytanie, opis, { tak })) return;
+          const w = await wyslijDoPanelu({ akcja, id: u.id }, blad);
+          if (!w) return;
+          zamknijOkno();
+          komunikat(w.komunikat, 'ok');
+          odswiezEkran();
+        };
+      };
+      dzialanie('#kz-haslo', 'haslo_startowe', 'Ustawić hasło startowe?',
+                `${u ? u.imie : ''} dostanie hasło „haslo123”, PIN zostanie skasowany, a wszystkie `
+                + 'urządzenia wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło i PIN.', 'Ustaw');
+      dzialanie('#kz-pin', 'resetuj_pin', 'Zresetować PIN?',
+                `${u ? u.imie : ''} dostanie PIN startowy 1234 — przy pierwszym logowaniu ustawi nowy.`,
+                'Resetuj PIN');
+      dzialanie('#kz-wyloguj', 'wyloguj_wszedzie', 'Wylogować wszędzie?',
+                `${u ? u.imie : ''} — osoba zostanie wylogowana we wszystkich aplikacjach GK i na `
+                + 'wszystkich urządzeniach. Następne logowanie — hasłem.', 'Wyloguj wszędzie');
+      if (nowy) tresc.querySelector('#kz-imie').focus();
+    },
+
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: nowy ? 'Załóż konto' : 'Zapisz', klasa: 'glowny', klik: async (zamknij) => {
+        const blad = document.getElementById('kz-blad');
+        const dane = {
+          akcja: 'zapisz',
+          nazwa: document.getElementById('kz-imie').value.trim(),
+          telefon: document.getElementById('kz-telefon').value.trim(),
+          role: [...document.querySelectorAll('.kz-role [data-rola]')]
+            .filter(p => p.checked).map(p => p.dataset.rola),
+        };
+        if (!nowy) {
+          dane.id = u.id;
+          dane.aktywny = document.getElementById('kz-aktywny').checked;
+        }
+        // Te same reguły sprawdza hub — tu tylko po to, żeby nie tracić wpisanych pól.
+        if (!dane.nazwa) { blad.textContent = 'Podaj imię i nazwisko.'; return; }
+        if (!dane.role.length) { blad.textContent = 'Zaznacz rolę: Biuro albo Kierowca (albo obie).'; return; }
+        const w = await wyslijDoPanelu(dane, blad);
+        if (!w) return;
+        zamknij();
+        komunikat(w.komunikat, 'ok');
+        odswiezEkran();
+      } },
+    ],
+  });
+}
+
+/* Odmowa Panelu (np. „Możesz nadać tylko role…”, „to imię i nazwisko ma już inna
+   osoba”) zostaje w oknie, pod polami — formularz się nie zamyka i nic nie ginie. */
+async function wyslijDoPanelu(dane, blad) {
+  blad.textContent = '';
+  zajety(true);
+  try {
+    return await API.post('/api/panel/osoba', dane);
+  } catch (e) {
+    blad.textContent = poLudzku(e);
+    return null;
+  } finally {
+    zajety(false);
+  }
 }
