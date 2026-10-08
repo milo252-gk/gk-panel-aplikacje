@@ -162,7 +162,7 @@
       maszyna: d.maszyna || '—', maszynaNazwa: nazwaMaszyny(slowniki, d.maszyna),
       linia: a.linia || d.linia || null, liniaNazwa: nazwaLinii(slowniki, a.linia || d.linia),
       stanowiskoNazwa: nazwaStanowiska(slowniki, d.stanowisko),
-      opis: d.opis || '', priorytet: pr.kod, priorytetNazwa: pr.nazwa, zatrzymuje: !!pr.zatrzymuje, kolejnosc: pr.kolejnosc || 9,
+      opis: d.opis || '', zdjec: (d.zdjecia || []).length, priorytet: pr.kod, priorytetNazwa: pr.nazwa, zatrzymuje: !!pr.zatrzymuje, kolejnosc: pr.kolejnosc || 9,
       // „Stoi linia” tylko, dopóki awaria trwa — zamknięta z priorytetem „zatrzymanie” już linii nie zatrzymuje.
       stoi: a.aktywny !== false && !!pr.zatrzymuje,
       priorytetZgloszony: d.priorytet_zgloszony && d.priorytet_zgloszony !== d.priorytet ? priorytetInfo(stale, d.priorytet_zgloszony).nazwa : null,
@@ -371,7 +371,7 @@
     const opis = z => {
       const d = z.dane || {};
       switch (z.typ) {
-        case 'awaria.zgloszona': return `Zgłoszona: ${d.opis || ''}`;
+        case 'awaria.zgloszona': return `Zgłoszona${d.opis ? ': ' + d.opis : ''}${(d.zdjecia || []).length ? ' (📷 ' + d.zdjecia.length + ')' : ''}`;   // notatka i zdjęcie nieobowiązkowe (D47)
         case 'awaria.przyjeta': return 'Jadę';
         case 'awaria.naprawa_rozpoczeta': return d.qr ? 'Na miejscu (skan maszyny)' : 'Na miejscu (bez skanu)';
         case 'awaria.wstrzymana': return `Wstrzymana: ${nazwaZeStalej(stale, 'powody_wstrzymania', d.powod) || ''}${d.opis ? ' — ' + d.opis : ''}`;
@@ -412,7 +412,15 @@
      dłużej — hub (telefon trzyma tylko 30 dni awarii, Hala.utworz dni: 30). */
   const OKRESY = [{ kod: '7', nazwa: '7 dni', dni: 7 }, { kod: '30', nazwa: '30 dni', dni: 30 },
                   { kod: '90', nazwa: '90 dni', dni: 90 }, { kod: '365', nazwa: 'Rok', dni: 365 }];
-  function okresKpi(kod, teraz) {
+  /* zakres (D47, „Zakres” z datami): {od, do (ms — HalaMiary.zakres: od północy „od” do północy po „do”), opis}. Telefon
+     liczy sam, gdy zakres zaczyna się nie wcześniej niż okres „30 dni” (tyle trzyma), inaczej hub. Plan przeglądów —
+     do końca dnia „do”. */
+  function okresKpi(kod, teraz, zakres) {
+    if (kod === 'zakres' && zakres && typeof zakres.od === 'number' && typeof zakres.do === 'number' && zakres.od < zakres.do) {
+      const od30 = Date.parse(okresKpi('30', teraz).od);
+      return { kod: 'zakres', nazwa: zakres.opis || 'Zakres', od: new Date(zakres.od).toISOString(), do: new Date(zakres.do).toISOString(),
+               doPlanu: new Date(zakres.do).toISOString(), zHuba: zakres.od < od30 };
+    }
     const o = OKRESY.find(x => x.kod === kod) || OKRESY[1];
     const odDnia = dodajDni(dzienZakladu(teraz), -(o.dni - 1));
     const [r, m, d] = odDnia.split('-').map(Number);

@@ -25,13 +25,14 @@
      wystapieniaStale    <-> wystapienia_stale
      jestKonflikt        <-> jest_konflikt
      kpiAwarii           <-> kpi_awarii   (etap 3: jedne liczby awarii; MTBF klasyczne — D44)
+     wskaznikiOkresu     <-> wskazniki_okresu (D47: Panel → Wskaźniki, „Zakres” liczy hub)
      alertAktywny        <-> alert_aktywny
      moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)                  */
 
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.14.0';
+  const WERSJA_KLIENTA = '0.15.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -408,6 +409,62 @@
       maszyny, linie,
       typy: Array.from(typy, ([kod, liczba]) => ({ kod, liczba }))
         .sort((a, b) => (b.liczba - a.liczba) || (a.kod < b.kod ? -1 : a.kod > b.kod ? 1 : 0)),
+    };
+  }
+
+  /* Wskaźniki za okres — Panel → Wskaźniki (D37, D47): awarie (kpiAwarii), próby i zlecenia JEDNĄ funkcją. Krótkie okresy
+     (zmiana, dziś, wczoraj) liczy Panel z pamięci, „Zakres” (do 366 dni) — hub tą samą regułą (bliźniak wskazniki_okresu,
+     wektory wektory-reduktora.json → wskazniki_okresu), więc liczby są te same, skąd by nie przyszły. Okno [od, do):
+       * próby — rozpoczęte w oknie (`czas_rozpoczecia`, bez niego `utworzono`): liczba, sprawdzone, braki, wady {kod, ile}
+         (ilość 0 albo brak = 1 sztuka, jak dotąd na Panelu);
+       * zlecenia — zlecone w oknie (`czas_zlecenia`; zaplanowane, jeszcze nie zlecone — D47 — go nie mają): liczba,
+         wykonane (wykonane + zamknięte), terminowość z tych, które mają termin: w terminie = wykonane do terminu; po terminie
+         = wykonane później, otwarte po minionym terminie albo przepadłe (D35); otwarte przed terminem, anulowane i „nie może”
+         się nie liczą. Ogółem, na dział i na wskazaną osobę (`wykonawca`), listy po kodzie.
+     Nazwy (linie, działy, osoby) i procenty dokłada ekran.                                                              */
+  const liczbaPola = v => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const poKodzie = (a, b) => (a.kod < b.kod ? -1 : a.kod > b.kod ? 1 : 0);
+  function wskaznikiOkresu(dane, opcje) {
+    const o = opcje || {}, d0 = dane || {};
+    const od = msChwili(o.od), do_ = msChwili(o.do);
+    const teraz = msChwili(o.teraz) === null ? Date.now() : msChwili(o.teraz);
+    const wOknie = v => { const t = msChwili(v || null); return t !== null && !isNaN(t) && (od === null || t >= od) && (do_ === null || t < do_); };
+    const awarie = kpiAwarii(d0.awarie, { od, do: do_, teraz, zatrzymujace: o.zatrzymujace });
+    let proby = 0, sprawdzone = 0, braki = 0;
+    const wady = new Map();
+    for (const p of d0.proby || []) {
+      if (!p) continue;
+      const d = p.dane || {};
+      if (!wOknie(d.czas_rozpoczecia || p.utworzono)) continue;
+      proby++; sprawdzone += liczbaPola(d.sprawdzone); braki += liczbaPola(d.braki);
+      for (const x of d.wady || []) if (x && x.kod) wady.set(x.kod, (wady.get(x.kod) || 0) + (liczbaPola(x.ilosc) || 1));
+    }
+    const zl = (d0.zlecenia || []).filter(z => z && wOknie((z.dane || {}).czas_zlecenia));
+    const ogolem = { wTerminie: 0, poTerminie: 0 }, dzialy = new Map(), osoby = new Map();
+    const dolicz = (mapa, kod, wynik) => {
+      if (kod === null || kod === undefined || kod === '') return;
+      const g = mapa.get(kod) || mapa.set(kod, { kod, wTerminie: 0, poTerminie: 0 }).get(kod);
+      if (wynik) g.wTerminie++; else g.poTerminie++;
+    };
+    for (const z of zl) {
+      const d = z.dane || {}, t = msChwili(d.termin || null), wyk = msChwili(d.czas_wykonania || null);
+      if (t === null || isNaN(t)) continue;
+      let wynik = null;
+      if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) wynik = wyk <= t;
+      else if ((z.status === 'nowe' || z.status === 'przyjete') && t < teraz) wynik = false;
+      else if (z.status === 'przepadlo') wynik = false;
+      if (wynik === null) continue;
+      if (wynik) ogolem.wTerminie++; else ogolem.poTerminie++;
+      dolicz(dzialy, d.dzial, wynik);
+      dolicz(osoby, d.wykonawca, wynik);
+    }
+    return {
+      awarie,
+      proby: { liczba: proby, sprawdzone, braki,
+               wady: Array.from(wady, ([kod, ile]) => ({ kod, ile })).sort((a, b) => (b.ile - a.ile) || poKodzie(a, b)) },
+      zlecenia: { liczba: zl.length, wykonane: zl.filter(z => z.status === 'wykonane' || z.status === 'zamkniete').length,
+                  terminowosc: { wTerminie: ogolem.wTerminie, poTerminie: ogolem.poTerminie,
+                                 dzialy: Array.from(dzialy.values()).sort(poKodzie), osoby: Array.from(osoby.values()).sort(poKodzie) } },
     };
   }
 
@@ -1454,7 +1511,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, wskaznikiOkresu,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

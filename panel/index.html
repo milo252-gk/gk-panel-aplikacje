@@ -101,6 +101,7 @@
           <button type="button" class="chip" data-filtr="otwarte" aria-pressed="true">W toku</button>
           <button type="button" class="chip" data-filtr="po-terminie" aria-pressed="false">Po terminie</button>
           <button type="button" class="chip" data-filtr="do-zamkniecia" aria-pressed="false">Do przyjęcia</button>
+          <button type="button" class="chip" data-filtr="zaplanowane" aria-pressed="false">Zaplanowane</button>
           <button type="button" class="chip" data-filtr="przepadle" aria-pressed="false">Przepadło</button>
           <button type="button" class="chip" data-filtr="zamkniete" aria-pressed="false">Zamknięte</button>
         </div>
@@ -122,7 +123,10 @@
         <button type="button" class="chip" data-okres="zmiana" aria-pressed="true">Ta zmiana</button>
         <button type="button" class="chip" data-okres="dzis" aria-pressed="false">Dziś</button>
         <button type="button" class="chip" data-okres="wczoraj" aria-pressed="false">Wczoraj</button>
+        <button type="button" class="chip" data-okres="zakres" aria-pressed="false">Zakres</button>
       </div>
+      <!-- D47: „Zakres” — od/do (dni zakładu, włącznie, najwyżej 366); dłuższy niż 2 doby liczy hub tą samą regułą. -->
+      <div id="wskazniki-zakres" hidden></div>
       <div id="wskazniki-tresc"></div>
     </section>
   </div>
@@ -177,10 +181,22 @@
     </div>
     <div class="dwie">
       <label>Kto (opcjonalnie)<select name="wykonawca"><option value="">— cały dział —</option></select></label>
-      <label>Termin (opcjonalnie)<input name="termin" type="datetime-local"></label>
+      <label id="zlecenie-termin">Termin (opcjonalnie)<input name="termin" type="datetime-local"></label>
     </div>
+    <!-- D47: kierownik zakładu planuje zlecenie na później — do tej chwili dział go nie widzi i nie dostaje powiadomienia. -->
+    <fieldset id="zlecenie-plan" hidden><legend>Zaplanuj na (opcjonalnie — puste = zleć od razu)</legend>
+      <div class="dwie">
+        <label>Dzień<input name="plan_dzien" type="date"></label>
+        <label>Godzina (puste = start 1. zmiany)<input name="plan_godzina" type="time"></label>
+      </div>
+      <div class="dwie" id="zlecenie-termin-po" hidden>
+        <label>Termin po starcie (opcjonalnie)<input name="termin_po" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="np. 8"></label>
+        <label>Jednostka<select name="termin_po_jedn"><option value="godz">godzin</option><option value="dni">dni</option></select></label>
+      </div>
+      <p class="slaby konto-drobne" id="zlecenie-plan-opis"></p>
+    </fieldset>
     <label>Szczegóły<textarea name="opis" rows="3" maxlength="4000"></textarea></label>
-    <label>Zdjęcie (opcjonalnie)<input name="zdjecie" type="file" accept="image/*" capture="environment"></label>
+    <label id="zlecenie-zdjecie">Zdjęcie (opcjonalnie)<input name="zdjecie" type="file" accept="image/*" capture="environment"></label>
     <!-- D31: jak dowód dostawy w GK Trasy — dział nie zamknie zlecenia bez tego, co tu zaznaczone. -->
     <fieldset><legend>Do zakończenia potrzebne</legend>
       <div class="zaznaczenia">
@@ -190,6 +206,7 @@
     </fieldset>
     <label class="zaznacz"><input type="checkbox" name="pilne"> Pilne</label>
     <input type="hidden" name="stale">
+    <input type="hidden" name="edycja">
     <p class="slaby" id="zlecenie-ze-stalego" hidden></p>
     <p class="blad" role="alert" hidden></p>
     <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zleć</button></div>
@@ -277,7 +294,9 @@
       <label>Maszyna<select name="maszyna" required></select></label>
     </div>
     <label>Priorytet<select name="priorytet" required></select></label>
-    <label>Co się dzieje<textarea name="opis" rows="3" required maxlength="2000" placeholder="np. Nie domyka formy"></textarea></label>
+    <!-- D47: notatka i zdjęcie nieobowiązkowe — brak nie blokuje zgłoszenia (liczy się czas: przestój biegnie od „Zgłoś”). -->
+    <label>Notatka (opcjonalnie)<textarea name="opis" rows="3" maxlength="2000" placeholder="Co się dzieje? (np. dźwięk, błąd na panelu)"></textarea></label>
+    <label>Zdjęcie (opcjonalnie)<input name="zdjecie" type="file" accept="image/*"></label>
     <p class="blad" role="alert" hidden></p>
     <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="czerwony" type="submit">Zgłoś do UR</button></div>
   </form>
@@ -396,6 +415,7 @@
 <script src="../wspolne/aktualizacja.js"></script>
 <script src="../wspolne/konto.js"></script>
 <script src="../wspolne/eksport.js"></script>
+<script src="../wspolne/miary.js"></script>
 <script src="widok.js"></script>
 <script src="panel.js"></script>
 <script src="etykiety.js"></script>

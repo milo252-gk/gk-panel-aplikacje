@@ -497,6 +497,29 @@ dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; col
 .hala-eksport-uwaga { font-size: 12px; color: var(--tekst-slaby); }
 @media (max-width: 820px) { .hala-eksport > * { flex: 1 1 100%; } .hala-eksport input { flex: 1; } }
 
+/* ------------------------------------------------ jak liczymy wskaźnik (miary.js, D47): „i” przy kafelku i nagłówku */
+/* Mała okrągła litera „i” obok podpisu; obszar dotyku większy niż kółko (::after), więc w rękawicach też trafia. */
+button.hala-info { position: relative; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  min-height: 0; width: 20px; height: 20px; padding: 0; margin: 0 0 0 6px; border-radius: 50%; border: 1px solid var(--ramka-mocna);
+  background: var(--karta); color: var(--tekst-slaby); font: italic 700 12px/1 Georgia, 'Times New Roman', serif; cursor: help;
+  text-transform: none; letter-spacing: 0; flex: 0 0 auto; }
+button.hala-info::after { content: ''; position: absolute; inset: -12px; }
+button.hala-info[aria-expanded="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+@media (max-width: 820px) { button.hala-info { width: 24px; height: 24px; font-size: 14px; } button.hala-info::after { inset: -14px; } }
+.hala-info-dymek { position: fixed; inset: auto; margin: 0; box-sizing: border-box; gap: 4px; padding: 10px 12px;
+  border: 1px solid var(--ramka-mocna); border-radius: 10px; background: var(--karta); color: var(--tekst);
+  box-shadow: var(--cien-mocny); font-size: 14px; line-height: 1.4; z-index: 1100; }
+.hala-info-dymek:popover-open, .hala-info-dymek:not([popover]):not([hidden]) { display: grid; }
+.hala-info-dymek b { font-size: 14px; }
+.hala-info-dymek span { color: var(--tekst-slaby); }
+/* Zakres dat (Panel → Wskaźniki, UR → KPI): od · do · Pokaż w jednym rzędzie, na telefonie daty obok siebie, Pokaż pod nimi. */
+.hala-zakres { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; }
+.hala-zakres label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.hala-zakres input { width: auto; }
+.hala-zakres .blad { flex: 1 1 100%; margin: 0; color: var(--czerwony); font-weight: 600; }
+@media (max-width: 820px) { .hala-zakres > label { flex: 1 1 calc(50% - 6px); } .hala-zakres input { flex: 1; min-width: 0; }
+                            .hala-zakres > button { flex: 1 1 100%; } }
+
 .hala-start main { max-width: 480px; margin: 40px auto; padding: 0 16px; }
 .hala-start li { margin: 10px 0; font-size: 1.2em; }
 .hala-start a { color: var(--akcent); }

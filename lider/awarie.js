@@ -1,7 +1,7 @@
 /* Awarie: zgłoszenie do UR, status naprawy na żywo, potwierdzenie wznowienia pracy.
 
-   Zgłoszenie to ekran awaryjny: maszyna → priorytet → opis → Wyślij, czyli trzy
-   dotknięcia i kilka słów. Czas zdarzenia = chwila dotknięcia „Wyślij” na telefonie,
+   Zgłoszenie to ekran awaryjny: maszyna → priorytet → Wyślij, czyli trzy dotknięcia; notatka i zdjęcie
+   są nieobowiązkowe (D47) — pomagają mechanikowi, ale ich brak nie może opóźnić zgłoszenia. Czas zdarzenia = chwila dotknięcia „Wyślij” na telefonie,
    więc przestój liczy się od zgłoszenia, nawet gdy sieć wróci dopiero po 20 minutach (D7). */
 
 (function () {
@@ -47,8 +47,8 @@
         <div class="siatka-wyboru priorytety" data-grupa="priorytet">
           ${prio.map(p => `<button type="button" class="prio-${esc(KLASA_PRIORYTETU[p.kod] || 'neutral')}" data-wartosc="${esc(p.kod)}">${esc(p.nazwa)}</button>`).join('')}
         </div>
-        <h3>3. Co się dzieje?</h3>
-        <textarea name="opis" rows="3" maxlength="2000" placeholder="Np. nie domyka formy, wyciek oleju"></textarea>
+        <h3>3. Notatka i zdjęcie <span class="slaby">(nieobowiązkowe)</span></h3>
+        <textarea name="opis" rows="3" maxlength="2000" placeholder="Co się dzieje? (np. dźwięk, błąd na panelu)" aria-label="Notatka — co się dzieje"></textarea>
         <div class="pole-zdjec"></div>
         <ul class="bledy" hidden></ul>
         <button type="submit" class="alarm szeroki duzy">Wyślij zgłoszenie</button>
@@ -217,7 +217,8 @@
         <span class="znacznik ${KLASA_PRIORYTETU[w.priorytet] || 'neutral'}">${esc(w.priorytetNazwa)}</span>
         ${w.czeka ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}
       </div>
-      <div class="opis-awarii">${esc(w.opis)}</div>
+      ${w.opis ? `<div class="opis-awarii">${esc(w.opis)}</div>` : ''}
+      ${w.zdjecia.length ? `<div class="galeria-awarii" data-zdjecia="${esc(w.zdjecia.join(','))}" data-podpis="${esc(w.maszynaNazwa)}"></div>` : ''}
       ${w.mechanik ? `<div class="slaby">Mechanik: ${esc(w.mechanik)}</div>` : ''}
       ${w.powodWstrzymania ? `<div class="tekst-uwaga">Wstrzymana: ${esc(w.powodWstrzymania)}</div>` : ''}
       ${w.opisNaprawy && w.doPotwierdzenia ? `<div>UR: ${esc(w.opisNaprawy)}</div>` : ''}
@@ -244,6 +245,8 @@
         ${aktywne.map(karta).join('') || '<p class="pusto ok">Brak aktywnych awarii na linii</p>'}
         ${zakonczone.length ? `<h2>Zakończone na tej zmianie</h2>${zakonczone.map(karta).join('')}` : ''}`;
       el.querySelector('[data-a=zglos]').addEventListener('click', () => zglos());
+      // Zdjęcia ze zgłoszenia (D47) — lokalne (jeszcze w kolejce) albo z huba; dotknięcie otwiera całe zdjęcie.
+      for (const g of el.querySelectorAll('.galeria-awarii')) L.galeria(g, g.dataset.zdjecia.split(',').filter(Boolean));
       for (const k of el.querySelectorAll('.karta.awaria')) {
         const id = k.dataset.id;
         k.addEventListener('click', ev => {

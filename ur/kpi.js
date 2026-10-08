@@ -4,12 +4,18 @@
    Do 30 dni liczy telefon z tego, co ma (URWidok.kpi na hala.obiekty('awaria')) — działa
    też bez sieci. Dłuższe okresy liczy hub (ur/serwer/rozszerzenie.py, GET /api/v1/ur/kpi),
    bo telefon trzyma tylko 30 dni. Obie strony liczą według tych samych definicji
-   (KONTRAKT §6.1, D8), pilnowanych wspólnymi wektorami ur/testy/wektory-kpi.json.     */
+   (KONTRAKT §6.1, D8), pilnowanych wspólnymi wektorami ur/testy/wektory-kpi.json.
+   D47: „Zakres” — dowolne dni od–do (najwyżej 366, pamiętane do końca dnia zakładu), a przy każdym kafelku „i”
+   z definicją — te same teksty co Panel → Wskaźniki (wspolne/klient/miary.js).                                  */
 
 (function (global) {
   'use strict';
 
   const UR = global.UR, W = UR.W, hala = UR.hala, esc = UR.esc;
+  const M = global.HalaMiary;
+  const pamiecZakresu = M.pamiecZakresu('ur', () => hala.teraz());
+  let bladZakresu = '';
+  let wpisane = null;                      // daty wpisywane, jeszcze bez „Pokaż” — przerysowanie po zdarzeniu ich nie kasuje
   const KLUCZ = 'hala.ur.kpi';
   const ustawienia = {
     czytaj() { try { return JSON.parse(localStorage.getItem(KLUCZ) || '{}'); } catch (e) { return {}; } },
@@ -18,14 +24,16 @@
   const zHuba = new Map();          // 'okres|linia|maszyna' → {wynik, kiedy} — żeby przerysowanie nie pytało huba co sekundę
   const czas = v => (v === null || v === undefined ? '—' : Hala.formatCzasu(v));
 
+  // Podpis kafelka z „i” (dotknięcie — dymek z definicją), cały kafelek z tą samą definicją w title (mysz).
+  const tytul = klucz => `title="${esc(M.title(klucz))}"`;
   function kafle(k, plan) {
     return `<div class="kafle-liczb">
-      <div><span>Awarie</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone} · zatrzymania linii ${k.zatrzymania}</small></div>
-      <div><span>MTTR</span><b>${esc(czas(k.mttrMs))}</b><small>średni czas naprawy</small></div>
-      <div title="${esc(Hala.OPIS_MTBF)}"><span>MTBF</span><b>${esc(czas(k.mtbfMs))}</b><small>średni czas pracy między awariami zatrzymującymi</small></div>
-      <div><span>Reakcja</span><b>${esc(czas(k.reakcjaMs))}</b><small>do przyjęcia</small></div>
-      <div class="${k.przestojMs ? 'alarm' : ''}"><span>Przestój</span><b>${esc(czas(k.przestojMs))}</b><small>łącznie</small></div>
-      ${plan ? `<div class="${plan.proc !== null && plan.proc < 90 ? 'uwaga' : ''}"><span>Plan przeglądów${plan.tylko30 ? ' (30 dni)' : ''}</span><b>${plan.proc === null ? '—' : plan.proc + ' %'}</b><small>w terminie ${plan.wTerminie}/${plan.wTerminie + plan.poTerminie + plan.opoznione + plan.usunietePoTerminie}${plan.usunietePoTerminie ? ` · usunięte po terminie ${plan.usunietePoTerminie}` : ''}</small></div>` : ''}
+      <div ${tytul('awarie')}><span>Awarie${M.przycisk('awarie')}</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone} · zatrzymania linii ${k.zatrzymania}</small></div>
+      <div ${tytul('mttr')}><span>MTTR${M.przycisk('mttr')}</span><b>${esc(czas(k.mttrMs))}</b><small>średni czas naprawy</small></div>
+      <div ${tytul('mtbf')}><span>MTBF${M.przycisk('mtbf')}</span><b>${esc(czas(k.mtbfMs))}</b><small>średni czas pracy między awariami zatrzymującymi</small></div>
+      <div ${tytul('reakcja')}><span>Reakcja${M.przycisk('reakcja')}</span><b>${esc(czas(k.reakcjaMs))}</b><small>do przyjęcia</small></div>
+      <div class="${k.przestojMs ? 'alarm' : ''}" ${tytul('przestoj')}><span>Przestój${M.przycisk('przestoj')}</span><b>${esc(czas(k.przestojMs))}</b><small>łącznie</small></div>
+      ${plan ? `<div class="${plan.proc !== null && plan.proc < 90 ? 'uwaga' : ''}" ${tytul('plan_przegladow')}><span>Plan przeglądów${plan.tylko30 ? ' (30 dni)' : ''}${M.przycisk('plan_przegladow')}</span><b>${plan.proc === null ? '—' : plan.proc + ' %'}</b><small>w terminie ${plan.wTerminie}/${plan.wTerminie + plan.poTerminie + plan.opoznione + plan.usunietePoTerminie}${plan.usunietePoTerminie ? ` · usunięte po terminie ${plan.usunietePoTerminie}` : ''}</small></div>` : ''}
     </div>`;
   }
 
@@ -55,12 +63,17 @@
     rysuj(el) {
       const k = UR.kontekst();
       const u = Object.assign({ okres: '30', linia: '', maszyna: '' }, ustawienia.czytaj());
-      const okres = W.okresKpi(u.okres, k.teraz);
+      // „Zakres” tylko z dziś (HalaMiary.pamiecZakresu); jutro KPI wraca do 30 dni.
+      const zd = pamiecZakresu.czytaj();
+      if (u.okres === 'zakres' && !zd.wybrany) u.okres = '30';
+      const zakres = M.zakres(zd.od, zd.do);
+      if (u.okres === 'zakres' && zakres.blad) bladZakresu = zakres.blad;
+      const okres = W.okresKpi(u.okres, k.teraz, zakres.blad ? null : zakres);
       // Telefon trzyma przeglądy z ~30 dni: dla dłuższych okresów kafel planu mówi uczciwie „30 dni”,
       // zamiast pokazywać miesiąc pod etykietą roku (błąd z przeglądu kodu).
       const plan = Object.assign(W.wykonaniePlanu({ przeglady: hala.obiekty('przeglad'),
         od: okres.zHuba ? W.okresKpi('30', k.teraz).od : okres.od, do: okres.doPlanu, teraz: k.teraz }), { tylko30: okres.zHuba });
-      const klucz = `${u.okres}|${u.linia}|${u.maszyna}`;
+      const klucz = `${u.okres === 'zakres' ? `${okres.od}~${okres.do}` : u.okres}|${u.linia}|${u.maszyna}`;
       let wynik = null, zrodlo = '';
       if (!okres.zHuba) {
         // stale (priorytety z „zatrzymuje”) — bez nich telefon liczył 0 zatrzymań, a hub (90 dni, rok) i Panel prawdziwą
@@ -75,13 +88,15 @@
       const maszyny = W.maszyny(k.slowniki).filter(m => !u.linia || m.linia === u.linia);
       el.innerHTML = `<h1>KPI</h1>
         <div class="filtry">
-          <div class="wybor" id="okres">${W.OKRESY.map(o => `<button type="button" data-okres="${o.kod}" aria-pressed="${u.okres === o.kod}">${esc(o.nazwa)}</button>`).join('')}</div>
+          <div class="wybor" id="okres">${W.OKRESY.map(o => `<button type="button" data-okres="${o.kod}" aria-pressed="${u.okres === o.kod}">${esc(o.nazwa)}</button>`).join('')}<button type="button" data-okres="zakres" aria-pressed="${u.okres === 'zakres'}">Zakres</button></div>
           <div class="filtry-listy">
             <select id="f-linia" aria-label="Linia"><option value="">Wszystkie linie</option>${W.linie(k.slowniki).map(l => `<option value="${esc(l.kod)}" ${u.linia === l.kod ? 'selected' : ''}>${esc(l.nazwa)}</option>`).join('')}</select>
             <select id="f-maszyna" aria-label="Maszyna"><option value="">Wszystkie maszyny</option>${maszyny.map(m => `<option value="${esc(m.kod)}" ${u.maszyna === m.kod ? 'selected' : ''}>${esc(m.nazwa)}</option>`).join('')}</select>
           </div>
         </div>
-        <div id="wynik-kpi">${wynik ? `${kafle(wynik, plan)}
+        <div id="kpi-zakres">${u.okres === 'zakres' ? M.poleZakresu(wpisane || zd, bladZakresu) : ''}</div>
+        ${u.okres === 'zakres' && !bladZakresu ? `<p class="slaby">Zakres: ${esc(okres.nazwa)}</p>` : ''}
+        <div id="wynik-kpi">${bladZakresu && u.okres === 'zakres' ? '' : wynik ? `${kafle(wynik, plan)}
           <h2>Maszyny — najdłuższy przestój</h2>${tabelaMaszyn(wynik.maszyny)}
           ${u.linia ? '' : `<h2>Linie</h2>${tabelaLinii(wynik.linie)}`}
           <h2>Typy usterek</h2>${tabelaTypow(wynik.typy, k.stale)}
@@ -93,12 +108,27 @@
       el.querySelector('#okres').addEventListener('click', ev => {
         const b = ev.target.closest('[data-okres]');
         if (!b) return;
+        bladZakresu = '';
+        wpisane = null;
+        pamiecZakresu.zapisz({ od: zd.od, do: zd.do, wybrany: b.dataset.okres === 'zakres' });
         ustawienia.zapisz(Object.assign(u, { okres: b.dataset.okres }));
         UR.odswiez('wymus');
       });
+      // „Pokaż”: od ≤ do, najwyżej 366 dni — błąd zostaje przy polach (bez liczb poprzedniego zakresu).
+      const fz = el.querySelector('#kpi-zakres form');
+      if (fz) fz.addEventListener('change', () => { wpisane = { od: fz.od.value, do: fz.do.value }; });
+      if (fz) fz.addEventListener('submit', ev => {
+        ev.preventDefault();
+        const z = M.zakres(fz.od.value, fz.do.value);
+        bladZakresu = z.blad || '';
+        wpisane = null;
+        pamiecZakresu.zapisz({ od: fz.od.value, do: fz.do.value, wybrany: true });
+        UR.odswiez('wymus');
+      });
+      M.podlacz(el);
       el.querySelector('#f-linia').addEventListener('change', ev => { ustawienia.zapisz(Object.assign(u, { linia: ev.target.value, maszyna: '' })); UR.odswiez('wymus'); });
       el.querySelector('#f-maszyna').addEventListener('change', ev => { ustawienia.zapisz(Object.assign(u, { maszyna: ev.target.value })); UR.odswiez('wymus'); });
-      if (okres.zHuba && !wynik && UR.online()) pobierz(klucz, okres, u);
+      if (okres.zHuba && !wynik && UR.online() && !(u.okres === 'zakres' && bladZakresu)) pobierz(klucz, okres, u);
     },
   });
 

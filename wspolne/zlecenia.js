@@ -44,13 +44,15 @@
      D35: zadanie zmianowe (`wazne_do` = koniec jego zmiany) PRZEPADA z końcem zmiany — dział go już nie widzi, nawet
      zanim hub (automat co minutę) wyśle „zlecenie.przepadlo”, i nie dostaje go jako zaległe na następnej zmianie.
      zostaw = id zlecenia z otwartym formularzem „Zrobione”: zostaje do wysłania (zrobione przed końcem zmiany).
-     linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich. */
+     linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich.
+     D47: zlecenie ZAPLANOWANE przez kierownika zakładu na później (status „zaplanowane”) dział widzi dopiero, gdy hub je
+     zleci (zlecenie.aktywowane → „nowe”) — wcześniej nie ma go ani na liście, ani na plakietce, ani w zaległych. */
   function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms)) return null; const l = H.lokalny(ms);
       return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
     return (lista || [])
-      .filter(z => z && (z.aktywny || (z.id === zostaw && z.status === 'przepadlo')) && (!przepadlo(z, teraz) || z.id === zostaw))
+      .filter(z => z && z.status !== 'zaplanowane' && (z.aktywny || (z.id === zostaw && z.status === 'przepadlo')) && (!przepadlo(z, teraz) || z.id === zostaw))
       .filter(z => (z.dane || {}).dzial === dzial && naLinii(z.dane || {}, { linia, linie }))
       .filter(z => !moje || (z.dane || {}).wykonawca === moje || (z.dane || {}).przyjal === moje)
       .map(z => {
@@ -300,11 +302,12 @@
      (to, co już było, człowiek zobaczy na liście). opcje() — funkcja, bo linia lidera może się zmienić. */
   function sledz(hala, opcje, fn) {
     const znane = new Set();
-    const zapamietaj = () => { znane.clear(); for (const z of hala.obiekty('zlecenie')) znane.add(z.id); };
+    // Zaplanowanego (D47) nie zapamiętujemy jako znanego: gdy hub je zleci, dział ma dostać „Nowe zlecenie” jak przy każdym nowym.
+    const zapamietaj = () => { znane.clear(); for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.add(z.id); };
     hala.na('sesja', zapamietaj);
     hala.na('zmiana', ({ typ, id, obiekt }) => {
-      if (typ === '*') { for (const z of hala.obiekty('zlecenie')) znane.add(z.id); return; }
-      if (typ !== 'zlecenie' || !obiekt || znane.has(id)) return;
+      if (typ === '*') { for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.add(z.id); return; }
+      if (typ !== 'zlecenie' || !obiekt || znane.has(id) || obiekt.status === 'zaplanowane') return;
       znane.add(id);
       const o = opcje(), d = obiekt.dane || {};
       if (obiekt.status === 'nowe' && !obiekt._oczekuje && !przepadlo(obiekt, hala.teraz()) && d.dzial === o.dzial

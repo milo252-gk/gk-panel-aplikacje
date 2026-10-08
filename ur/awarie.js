@@ -38,7 +38,7 @@
         ${w.czekaMs !== null ? `<span class="slaby">${w.czekaMs >= 60000 ? `lider nie potwierdził od ${esc(Hala.formatCzasu(w.czekaMs))}` : 'czeka na lidera — przed chwilą'}</span>` : ''}
         <span class="slaby">${esc(w.numer)} · ${esc(W.godzina(w.czasZgloszenia))}</span>
       </div>
-      ${w.opis ? `<div class="opis-awarii">${esc(w.opis)}</div>` : ''}
+      ${w.opis || w.zdjec ? `<div class="opis-awarii">${w.zdjec ? `<span title="Zdjęcie ze zgłoszenia — w karcie awarii">📷${w.zdjec > 1 ? ' ' + w.zdjec : ''}</span> ` : ''}${esc(w.opis)}</div>` : ''}
     </a>`;
   }
 

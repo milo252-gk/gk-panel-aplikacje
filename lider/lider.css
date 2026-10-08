@@ -166,6 +166,9 @@ dl.dane dd { margin: 0; white-space: pre-wrap; }
 .miniatura { position: relative; margin: 0; }
 .miniatura img, .galeria img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); }
 .galeria img { width: 140px; height: 140px; }
+/* D47: zdjęcie ze zgłoszenia awarii na karcie — mniejsze, żeby lista awarii została listą. */
+.galeria-awarii { margin: 6px 0; }
+.galeria-awarii .galeria img { width: 72px; height: 72px; }
 .miniatura .usun { position: absolute; top: -8px; right: -8px; min-height: 32px; width: 32px; padding: 0; border-radius: 50%;
   background: var(--nakladka); color: var(--na-nakladce); border: 0; }
 .dodaj-zdjecie { display: inline-flex; align-items: center; justify-content: center; min-height: var(--dotyk); }

@@ -259,7 +259,7 @@
         return {
           id: a.id, numer: a.numer || '—', status: a.status, etykieta: a.etykieta || a.status, aktywny: a.aktywny,
           maszyna: d.maszyna, maszynaNazwa: (m && m.nazwa) || d.maszyna || '—', linia: a.linia,
-          opis: d.opis || '', priorytet: d.priorytet, priorytetNazwa: p.nazwa || d.priorytet || '—', zatrzymuje: !!p.zatrzymuje,
+          opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), priorytet: d.priorytet, priorytetNazwa: p.nazwa || d.priorytet || '—', zatrzymuje: !!p.zatrzymuje,
           mechanik: nazwaPracownika(o.pracownicy, d.mechanik),
           powodWstrzymania: d.powod_wstrzymania ? (powody[d.powod_wstrzymania] || d.powod_wstrzymania) : null,
           opisNaprawy: d.opis_naprawy || null,
@@ -294,7 +294,7 @@
     const bledy = [];
     if (!f.maszyna) bledy.push('Wybierz maszynę.');
     if (!(stale && (stale.priorytety || []).some(p => p.kod === f.priorytet))) bledy.push('Wybierz priorytet.');
-    if (!String(f.opis || '').trim()) bledy.push('Opisz krótko problem.');
+    // Notatka (opis) i zdjęcie są nieobowiązkowe (D47, kontrakt 1.12.0) — brak nie blokuje zgłoszenia.
     return bledy;
   }
 

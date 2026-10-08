@@ -123,6 +123,7 @@
         status: a.status, etykieta,
         mechanik: nazwaPracownika(pracownicy, d.mechanik),
         opis: d.opis || '',
+        zdjecia: [].concat(d.zdjecia || []),            // D47: zdjęcie ze zgłoszenia (nieobowiązkowe)
         czasZgloszenia: d.czas_zgloszenia || null,
         godzZgloszenia: godzina(d.czas_zgloszenia),
         przestojMs: H().przestojMs(a, teraz),
@@ -254,7 +255,8 @@
 
   /* Wiersze zleceń. filtr: 'otwarte' (dział jeszcze robi) | 'po-terminie' (otwarte, termin minął — egzekwowanie, D31)
      | 'do-zamkniecia' (dział skończył albo nie może — kierownik przyjmuje albo zwraca) | 'przepadle' (zadanie zmianowe,
-     którego dział nie zrobił do końca swojej zmiany — D35) | 'zamkniete' (także przepadłe).
+     którego dział nie zrobił do końca swojej zmiany — D35) | 'zamkniete' (także przepadłe) | 'zaplanowane' (D47: kierownik
+     zakładu zaplanował na później — dział jeszcze go nie widzi; od najbliższego startu).
      Najpierw po terminie (najdłużej spóźnione), potem pilne, potem najstarsze.
      ja = zalogowana osoba: moznaAnulowac — zlecenia kierownika zakładu nie anuluje kierownik UR/KJ (D45, Hala.moznaAnulowacZlecenie). */
   function zlecenia({ zlecenia: lista, slowniki, pracownicy, stale, teraz, filtr, ja }) {
@@ -265,7 +267,9 @@
       : filtr === 'po-terminie' ? poTerminie(z, teraz)
       : filtr === 'do-zamkniecia' ? DO_ZAMKNIECIA.has(z.status)
       : filtr === 'przepadle' ? z.status === 'przepadlo'
+      : filtr === 'zaplanowane' ? z.status === 'zaplanowane'
       : filtr === 'zamkniete' ? !z.aktywny : true;
+    const zZakladu = ((ja && ja.role) || []).some(r => r === 'kierownik' || r === 'admin');
     return (lista || []).filter(z => z && pasuje(z)).map(z => {
       const d = z.dane || {};
       const termin = d.termin ? Date.parse(d.termin) : NaN;
@@ -275,6 +279,8 @@
       const wykonano = Date.parse(d.czas_wykonania);
       const spoznioneWykonanie = DO_ZAMKNIECIA.has(z.status) && !isNaN(termin) && !isNaN(wykonano) && wykonano > termin;
       const przepadlo = z.status === 'przepadlo';
+      const zaplanowane = z.status === 'zaplanowane';
+      const start = Date.parse(d.zaplanowane_na);
       return {
         id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
         tytul: d.tytul || '', opis: d.opis || '',
@@ -300,11 +306,85 @@
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [].concat(d.zdjecia_wykonania || []),
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
-        moznaAnulowac: OTWARTE.has(z.status) && H().moznaAnulowacZlecenie(z, ja, pracownicy),
-        czas: d.czas_zlecenia || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
+        moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && H().moznaAnulowacZlecenie(z, ja, pracownicy),
+        // D47: zaplanowane — kiedy hub je zleci i jaki dostanie termin; zmienia i „Zleć teraz” tylko kierownik zakładu (admin).
+        zaplanowane, zaplanowaneMs: zaplanowane && !isNaN(start) ? start : null,
+        zaplanowaneNa: zaplanowane && !isNaN(start) ? `${dataDluga(start)} ${godzina(start)}` : null,
+        terminPlanu: zaplanowane ? opisTerminuPlanu(d) : null,
+        moznaZmienic: zaplanowane && zZakladu,
+        czas: d.czas_zlecenia || d.czas_zaplanowania || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
       };
-    }).sort((a, b) => (b.poTerminie - a.poTerminie) || (a.poTerminie && b.poTerminie ? a.terminMs - b.terminMs : 0)
+    }).sort((a, b) => (a.zaplanowane && b.zaplanowane ? (a.zaplanowaneMs || 0) - (b.zaplanowaneMs || 0) : 0)
+      || (b.poTerminie - a.poTerminie) || (a.poTerminie && b.poTerminie ? a.terminMs - b.terminMs : 0)
       || (b.pilne - a.pilne) || String(a.czas).localeCompare(String(b.czas)));
+  }
+
+  // ------------------------------------------------------------ zlecenia zaplanowane (D47)
+
+  const DOBA = 24 * 3600000;
+  /* DD.MM.RRRR (data zakładu) — zaplanowane zlecenia bywają za miesiące, więc z rokiem. */
+  function dataDluga(t) {
+    const ms = typeof t === 'number' ? t : Date.parse(t);
+    if (isNaN(ms)) return '—';
+    const l = H().lokalny(ms);
+    return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')}.${l.rok}`;
+  }
+  /* „termin 2 h po starcie”, „termin 3 d po starcie”, „termin 12.12 14:00” albo „bez terminu”. */
+  function opisTerminuPlanu(d) {
+    const po = d.termin_po_min;
+    if (typeof po === 'number' && isFinite(po) && po >= 1) {
+      const tekst = po % 1440 === 0 ? `${po / 1440} d` : po % 60 === 0 ? `${po / 60} h` : H().formatCzasu(po * 60000);
+      return `termin ${tekst} po starcie`;
+    }
+    const t = Date.parse(d.termin);
+    return isNaN(t) ? 'bez terminu' : `termin ${dataDluga(t)} ${godzina(t)}`;
+  }
+
+  /* Start pierwszej zmiany dnia (RRRR-MM-DD) — ta sama reguła co zlecenia stałe „raz dziennie” (Hala.wystapieniaStale). */
+  function startPierwszejZmiany(dzien, zmiany) {
+    const w = H().wystapieniaStale('plan', { harmonogram: { rodzaj: 'codziennie' }, termin: { rodzaj: 'koniec_zmiany' } }, dzien, zmiany)[0];
+    return w ? Date.parse(w.start) : NaN;
+  }
+
+  /* „Zaplanuj na” z formularza (D47): dzień + godzina (pusto = start pierwszej zmiany tego dnia) → {na: ISO, opis} albo
+     {blad}. Pusty dzień = bez planu ({na: null} — zlecenie od razu). Najwyżej rok naprzód; chwila z przeszłości to błąd. */
+  function planZFormularza({ dzien, godzina: g, zmiany, teraz }) {
+    if (!dzien) return { na: null };
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dzien);
+    if (!m) return { blad: 'Wybierz dzień z kalendarza.' };
+    let ms;
+    if (g) {
+      const gm = /^(\d{1,2}):(\d{2})$/.exec(g);
+      if (!gm || +gm[1] > 23 || +gm[2] > 59) return { blad: 'Godzina w postaci GG:MM, np. 06:00.' };
+      ms = H().zLokalnego(+m[1], +m[2], +m[3], +gm[1], +gm[2]);
+    } else {
+      ms = startPierwszejZmiany(dzien, zmiany);
+      if (isNaN(ms)) ms = H().zLokalnego(+m[1], +m[2], +m[3], 6, 0);
+    }
+    if (!(ms > teraz)) return { blad: 'Ta chwila już minęła — wybierz późniejszą albo wyczyść „Zaplanuj na”, żeby zlecić od razu.' };
+    if (ms > teraz + 366 * DOBA) return { blad: 'Najwyżej rok naprzód.' };
+    return { na: new Date(ms).toISOString(), opis: `${dataDluga(ms)} ${godzina(ms)}` };
+  }
+
+  /* Termin względny „po starcie” (liczba + jednostka: godz albo dni) → {min} (null = bez) albo {blad}. */
+  function terminPoZFormularza(ile, jednostka) {
+    if (ile === '' || ile === null || ile === undefined) return { min: null };
+    const n = Number(String(ile).replace(',', '.'));
+    if (!isFinite(n) || n <= 0) return { blad: 'Termin po starcie — liczba większa od zera.' };
+    const min = Math.round(n * (jednostka === 'dni' ? 1440 : 60));
+    if (min < 1 || min > 366 * 1440) return { blad: 'Termin po starcie — od 1 minuty do roku.' };
+    return { min };
+  }
+
+  /* Termin przy „Zleć teraz” (D47) — bliźniak termin_aktywacji w hubie: termin_po_min od planowanego startu, a gdy
+     kierownik zleca wcześniej — od teraz (wcześniejsza z dwóch chwil); bez niego termin z planu albo żaden. */
+  function terminAktywacji(d, teraz) {
+    const po = d && d.termin_po_min;
+    if (typeof po === 'number' && isFinite(po) && po >= 1) {
+      const start = Date.parse(d.zaplanowane_na);
+      return new Date((isNaN(start) ? teraz : Math.min(start, teraz)) + po * 60000).toISOString();
+    }
+    return (d && d.termin) || null;
   }
 
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
@@ -1158,13 +1238,14 @@
     return { od: polnoc, do: nastepna(polnoc), nazwa: 'Dziś' };
   }
 
-  /* Liczby dla kierownika z danych, które Panel ma w pamięci (2 doby): awarie przez Hala.kpiAwarii — tę samą funkcję
-     liczy UR, raport zmiany lidera i hub (etap 3, D37: jedne liczby). Awarie ZGŁOSZONE w oknie (liczba, zatrzymania,
-     MTTR, reakcja); przestój przycięty do okna, także awarii z wczoraj, która dalej trwa, a nakładające się awarie
-     liczą się na linii raz; anulowane (fałszywy alarm) nigdzie. Próby z oknem rozpoczęcia, zlecenia zlecone w oknie. */
-  function wskazniki({ awarie: la, proby: lp, zlecenia: lz, slowniki, pracownicy, stale, teraz, okno }) {
-    const w = t => { const ms = Date.parse(t); return !isNaN(ms) && ms >= okno.od && ms < okno.do; };
-    const k = H().kpiAwarii(la, { od: okno.od, do: okno.do, teraz, zatrzymujace: [...kodyZatrzymujace(stale)] });
+  /* Liczby dla kierownika — JEDNA funkcja liczenia: Hala.wskaznikiOkresu (awarie przez Hala.kpiAwarii, próby, zlecenia;
+     bliźniak wskazniki_okresu w hubie — D37, D47: jedne liczby). Krótkie okresy liczy Panel z pamięci (2 doby), a „Zakres”
+     — hub (GET /api/v1/panel/wskazniki) i podaje gotowe podsumowanie (`gotowe`) tej samej postaci. Tu tylko nazwy,
+     procenty i kolejność do ekranu — tak samo dla obu źródeł. Definicje: wspolne/klient/miary.js (podpowiedzi „i”). */
+  function wskazniki({ awarie: la, proby: lp, zlecenia: lz, slowniki, pracownicy, stale, teraz, okno, gotowe }) {
+    const s = gotowe || H().wskaznikiOkresu({ awarie: la, proby: lp, zlecenia: lz },
+                                           { od: okno.od, do: okno.do, teraz, zatrzymujace: [...kodyZatrzymujace(stale)] });
+    const k = s.awarie;
     const zKpi = new Map(k.linie.map(l => [l.kod, l]));
     // Wszystkie linie ze słownika (także bez awarii — pusty pasek to też informacja), potem spoza słownika.
     const linie = liniePosortowane(slowniki).map(l => l.kod).concat(k.linie.map(l => l.kod).filter(kod => !((slowniki && slowniki.linie) || {})[kod]))
@@ -1172,52 +1253,35 @@
         return { kod, nazwa: nazwaLinii(slowniki, kod), awarie: x.liczba || 0, zatrzymania: x.zatrzymania || 0,
                  przestojMs: x.przestojMs || 0, mttrMs: x.mttrMs === undefined ? null : x.mttrMs }; });
 
-    const pr = (lp || []).filter(p => p && w((p.dane || {}).czas_rozpoczecia || p.utworzono));
-    const wady = new Map();
-    let sprawdzone = 0, braki = 0;
-    for (const p of pr) {
-      const d = p.dane || {};
-      sprawdzone += +d.sprawdzone || 0; braki += +d.braki || 0;
-      for (const x of d.wady || []) if (x && x.kod) wady.set(x.kod, (wady.get(x.kod) || 0) + (+x.ilosc || 1));
-    }
+    const { liczba: proby, sprawdzone, braki } = s.proby;
     const katalog = (slowniki && slowniki.katalog_wad) || {};
-    const sumaWad = [...wady.values()].reduce((s, x) => s + x, 0);
-    const pareto = [...wady.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-      .map(([kod, ile]) => ({ kod, nazwa: (katalog[kod] || {}).nazwa || kod, ile, proc: sumaWad ? Math.round(ile * 100 / sumaWad) : 0 }));
+    const sumaWad = s.proby.wady.reduce((suma, x) => suma + x.ile, 0);
+    const pareto = s.proby.wady.slice(0, 5)
+      .map(({ kod, ile }) => ({ kod, nazwa: (katalog[kod] || {}).nazwa || kod, ile, proc: sumaWad ? Math.round(ile * 100 / sumaWad) : 0 }));
 
-    const zl = (lz || []).filter(z => z && w((z.dane || {}).czas_zlecenia));
-    // Terminowość zleceń (D31) — z tych zleconych w okresie, które mają termin: w terminie = wykonane do terminu;
-    // po terminie = wykonane później albo dalej otwarte, gdy termin minął, albo przepadłe z końcem zmiany (D35). Otwarte
-    // przed terminem jeszcze się nie liczą, anulowane i „nie może” też nie (to nie jest spóźnienie działu).
+    // Terminowość zleceń (D31) — reguły w Hala.wskaznikiOkresu; tu procent i kolejność (najgorsze najpierw).
     const dzialy = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
-    const policz = (lista, klucz, nazwa) => {
-      const grupy = new Map();
-      for (const z of lista) {
-        const d = z.dane || {}, t = Date.parse(d.termin), wyk = Date.parse(d.czas_wykonania);
-        if (isNaN(t)) continue;
-        let wynik = null;
-        if (['wykonane', 'zamkniete'].includes(z.status) && !isNaN(wyk)) wynik = wyk <= t;
-        else if (OTWARTE.has(z.status) && t < teraz) wynik = false;
-        else if (z.status === 'przepadlo') wynik = false;          // D35: zadanie zmianowe nie zrobione — niewykonane
-        if (wynik === null) continue;
-        const k = klucz(z);
-        if (k === null || k === undefined) continue;
-        const g = grupy.get(k) || grupy.set(k, { kod: k, nazwa: nazwa(k), wTerminie: 0, poTerminie: 0 }).get(k);
-        if (wynik) g.wTerminie++; else g.poTerminie++;
-      }
-      return [...grupy.values()].map(g => Object.assign(g, { proc: Math.round(g.wTerminie * 100 / (g.wTerminie + g.poTerminie)) }))
-        .sort((a, b) => a.proc - b.proc || a.nazwa.localeCompare(b.nazwa, 'pl'));
-    };
-    const ogolem = policz(zl, () => '*', () => 'Wszystkie')[0] || { wTerminie: 0, poTerminie: 0, proc: null };
+    const t = s.zlecenia.terminowosc;
+    const zProcentem = (lista, nazwa) => lista.map(g => ({ kod: g.kod, nazwa: nazwa(g.kod), wTerminie: g.wTerminie, poTerminie: g.poTerminie,
+                                                         proc: Math.round(g.wTerminie * 100 / (g.wTerminie + g.poTerminie)) }))
+      .sort((a, b) => a.proc - b.proc || a.nazwa.localeCompare(b.nazwa, 'pl'));
+    const razem = t.wTerminie + t.poTerminie;
     return {
       awarie: k.liczba, zatrzymania: k.zatrzymania, przestojMs: k.przestojMs, mttrMs: k.mttrMs, reakcjaMs: k.reakcjaMs, mtbfMs: k.mtbfMs,
       linie, maksPrzestojMs: Math.max(0, ...linie.map(x => x.przestojMs)),
-      proby: pr.length, sprawdzone, braki, brakiProc: sprawdzone ? Math.round(braki * 1000 / sprawdzone) / 10 : null, pareto,
-      zlecenia: zl.length, zleceniaWykonane: zl.filter(z => ['wykonane', 'zamkniete'].includes(z.status)).length,
-      terminowosc: { wTerminie: ogolem.wTerminie, poTerminie: ogolem.poTerminie, proc: ogolem.proc,
-                     dzialy: policz(zl, z => (z.dane || {}).dzial, k => dzialy.get(k) || k),
-                     osoby: policz(zl, z => (z.dane || {}).wykonawca || null, k => nazwaPracownika(pracownicy, k)) },
+      proby, sprawdzone, braki, brakiProc: sprawdzone ? Math.round(braki * 1000 / sprawdzone) / 10 : null, pareto,
+      zlecenia: s.zlecenia.liczba, zleceniaWykonane: s.zlecenia.wykonane,
+      terminowosc: { wTerminie: t.wTerminie, poTerminie: t.poTerminie, proc: razem ? Math.round(t.wTerminie * 100 / razem) : null,
+                     dzialy: zProcentem(t.dzialy, kod => dzialy.get(kod) || kod),
+                     osoby: zProcentem(t.osoby, kod => nazwaPracownika(pracownicy, kod)) },
     };
+  }
+
+  /* Okno „Zakres” (D47) — skąd liczby: z pamięci Panelu, gdy zakres zaczyna się najwcześniej wczoraj (tyle Panel trzyma:
+     dni 2), inaczej z huba. Ten sam wynik, bo obie strony liczą tą samą regułą (Hala.wskaznikiOkresu ↔ wskazniki_okresu). */
+  function zakresZPamieci(okno, teraz) {
+    const wczoraj = oknoWskaznikow('wczoraj', teraz, null);
+    return !!okno && okno.od >= wczoraj.od;
   }
 
   // ------------------------------------------------------------ licznik i alarm na monitorze
@@ -1303,7 +1367,7 @@
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
-                       zmianyZFormularza, oknoWskaznikow, wskazniki, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
+                       zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -296,9 +296,12 @@
             ${w.czeka ? `<span class="${w.czeka.alarm ? 'tekst-alarm' : ''}">${w.czeka.min ? `od ${esc(Hala.formatCzasu(w.czeka.min * 60000))}` : 'przed chwilą'}</span>` : ''}
           </div>
           ${w.opis ? `<div class="slaby tekst-opisu">${esc(w.opis)}</div>` : ''}
+          ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc([w.maszynaNazwa, w.opis].filter(Boolean).join(' · '))}" aria-label="Powiększ zdjęcie awarii"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
         </div>
         <div class="numer slaby">${esc(w.numer)}<br> od ${esc(w.godzZgloszenia)}</div>
       </article>`).join('') || '<p class="pusto ok">Brak aktywnych awarii</p>';
+    for (const e of $('lista-awarii').querySelectorAll('img[data-plik]'))
+      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
   }
 
   function statusKlasa(status) {
@@ -466,11 +469,12 @@
 
   function klasaZlecenia(status) {
     return { nowe: 'info', przyjete: 'info', wykonane: 'ok', odrzucone: 'uwaga', zamkniete: 'neutral', anulowane: 'neutral',
-             przepadlo: 'alarm' }[status] || 'neutral';
+             przepadlo: 'alarm', zaplanowane: 'neutral' }[status] || 'neutral';
   }
 
   const PUSTE_ZLECENIA = { otwarte: 'Żadne zlecenie nie jest w toku', 'po-terminie': 'Nic nie jest po terminie',
-                           'do-zamkniecia': 'Nic nie czeka na przyjęcie', przepadle: 'Żadne zadanie zmianowe nie przepadło (ostatnie dwa dni)',
+                           'do-zamkniecia': 'Nic nie czeka na przyjęcie', zaplanowane: 'Nic nie jest zaplanowane na później',
+                           przepadle: 'Żadne zadanie zmianowe nie przepadło (ostatnie dwa dni)',
                            zamkniete: 'Brak zamkniętych zleceń z ostatnich dwóch dni' };
 
   const mozeZapisacStale = () => {
@@ -507,7 +511,7 @@
         <div class="opis">
           <div class="tytul"><b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)}</span>${z.stale ? ` <span class="slaby" title="Ze zlecenia stałego">🔁</span>` : ''}</div>
           <div class="szczegoly">
-            <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.etykieta)}</span>
+            <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
             ${z.spoznienie ? `<span class="znacznik alarm">${esc(z.spoznienie)}</span>` : ''}
             <span class="znacznik neutral">${esc(z.dzialNazwa)}</span>
@@ -521,12 +525,15 @@
           ${z.uwagiZwrotu && z.otwarte ? `<div class="slaby">Zwrócone: ${esc(z.uwagiZwrotu)}</div>` : ''}
           ${zdjecia(z.zdjecia, 'Od działu:', [z.tytul, z.kto, z.notatka].filter(Boolean).join(' · '))}${zdjecia(z.zdjeciaKierownika, 'Do zlecenia:', z.tytul)}
         </div>
-        <div class="numer slaby">${esc(z.zleconoDzien)} ${esc(z.zlecono)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}${z.termin ? `<br><span class="${z.poTerminie ? 'tekst-alarm' : ''}">termin ${esc(z.termin)}</span>` : ''}</div>
+        ${z.zaplanowane ? `<div class="numer slaby">zleci się<br><b class="tekst-planu">${esc(z.zaplanowaneNa || '—')}</b><br>${esc(z.terminPlanu)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}</div>`
+          : `<div class="numer slaby">${esc(z.zleconoDzien)} ${esc(z.zlecono)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}${z.termin ? `<br><span class="${z.poTerminie ? 'tekst-alarm' : ''}">termin ${esc(z.termin)}</span>` : ''}</div>`}
         <div class="akcje">
+          ${z.moznaZmienic ? `<button type="button" class="maly" data-akcja="zmien-plan">Zmień</button>
+            <button type="button" class="maly glowny" data-akcja="zlec-teraz" title="Zleć od razu — dział dostanie powiadomienie">Zleć teraz</button>` : ''}
           ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
             <button type="button" class="maly" data-akcja="zwroc">Zwróć</button>` : ''}
           ${kier && z.moznaAnulowac ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
-          ${stale && !z.stale ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz jako zlecenie stałe">🔁 Jako stałe</button>' : ''}
+          ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz jako zlecenie stałe">🔁 Jako stałe</button>' : ''}
         </div>
       </article>`).join('') || `<p class="pusto ${filtrZlecen === 'po-terminie' || filtrZlecen === 'przepadle' ? 'ok' : ''}">${PUSTE_ZLECENIA[filtrZlecen]}</p>`;
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
@@ -561,6 +568,11 @@
     f.tekst.focus();
   });
 
+  // Zdjęcie ze zgłoszenia awarii (D47) — dotknięcie miniatury powiększa, jak w zleceniach.
+  $('lista-awarii').addEventListener('click', ev => {
+    const foto = ev.target.closest('[data-zdjecie]');
+    if (foto) pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis);
+  });
   $('lista-zlecen').addEventListener('click', async ev => {
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
@@ -576,6 +588,14 @@
         const powod = await Panel.zapytajTekst({ tytul: 'Anulować zlecenie?', etykieta: 'Dlaczego? (można zostawić puste)', przycisk: 'Anuluj zlecenie' });
         if (powod === null) return;
         await hala.zapisz('zlecenie.anulowane', id, powod ? { powod } : {});
+      }
+      if (b.dataset.akcja === 'zmien-plan') Panel.noweZlecenie(null, hala.obiekt('zlecenie', id));
+      if (b.dataset.akcja === 'zlec-teraz') {
+        // D47: zaplanowane zlecenie od razu — jak hub o planowanej chwili (termin „po starcie” liczony od teraz).
+        const z = hala.obiekt('zlecenie', id);
+        const termin = W.terminAktywacji((z && z.dane) || {}, hala.teraz());
+        await hala.zapisz('zlecenie.aktywowane', id, termin ? { termin } : {});
+        komunikat('Zlecone — dział dostał powiadomienie', 'ok');
       }
       if (b.dataset.akcja === 'zwroc') {
         const uwagi = await Panel.zapytajTekst({ tytul: 'Zwrócić do działu?', etykieta: 'Co jeszcze trzeba zrobić?', wymagany: true, przycisk: 'Zwróć' });
@@ -621,9 +641,20 @@
       .map(p => [p.id, p.nazwa]);
   }
   /* „Nowe zlecenie” — puste albo wypełnione zleceniem stałym („Zleć teraz”, D31). Wymagania domyślnie zaznaczone:
-     egzekwowanie ma być zasadą, a kierownik odznacza je świadomie. */
-  Panel.noweZlecenie = wstepne => {
-    const w = wstepne || {};
+     egzekwowanie ma być zasadą, a kierownik odznacza je świadomie. D47: kierownik zakładu może je „Zaplanować na” później,
+     a zaplanowane — zmienić tym samym oknem (edycja = obiekt zlecenia; dział, linia i maszyna wtedy bez zmian). */
+  const mozePlanowac = () => mozeWyslac('zlecenie.zaplanowane');
+  function pokazPlan() {
+    const plan = !!fz.plan_dzien.value || !!fz.edycja.value;
+    $('zlecenie-termin').hidden = plan;
+    $('zlecenie-termin-po').hidden = !plan;
+    const w = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
+    $('zlecenie-plan-opis').textContent = !fz.plan_dzien.value ? 'Puste — zlecenie idzie do działu od razu.'
+      : w.blad ? w.blad : `Dział zobaczy je ${w.opis} i wtedy dostanie powiadomienie.`;
+    fz.querySelector('button[type="submit"]').textContent = fz.edycja.value ? 'Zapisz zmiany' : fz.plan_dzien.value ? 'Zaplanuj' : 'Zleć';
+  }
+  Panel.noweZlecenie = (wstepne, edycja) => {
+    const w = edycja ? Object.assign({}, edycja.dane, { pilne: (edycja.dane || {}).priorytet === 'pilne' }) : (wstepne || {});
     fz.reset();
     fz.dzial.innerHTML = opcje(((hala.kontrakt.stale || {}).dzialy || []).map(d => [d.kod, d.nazwa]));
     if (w.dzial) fz.dzial.value = w.dzial;
@@ -638,32 +669,81 @@
     fz.pilne.checked = !!w.pilne;
     if (wstepne) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; }
     fz.termin.value = w.termin ? W.poleCzasu(w.termin) : '';
-    fz.stale.value = w.stale || '';
-    $('zlecenie-ze-stalego').hidden = !w.stale;
+    fz.stale.value = edycja ? '' : (w.stale || '');
+    fz.edycja.value = edycja ? edycja.id : '';
+    if (edycja) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; }
+    // Plan (D47): tylko kierownik zakładu (i admin) i nie dla „Zleć teraz” ze zlecenia stałego.
+    $('zlecenie-plan').hidden = !(edycja || (mozePlanowac() && !w.stale));
+    $('zlecenie-plan').querySelector('legend').textContent = edycja ? 'Zaplanuj na' : 'Zaplanuj na (opcjonalnie — puste = zleć od razu)';
+    const start = edycja ? Date.parse(w.zaplanowane_na) : NaN;
+    fz.plan_dzien.value = isNaN(start) ? '' : W.poleCzasu(start).slice(0, 10);
+    fz.plan_godzina.value = isNaN(start) ? '' : W.poleCzasu(start).slice(11, 16);
+    let po = w.termin_po_min;
+    if (edycja && !(typeof po === 'number' && po >= 1) && w.termin && !isNaN(start)) {
+      // Termin „na sztywno” z planu → ten sam termin jako „po starcie”: przesunięcie dnia startu przesunie i termin.
+      const r = Math.round((Date.parse(w.termin) - start) / 60000);
+      if (r >= 1) po = r;
+    }
+    const wDniach = typeof po === 'number' && po >= 1440 && po % 1440 === 0;
+    fz.termin_po.value = typeof po === 'number' && po >= 1 ? String(wDniach ? po / 1440 : Math.round(po / 6) / 10) : '';
+    fz.termin_po_jedn.value = wDniach ? 'dni' : 'godz';
+    for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = !!edycja;
+    $('zlecenie-zdjecie').hidden = !!edycja;
+    $('zlecenie-ze-stalego').hidden = !w.stale || !!edycja;
     $('zlecenie-ze-stalego').textContent = w.stale ? '🔁 Ze zlecenia stałego — termin dla bieżącej zmiany, możesz go zmienić.' : '';
-    $('t-okno-zlecenia').textContent = w.stale ? 'Zleć teraz' : 'Nowe zlecenie';
+    $('t-okno-zlecenia').textContent = edycja ? 'Zmień zaplanowane zlecenie' : w.stale ? 'Zleć teraz' : 'Nowe zlecenie';
+    pokazPlan();
     otworzOkno($('okno-zlecenia'));
   };
+  fz.plan_dzien.addEventListener('input', pokazPlan);
+  fz.plan_godzina.addEventListener('input', pokazPlan);
   Panel.opcje = opcje;
   Panel.linieLista = linieLista;
   Panel.maszynyLinii = maszynyLinii;
   Panel.osobyDzialu = osobyDzialu;
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
+  // Każde zamknięcie okna zdejmuje blokadę pól edycji — następne „Nowe zlecenie” zaczyna od zwykłego formularza.
+  $('okno-zlecenia').addEventListener('close', () => { for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = false; });
   fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); });
   fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); });
   fz.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
+    const blad = t => { const b = fz.querySelector('.blad'); b.textContent = t; b.hidden = false; };
     const dane = { tytul: fz.tytul.value.trim(), dzial: fz.dzial.value, priorytet: fz.pilne.checked ? 'pilne' : 'normalny',
                    wymagaj_zdjecia: fz.wymagaj_zdjecia.checked, wymagaj_notatki: fz.wymagaj_notatki.checked };
     for (const pole of ['opis', 'linia', 'maszyna', 'wykonawca', 'stale']) if (fz[pole].value.trim()) dane[pole] = fz[pole].value.trim();
-    if (fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
+    const edycja = fz.edycja.value;
+    const plan = (edycja || fz.plan_dzien.value)
+      ? W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() }) : { na: null };
+    if (plan.blad) { blad(plan.blad); return; }
+    if (edycja && !plan.na) { blad('Wybierz dzień startu — albo zamknij okno i użyj „Zleć teraz”.'); return; }
+    const po = plan.na ? W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value) : { min: null };
+    if (po.blad) { blad(po.blad); return; }
+    if (!plan.na && fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
     try {
+      if (edycja) {
+        // Zmiana planu (D47): wszystkie pola do zmiany naraz — puste czyści (null), dział, linia i maszyna zostają.
+        await hala.zapisz('zlecenie.plan_zmieniony', edycja, { tytul: dane.tytul, opis: dane.opis || '', priorytet: dane.priorytet,
+          wykonawca: dane.wykonawca || '', zaplanowane_na: plan.na, termin_po_min: po.min, termin: null,
+          wymagaj_zdjecia: dane.wymagaj_zdjecia, wymagaj_notatki: dane.wymagaj_notatki });
+        $('okno-zlecenia').close();
+        komunikat(`Zmienione — zleci się ${plan.opis}`, 'ok');
+        return;
+      }
       if (fz.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fz.zdjecie.files[0])];
+      if (plan.na) {
+        delete dane.stale;
+        await hala.zapisz('zlecenie.zaplanowane', hala.nowyId(), Object.assign(dane, { zaplanowane_na: plan.na }, po.min ? { termin_po_min: po.min } : {}));
+        $('okno-zlecenia').close();
+        komunikat(`Zaplanowane — dział zobaczy je ${plan.opis}`, 'ok');
+        Panel.pokazZlecenia('zaplanowane', 'biezace');
+        return;
+      }
       await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
       $('okno-zlecenia').close();
       komunikat('Zlecone', 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
-    } catch (e) { const b = fz.querySelector('.blad'); b.textContent = komunikatBledu(e); b.hidden = false; }
+    } catch (e) { blad(komunikatBledu(e)); }
   }));
 
   // Zgłoszenie awarii z Panelu — trafia do UR jak od lidera (awaria.zgloszona).
@@ -679,8 +759,11 @@
   fa.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
     try {
-      await hala.zapisz('awaria.zgloszona', hala.nowyId(),
-        { linia: fa.linia.value, maszyna: fa.maszyna.value, priorytet: fa.priorytet.value, opis: fa.opis.value.trim() });
+      // D47: zdjęcie i notatka nieobowiązkowe — bez nich zgłoszenie idzie tak samo (przestój liczy się od „Zgłoś”).
+      const dane = { linia: fa.linia.value, maszyna: fa.maszyna.value, priorytet: fa.priorytet.value };
+      if (fa.opis.value.trim()) dane.opis = fa.opis.value.trim();
+      if (fa.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fa.zdjecie.files[0])];
+      await hala.zapisz('awaria.zgloszona', hala.nowyId(), dane);
       $('okno-awarii').close();
       document.querySelector('.zakladki [data-widok="na-zywo"]').click();
     } catch (e) { const b = fa.querySelector('.blad'); b.textContent = komunikatBledu(e); b.hidden = false; }
