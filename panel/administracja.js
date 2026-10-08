@@ -151,6 +151,10 @@
     const ekran = role.length === 1 && role[0] === 'ekran';
     // D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie — podpowiedź przy liniach, gdy ma tę rolę.
     $('osoba-linie-mistrz').hidden = !role.includes('mistrz');
+    // D46 (właściciel 2026-10-08): administrator nie wpisuje nikomu PIN-u — tylko „Resetuj PIN” (startowy 1234).
+    // Pole zostaje wyłącznie dla konta ekranu (monitor), które ma jeden sekret 4–8 cyfr.
+    $('osoba-pin-pole').hidden = !ekran;
+    if (!ekran) fp.pin.value = '';
     $('osoba-pin-etykieta').textContent = ekran ? 'PIN ekranu (4–8 cyfr)' : 'PIN (4 cyfry, nieobowiązkowy)';
     fp.pin.maxLength = ekran ? 8 : 4;
     fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : ekran ? '4–8 cyfr' : 'osoba ustawi sama';
