@@ -11,7 +11,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej Panel nie wstaje wcale.                        */
 
-const WERSJA = 'panel-525cb88cd17d';
+const WERSJA = 'panel-5a2f0ffe8f4c';
 
 // Powiadomienia przy zamkniętym Panelu (2026-10-02): kierownik, który zlecił, dowiaduje się, że zlecenie jest po
 // terminie (wspólna część z Liderem, UR i KJ — D28). Panel nie ma własnej obsługi dotknięcia: robi to wspólny plik

@@ -61,7 +61,6 @@
     stary = String(stary || '').trim(); nowy = String(nowy || '').trim(); powtorz = String(powtorz || '').trim();
     if (wymagajStarego !== false && !stary) b.push('Wpisz obecne hasło albo obecny PIN.');
     if (!/^\d{4}$/.test(nowy)) b.push('PIN to dokładnie 4 cyfry.');
-    else if (oczywisty(nowy)) b.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
     if (nowy && stary && nowy === stary) b.push('Nowy PIN musi być inny niż obecny.');
     if (nowy && powtorz !== nowy) b.push('Powtórzony PIN nie zgadza się z nowym.');
     return b;
