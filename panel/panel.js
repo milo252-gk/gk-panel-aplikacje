@@ -90,10 +90,8 @@
     $('menu-awaria').hidden = !(z && mozeWyslac('awaria.zgloszona'));
     $('nowe-zlecenie').hidden = !(z && mozeWyslac('zlecenie.utworzone'));
     // D49: kierownik zakładu, kierownik UR i KJ też — ale tylko „Pracownicy” ze swoim zespołem (administracja.js).
-    $('menu-administracja').hidden = !(z && HalaZespol.zarzadzaKontami(hala.pracownik.role, (hala.kontrakt || {}).stale));
-    // Szablony checklist może zmieniać, komu kontrakt pozwala zapisywać ten słownik (kierownik, admin).
-    const zapisSzablonow = (((hala.kontrakt || {}).slowniki || {}).szablony_checklist || {}).zapis || [];
-    $('menu-checklisty').hidden = !(z && (hala.pracownik.role || []).some(r => r === 'admin' || zapisSzablonow.includes(r)));
+    // UI etap 3: Checklisty są częścią Administracji — menu widać też samemu edytującemu szablony.
+    $('menu-administracja').hidden = !(z && W.czesciAdministracji(Panel.dostepAdministracji()).length);
     if (z) requestAnimationFrame(dopasujMenu);        // liczba pozycji zależy od roli — mierzymy po ich pokazaniu
     rysujPasek(hala.polaczenie);
     // Raporty → „Do Excela” (D32): rysowany raz na sesję, nie co 20 s — inaczej zamykałby kalendarz w trakcie wyboru daty.
@@ -233,7 +231,16 @@
   }
   window.addEventListener('resize', dopasujMenu);
 
-  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'checklisty', 'administracja'];
+  /* Kto co widzi w Administracji (W.czesciAdministracji). Szablony checklist może zmieniać, komu kontrakt pozwala
+     zapisywać ten słownik (kierownik, admin). */
+  Panel.dostepAdministracji = () => {
+    const role = (hala.pracownik && hala.pracownik.role) || [];
+    const zapisSzablonow = (((hala.kontrakt || {}).slowniki || {}).szablony_checklist || {}).zapis || [];
+    return { admin: role.includes('admin'), zespol: HalaZespol.zarzadzaKontami(role, (hala.kontrakt || {}).stale),
+             szablony: role.some(r => zapisSzablonow.includes(r)) };
+  };
+
+  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja'];
   for (const b of document.querySelectorAll('.zakladki button[data-widok]')) {
     b.addEventListener('click', () => {
       widokAktywny = b.dataset.widok;
@@ -384,7 +391,7 @@
           ${r.obsada ? `<dt>Obsada</dt><dd>${esc(r.obsada.obecna ?? '—')} z ${esc(r.obsada.planowana ?? '—')}</dd>` : ''}
           <dt>Checklista</dt><dd>${r.checklista.wszystkie !== null ? `${esc(r.checklista.zrobione)}/${esc(r.checklista.wszystkie)}, opóźnione: ${esc(r.checklista.opoznione)}, pominięte: ${esc(r.checklista.pominiete)}` : '—'}</dd>
           <dt>Awarie</dt><dd>${r.awarieLista.map(a => `${esc(a.numer)} ${esc(a.maszyna)} (${esc(Hala.formatCzasu(a.przestojMin * 60000))})`).join(', ') || 'brak'}</dd>
-          <dt>Próby</dt><dd>${r.proby.liczba ? `${esc(r.proby.liczba)}, sprawdzone ${esc(r.proby.sprawdzone)}, braki ${esc(r.proby.braki)}${r.proby.proc !== null ? ` (${esc(r.proby.proc)} %)` : ''}` : 'brak'}</dd>
+          <dt>Próby</dt><dd>${r.proby.liczba ? `${esc(r.proby.liczba)}, sprawdzone ${esc(r.proby.sprawdzone)}, braki ${esc(r.proby.braki)}${r.proby.proc !== null ? ` (${esc(W.procent(r.proby.proc))} %)` : ''}` : 'brak'}</dd>
           ${r.uwagi ? `<dt>Uwagi lidera</dt><dd>${esc(r.uwagi)}</dd>` : ''}
           <dt>Zamknięta</dt><dd>${esc(W.dataKrotka(r.czas))} ${esc(W.godzina(r.czas))}</dd>
         </dl>
@@ -436,8 +443,6 @@
         rysujZlecenia(d, zlecenia);
       } else if (widokAktywny === 'wskazniki') {
         if (Panel.widoki.wskazniki) Panel.widoki.wskazniki.rysuj(d);
-      } else if (widokAktywny === 'checklisty') {
-        if (Panel.widoki.checklisty) Panel.widoki.checklisty.rysuj(d);
       } else if (widokAktywny === 'administracja') {
         if (Panel.widoki.administracja) Panel.widoki.administracja.rysuj(d);
       } else {
@@ -452,7 +457,7 @@
   function rysujLiczby(lista) {
     const w = W.kafelkiDoPokazania(lista);
     $('kafelki-liczb').innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie stoi, nic nie czeka</p>' : w.kafelki.map(k => `
-      <button type="button" class="${esc(k.klasa)}" data-kafel="${esc(k.kod)}"><span class="etykieta">${esc(k.etykieta)}</span><b>${k.liczba}</b></button>`).join('');
+      <button type="button" class="${esc(k.klasa)}" data-kafel="${esc(k.kod)}"><span class="etykieta">${esc(k.etykieta)}</span><b>${k.liczba}</b>${k.dopisek ? `<span class="dopisek">${esc(k.dopisek)}</span>` : ''}</button>`).join('');
   }
   // Kafelki zleceń prowadzą do zleceń — „po terminie” do „W toku”, gdzie spóźnione stoją na górze z ⏰ (UI etap 2:
   // osobnego filtra „Po terminie” już nie ma). Reszta jest na tym samym ekranie.
@@ -478,12 +483,17 @@
      Adres czyścimy, żeby następne powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie
      przełączało widoku. Przed zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
   function obsluzAdres() {
-    if (!hala.zalogowany() || !['#zlecenia', '#administracja'].includes(location.hash)) return;
+    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#checklisty'].includes(location.hash)) return;
     const adres = location.hash;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* stary adres zostanie — bez szkody */ }
     // #administracja = dotknięty alarm huba (etap 2: kopia, adres na Pages, token, miejsce) — tylko administrator ma ten widok.
     // Nad częściami świeci czerwona wstęga, a przy każdym alarmie „Pokaż” prowadzi tam, gdzie się go naprawia.
     if (adres === '#administracja') { if (!$('menu-administracja').hidden) $('menu-administracja').click(); return; }
+    // #checklisty — dawna pozycja menu (UI etap 3: część Administracji); stare zakładki i linki dalej trafiają w szablony.
+    if (adres === '#checklisty') {
+      if (!$('menu-administracja').hidden) { Panel.widoki.administracja.przejdz('checklisty'); $('menu-administracja').click(); }
+      return;
+    }
     Panel.pokazZlecenia('otwarte', 'biezace');
   }
   window.addEventListener('hashchange', obsluzAdres);

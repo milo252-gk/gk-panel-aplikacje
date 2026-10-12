@@ -217,8 +217,9 @@
   function miejscaDoWyboru(slowniki) {
     const st = (slowniki || {}).stanowiska || {};
     const zeStanowiskami = new Set(Object.values(st).map(s => s && s.linia));
+    const jednaLinia = linie(slowniki).length === 1;   // UI etap 3: przy jednej linii jej nazwa w każdym wierszu to szum
     return Object.entries(st).sort(([a], [b]) => a.localeCompare(b, 'pl'))
-      .map(([k, s]) => ({ wartosc: k, opis: `${nazwaLinii(slowniki, s && s.linia)} · ${(s && s.nazwa) || k}` }))
+      .map(([k, s]) => ({ wartosc: k, opis: `${jednaLinia ? '' : nazwaLinii(slowniki, s && s.linia) + ' · '}${(s && s.nazwa) || k}` }))
       .concat(linie(slowniki).filter(l => !zeStanowiskami.has(l.kod)).map(l => ({ wartosc: LINIA_W_LISCIE + l.kod, opis: `${l.nazwa} · cała linia` })));
   }
 
@@ -353,10 +354,11 @@
   function wierszePlanu(slowniki) {
     const plan = (slowniki || {}).plan_probkowania || {};
     const st = Object.entries((slowniki || {}).stanowiska || {});
+    const kody = pokazKody(slowniki);
     return linie(slowniki).map(l => {
       const ze = st.filter(([, s]) => s && s.linia === l.kod).sort(([a], [b]) => a.localeCompare(b, 'pl'));
       const pozycje = ze.length
-        ? ze.map(([k, s]) => ({ pole: k, klucz: k, nazwa: `${s.nazwa || k} (${k})`, wartosc: { linia: l.kod, stanowisko: k },
+        ? ze.map(([k, s]) => ({ pole: k, klucz: k, nazwa: kody ? `${s.nazwa || k} (${k})` : (s.nazwa || k), wartosc: { linia: l.kod, stanowisko: k },
                                 na_zmiane: (plan[k] && !wpisLinii(k, plan[k]) && liczba(plan[k].na_zmiane)) || 0 }))
         : [{ pole: LINIA_W_LISCIE + l.kod, klucz: l.kod, nazwa: 'Cała linia', wartosc: { linia: l.kod },
              na_zmiane: (wpisLinii(l.kod, plan[l.kod]) && liczba(plan[l.kod].na_zmiane)) || 0 }];
@@ -679,6 +681,24 @@
   /* Zlecenia od kierownika na Planie (zamiast osobnej zakładki): sekcja tylko, gdy coś jest do zrobienia. */
   const pokazZleceniaNaPlanie = doZrobienia => Number(doZrobienia) > 0;
 
+  // ------------------------------------------------------------ UI etap 3 (2026-10-12, ocena właściciela)
+
+  /* Ile prób zmiany pokazać pod planem bez rozwijania. Lista rosła przez całą zmianę (40 prób = długie przewijanie
+     do partii i prób liderów); kontroler patrzy na ostatnie, starsze są za „Pokaż wszystkie (N)”. */
+  const NAJNOWSZYCH_PROB = 5;
+  const najnowsze = (lista, wszystkie, ile = NAJNOWSZYCH_PROB) => {
+    const l = lista || [];
+    return { widoczne: wszystkie ? l : l.slice(0, ile), ukryte: wszystkie ? 0 : Math.max(0, l.length - ile) };
+  };
+
+  /* Kody stanowisk i linii (L1-S1) przy nazwach tylko, gdy linii jest kilka — przy jednej linii (zakład GK) kod nic
+     nie mówi kontrolerowi, a zabiera miejsce w wierszu. */
+  const pokazKody = slowniki => linie(slowniki).length > 1;
+
+  /* „▸ Więcej” w próbie (zlecenie, przewodnik, wyrób) zwinięte, chyba że coś już w nim wpisano — inaczej kontroler
+     nie zobaczyłby, że brudnopis ma zlecenie. */
+  const wiecejProbyOtwarte = f => !!(f && (String(f.zlecenie || '').trim() || f.wyrob || f.zdjecie_zlecenia));
+
   global.KJWidok = {
     raz, odmiana, liczba, linie, nazwaLinii, nazwaStanowiska, nazwaWyrobu, nazwaWady, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
     koniecDnia, mozna, sumaWad, MAKS_ZDJEC, skanZInnejZmiany, bledyProby, daneProby, podpowiedzPartii, powodPartii, korektaProby,
@@ -688,5 +708,6 @@
     jedynaLinia, miejscaDoWyboru, miejsceZWyboru, domyslneMiejsce, napisSkanu, miejsceZeSkanu, nazwaMiejsca, wierszePlanu,
     liniaPoWyrobie, liniaKliknieta, naglowekOdczytow, bladIlosci, kolejnoscWOknie, procent, opisWad, wysylaNaZywo, komunikatBleduZapisu,
     brakiZWad, kluczPominietych, pominiete, pomin, bezPominietych, pokazZleceniaNaPlanie,
+    NAJNOWSZYCH_PROB, najnowsze, pokazKody, wiecejProbyOtwarte,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

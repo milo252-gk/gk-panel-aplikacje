@@ -25,6 +25,9 @@
   const czytajPominiete = () => { try { return JSON.parse(localStorage.getItem('hala.kj.pominieteProbyLiderow') || 'null'); } catch (e) { return null; } };
   const zapiszPominiete = z => { try { localStorage.setItem('hala.kj.pominieteProbyLiderow', JSON.stringify(z)); } catch (e) { /* bez pamięci wiersz wróci */ } };
 
+  /* „Pokaż wszystkie” pamiętane do końca zmiany (id zmiany), żeby odświeżenie co kilka sekund nie zwijało listy. */
+  let wszystkieProby = null;
+
   KJ.ekran('plan', {
     rysuj(el) {
       const zmiana = hala.zmianaTeraz();
@@ -39,6 +42,9 @@
                                        czytajPominiete(), kluczPominietych);
       const mogePartie = KJ.mozna('partia.oznaczona_brakowa');
       const proc = plan.plan ? Math.round(plan.zrobione * 100 / plan.plan) : 0;
+      const kody = W.pokazKody(hala.slowniki);
+      // UI etap 3: tylko ostatnie próby zmiany — reszta za „Pokaż wszystkie (N)” (do końca zmiany w tym telefonie).
+      const widoczne = W.najnowsze(moje, wszystkieProby === (zmiana && zmiana.id));
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Plan próbkowania</h1><span class="licznik-planu ${plan.zrobione >= plan.plan && plan.plan ? 'tekst-ok' : ''}">${plan.zrobione}/${plan.plan}</span></div>
         <div class="postep ${W.stanPaskaPlanu(plan, zmiana, hala.teraz())}"><span style="width:${proc}%"></span></div>
@@ -48,7 +54,7 @@
             <h2>${esc(g.nazwa)} <span class="slaby">${g.zrobione}/${g.plan}</span></h2>
             ${g.stanowiska.map(s => `
               <a class="stanowisko ${s.gotowe ? 'gotowe' : 'czeka'}" href="${s.calaLinia ? '#proba' : `#proba/${encodeURIComponent(s.kod)}`}">
-                <span class="nazwa">${esc(s.nazwa)}${s.calaLinia ? '' : ` <span class="slaby">${esc(s.kod)}</span>`}</span>
+                <span class="nazwa">${esc(s.nazwa)}${s.calaLinia || !kody ? '' : ` <span class="slaby">${esc(s.kod)}</span>`}</span>
                 <span class="stan">${s.gotowe ? '✓ ' : ''}${s.zrobione}/${s.plan}</span>
               </a>`).join('')}
           </section>`).join('') || '<p class="pusto">Brak planu próbkowania. Kierownik KJ ustawia go w „Więcej → Katalog, wyroby, plan → Plan próbkowania”.</p>'}
@@ -62,9 +68,12 @@
             ${mogePartie ? `<button type="button" data-partia-proby="${esc(p.id)}">Partia brakowa</button>` : ''}
             <button type="button" data-pomin-probe="${esc(p.id)}">Pomiń</button></div>`).join('')}</section>` : ''}
         <section class="grupa"><h2>Próby KJ na tej zmianie <span class="slaby">${moje.length}</span></h2>
-          ${moje.map(kartaProby).join('') || '<p class="pusto">Jeszcze żadnej</p>'}</section>`;
+          ${widoczne.widoczne.map(kartaProby).join('') || '<p class="pusto">Jeszcze żadnej</p>'}
+          ${widoczne.ukryte ? `<button type="button" class="szeroki" id="wszystkie-proby">Pokaż wszystkie (${moje.length})</button>` : ''}</section>`;
       const b = el.querySelector('#skanuj-stanowisko');
       if (b) b.addEventListener('click', () => KJ.idz('proba/skanuj'));
+      const w = el.querySelector('#wszystkie-proby');
+      if (w) w.addEventListener('click', () => { wszystkieProby = zmiana && zmiana.id; KJ.odswiez('wymus'); });
       // „Partia brakowa” przy próbie lidera — ta sama ścieżka co z wyniku próby (zaproponujPartie + podpowiedź progiem).
       for (const x of el.querySelectorAll('[data-partia-proby]')) {
         x.addEventListener('click', W.raz(async () => {
@@ -139,13 +148,6 @@
         <form id="f-proba" class="formularz" autocomplete="off" novalidate>
           <section class="grupa" id="p-stanowisko"></section>
           <section class="grupa">
-            <h2>Zlecenie / partia</h2>
-            <div class="z-przyciskiem"><input name="zlecenie" value="${esc(f.zlecenie)}" placeholder="Numer z przewodnika" aria-label="Numer zlecenia">
-              <button type="button" id="skanuj-zlecenie">Skanuj</button></div>
-            <div id="p-zdjecie-zlecenia"></div>
-            <label>Wyrób <span class="slaby">(opcjonalnie)</span><select name="wyrob" id="p-wyrob"></select></label>
-          </section>
-          <section class="grupa">
             <h2>Wyniki</h2>
             <div class="liczniki">
               ${KJ.licznik('sprawdzone', f.sprawdzone, 'Sprawdzone')}
@@ -155,6 +157,15 @@
           </section>
           <section class="grupa"><h2>Wady</h2><div class="wady" id="p-wady"></div></section>
           <section class="grupa"><h2>Zdjęcia wad</h2><div class="zdjecia" id="p-zdjecia"></div></section>
+          <!-- UI etap 3: zlecenie i wyrób rzadko wpisywane na hali — zwinięte pod „Więcej”, żeby formularz był krótki;
+               otwarte, gdy brudnopis już coś w nich ma. -->
+          <details class="grupa wiecej-proby" ${W.wiecejProbyOtwarte(f) ? 'open' : ''}><summary>Więcej <span class="slaby">(zlecenie, wyrób — opcjonalnie)</span></summary>
+            <label for="p-zlecenie">Zlecenie / partia</label>
+            <div class="z-przyciskiem"><input id="p-zlecenie" name="zlecenie" value="${esc(f.zlecenie)}" placeholder="Numer z przewodnika" aria-label="Numer zlecenia">
+              <button type="button" id="skanuj-zlecenie">Skanuj</button></div>
+            <div id="p-zdjecie-zlecenia"></div>
+            <label>Wyrób<select name="wyrob" id="p-wyrob"></select></label>
+          </details>
           <details class="grupa" ${f.wnioski || f.dzialania ? 'open' : ''}><summary>Wnioski i działania <span class="slaby">(opcjonalnie)</span></summary>
             <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000">${esc(f.wnioski)}</textarea></label>
             <label>Działania<textarea name="dzialania" rows="2" maxlength="2000">${esc(f.dzialania)}</textarea></label>
@@ -387,7 +398,12 @@
     b.innerHTML = bledy.map(esc).join('<br>');
     if (bledy.length) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     if (!f.zlecenie.trim() && !f.zdjecie_zlecenia &&
-        !(await KJ.potwierdz('Bez zlecenia?', 'Bez numeru ani zdjęcia przewodnika tej próby nie da się połączyć z partią.', 'Zapisz bez zlecenia'))) return;
+        !(await KJ.potwierdz('Bez zlecenia?', 'Bez numeru ani zdjęcia przewodnika tej próby nie da się połączyć z partią.', 'Zapisz bez zlecenia'))) {
+      // Pole zlecenia jest zwinięte pod „Więcej” (UI etap 3) — po „Anuluj” otwieramy je, żeby było gdzie wpisać.
+      const w = form.querySelector('.wiecej-proby');
+      if (w) { w.open = true; form.elements.zlecenie.focus(); }
+      return;
+    }
     if (W.skanZInnejZmiany(f.czas_rozpoczecia, hala.zmianaTeraz()) &&
         !(await KJ.potwierdz('Skan z innej zmiany', `${f.stanowisko ? 'Stanowisko' : 'Miejsce'} zeskanowano ${W.kiedy(f.czas_rozpoczecia, hala.teraz())}. Próba policzy się do tamtej zmiany. Jeśli kontrola jest teraz — Anuluj i zeskanuj ponownie.`, 'Zapisz tak'))) return;
     const id = hala.nowyId();

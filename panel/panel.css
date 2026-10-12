@@ -57,6 +57,8 @@
 .kafelki-liczb > button { cursor: default; }
 .kafelki-liczb > button:is([data-kafel="zlecenia"], [data-kafel="po-terminie"]) { cursor: pointer; }
 .kafelki-liczb > button:hover { filter: none; }
+/* UI etap 3: „1 do przyjęcia” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
+.kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
 .awarie { grid-area: awarie; }
 .jakosc { grid-area: jakosc; }
@@ -278,6 +280,9 @@ dialog.okno .zaznaczenia .zaznacz { font-size: 15px; color: var(--tekst); }
 /* ---------------------------------------------------------------- szablony checklist */
 
 .opis-widoku { margin: 0 0 10px; font-size: .9em; }
+/* UI etap 3: szablony jako część Administracji — nagłówek części z przyciskiem po prawej (jak licznik w h2). */
+.naglowek-czesci { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+.naglowek-czesci > button { margin-left: auto; }
 .szablon { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
            border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 12px; }
 .szablon .akcje { display: flex; gap: 6px; flex-wrap: wrap; }

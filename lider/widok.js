@@ -624,7 +624,15 @@
     return { sprawdzone: s, braki, zgodne: Number.isInteger(s) && s >= braki ? s - braki : NaN };
   }
 
+  /* Kafelek maszyny w zgłoszeniu awarii (UI etap 3): nazwa duża, kod mały. Lider szuka „Wtryskarka 2”, nie „WT-02” —
+     kod jest na etykiecie QR, a nie w głowie. Maszyna bez nazwy — sam kod, raz. */
+  const kafelekMaszyny = m => {
+    const kod = String((m && m.kod) || ''), nazwa = String((m && m.nazwa) || '').trim();
+    return nazwa && nazwa !== kod ? { duzy: nazwa, maly: kod } : { duzy: kod, maly: '' };
+  };
+
   global.LiderWidok = {
+    kafelekMaszyny,
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,

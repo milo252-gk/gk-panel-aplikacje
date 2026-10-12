@@ -64,7 +64,7 @@
           ${wynik.wiersze.map(w => {
             // Kreska po wierszu, który przekroczył 80 % — tyle wad daje większość braków.
             const kreska = !granica && w.skumulowany >= 80 ? (granica = true) : false;
-            return `<div class="pareto-wiersz ${kreska ? 'granica' : ''}" role="row" title="${esc(w.nazwa)}: ${w.ilosc} (${w.proc} %), narastająco ${w.skumulowany} %">
+            return `<div class="pareto-wiersz ${kreska ? 'granica' : ''}" role="row" title="${esc(w.nazwa)}: ${w.ilosc} (${W.procent(w.proc)} %), narastająco ${W.procent(w.skumulowany)} %">
               <span class="nazwa" role="cell">${esc(w.nazwa)}${w.wycofana ? ' <span class="slaby">(wycofana)</span>' : ''}</span>
               <span class="slupek" role="cell"><span class="pasek" style="width:${max ? (w.ilosc * 100 / max) : 0}%"></span><b>${w.ilosc}</b></span>
               <span class="skumulowany" role="cell"><span class="tor"><span style="width:${w.skumulowany}%"></span></span>${String(w.skumulowany).replace('.', ',')} %</span>

@@ -134,6 +134,16 @@ dl.dane dd { margin: 0; white-space: pre-wrap; }
 .priorytety .prio-uwaga { background: var(--zolty); border-color: var(--zolty); }
 .priorytety .prio-neutral { background: var(--szary); border-color: var(--szary); }
 .priorytety button.wybrany { outline: 4px solid var(--tekst); outline-offset: 2px; }
+/* UI etap 3: napis priorytetu łamie się tylko między słowami — „ogranicze-niem” w środku słowa czytało się źle
+   (overflow-wrap: anywhere z .siatka-wyboru i hyphens: auto). Na wąskim telefonie najważniejszy (zatrzymanie) zajmuje
+   cały rząd, a dwa pozostałe dzielą drugi — każdy ma wtedy miejsce na „Praca z / ograniczeniem” w dwóch wierszach. */
+.priorytety button { overflow-wrap: normal; word-break: normal; hyphens: manual; }
+/* Znacznik („Praca z ograniczeniem”, „czeka na wysłanie”) to jedna etykieta — nie łamie się w środku. */
+.znacznik { white-space: nowrap; }
+@media (max-width: 420px) {
+  .priorytety { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .priorytety button:first-child { grid-column: 1 / -1; }
+}
 .priorytety button:not(.wybrany) { opacity: .75; }
 
 /* ---------------------------------------------------------------- formularze */

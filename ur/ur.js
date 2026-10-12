@@ -243,12 +243,18 @@
     if (a && a.state !== 'running') a.resume().catch(() => {});
     setTimeout(pokazDzwonek, 300);
   }
+  /* UI etap 3: duży pasek 🔇 nad treścią + mały znacznik w nagłówku, oba aż do dotknięcia. Pasek dało się przeoczyć,
+     a mechanik bez dźwięku nie usłyszy awarii. Sprawdzamy też po powrocie z tła (iPhone usypia dźwięk). */
   function pokazDzwonek() {
     const a = kontekstAudio();
-    $('dzwonek').hidden = !hala.zalogowany() || !a || a.state === 'running';
+    const wylaczony = W.dzwiekWylaczony(hala.zalogowany(), a && a.state);
+    $('dzwonek').hidden = !wylaczony;
+    $('dzwiek-wylaczony').hidden = !wylaczony;
+    if (a && !a.onstatechange) a.onstatechange = pokazDzwonek;
   }
   document.addEventListener('pointerdown', odblokujDzwiek, true);
-  $('dzwonek').addEventListener('click', () => { odblokujDzwiek(); UR.brzeczyk.ok(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pokazDzwonek(); });
+  for (const id of ['dzwonek', 'dzwiek-wylaczony']) $(id).addEventListener('click', () => { odblokujDzwiek(); UR.brzeczyk.ok(); });
 
   UR.powiadomienia = {
     dostepne: () => 'Notification' in global,
@@ -572,6 +578,22 @@
     });
   }
 
+  /* Stopka „Więcej”: „Wersja z 12.10.2026” (W.wersjaZDnia) — mechanik nie czyta skrótów; pełny opis w podpowiedzi. */
+  function wpiszWersje(el) {
+    global.HalaAktualizacja.wpiszWersje(el, 'ur');               // od razu: wersja klienta + podpowiedź dla serwisu
+    if (!global.caches) return;
+    global.caches.keys().then(klucze => {
+      const stempel = klucze.filter(k => k.startsWith('ur-')).sort().pop() || '';
+      let zapis = null;
+      try { zapis = JSON.parse(localStorage.getItem('hala.ur.wersja') || 'null'); } catch (e) { /* bez pamięci — dziś */ }
+      const w = W.wersjaZDnia(stempel, zapis, W.dzienZakladu(hala.teraz()));
+      if (!w.tekst) return;
+      try { localStorage.setItem('hala.ur.wersja', JSON.stringify(w.zapis)); } catch (e) { /* data policzy się od nowa */ }
+      el.textContent = w.tekst;
+      el.title = `klient ${hala.wersja} · aplikacja ${stempel}`;
+    }, () => {});
+  }
+
   UR.ekran('wiecej', {
     rysuj(el) {
       el.innerHTML = `<h1>Więcej</h1>
@@ -585,7 +607,7 @@
         <div id="push"></div>
         <button type="button" class="szeroki" id="test-dzwieku" style="margin-top:10px">Sprawdź dźwięk</button>
         <p class="slaby stopka">Zalogowany: ${esc(hala.pracownik && hala.pracownik.nazwa)} · <span id="wersja">klient ${esc(hala.wersja)}</span></p>`;
-      global.HalaAktualizacja.wpiszWersje(el.querySelector('#wersja'), 'ur');
+      wpiszWersje(el.querySelector('#wersja'));
       rysujPush(el.querySelector('#push'), t => UR.komunikat(t, 'alarm'), true);
       el.querySelector('#test-dzwieku').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.awaria(true), 150); });
     },

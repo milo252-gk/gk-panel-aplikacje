@@ -98,16 +98,24 @@
   }
 
   function rysuj() {
-    // D49: kierownik zakładu / UR / KJ — tylko Pracownicy (jego zespół); bez chipów, alarmów huba i ustawień.
+    // D49: kierownik zakładu / UR / KJ — tylko Pracownicy (jego zespół); bez alarmów huba i ustawień.
+    // UI etap 3: + Checklisty dla tych, którym kontrakt pozwala zmieniać szablony — chipy, gdy części jest więcej niż jedna.
     const admin = jestAdmin();
-    if (!admin) czesc = 'pracownicy';
-    $('admin-chipy').hidden = !admin;
-    rysujZespol(admin);
-    for (const b of document.querySelectorAll('#administracja .chip')) b.setAttribute('aria-pressed', String(b.dataset.czesc === czesc));
+    const dostepne = W.czesciAdministracji(P.dostepAdministracji());
+    czesc = W.czescAdministracji(czesc, dostepne);
+    $('admin-chipy').hidden = dostepne.length < 2;
+    rysujZespol(admin || czesc !== 'pracownicy');
+    for (const b of document.querySelectorAll('#administracja .chip')) {
+      b.hidden = !dostepne.includes(b.dataset.czesc);
+      b.setAttribute('aria-pressed', String(b.dataset.czesc === czesc));
+    }
     if (!admin) { alarmy = []; rysujAlarmy(); }
     else if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();
     const el = $('admin-tresc');
-    if (czesc === 'pracownicy') rysujPracownikow(el);
+    el.hidden = czesc === 'checklisty';
+    $('checklisty').hidden = czesc !== 'checklisty';
+    if (czesc === 'checklisty') { if (P.widoki.checklisty) P.widoki.checklisty.rysuj(); }
+    else if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'maszyny') rysujMaszyny(el);
     else if (czesc === 'serwis') rysujSerwis(el);
     else rysujUstawienia(el);
@@ -1006,5 +1014,5 @@
     $('admin-zespol').hidden = true; $('admin-zespol').textContent = '';
   });
 
-  P.widoki.administracja = { rysuj };
+  P.widoki.administracja = { rysuj, przejdz };
 })();

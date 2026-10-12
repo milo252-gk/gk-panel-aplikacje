@@ -83,7 +83,7 @@
     const wierszTerminu = g => `<div class="pasek-wsk">
             <span class="nazwa">${esc(g.nazwa)}</span>
             <span class="slupek"><i class="${g.proc >= 80 ? 'dobrze' : ''}" style="width:${g.proc}%"></i></span>
-            <span class="liczba">${g.proc} %</span>
+            <span class="liczba">${W.procent(g.proc)} %</span>
             <span class="slaby">w terminie ${g.wTerminie} z ${g.wTerminie + g.poTerminie}${g.poTerminie ? ` · po terminie ${g.poTerminie}` : ''}</span>
           </div>`;
     // Kafelek: podpis z „i” (dotknięcie — dymek z definicją), cały kafelek z tą samą definicją w title (mysz).
@@ -100,9 +100,9 @@
         ${kafel('reakcja', czas(w.reakcjaMs), w.reakcjaMs === null ? 'zero' : '')}
         ${kafel('mttr', czas(w.mttrMs), w.mttrMs === null ? 'zero' : '')}
         ${kafel('mtbf', czas(w.mtbfMs), w.mtbfMs === null ? 'zero' : '')}
-        ${kafel('braki', w.brakiProc === null ? '—' : `${w.brakiProc} %`, w.brakiProc ? 'uwaga' : 'zero')}
+        ${kafel('braki', w.brakiProc === null ? '—' : `${W.procent(w.brakiProc)} %`, w.brakiProc ? 'uwaga' : 'zero')}
         ${kafel('zlecenia_wykonane', `${w.zleceniaWykonane}/${w.zlecenia}`, w.zlecenia ? 'dobrze' : 'zero')}
-        ${kafel('zlecenia_w_terminie', tw.proc === null ? '—' : `${tw.proc} %`, tw.proc === null ? 'zero' : tw.proc >= 80 ? 'dobrze' : 'pilne')}
+        ${kafel('zlecenia_w_terminie', tw.proc === null ? '—' : `${W.procent(tw.proc)} %`, tw.proc === null ? 'zero' : tw.proc >= 80 ? 'dobrze' : 'pilne')}
       </div>
       <div class="wskazniki-dwa">
         <section>${naglowek(w.naMaszyne ? 'przestoj_maszyny' : 'przestoj_linie')}
@@ -117,7 +117,7 @@
           ${w.pareto.map(p => `<div class="pasek-wsk">
             <span class="nazwa">${esc(p.nazwa)}</span>
             <span class="slupek"><i class="wada" style="width:${p.proc}%"></i></span>
-            <span class="liczba">${p.ile} szt.</span><span class="slaby">${p.proc} %</span>
+            <span class="liczba">${p.ile} szt.</span><span class="slaby">${W.procent(p.proc)} %</span>
           </div>`).join('') || `<p class="pusto ok">${w.proby ? 'Bez wad w próbach' : 'Brak prób w tym okresie'}</p>`}
         </section>
         <section>${naglowek('terminowosc_dzialy', tw.proc !== null ? `<span class="slaby">(${tw.wTerminie} z ${tw.wTerminie + tw.poTerminie})</span>` : '')}

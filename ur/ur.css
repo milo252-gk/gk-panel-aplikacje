@@ -181,9 +181,16 @@ body.kierownik-ur .tylko-kierownik { display: flex !important; }
 .plakietka { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
   border-radius: 10px; background: var(--czerwony); color: var(--na-barwie); font-size: .95em; line-height: 20px; text-align: center; }
 
-/* Prośba o dźwięk: przeglądarka gra dopiero po pierwszym dotknięciu strony. */
-.dzwonek { background: var(--zolty-tlo); color: var(--tekst); border-bottom: 1px solid var(--ramka); text-align: center; padding: 10px 12px;
-  font-weight: 600; cursor: pointer; }
+/* Prośba o dźwięk: przeglądarka gra dopiero po pierwszym dotknięciu strony. UI etap 3: pasek duży, z 🔇, przyklejony
+   u góry — wcześniej cienki żółty napis łatwo było przeoczyć, a mechanik bez dźwięku nie usłyszy awarii. */
+.dzwonek { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 56px; padding: 10px 14px; background: var(--zolty-tlo); color: var(--tekst); border-bottom: 3px solid var(--zolty);
+  text-align: center; font-weight: 700; font-size: 1.05em; cursor: pointer; }
+.dzwonek .ikona { font-size: 1.6em; line-height: 1; }
+.naglowek .dzwiek-wylaczony { margin-left: auto; white-space: nowrap; background: var(--zolty-tlo); color: var(--tekst);
+  border: 2px solid var(--zolty); }
+.naglowek .dzwiek-wylaczony:not([hidden]) + .kto { margin-left: 8px; }
+@media (max-width: 420px) { .naglowek .dzwiek-wylaczony .dz-dotknij { display: none; } }
 
 /* ---------------------------------------------------------------- awarie */
 
@@ -201,6 +208,13 @@ body.kierownik-ur .tylko-kierownik { display: flex !important; }
 .awaria .opis-awarii { font-size: .95em; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .awaria .znaczniki { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .9em; }
 .awaria.zamknieta, .awaria.anulowana { opacity: .8; border-left-color: var(--szary); }
+/* UI etap 3 (≤ 420 px): licznik przestoju nad tytułem, w jednym wierszu — kolumna 5.8em po lewej zabierała
+   na telefonie prawie jedną trzecią karty, a nazwa maszyny i znaczniki łamały się w wąskim pasku. */
+@media (max-width: 420px) {
+  .awaria { grid-template-columns: minmax(0, 1fr); }
+  .awaria .przestoj { grid-row: auto; width: auto; display: flex; align-items: baseline; gap: 8px; font-size: 1.25em; }
+  .awaria .przestoj small { display: inline; font-size: .6em; }
+}
 
 .licznik-duzy { font-size: 2.6em; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .naglowek-awarii { border-left: 10px solid var(--szary); }

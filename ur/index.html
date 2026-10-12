@@ -50,11 +50,15 @@
   <header class="naglowek">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="logo">
     <div class="zmiana" id="zmiana"></div>
+    <!-- Mały znacznik w nagłówku, póki dźwięk jest wyłączony (pasek pod nagłówkiem mógł zjechać z ekranu). -->
+    <button type="button" id="dzwiek-wylaczony" class="maly dzwiek-wylaczony" hidden><span aria-hidden="true">🔇</span> <b>Dźwięk wyłączony</b><b class="dz-dotknij"> — dotknij</b></button>
     <div class="kto"><span id="kto" class="tylko-telefon"></span><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
-  <div id="dzwonek" class="dzwonek" hidden>
-    <span>Dotknij, żeby włączyć dźwięk powiadomień</span>
+  <!-- UI etap 3: pasek nie do przeoczenia (🔇, przyklejony u góry) — zostaje, aż ktoś dotknie ekranu. -->
+  <div id="dzwonek" class="dzwonek" role="button" tabindex="0" hidden>
+    <span class="ikona" aria-hidden="true">🔇</span>
+    <span>Dźwięk powiadomień wyłączony — <u>dotknij, żeby włączyć</u></span>
   </div>
 
   <main id="ekran" class="ekran" tabindex="-1"></main>

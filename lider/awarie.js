@@ -40,7 +40,8 @@
     kontener.innerHTML = `<form class="formularz awaria-form" novalidate>
         <h3>1. Maszyna</h3>
         <div class="siatka-wyboru" data-grupa="maszyna">
-          ${maszyny.map(m => `<button type="button" data-wartosc="${esc(m.kod)}"><b>${esc(m.kod)}</b><span>${esc(m.nazwa)}</span></button>`).join('')}
+          ${maszyny.map(m => { const k = W.kafelekMaszyny(m);   // nazwa duża, kod mały (UI etap 3)
+            return `<button type="button" data-wartosc="${esc(m.kod)}"><b>${esc(k.duzy)}</b>${k.maly ? `<span>${esc(k.maly)}</span>` : ''}</button>`; }).join('')}
           <button type="button" class="skan" data-skanuj>📷 Skanuj QR maszyny</button>
         </div>
         <div class="wybrana-inna slaby" hidden></div>

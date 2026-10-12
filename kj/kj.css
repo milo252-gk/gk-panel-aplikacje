@@ -79,6 +79,10 @@ a.karta:active { background: var(--tlo); }
 .grupa h2 { display: flex; gap: 8px; align-items: center; }
 details.grupa { padding: 0 12px; }
 details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+/* Strzałka zwiniętej grupy (jak „▸ Więcej” w Panelu i Liderze) — display:flex chowa znacznik przeglądarki. */
+details.grupa > summary::-webkit-details-marker { display: none; }
+details.grupa > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
+details.grupa[open] > summary::before { transform: rotate(90deg); }
 
 .postep { height: 10px; border-radius: 5px; background: var(--tlo-neutralne); overflow: hidden; margin: 6px 0; }
 /* Pasek w trakcie neutralny (grafit); czerwony tylko „alarm” (koniec zmiany bez planu, alert bez potwierdzeń) — W.stanPaskaPlanu. */

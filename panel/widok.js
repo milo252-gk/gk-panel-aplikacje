@@ -458,7 +458,8 @@
       { kod: 'obchody', etykieta: 'Opóźnione obchody', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
       { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'uwaga') },
       // „do przyjęcia” — tak samo jak chip w Zleceniach (kierownik przyjmuje albo zwraca); dwie nazwy jednej listy myliły.
-      { kod: 'zlecenia', etykieta: doZamkniecia ? `Zlecenia · ${doZamkniecia} do przyjęcia` : 'Zlecenia w toku',
+      // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO PRZYJĘCIA” łamało się w wąskim kafelku.
+      { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do przyjęcia` : null,
         liczba: otwarte + doZamkniecia, klasa: doZamkniecia ? 'dobrze' : klasa(otwarte, 'uwaga') },
       { kod: 'po-terminie', etykieta: 'Zlecenia po terminie', liczba: spoznione, klasa: klasa(spoznione, 'pilne') },
     ].concat(bezRaportu === undefined ? [] : [
@@ -1509,7 +1510,27 @@
              zostaloMs: Math.max(0, Date.parse(zmiana.do) - teraz) };
   }
 
-  const PanelWidok = { obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
+  // ------------------------------------------------------------ UI etap 3 (2026-10-12, ocena właściciela)
+
+  /* Liczba z ułamkiem po polsku: 3.6 → „3,6” (Wskaźniki, raporty zmian). Kropka w „3.6 %” to zapis angielski. */
+  const procent = n => (n === null || n === undefined ? '—' : String(n).replace('.', ','));
+
+  /* Części Administracji dla tej osoby, w kolejności chipów. Checklisty (szablony obchodów lidera) zeszły z górnego menu
+     do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
+     admin — wszystko; zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; szablony (kontrakt: zapis
+     szablony_checklist) — Checklisty. */
+  function czesciAdministracji({ admin, zespol, szablony } = {}) {
+    const c = [];
+    if (admin || zespol) c.push('pracownicy');
+    if (admin) c.push('maszyny', 'ustawienia');
+    if (admin || szablony) c.push('checklisty');
+    if (admin) c.push('serwis');
+    return c;
+  }
+  /* Część do pokazania: wybrana, jeśli wolno, inaczej pierwsza dostępna (kierownik bez Pracowników — od razu Checklisty). */
+  const czescAdministracji = (chciana, dostepne) => ((dostepne || []).includes(chciana) ? chciana : ((dostepne || [])[0] || 'pracownicy'));
+
+  const PanelWidok = { procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
