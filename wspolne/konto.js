@@ -64,7 +64,9 @@
     return o;
   }
 
-  const bezSieci = e => !e || e instanceof TypeError || !e.kod;
+  /* Brak połączenia z hubem: fetch bez odpowiedzi albo odpowiedź, która nie przyszła od huba (e.odHuba === false —
+     Cloudflare 530 przy zgaszonym tunelu, 502 bramy). Wcześniej człowiek widział wtedy samo „HTTP 530”. */
+  const bezSieci = e => !e || e instanceof TypeError || !e.kod || e.odHuba === false;
 
   /* Wspólny przebieg okna: formularz → sprawdzenie → zapytanie do huba → komunikat. wyslij(f) zwraca obietnicę;
      bledy(f) — lista błędów formularza. Obietnica okna: true = zrobione, false = anulowano. */
@@ -121,7 +123,7 @@
       wyslij: f => hala.zmienHaslo(f.stare.value.trim(), f.nowe.value.trim()),
       poBledzie: (e, f) => { if (e && e.kod === 403) { f.stare.value = ''; f.stare.focus(); } },
       komunikatOk: 'Hasło zmienione — działa we wszystkich aplikacjach GK.', komunikat: o.komunikat,
-      bezSieciTekst: 'Zmiana hasła wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.',
+      bezSieciTekst: 'Zmiana hasła wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.',
     });
   }
 
@@ -146,7 +148,7 @@
       wyslij: f => hala.zmienPin(f.stary.value.trim(), f.nowy.value.trim()),
       poBledzie: (e, f) => { if (e && e.kod === 403) { f.stary.value = ''; f.stary.focus(); } },
       komunikatOk: 'PIN zmieniony — działa we wszystkich aplikacjach GK.', komunikat: o.komunikat,
-      bezSieciTekst: 'Zmiana PIN-u wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.',
+      bezSieciTekst: 'Zmiana PIN-u wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.',
     });
   }
 
@@ -191,7 +193,7 @@
         }
       },
       komunikatOk: null, komunikat: o.komunikat,
-      bezSieciTekst: 'Ustawienie hasła i PIN-u wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.',
+      bezSieciTekst: 'Ustawienie hasła i PIN-u wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.',
     }).then(zrobione => {
       if (!zrobione && hala.anulujUstawienie) hala.anulujUstawienie();
       if (bladDostepu) throw bladDostepu;
@@ -266,8 +268,9 @@
 
   /* Ikona osoby na przycisku „Moje konto” w nagłówku (STYL-GK §3, runda 2): SVG w kolorze currentColor — biała na
      grafitowym pasku. Emoji 👤 Windows rysuje fioletowo i ginie na grafitowym pasku. Kształt jest kanoniczny — ten sam
-     we wszystkich aplikacjach webowych GK (GK Trasy, GK Flota) — nie zmieniać tylko tutaj. Aplikacje wstawiają go
-     w index.html; Lider rysuje nagłówek w JS (app.js), więc bierze stałą stąd. */
+     we wszystkich aplikacjach webowych GK (GK Trasy, GK Flota) — nie zmieniać tylko tutaj. Wszystkie cztery aplikacje
+     (także Lider) mają go wpisany w index.html; ta stała to wzorzec, z którym t_aplikacje.py porównuje ich nagłówki,
+     i ikona dla ekranu, który rysowałby nagłówek w JS. */
   const IKONA_KONTA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg>';
 
   /* ---------------------------------------------------------------- „Moje konto” (STYL-GK §3, 2026-10-06)
@@ -303,8 +306,8 @@
         ${d.pin ? '<div data-pin></div>' : ''}
         <div data-dodatki></div>
         <fieldset><legend>Dane w tym urządzeniu</legend>
-          <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} innej osoby)` : ''}</p>
-          ${d.odrzucone && d.zOdrzuconymi ? `<button type="button" data-odrzucone>Odrzucone przez hub: ${Number(d.odrzucone)}</button>` : ''}
+          <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} od innych osób)` : ''}</p>
+          ${d.odrzucone && d.zOdrzuconymi ? `<button type="button" data-odrzucone>Odrzucone przez serwer: ${Number(d.odrzucone)}</button>` : ''}
         </fieldset>
         <p class="hala-konto-drobne" data-wersja></p>
         <div class="hala-okno-przyciski"><button type="button" data-zamknij>Zamknij</button><button type="button" class="glowny" data-wyloguj>Wyloguj</button></div>
@@ -404,6 +407,6 @@
   }
 
   global.HalaKonto = { zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
-                       biuro, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
+                       biuro, bezSieci, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

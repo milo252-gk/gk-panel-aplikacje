@@ -30,10 +30,10 @@
   function kartaListy(w) {
     return `<a class="karta awaria ${klasaPriorytetu(w)} ${w.moja ? 'moja' : ''} ${esc(w.status)}" href="#awaria/${encodeURIComponent(w.id)}">
       <div class="przestoj">${licznik(w)}<small>${w.aktywny ? 'przestój' : esc(w.etykieta)}</small></div>
-      <div class="maszyna"><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)} · ${esc(w.liniaNazwa)}</span></div>
+      <div class="maszyna"><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(w.liniaNazwa)}` : ''}</span></div>
       <div class="znaczniki">
         <span class="znacznik ${KLASA_STATUSU[w.status] || 'neutral'}">${esc(w.etykieta)}${w.powodWstrzymania ? ': ' + esc(w.powodWstrzymania) : ''}</span>
-        ${stoi(w) ? '<span class="znacznik alarm">Stoi linia</span>' : `<span class="slaby">${esc(w.priorytetNazwa)}</span>`}
+        ${stoi(w) ? `<span class="znacznik alarm">${esc(w.stoiNapis)}</span>` : `<span class="slaby">${esc(w.priorytetNazwa)}</span>`}
         ${w.mechanikNazwa ? `<span>${w.moja ? '<b>Ty</b>' : esc(w.mechanikNazwa)}</span>` : ''}
         ${w.czekaMs !== null ? `<span class="slaby">${w.czekaMs >= 60000 ? `lider nie potwierdził od ${esc(Hala.formatCzasu(w.czekaMs))}` : 'czeka na lidera — przed chwilą'}</span>` : ''}
         <span class="slaby">${esc(w.numer)} · ${esc(W.godzina(w.czasZgloszenia))}</span>
@@ -92,9 +92,11 @@
 
   function szczegoly(a, w, k) {
     const d = a.dane || {};
+    // Jedna (ukryta) linia „Hala” (D51): wiersz „Linia: Hala” to szum — zostaje samo stanowisko, jeśli jest.
     const wiersze = [
       ['Numer', w.numer],
-      ['Linia', w.liniaNazwa + (w.stanowiskoNazwa ? ` · ${w.stanowiskoNazwa}` : '')],
+      W.wieleLinii(k.slowniki) ? ['Linia', w.liniaNazwa + (w.stanowiskoNazwa ? ` · ${w.stanowiskoNazwa}` : '')]
+        : w.stanowiskoNazwa ? ['Stanowisko', w.stanowiskoNazwa] : null,
       ['Zgłosił', `${w.zglosil || '—'} · ${W.kiedy(w.czasZgloszenia, k.teraz)}`],
       ['Priorytet', w.priorytetNazwa + (w.priorytetZgloszony ? ` (zgłoszony: ${w.priorytetZgloszony})` : '')],
       ['Typ usterki', w.typUsterki || '—'],
@@ -108,7 +110,7 @@
     if (d.powod_anulowania) wiersze.push(['Powód anulowania', d.powod_anulowania]);
     if (d.uwagi_potwierdzenia) wiersze.push(['Uwagi lidera', d.uwagi_potwierdzenia]);
     for (const o of d.odrzucenia || []) wiersze.push(['Lider: nie działa', `${o.powod || ''} (${W.kiedy(o.czas, k.teraz)})`]);
-    return `<dl class="szczegoly">${wiersze.map(([t, v]) => `<dt>${esc(t)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+    return `<dl class="szczegoly">${wiersze.filter(Boolean).map(([t, v]) => `<dt>${esc(t)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
   }
 
   function rysujKarte(el, id) {
@@ -119,7 +121,9 @@
     }
     const k = UR.kontekst();
     const w = W.wierszAwarii(a, k);
-    const akcje = W.akcjeAwarii(a, k);
+    // UI etap 2: jeden duży przycisk następnego kroku na wierzchu, rzadkie rzeczy pod „Więcej ▾” (W.ukladAkcji).
+    const uklad = W.ukladAkcji(W.akcjeAwarii(a, k));
+    const przycisk = x => `<button type="button" data-krok="${esc(x.typ)}" class="${x.glowny ? 'glowny' : ''} ${x.alarm ? 'alarm' : ''}">${esc(x.tekst)}</button>`;
     const d = a.dane || {};
     const komentarze = d.komentarze || [];
     el.innerHTML = `
@@ -129,19 +133,23 @@
         <div class="licznik-duzy" aria-label="Przestój">${licznik(w)}</div>
         <div class="wiersz">
           <span class="znacznik ${KLASA_STATUSU[w.status] || 'neutral'}">${esc(w.etykieta)}${w.powodWstrzymania ? ': ' + esc(w.powodWstrzymania) : ''}</span>
-          ${stoi(w) ? '<span class="znacznik alarm">Stoi linia</span>' : ''}
+          ${stoi(w) ? `<span class="znacznik alarm">${esc(w.stoiNapis)}</span>` : ''}
           ${w.oczekuje ? '<span class="slaby">czeka na wysłanie</span>' : ''}
         </div>
         ${w.opis ? `<p class="tekst">${esc(w.opis)}</p>` : ''}
         ${(d.zdjecia || []).length ? `<div class="zdjecia">${UR.miniatury(d.zdjecia)}</div>` : ''}
       </section>
       ${a.status === 'oczekuje_potwierdzenia' ? `<p class="czeka-na-lidera">Czeka na potwierdzenie lidera od <span data-od="${esc(Date.parse(d.czas_zakonczenia_ur))}">${esc(Hala.formatLicznika(w.czekaMs))}</span></p>` : ''}
-      <div class="akcje">${akcje.map(x => `<button type="button" data-krok="${esc(x.typ)}" class="${x.glowny ? (x.zielony ? 'zielony' : 'glowny') : ''} ${x.alarm ? 'alarm' : ''}">${esc(x.tekst)}</button>`).join('')}</div>
+      <div class="akcje-karty">
+        ${uklad.wierzch.length ? `<div class="akcje">${uklad.wierzch.map(przycisk).join('')}</div>` : ''}
+        ${uklad.wiecej.length ? `<details class="wiecej-akcji" id="wiecej-akcji"><summary>Więcej</summary>
+          <div class="akcje">${uklad.wiecej.map(przycisk).join('')}</div></details>` : ''}
+      </div>
       ${szczegoly(a, w, k)}
       ${(d.zdjecia_naprawy || []).length ? `<h2>Zdjęcia po naprawie</h2><div class="zdjecia">${UR.miniatury(d.zdjecia_naprawy)}</div>` : ''}
       ${komentarze.length ? `<h2>Notatki</h2><div class="lista">${komentarze.map(c => `<div class="karta"><div class="slaby">${esc(W.nazwaPracownika(k.pracownicy, c.autor))} · ${esc(W.kiedy(c.czas, k.teraz))}</div><div class="tekst">${esc(c.tekst)}</div>${(c.zdjecia || []).length ? `<div class="zdjecia">${UR.miniatury(c.zdjecia)}</div>` : ''}</div>`).join('')}</div>` : ''}
-      <details class="grupa" id="historia"><summary>Historia</summary><div id="historia-tresc"><p class="slaby">Rozwiń, żeby wczytać z huba.</p></div></details>`;
-    el.querySelector('.akcje').addEventListener('click', ev => {
+      <details class="grupa" id="historia"><summary>Historia</summary><div id="historia-tresc"><p class="slaby">Rozwiń, żeby wczytać z serwera.</p></div></details>`;
+    el.querySelector('.akcje-karty').addEventListener('click', ev => {
       const b = ev.target.closest('[data-krok]');
       if (b) wykonaj(b.dataset.krok, a.id, b);
     });
@@ -179,8 +187,12 @@
       ostatniPodpis = teraz;
       const byla = el.querySelector('#historia');
       const otwarta = byla && byla.open;
+      // „Więcej ▾” rozwinięte zostaje rozwinięte — zmiana z huba nie może zwinąć mechanikowi menu spod palca.
+      const wiecej = el.querySelector('#wiecej-akcji');
+      const wiecejOtwarte = wiecej && wiecej.open;
       const y = global.scrollY;
       rysujKarte(el, id);
+      if (wiecejOtwarte && el.querySelector('#wiecej-akcji')) el.querySelector('#wiecej-akcji').open = true;
       UR.wypelnijZdjecia(el);
       if (otwarta) { el.querySelector('#historia').open = true; historie.delete(id); pokazHistorie(id, true); }
       global.scrollTo(0, y);
@@ -254,18 +266,17 @@
         break;
 
       case 'awaria.sklasyfikowana': {
+        // Sam priorytet (UI etap 2): typ usterki mechanik wybiera raz — w „Zakończ naprawę”, kiedy wie, co się zepsuło.
         const d = a.dane || {};
         const w = await UR.okno({
-          tytul: 'Typ i priorytet',
-          tresc: `<h3>Typ usterki</h3>${UR.chipy('typ_usterki', stale.typy_usterek || [], d.typ_usterki ? [d.typ_usterki] : [])}
-            <h3>Priorytet</h3>${UR.chipy('priorytet', stale.priorytety || [], d.priorytet ? [d.priorytet] : [])}
-            ${d.priorytet_zgloszony ? `<p class="slaby">Lider zgłosił: ${esc(W.priorytetInfo(stale, d.priorytet_zgloszony).nazwa)} — zostaje w historii.</p>` : ''}`,
+          tytul: 'Priorytet',
+          tresc: `${UR.chipy('priorytet', (stale.priorytety || []).map(p => ({ kod: p.kod, nazwa: W.nazwaPriorytetu(p, hala.slowniki) })), d.priorytet ? [d.priorytet] : [])}
+            ${d.priorytet_zgloszony ? `<p class="slaby">Lider zgłosił: ${esc(W.nazwaPriorytetu(W.priorytetInfo(stale, d.priorytet_zgloszony), hala.slowniki))} — zostaje w historii.</p>` : ''}`,
           przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: 'Zapisz', wartosc: true, glowny: true,
-            sprawdz: f => (f.get('typ_usterki') || f.get('priorytet') ? null : 'Wybierz typ albo priorytet.') }],
+            sprawdz: f => (f.get('priorytet') ? null : 'Wybierz priorytet.') }],
         });
         if (!w || !w.wartosc) break;
         const dane = {};
-        if (w.dane.get('typ_usterki') && w.dane.get('typ_usterki') !== d.typ_usterki) dane.typ_usterki = w.dane.get('typ_usterki');
         if (w.dane.get('priorytet') && w.dane.get('priorytet') !== d.priorytet) dane.priorytet = w.dane.get('priorytet');
         if (!Object.keys(dane).length) { UR.komunikat('Bez zmian.'); break; }
         await zapisz(typ, id, dane, 'Zapisane');
@@ -337,8 +348,8 @@
         <h3>Typ usterki</h3>${UR.chipy('typ_usterki', stale.typy_usterek || [], typ ? [typ] : [])}
         <label>Części (opcjonalnie)<input name="czesci" maxlength="1000" value="${esc(b.czesci || '')}" placeholder="np. czujnik PNP M12, 2 szt." data-bez-fokusu></label>
         <h3>Zdjęcia (opcjonalnie)</h3>${UR.poleZdjec('zdjecia', b.zdjecia || [])}
-        <p class="slaby">Potem lider potwierdzi, że linia ruszyła — do tego czasu przestój biegnie.</p>`,
-      przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: 'Zakończ naprawę', wartosc: true, zielony: true,
+        <p class="slaby">Potem lider potwierdzi, że ${W.wieleLinii(hala.slowniki) ? 'linia ruszyła' : 'maszyna ruszyła'} — do tego czasu przestój biegnie.</p>`,
+      przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: 'Zakończ naprawę', wartosc: true, glowny: true,
         sprawdz: f => W.bledyZakonczenia(formularz(f))[0] || null }],
       przy: form => form.addEventListener('input', () => hala.brudnopis.zapisz(klucz, formularz(new FormData(form)))),
     });

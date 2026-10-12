@@ -39,9 +39,9 @@
       setTimeout(() => zHuba.delete(klucz), 5 * 60000);     // nowe awarie i zlecenia — po 5 min liczymy od nowa
       bledyHuba.delete(klucz);
     } catch (e) {
-      const tekst = e && e.kod === 403 ? 'To konto nie widzi wskaźników z huba.'
-        : e && e.kod ? `Hub nie policzył wskaźników: ${P.komunikatBledu(e)}`
-        : 'Dłuższy zakres liczy hub — brak połączenia. Spróbuj za chwilę albo wybierz „Dziś” lub „Wczoraj”.';
+      const tekst = e && e.kod === 403 ? 'To konto nie widzi wskaźników z serwera.'
+        : e && e.kod ? `Serwer nie policzył wskaźników: ${P.komunikatBledu(e)}`
+        : 'Dłuższy zakres liczy serwer — brak połączenia. Spróbuj za chwilę albo wybierz „Dziś” lub „Wczoraj”.';
       bledyHuba.set(klucz, { tekst, do: Date.now() + 60000 });
     } finally {
       wToku.delete(klucz);
@@ -69,12 +69,12 @@
       const z = zHuba.get(klucz);
       if (!z) {
         const b = bledyHuba.get(klucz);
-        el.innerHTML = `<p class="slaby okres-opis">${esc(okno.nazwa)}</p><p class="pusto">${esc(b && Date.now() < b.do ? b.tekst : 'Liczę w hubie…')}</p>`;
+        el.innerHTML = `<p class="slaby okres-opis">${esc(okno.nazwa)}</p><p class="pusto">${esc(b && Date.now() < b.do ? b.tekst : 'Liczę na serwerze…')}</p>`;
         pobierz(klucz, okno);
         return;
       }
       gotowe = z.wynik;
-      zrodlo = ` · policzone przez hub o ${W.godzina(z.kiedy)}`;
+      zrodlo = ` · policzone przez serwer o ${W.godzina(z.kiedy)}`;
     }
     const w = W.wskazniki({ awarie: hala.obiekty('awaria'), proby: hala.obiekty('proba'), zlecenia: hala.obiekty('zlecenie'),
                             slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, okno, gotowe });
@@ -95,7 +95,7 @@
       <p class="slaby okres-opis">${esc(opisOkna)}${esc(zrodlo)}</p>
       <div class="hala-kafelki">
         ${kafel('awarie', w.awarie, w.awarie ? 'uwaga' : 'zero')}
-        ${kafel('zatrzymania', w.zatrzymania, w.zatrzymania ? 'pilne' : 'zero')}
+        ${kafel(w.naMaszyne ? 'zatrzymania_maszyn' : 'zatrzymania', w.zatrzymania, w.zatrzymania ? 'pilne' : 'zero')}
         ${kafel('przestoj', czas(w.przestojMs), w.przestojMs ? 'pilne' : 'zero')}
         ${kafel('reakcja', czas(w.reakcjaMs), w.reakcjaMs === null ? 'zero' : '')}
         ${kafel('mttr', czas(w.mttrMs), w.mttrMs === null ? 'zero' : '')}
@@ -105,13 +105,13 @@
         ${kafel('zlecenia_w_terminie', tw.proc === null ? '—' : `${tw.proc} %`, tw.proc === null ? 'zero' : tw.proc >= 80 ? 'dobrze' : 'pilne')}
       </div>
       <div class="wskazniki-dwa">
-        <section>${naglowek('przestoj_linie')}
-          ${w.linie.map(k => `<div class="pasek-wsk">
+        <section>${naglowek(w.naMaszyne ? 'przestoj_maszyny' : 'przestoj_linie')}
+          ${(w.naMaszyne ? w.maszyny : w.linie).map(k => `<div class="pasek-wsk">
             <span class="nazwa">${esc(k.nazwa)}</span>
-            <span class="slupek"><i style="width:${w.maksPrzestojMs ? Math.round(k.przestojMs * 100 / w.maksPrzestojMs) : 0}%"></i></span>
+            <span class="slupek"><i style="width:${k.proc}%"></i></span>
             <span class="liczba">${esc(czas(k.przestojMs))}</span>
             <span class="slaby">${k.awarie} aw.${k.zatrzymania ? ` · ${k.zatrzymania} zatrz.` : ''}${k.mttrMs !== null ? ` · MTTR ${esc(czas(k.mttrMs))}` : ''}</span>
-          </div>`).join('') || '<p class="pusto">Brak linii</p>'}
+          </div>`).join('') || (w.naMaszyne ? '<p class="pusto ok">Bez awarii w tym okresie</p>' : '<p class="pusto">Brak linii</p>')}
         </section>
         <section>${naglowek('wady', w.proby ? `<span class="slaby">(${w.proby} prób, ${w.braki}/${w.sprawdzone} braków)</span>` : '')}
           ${w.pareto.map(p => `<div class="pasek-wsk">

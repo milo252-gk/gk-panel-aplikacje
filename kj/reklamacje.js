@@ -31,7 +31,7 @@
         ${r.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
       <div class="slaby">${esc(r.liniaNazwa)}${r.klient ? ' · ' + esc(r.klient) : ''} · ${esc(W.kiedy(r.czas, hala.teraz()))}</div>
       ${r.otwarta ? `<div class="${r.odczyty.length ? 'tekst-ok' : 'tekst-uwaga'}">${r.odczyty.length
-        ? 'Odczytał: ' + esc(r.odczyty.map(o => o.kto).join(', ')) : 'Lider jeszcze nie odczytał'}</div>` : `<div class="slaby">${esc(r.etykieta)}</div>`}
+        ? `${W.naglowekOdczytow(r.odczyty.length)}: ` + esc(r.odczyty.map(o => o.kto).join(', ')) : 'Lider jeszcze nie odczytał'}</div>` : `<div class="slaby">${esc(r.etykieta)}</div>`}
     </a>`;
   }
 
@@ -64,7 +64,7 @@
         });
         if (!w || !w.wartosc) return;
         const t = String(w.dane.get('rozstrzygniecie') || '').trim();
-        await hala.zapisz('reklamacja.zamknieta', r.id, t ? { rozstrzygniecie: t } : {});
+        if (!(await KJ.zapisz('reklamacja.zamknieta', r.id, t ? { rozstrzygniecie: t } : {}))) return;
         KJ.komunikat('Reklamacja zamknięta');
       });
     },
@@ -72,7 +72,8 @@
 
   // ------------------------------------------------------------ nowa reklamacja
 
-  const pusty = () => ({ kod_wyrobu: '', linia: '', liniaRecznie: false, partia: '', klient: '', opis: '', zdjecia: [] });
+  // liniaZWyrobu: linia wpisana podpowiedzią z wyrobu (znika, gdy kod przestanie pasować) — W.liniaPoWyrobie.
+  const pusty = () => ({ kod_wyrobu: '', linia: '', liniaRecznie: false, liniaZWyrobu: false, partia: '', klient: '', opis: '', zdjecia: [] });
   let f = pusty();
 
   KJ.ekran('reklamacja-nowa', {
@@ -81,6 +82,7 @@
     async rysuj(el) {
       if (!KJ.mozna('reklamacja.zarejestrowana')) { el.innerHTML = '<p class="pusto">Reklamacje rejestruje kontroler albo kierownik KJ.</p>'; return; }
       f = Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS)) || {});
+      if (!f.linia && W.jedynaLinia(hala.slowniki)) f.linia = W.jedynaLinia(hala.slowniki);   // D51: jedna linia — bez wybierania
       el.innerHTML = `<a class="wstecz" href="#reklamacje">‹ Reklamacje</a>
         <h1>Nowa reklamacja</h1>
         <form id="f-reklamacja" class="formularz" autocomplete="off" novalidate>
@@ -112,7 +114,7 @@
         KJ.idz('reklamacja-nowa');
       });
     },
-    odswiez(el) { rysujWyroby(el); rysujLinie(el); },
+    odswiez(el) { podpowiedzLinie(el); rysujWyroby(el); },          // nowy wyrób albo linia w słowniku
   });
 
   function czytaj(form) {
@@ -120,11 +122,11 @@
     for (const k of ['kod_wyrobu', 'partia', 'klient', 'opis']) f[k] = String(d.get(k) || '');
   }
 
-  /* Kod wyrobu z listy → linia ze słownika. Linii wybranej ręcznie nie nadpisujemy. */
+  /* Kod wyrobu z listy → linia ze słownika (W.liniaPoWyrobie: linii świadomie zmienionej przy znanym wyrobie nie
+     nadpisujemy, podpowiedź z wyrobu, który przestał pasować, znika). Object.assign, nie nowe f — zdjęcie w drodze
+     sprawdza, czy formularz jest wciąż ten sam (f === cel). */
   function podpowiedzLinie(el) {
-    const kod = kodWyrobu();
-    const z = W.liniaWyrobu(hala.slowniki, kod);
-    if (z && !f.liniaRecznie) f.linia = z;
+    Object.assign(f, W.liniaPoWyrobie(f, W.liniaWyrobu(hala.slowniki, kodWyrobu()), W.jedynaLinia(hala.slowniki)));
     rysujLinie(el);
   }
   // Wyrób ze słownika dopasowany bez względu na wielkość liter (w-200 = W-200).
@@ -144,8 +146,14 @@
     const z = W.liniaWyrobu(hala.slowniki, kodWyrobu());
     const nazwa = W.nazwaWyrobu(hala.slowniki, kodWyrobu());
     el.querySelector('#nazwa-wyrobu').textContent = nazwa || (f.kod_wyrobu.trim() ? 'Wyrobu nie ma w słowniku — wybierz linię ręcznie.' : '');
-    el.querySelector('#skad-linia').textContent = f.linia && z === f.linia ? '(podpowiedź z wyrobu — zmień, jeśli trzeba)' : '';
-    box.innerHTML = W.linie(hala.slowniki).map(l => `<button type="button" data-linia="${esc(l.kod)}" aria-pressed="${f.linia === l.kod}">${esc(l.nazwa)}</button>`).join('');
+    // Linia inna niż linia znanego wyrobu — ostrzeżenie: reklamacja trafi do liderów innej linii, niż powstaje wyrób.
+    el.querySelector('#skad-linia').textContent = f.linia && z === f.linia ? '(podpowiedź z wyrobu — zmień, jeśli trzeba)'
+      : f.linia && z ? `(uwaga: wyrób jest z linii ${W.nazwaLinii(hala.slowniki, z)})` : '';
+    // Jedna linia (D51): wybrana sama, pole chowamy jak Panel; zero linii — mówimy, kto je zakłada.
+    const lista = W.linie(hala.slowniki);
+    box.closest('fieldset').hidden = lista.length === 1 && f.linia === lista[0].kod;
+    if (!lista.length) { box.innerHTML = '<p class="pusto">Brak linii w systemie — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
+    box.innerHTML = lista.map(l => `<button type="button" data-linia="${esc(l.kod)}" aria-pressed="${f.linia === l.kod}">${esc(l.nazwa)}</button>`).join('');
   }
 
   function rysujZdjecia(el) {
@@ -162,8 +170,7 @@
     const el = KJ.$('ekran');
     const l = ev.target.closest('#linia-reklamacji button');
     if (l) {
-      f.linia = l.dataset.linia;
-      f.liniaRecznie = f.linia !== W.liniaWyrobu(hala.slowniki, kodWyrobu());
+      Object.assign(f, W.liniaKliknieta(f, l.dataset.linia, W.liniaWyrobu(hala.slowniki, kodWyrobu())));
       rysujLinie(el); hala.brudnopis.zapisz(BRUDNOPIS, f);
       return;
     }
@@ -187,11 +194,12 @@
     b.innerHTML = bledy.map(esc).join('<br>');
     if (bledy.length) return;
     const id = hala.nowyId();
-    await hala.zapisz('reklamacja.zarejestrowana', id, W.daneReklamacji(f));
+    if (!(await KJ.zapisz('reklamacja.zarejestrowana', id, W.daneReklamacji(f)))) return;
     await hala.brudnopis.usun(BRUDNOPIS);
     const linia = f.linia;                           // przed pusty() — inaczej komunikat mówił „liderom: —”
     f = pusty();                                     // spóźnione zdjęcie nie wskrzesi wysłanego formularza
-    KJ.komunikat(W.komunikatReklamacji(hala.slowniki, linia));
+    // Bez połączenia nie mówimy „przekazana” — liderzy dostaną ją dopiero po wysłaniu kolejki.
+    KJ.komunikat(W.komunikatReklamacji(hala.slowniki, linia, W.wysylaNaZywo(hala.polaczenie)));
     KJ.idz('reklamacja/' + id);
   }
 })(window.KJ);

@@ -25,6 +25,14 @@
   KJ.kierownikKJ = () => !!hala.pracownik && (hala.pracownik.role || []).some(r => r === 'kierownik_kj' || r === 'admin');
   KJ.prog = () => Number(hala.ustawienie('prog_brakow_proc', 5));
 
+  /* Każdy zapis zdarzenia z ekranów KJ idzie tędy: hala.zapisz rzuca (nikt nie zalogowany, brak wymaganego pola,
+     pełna pamięć telefonu), a wcześniej taki błąd ginął bez słowa — „Zapisz” po prostu nic nie robił.
+     true = zapis jest w kolejce telefonu; false = nie zapisano (komunikat już pokazany, formularz zostaje). */
+  KJ.zapisz = async (typ, obiekt, dane) => {
+    try { await hala.zapisz(typ, obiekt, dane); return true; }
+    catch (e) { console.error(e); KJ.komunikat(W.komunikatBleduZapisu(e), 'alarm'); return false; }
+  };
+
   // ------------------------------------------------------------ komunikaty i okna
 
   let komunikatZegar = null;
@@ -67,6 +75,9 @@
       ev.preventDefault();
       zamknij(p ? { wartosc: p.wartosc, dane: new FormData(f) } : null);
     });
+    // Enter w polu (klawiatura „OK”, czytnik kodów kończący Enterem) NIE wysyła okna — jak w formularzach
+    // (przyZapisie): skan numeru partii w oknie „Partia brakowa” od razu oznaczał partię, zanim wpisano ilość.
+    f.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') ev.preventDefault(); });
     o.oncancel = ev => { ev.preventDefault(); zamknij(null); };      // Esc / „wstecz” — jedna obsługa na okno
     o.showModal();
     const pierwsze = o.querySelector('input, textarea, select');
@@ -79,7 +90,9 @@
     const raz = W.raz(async () => {
       const przyciski = form.querySelectorAll('button[type="submit"]');
       przyciski.forEach(b => { b.disabled = true; });
-      try { await zapisz(form); } finally { przyciski.forEach(b => { b.disabled = false; }); }
+      // Błąd poza samym zapisem (brudnopis, okno) też ma być widać — wcześniej przycisk tylko wracał do życia.
+      try { await zapisz(form); } catch (e) { console.error(e); KJ.komunikat(W.komunikatBleduZapisu(e), 'alarm'); }
+      finally { przyciski.forEach(b => { b.disabled = false; }); }
     });
     form.addEventListener('submit', ev => { ev.preventDefault(); raz(); });
     // Enter w polu (klawiatura telefonu „Dalej/OK” albo czytnik kodów kończący Enterem) NIE zapisuje całego
@@ -167,9 +180,9 @@
   // ------------------------------------------------------------ nawigacja
 
   KJ.ekran = (nazwa, def) => { KJ.ekrany[nazwa] = def; };
-  // Zlecenia od kierownika (Panel → dział „kj”): wspólny ekran z wspolne/zlecenia.js.
-  KJ.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'kj' }) });
-  global.HalaZlecenia.sledz(hala, () => ({ dzial: 'kj' }), z => KJ.komunikat(`Nowe zlecenie od kierownika: ${(z.dane || {}).tytul || ''}`));
+  // Zlecenia od kierownika (Panel → dział „kj”) są na Planie (UI etap 2, proba.js) — bez osobnego ekranu. Adres „#zlecenia”
+  // (push z huba, stare zakładki) nie zna ekranu, więc adres() otwiera Plan, gdzie zlecenia stoją na samej górze.
+  global.HalaZlecenia.sledz(hala, () => ({ dzial: 'kj' }), (z, o) => KJ.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
   KJ.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };
 
   function adres() {
@@ -257,7 +270,7 @@
 
   function komunikatBledu(e) {
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
-    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
+    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
     if (e.kod === 403) return 'To konto nie ma dostępu do Kontroli Jakości. Zaloguj się kontem kontrolera albo kierownika KJ.';
     // 400/401/429: hub mówi po polsku i co zrobić („Złe imię i nazwisko albo PIN”, blokada na 5 minut) — wprost (D24).
@@ -348,14 +361,14 @@
         czesci.push('Odświeżanie co kilka sekund' + (kolejka.moje ? ` · wysyłam: ${kolejka.moje}` : ''));
       } else if (!p.strumien && !laska) {
         klasa = p.online ? 'brak-huba' : 'offline';
-        czesci.push(p.online ? 'Brak połączenia z hubem' + (kolejka.moje ? ` — ${kolejka.moje} czeka na wysłanie` : '')
+        czesci.push(p.online ? 'Brak połączenia z serwerem' + (kolejka.moje ? ` — ${kolejka.moje} czeka na wysłanie` : '')
           : 'Brak sieci — zapisy zostają w telefonie' + (kolejka.moje ? ` (${kolejka.moje})` : ''));   // STYL-GK §6, jak Lider
       } else if (kolejka.moje) {
         // Tylko zapisy zalogowanej osoby — cudze (poprzednia osoba na tym telefonie) czekają na jej powrót.
         klasa = 'kolejka';
         czesci.push(`Wysyłam: ${kolejka.moje}`);
       }
-      if (kolejka.odrzucone) { klasa = 'odrzucone'; czesci.push(`Odrzucone: ${kolejka.odrzucone} — dotknij`); }
+      if (kolejka.odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${kolejka.odrzucone} — dotknij`); }
     }
     pasek.className = 'hala-polaczenie ' + klasa;
     pasek.textContent = czesci.join(' · ');
@@ -363,11 +376,11 @@
   }
   $('pasek').addEventListener('click', () => { if (kolejka.odrzucone) KJ.idz('odrzucone'); });
 
-  // Odrzucone przez hub: nic nie znika samo — człowiek czyta powód i decyduje (KONTRAKT §5.2).
+  // „Nie wysłane” = zapisy odrzucone przez serwer (na ekranie nie „hub” — tak mówią ludzie): nic nie znika samo — człowiek czyta powód i decyduje (KONTRAKT §5.2).
   KJ.ekran('odrzucone', {
     zakladka: 'wiecej',
     async rysuj(el) {
-      el.innerHTML = '<h1>Odrzucone przez hub</h1><div class="lista" id="lista-odrzuconych"><p class="pusto">Wczytuję…</p></div>';
+      el.innerHTML = '<h1>Nie wysłane</h1><div class="lista" id="lista-odrzuconych"><p class="pusto">Wczytuję…</p></div>';
       const lista = await hala.odrzucone();
       $('lista-odrzuconych').innerHTML = lista.map(o => `
         <article class="karta">
@@ -375,13 +388,13 @@
           <p class="blad">${esc(o.powod)}</p>
           <details><summary>Co było w zapisie</summary><pre>${esc(JSON.stringify(o.zd.dane, null, 1))}</pre></details>
           <button type="button" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button>
-        </article>`).join('') || '<p class="pusto ok">Nic nie zostało odrzucone</p>';
+        </article>`).join('') || '<p class="pusto ok">Wszystko wysłane</p>';
     },
   });
   document.addEventListener('click', async ev => {
     const b = ev.target.closest && ev.target.closest('[data-usun-odrzucone]');
     if (!b) return;
-    if (!(await KJ.potwierdz('Usunąć z listy?', 'Ten zapis nie trafił do huba. Po usunięciu trzeba go wprowadzić jeszcze raz.', 'Usuń'))) return;
+    if (!(await KJ.potwierdz('Usunąć z listy?', 'Ten zapis nie trafił na serwer. Po usunięciu trzeba go wprowadzić jeszcze raz.', 'Usuń'))) return;
     await hala.usunOdrzucone(b.dataset.usunOdrzucone);
     pokazEkran();
   });
@@ -426,7 +439,7 @@
           <a class="przycisk" href="#pareto">Pareto wad</a>
           <a class="przycisk" href="#partie">Partie brakowe</a>
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
-          <a class="przycisk" href="#odrzucone">Odrzucone przez hub${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
+          <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
         <h2>Powiadomienia</h2>
         <p class="slaby">Zlecenia od kierownika — także przy zamkniętej aplikacji.</p>
@@ -440,7 +453,7 @@
   // ------------------------------------------------------------ start
 
   hala.na('zmiana', () => KJ.odswiez());
-  // Plakietka „Zlecenia”: ile zleceń od kierownika czeka na KJ.
+  // Plakietka przy „Plan” (UI etap 2 — zlecenia są na Planie): ile zleceń od kierownika czeka na KJ.
   const plakietkaZlecen = () => { const e = document.getElementById('licznik-zlecen'); const n = global.HalaZlecenia.doZrobienia(hala, { dzial: 'kj' });
     e.hidden = !n; e.textContent = n > 99 ? '99+' : String(n); };
   hala.na('zmiana', plakietkaZlecen);
@@ -449,7 +462,7 @@
   hala.na('sesja', pokazSesje);
   hala.na('polaczenie', rysujPasek);
   hala.na('kolejka', k => { kolejka = k; rysujPasek(); });
-  hala.na('odrzucone', ({ powod }) => KJ.komunikat(`Hub nie przyjął zapisu: ${powod}`, 'alarm'));
+  hala.na('odrzucone', ({ powod }) => KJ.komunikat(`Serwer nie przyjął zapisu: ${powod}`, 'alarm'));
   /* Konflikt = ktoś (inny telefon) zmienił to wcześniej. Zapis jest w historii, stan się nie zmienił —
      mówimy to po ludzku, a techniczny powód huba zostaje w konsoli. */
   hala.na('konflikt', ({ zdarzenie, uwaga }) => {

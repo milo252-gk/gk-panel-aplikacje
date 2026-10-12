@@ -1,4 +1,4 @@
-/* Quality Alerty (KONTRAKT §6.3): tworzenie, lista z postępem potwierdzeń
+/* Alerty jakości (KONTRAKT §6.3): tworzenie, lista z postępem potwierdzeń
    liderów, szczegóły, wycofanie.
 
    Wypchnięcie do liderów dzieje się samo — alert.opublikowany idzie strumieniem
@@ -18,10 +18,10 @@
       const lista = W.listaAlertow({ alerty: hala.obiekty('alert'), slowniki: hala.slowniki, pracownicy: hala.pracownicy, teraz: hala.teraz() });
       const aktywne = lista.filter(a => a.aktywny), wycofane = lista.filter(a => !a.aktywny);
       el.innerHTML = `
-        <div class="tytul-ekranu"><h1>Quality Alerty</h1>
+        <div class="tytul-ekranu"><h1>Alerty jakości</h1>
           ${KJ.mozna('alert.opublikowany') ? '<a class="przycisk glowny" href="#alert-nowy">Nowy alert</a>' : ''}</div>
         <div class="lista">${aktywne.map(karta).join('') || '<p class="pusto">Brak aktywnych alertów</p>'}</div>
-        ${wycofane.length ? `<details class="archiwum"><summary>Wycofane (${wycofane.length})</summary>
+        ${wycofane.length ? `<details class="archiwum"><summary>Wycofane i wygasłe (${wycofane.length})</summary>
           <div class="lista">${wycofane.map(karta).join('')}</div></details>` : ''}`;
     },
   });
@@ -31,11 +31,10 @@
     return `<a class="karta alert ${a.aktywny ? '' : 'wycofany'}" href="#alert/${encodeURIComponent(a.id)}">
       <div class="wiersz"><span class="znacznik ${a.aktywny ? 'alarm' : 'neutral'}">${esc(a.numer)}</span>
         <span class="slaby">${esc(W.kiedy(a.czas, hala.teraz()))}</span>
-        ${a.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}
-        ${a.przeterminowany && a.aktywny ? '<span class="znacznik uwaga">po terminie ważności</span>' : ''}</div>
+        ${a.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
       <b class="tytul">${esc(a.tytul)}</b>
-      ${a.aktywny ? `<div class="postep ${a.komplet ? 'komplet' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="${a.wszystkie}" aria-valuenow="${a.potwierdzone}"><span style="width:${proc}%"></span></div>
-      <div class="potwierdzenia ${a.komplet ? 'komplet' : ''}">Potwierdzenia ${a.potwierdzone}/${a.wszystkie}${a.brakuje.length ? ` <span class="slaby">— brak: ${esc(a.brakuje.join(', '))}</span>` : ''}</div>` : `<div class="slaby">${esc(a.etykieta)}</div>`}
+      ${a.aktywny ? `<div class="postep ${a.komplet ? 'komplet' : 'alarm'}" role="progressbar" aria-valuemin="0" aria-valuemax="${a.wszystkie}" aria-valuenow="${a.potwierdzone}"><span style="width:${proc}%"></span></div>
+      <div class="potwierdzenia ${a.komplet ? 'komplet' : ''}">Potwierdzenia ${a.potwierdzone}/${a.wszystkie}${a.brakuje.length ? ` <span class="slaby">— brak: ${esc(a.brakuje.join(', '))}</span>` : ''}</div>` : `<div class="slaby">${a.wygasl ? `Wygasł ${esc(W.dataPelna(a.waznyDo))}` : esc(a.etykieta)}</div>`}
     </a>`;
   }
 
@@ -47,9 +46,12 @@
       const a = hala.obiekt('alert', id);
       if (!a) { el.innerHTML = '<p class="pusto">Nie ma takiego alertu (może jeszcze się nie zsynchronizował). <a href="#alerty">Wróć do listy</a></p>'; return; }
       const d = a.dane, p = W.postepAlertu(a, hala.slowniki, hala.pracownicy);
+      // Po „Ważny do” lider go nie widzi i nie potwierdzi (Hala.alertAktywny) — nie udajemy, że „czeka na lidera”.
+      const wygasl = a.status === 'aktywny' && !Hala.alertAktywny(a, hala.teraz());
+      const obowiazuje = a.status === 'aktywny' && !wygasl;
       el.innerHTML = `
         <a class="wstecz" href="#alerty">‹ Alerty</a>
-        <div class="wiersz"><span class="znacznik ${a.status === 'aktywny' ? 'alarm' : 'neutral'}">${esc(W.numer(a))}</span>
+        <div class="wiersz"><span class="znacznik ${obowiazuje ? 'alarm' : 'neutral'}">${esc(W.numer(a))}</span>
           <span class="slaby">${esc(a.etykieta)} · ${esc(W.kiedy(d.czas_publikacji || a.utworzono, hala.teraz()))} · ${esc(W.nazwaPracownika(hala.pracownicy, d.opublikowal) || '')}</span></div>
         <h1>${esc(d.tytul)}</h1>
         <div class="porownanie">
@@ -58,14 +60,15 @@
         </div>
         <h2>Problem</h2><p class="tekst">${esc(d.opis)}</p>
         <h2>Instrukcja dla operatora</h2><p class="tekst instrukcja">${esc(d.instrukcja)}</p>
-        <p class="slaby">${d.wyrob ? `Wyrób: ${esc(d.wyrob)} ${esc(W.nazwaWyrobu(hala.slowniki, d.wyrob) || '')} · ` : ''}${d.wazny_do ? `Ważny do ${esc(W.data(d.wazny_do))}` : 'Bez terminu ważności'}</p>
+        <p class="slaby">${d.wyrob ? `Wyrób: ${esc(d.wyrob)} ${esc(W.nazwaWyrobu(hala.slowniki, d.wyrob) || '')} · ` : ''}${d.wazny_do ? `Ważny do ${esc(W.dataPelna(d.wazny_do))}` : 'Bez terminu ważności'}</p>
         <h2>Potwierdzenia liderów <span class="${p.komplet ? 'tekst-ok' : 'tekst-alarm'}">${p.potwierdzone}/${p.wszystkie}</span></h2>
         <ul class="potwierdzenia-linii">${p.wiersze.map(w => `
           <li class="${w.potwierdzone ? 'ok' : 'brak'}"><b>${esc(w.nazwa)}</b>
-            ${w.potwierdzone ? `<span>${esc(w.kto || '')} · ${esc(W.kiedy(w.czas, hala.teraz()))}</span>${w.uwagi ? `<q>${esc(w.uwagi)}</q>` : ''}` : '<span>czeka na lidera</span>'}</li>`).join('')}
+            ${w.potwierdzone ? `<span>${esc(w.kto || '')} · ${esc(W.kiedy(w.czas, hala.teraz()))}</span>${w.uwagi ? `<q>${esc(w.uwagi)}</q>` : ''}` : `<span>${wygasl ? 'nie potwierdzono' : 'czeka na lidera'}</span>`}</li>`).join('')}
         </ul>
         ${a.status === 'wycofany' ? `<p class="slaby">Wycofany ${esc(W.kiedy(d.czas_wycofania, hala.teraz()))}${d.powod_wycofania ? ': ' + esc(d.powod_wycofania) : ''}</p>` : ''}
-        ${a.status === 'aktywny' && KJ.mozna('alert.wycofany') ? '<button type="button" id="wycofaj" class="alarm szeroki">Wycofaj alert</button>' : ''}`;
+        ${wygasl ? `<p class="slaby">Wygasł ${esc(W.dataPelna(d.wazny_do))} — liderzy już go nie widzą i nie potwierdzają.</p>` : ''}
+        ${obowiazuje && KJ.mozna('alert.wycofany') ? '<button type="button" id="wycofaj" class="alarm szeroki">Wycofaj alert</button>' : ''}`;
       const b = el.querySelector('#wycofaj');
       if (b) b.addEventListener('click', () => wycofaj(a));
     },
@@ -81,7 +84,7 @@
     });
     if (!w || !w.wartosc) return;
     const powod = String(w.dane.get('powod') || '').trim();
-    await hala.zapisz('alert.wycofany', a.id, powod ? { powod } : {});
+    if (!(await KJ.zapisz('alert.wycofany', a.id, powod ? { powod } : {}))) return;
     KJ.komunikat('Alert wycofany');
   }
 
@@ -99,7 +102,7 @@
       const wyroby = Object.entries(hala.slowniki.wyroby || {}).sort(([a], [b]) => a.localeCompare(b, 'pl'));
       el.innerHTML = `
         <a class="wstecz" href="#alerty">‹ Alerty</a>
-        <h1>Nowy Quality Alert</h1>
+        <h1>Nowy alert jakości</h1>
         <form id="f-alert" class="formularz" autocomplete="off" novalidate>
           <label>Tytuł<input name="tytul" maxlength="200" value="${esc(f.tytul)}" placeholder="np. Rysa na obudowie A"></label>
           <div class="porownanie">
@@ -147,9 +150,13 @@
     KJ.wypelnijZdjecia(el);
   }
 
+  /* Przy jednej linii (D51) wybór nie ma sensu — przycisk „Hala” odskakiwał zaraz na „Wszystkie” i wyglądał na
+     zepsuty. Pole chowamy (alert idzie na wszystkie linie, czyli na tę jedną), jak Panel chowa pola linii. */
   function rysujLinie(el) {
     const box = el.querySelector('#linie-alertu');
     if (!box) return;
+    const pole = box.closest('fieldset');
+    if (pole) pole.hidden = W.linie(hala.slowniki).length <= 1;
     const wszystkie = !f.linie.length;
     box.innerHTML = `<button type="button" data-linia="" aria-pressed="${wszystkie}">Wszystkie</button>` +
       W.linie(hala.slowniki).map(l => `<button type="button" data-linia="${esc(l.kod)}" aria-pressed="${f.linie.includes(l.kod)}">${esc(l.nazwa)}</button>`).join('');
@@ -188,10 +195,11 @@
       if (!(await KJ.potwierdz('Bez zdjęcia?', 'Operatorowi najłatwiej porównać wzór z wadą na zdjęciach. Opublikować mimo to?', 'Opublikuj'))) return;
     }
     const id = hala.nowyId();
-    await hala.zapisz('alert.opublikowany', id, W.daneAlertu(f));
+    if (!(await KJ.zapisz('alert.opublikowany', id, W.daneAlertu(f)))) return;
     await hala.brudnopis.usun(BRUDNOPIS);
     f = pusty();                                     // spóźnione zdjęcie nie wskrzesi wysłanego formularza
-    KJ.komunikat(hala.polaczenie.strumien ? 'Alert opublikowany — liderzy już go widzą' : 'Alert zapisany — wyśle się, gdy wróci sieć');
+    // W.wysylaNaZywo: także tryb dociągania (szybki tunel) — wtedy zapis wychodzi od razu, a nie „gdy wróci sieć”.
+    KJ.komunikat(W.wysylaNaZywo(hala.polaczenie) ? 'Alert opublikowany — liderzy już go widzą' : 'Alert zapisany — wyśle się, gdy wróci sieć');
     KJ.idz('alert/' + id);
   }
 })(window.KJ);

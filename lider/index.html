@@ -54,7 +54,7 @@
       </div>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
-    <p class="hala-konto-skad">Konto zakłada administrator w Panelu Kierownika → Administracja.</p>
+    <p class="hala-konto-skad">Konto zakłada administrator w Panelu Kierownika → Administracja albo mistrz (GK Lider → Moje konto → Mój zespół).</p>
     <p id="czeka-na" class="pod czeka-na" hidden></p>
   </div>
 </main>
@@ -71,7 +71,7 @@
 
   <main class="ekrany">
     <section id="ekran-zmiana" class="ekran" aria-label="Zmiana"></section>
-    <section id="ekran-awarie" class="ekran" aria-label="Awarie" hidden></section>
+    <section id="ekran-awarie" class="ekran" aria-label="Awaria" hidden></section>
     <section id="ekran-jakosc" class="ekran" aria-label="Jakość" hidden></section>
     <section id="ekran-koniec" class="ekran" aria-label="Koniec zmiany" hidden></section>
     <section id="ekran-zlecenia" class="ekran" aria-label="Zlecenia od kierownika" hidden></section>
@@ -86,15 +86,16 @@
     </div>
     <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona">✅</span>Zmiana</button>
     <button type="button" data-ekran="jakosc"><span class="ikona">🔍</span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>
-    <button type="button" id="przycisk-awarii" class="awaria"><span class="ikona">⚠️</span>AWARIA</button>
-    <button type="button" data-ekran="awarie"><span class="ikona">🔧</span>Awarie<span class="plakietka" data-plakietka="awarie" hidden></span></button>
+    <!-- ⚠️ = awarie (zgłoszenie i lista) w GK Lider i GK Utrzymanie Ruchu; 🔧 to w UR przeglądy — jedna ikona, jedna rzecz.
+         UI etap 2: jedna czerwona zakładka zamiast przycisku AWARIA i zakładki „Awarie” — zgłoszenie na górze, pod nim lista. -->
+    <button type="button" data-ekran="awarie" class="awaria"><span class="ikona">⚠️</span>Awaria<span class="plakietka" data-plakietka="awarie" hidden></span></button>
     <button type="button" data-ekran="zlecenia"><span class="ikona">📋</span>Zlecenia<span class="plakietka" data-plakietka="zlecenia" hidden></span></button>
     <button type="button" data-ekran="koniec"><span class="ikona">🏁</span>Koniec</button>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 </div>
 
-<!-- Ekran blokujący Quality Alertu — nad wszystkim oprócz okna awarii i skanera. -->
+<!-- Ekran blokujący alertu jakości — nad wszystkim oprócz okna awarii i skanera. -->
 <div id="blokada" class="blokada" role="alertdialog" aria-modal="true" aria-labelledby="blokada-tytul" hidden></div>
 
 <!-- Jedno okno na formularze (próba, obsada, BHP, awaria…). -->
@@ -105,7 +106,8 @@
   </div>
 </div>
 
-<div id="komunikaty" class="komunikaty" role="status" aria-live="polite"></div>
+<!-- popover="manual": Lider.komunikat wnosi dymki nad okna <dialog> (Moje konto, Mój zespół) — jak UR i KJ (hala.css). -->
+<div id="komunikaty" class="komunikaty" popover="manual" role="status" aria-live="polite"></div>
 
 <script src="../wspolne/hala.js"></script>
 <script src="../wspolne/aktualizacja.js"></script>

@@ -54,7 +54,7 @@
       + 'z końcem swojej zmiany; obsadę („Ustaw ludzi na maszyny”) lider ma w checkliście.', 'Dodaj'))) return;
     try {
       for (const z of brak) await hala.zapisz('slownik.zapisany', `zlecenia_stale/${z.kod}`, { slownik: 'zlecenia_stale', klucz: z.kod, wartosc: z.wartosc });
-      P.komunikat(`Dodano ${brak.length} — hub sam zleci je według harmonogramu`, 'ok');
+      P.komunikat(`Dodano ${brak.length} — serwer sam zleci je według harmonogramu`, 'ok');
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   });
 
@@ -146,7 +146,7 @@
       await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
       $('okno-stalego').close();
       P.komunikat(w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Zapisano — zlecasz je przyciskiem „Zleć teraz”'
-        : 'Zapisano — hub sam zleci je według harmonogramu', 'ok');
+        : 'Zapisano — serwer sam zleci je według harmonogramu', 'ok');
       P.pokazZlecenia(null, 'stale');
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
@@ -170,7 +170,7 @@
         // Autor = kto zapisuje: od teraz hub zleca w imieniu tej osoby (kontrakt — hub to sprawdza).
         const wartosc = Object.assign({}, s, { aktywny: s.aktywny === false, autor: hala.pracownik.id });
         await hala.zapisz('slownik.zapisany', `zlecenia_stale/${kod}`, { slownik: 'zlecenia_stale', klucz: kod, wartosc });
-        P.komunikat(wartosc.aktywny ? 'Wznowione' : 'Wstrzymane — hub nie będzie go zlecał', 'ok');
+        P.komunikat(wartosc.aktywny ? 'Wznowione' : 'Wstrzymane — serwer nie będzie go zlecał', 'ok');
       }
       if (b.dataset.akcja === 'usun') {
         if (!(await P.potwierdz('Usunąć zlecenie stałe?', `„${s.tytul}”. Zlecenia zrobione z niego zostają nietknięte.`, 'Usuń'))) return;

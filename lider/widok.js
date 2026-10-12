@@ -88,7 +88,9 @@
     const lm = linieMistrza(pracownik, slowniki);
     const role = (pracownik && pracownik.role) || [];
     const lista = liniePosortowane(slowniki, (pracownik && pracownik.linie) || []).filter(l => !lm || lm.includes(l.kod));
-    return role.includes('mistrz') && !lm ? lista.map(l => Object.assign(l, { moja: true })) : lista;
+    // Jedna linia w zakładzie (D51) — jest linią każdego: Panel przy jednej linii chowa pole „Linie” osoby, więc nowy
+    // lider nie ma przypisanej linii, a nie jest „przesunięty” (wcześniej: „Hala (przesunięcie)”).
+    return (role.includes('mistrz') && !lm) || !wieleLinii(slowniki) ? lista.map(l => Object.assign(l, { moja: true })) : lista;
   }
 
   /* Czyje zlecenia pokazuje aplikacja (D34): mistrz — dział „mistrz”, bez zawężenia do wybranej linii (przełożony
@@ -123,6 +125,16 @@
   const stanowiskaLinii = (slowniki, linia) => wpisySlownika(slowniki, 'stanowiska', linia);
   const wyrobyLinii = (slowniki, linia) => wpisySlownika(slowniki, 'wyroby', linia);
   const katalogWad = slowniki => wpisySlownika(slowniki, 'katalog_wad');
+
+  /* Punkty audytu BHP (L-D3, zmienione 2026-10-12 po D51): maszyny linii — od D51 w Panelu wyznacza się tylko maszyny,
+     stanowisk nikt już nie zakłada, więc audyt „po stanowiskach” w zakładzie GK nie miał żadnego punktu i nie mógł
+     znaleźć niezgodności. Linia bez maszyn (starsze dane) — stanowiska jak dotąd. pole = nazwa pola w pozycji
+     zdarzenia bhp.audyt; stanowisko = stanowisko punktu (do zgłoszenia BHP z niezgodności — tylko kod ze słownika). */
+  function punktyAudytuBhp(slowniki, linia) {
+    const maszyny = maszynyLinii(slowniki, linia);
+    if (maszyny.length) return maszyny.map(m => ({ kod: m.kod, nazwa: m.nazwa || m.kod, pole: 'maszyna', stanowisko: m.stanowisko || '' }));
+    return stanowiskaLinii(slowniki, linia).map(s => ({ kod: s.kod, nazwa: s.nazwa || s.kod, pole: 'stanowisko', stanowisko: s.kod }));
+  }
 
   // ------------------------------------------------------------ zmiany
 
@@ -217,11 +229,31 @@
     };
   }
 
+  /* Kod wpisany ręcznie w oknie skanera → tekst, jaki dałby skan naklejki. Lider przy nieczytelnej naklejce wpisuje
+     sam kod maszyny („WT-01”, „ wt-01”), a Hala.odczytajKod rozumie tylko „HALA:M:WT-01” — wpisany kod był „nieznany”.
+     Wielkość liter i spacje bez znaczenia; najpierw maszyny (od D51 na hali wiszą tylko ich naklejki), potem stanowiska
+     i linie. Kod pełny („HALA:M:…”, qr ze słownika) i nieznany tekst wracają bez zmian (błąd pokaże sprawdzenie). */
+  const bezOdstepow = s => String(s || '').replace(/\s+/g, '').toUpperCase();
+  const PRZEDROSTKI = { maszyny: 'M', stanowiska: 'S', linie: 'L' };
+  function kodZeSkanu(tekst, slowniki) {
+    const t = String(tekst || '').trim();
+    const k = H().odczytajKod(t, slowniki);
+    if (k.rodzaj === 'pracownik' || k.wpis) return t;
+    const m = /^HALA:([MSL]):(.+)$/.exec(bezOdstepow(t));
+    const szukany = m ? m[2] : bezOdstepow(t);
+    const rodzaje = Object.keys(PRZEDROSTKI).filter(r => !m || PRZEDROSTKI[r] === m[1]);
+    for (const r of rodzaje) {
+      const kod = Object.keys((slowniki || {})[r] || {}).find(x => bezOdstepow(x) === szukany);
+      if (kod) return `HALA:${PRZEDROSTKI[r]}:${kod}`;
+    }
+    return t;
+  }
+
   /* Czy zeskanowany kod potwierdza obecność na tej linii / przy tym celu pozycji.
      odczyt = Hala.odczytajKod(tekst, slowniki).                                  */
   function kodDlaLinii(odczyt, linia, cel) {
     if (!odczyt || !odczyt.rodzaj || odczyt.rodzaj === 'pracownik') {
-      return { ok: false, powod: 'Nieznany kod. Zeskanuj naklejkę HALA na stanowisku albo maszynie.' };
+      return { ok: false, powod: 'Nieznany kod. Zeskanuj naklejkę HALA na maszynie albo wpisz kod z naklejki.' };
     }
     if (cel) {
       if (odczyt.kod === cel) return { ok: true };
@@ -259,7 +291,7 @@
         return {
           id: a.id, numer: a.numer || '—', status: a.status, etykieta: a.etykieta || a.status, aktywny: a.aktywny,
           maszyna: d.maszyna, maszynaNazwa: (m && m.nazwa) || d.maszyna || '—', linia: a.linia,
-          opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), priorytet: d.priorytet, priorytetNazwa: p.nazwa || d.priorytet || '—', zatrzymuje: !!p.zatrzymuje,
+          opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), priorytet: d.priorytet, priorytetNazwa: p.kod ? nazwaPriorytetu(p, o.slowniki) : (d.priorytet || '—'), zatrzymuje: !!p.zatrzymuje,
           mechanik: nazwaPracownika(o.pracownicy, d.mechanik),
           powodWstrzymania: d.powod_wstrzymania ? (powody[d.powod_wstrzymania] || d.powod_wstrzymania) : null,
           opisNaprawy: d.opis_naprawy || null,
@@ -331,8 +363,12 @@
     return (lista || []).filter(p => p.linia === linia && (!zrodlo || (p.dane || {}).zrodlo === zrodlo))
       .map(p => {
         const d = p.dane || {};
+        const stanowisko = (((slowniki || {}).stanowiska || {})[d.stanowisko] || {}).nazwa || d.stanowisko || '';
+        // D51: próba bez stanowiska ma maszynę ze skanu (qr „HALA:M:…”) — wcześniej na liście stało „—” pod „Stanowisko”.
+        const kodMaszyny = d.maszyna || (/^HALA:M:(.+)$/i.exec(String(d.qr || '')) || [])[1] || '';
+        const maszyna = kodMaszyny ? ((((slowniki || {}).maszyny || {})[kodMaszyny]) || {}).nazwa || kodMaszyny : '';
         return { id: p.id, czas: p.utworzono, godz: godzina(p.utworzono), dzien: dataKrotka(p.utworzono),
-                 stanowisko: (((slowniki || {}).stanowiska || {})[d.stanowisko] || {}).nazwa || d.stanowisko || '',
+                 stanowisko, miejsce: stanowisko || maszyna, miejsceEtykieta: stanowisko ? 'Stanowisko' : maszyna ? 'Maszyna' : 'Miejsce',
                  sprawdzone: d.sprawdzone, zgodne: d.zgodne, braki: d.braki, zrodlo: d.zrodlo,
                  proc: d.sprawdzone ? Math.round(d.braki * 1000 / d.sprawdzone) / 10 : null,
                  wady: (d.wady || []).map(w => `${(wady[w.kod] || {}).nazwa || w.kod} ${w.ilosc}`),
@@ -360,9 +396,13 @@
     const s = liczba(f.sprawdzone), z = liczba(f.zgodne), b = liczba(f.braki);
     const calk = v => Number.isInteger(v) && v >= 0;
     if (!calk(s) || s < 1) bledy.push('Wpisz, ile sztuk sprawdzono.');
-    if (!calk(z)) bledy.push('Wpisz liczbę sztuk zgodnych.');
-    if (!calk(b)) bledy.push('Wpisz liczbę braków (0, gdy brak).');
-    if (calk(s) && calk(z) && calk(b) && z + b !== s) bledy.push(`Zgodne + braki = ${z + b}, a sprawdzono ${s}. Popraw liczby.`);
+    // Braki liczone z kafelków wad (UI etap 2, W.liczbyProby): za dużo wad to błąd w wadach, nie „wpisz zgodne”.
+    if (calk(s) && calk(b) && b > s) bledy.push(`Braków (${b}) jest więcej niż sprawdzonych sztuk (${s}). Popraw wady albo liczbę sprawdzonych.`);
+    else {
+      if (!calk(z)) bledy.push('Wpisz liczbę sztuk zgodnych.');
+      if (!calk(b)) bledy.push('Wpisz liczbę braków (0, gdy brak).');
+      if (calk(s) && calk(z) && calk(b) && z + b !== s) bledy.push(`Zgodne + braki = ${z + b}, a sprawdzono ${s}. Popraw liczby.`);
+    }
     const katalog = (slowniki && slowniki.katalog_wad) || {};
     let suma = 0;
     for (const w of f.wady || []) {
@@ -473,12 +513,125 @@
     return nazwa && (ekrany || []).includes(nazwa) ? nazwa : null;
   }
 
+  // ------------------------------------------------------------ audyt 2026-10-12 (jedna linia, D51)
+
+  /* Zakład z jedną linią (D51: w zakładzie GK jedna linia „Hala”, schowana w Panelu). Wtedy wybór linii, dopiski
+     „na linii FH6” i „przesunięcie między liniami” nic nie mówią — Lider ich nie pokazuje. Dwie albo więcej linii
+     (starsze dane, --demo) — wszystko jak dotąd. */
+  function wieleLinii(slowniki) {
+    return Object.keys((slowniki && slowniki.linie) || {}).length > 1;
+  }
+
+  /* Nazwa priorytetu awarii na ekranie. Przy jednej linii (D51) stoi maszyna, nie „linia” — „Zatrzymanie linii”
+     myliło (lider zgłasza jedną maszynę, reszta hali pracuje), więc priorytet zatrzymujący to „Maszyna stoi”.
+     Kod w zdarzeniu bez zmian (zatrzymanie), Panel i UR mówią tak samo. */
+  function nazwaPriorytetu(p, slowniki) {
+    if (!p) return '—';
+    return p.zatrzymuje && !wieleLinii(slowniki) ? 'Maszyna stoi' : (p.nazwa || p.kod || '—');
+  }
+  /* Co rusza po naprawie: „Czy maszyna ruszyła?” przy jednej linii, „Czy linia ruszyła?” przy wielu. */
+  const coStoi = slowniki => (wieleLinii(slowniki) ? 'linia' : 'maszyna');
+
+  /* Rodzaje zdarzeń obsady do wyboru: przy jednej linii bez „Przesunięcie między liniami” — nie ma dokąd przesunąć,
+     a lista „Na linię” była pusta. */
+  function rodzajeZdarzenObsady(stale, slowniki) {
+    const rodzaje = (stale && stale.rodzaje_zdarzen_obsady) || [];
+    return wieleLinii(slowniki) ? rodzaje : rodzaje.filter(r => r.kod !== 'przesuniecie');
+  }
+
+  /* Skan w próbie: kod stanowiska albo MASZYNY tej linii. Od D51 maszyny nie mają stanowiska — wcześniej skan maszyny
+     dawał „Ten kod nie wskazuje stanowiska” i dowód obecności przepadał. Maszyna bez stanowiska = sam dowód obecności
+     (qr), stanowisko puste. Kod linii nic nie wskazuje. */
+  function skanProby(odczyt, linia) {
+    const ok = kodDlaLinii(odczyt, linia);
+    if (!ok.ok) return { ok: false, powod: ok.powod };
+    if (odczyt.rodzaj === 'stanowiska') return { ok: true, stanowisko: odczyt.kod };
+    if (odczyt.rodzaj === 'maszyny') return { ok: true, stanowisko: (odczyt.wpis && odczyt.wpis.stanowisko) || '' };
+    return { ok: false, powod: 'To kod linii. Zeskanuj naklejkę na maszynie.' };
+  }
+
+  /* Klucz brudnopisu formularza — ze ZMIANĄ (jak kluczBrudnopisuProby). Formularz zamknięty ✕ zostawia brudnopis, a bez
+     zmiany w kluczu wstawał po dniach: AWARIA otwierała się z wczorajszą maszyną, priorytetem i notatką, i jedno dotknięcie
+     „Wyślij” szło do UR ze starymi danymi. dopisek — osobny brudnopis, np. zgłoszenie BHP z konkretnego audytu: inaczej
+     stary brudnopis „+ Zgłoszenie BHP” przykrywał niezgodności wpisane przez audyt. */
+  function kluczBrudnopisu(rodzaj, linia, zmianaId, dopisek) {
+    return `${rodzaj}:${linia || '-'}:${zmianaId || '-'}${dopisek ? ':' + dopisek : ''}`;
+  }
+
+  /* Zmiana formularza przy wysyłce (granica zmiany, etap 1): zapamiętane id → TA zmiana albo null, gdy jej już nie da się
+     odtworzyć (ktoś zmienił godziny zmian) — nigdy po cichu bieżąca, bo wtedy raport zmiany I szedł do zmiany II.
+     Bez zapamiętanego id (formularz poza zmianą) — bieżąca. */
+  function zmianaFormularza(zmianaId, zmiany, zmianaTeraz) {
+    return zmianaId ? zmianaPoId(zmianaId, zmiany) : (zmianaTeraz || null);
+  }
+
+  /* „3 zapisy czekają na wysłanie”, „5 zapisów czeka na wysłanie” (wcześniej „3 czeka na wysłanie”). */
+  const czekaNaWyslanie = n => `${liczebnik(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
+
+  /* Ekran logowania na wspólnym telefonie: czyje zapisy czekają. Bez „czeka na Jan Kowalski” (mianownik po „na”)
+     i bez „po jej zalogowaniu”, które przy dwóch osobach nie mówiło, czyim. */
+  function opisCzekajacych(moje, inne, kto) {
+    const czesci = [];
+    if (moje && kto) czesci.push(`${kto} — ${moje}`);
+    if (inne > 0) czesci.push(`inna osoba — ${inne}`);
+    return czesci.length ? `Zapisy czekające na wysłanie: ${czesci.join(', ')}. Wyślą się, gdy zaloguje się ich autor.` : '';
+  }
+
+  /* „z 1 braku”, „z 2 braków”, „z 5 braków” (wcześniej „1 z 1 braków”). */
+  const zBrakow = b => `z ${b} ${b === 1 ? 'braku' : 'braków'}`;
+
+  /* Awaria zakończona na zmianie od `od`: liczy się chwila zamknięcia (potwierdzenie albo anulowanie), a nie `zmieniono` —
+     notatka UR dopisana do wczoraj zamkniętej awarii przesuwała `zmieniono` i awaria wracała do „Zakończone na tej zmianie”. */
+  function zakonczonaNaZmianie(a, od) {
+    if (!a || a.aktywny) return false;
+    const d = a.dane || {};
+    return ms(d.czas_potwierdzenia || d.czas_anulowania || a.zmieniono) >= od;
+  }
+
+  // ------------------------------------------------------------ UI etap 2 (2026-10-12, wybór właściciela)
+
+  /* Przyciski pod checklistą — każda czynność w jednym miejscu. Próba i zgłoszenie BHP są na ekranie Jakość („+ Próba”,
+     „+ Zgłoszenie BHP”), obsadę i audyt BHP otwierają pozycje checklisty. Zostaje „Zdarzenie obsady” (checklista go nie ma)
+     i wejście do obsady albo audytu tylko wtedy, gdy checklista (otwarta albo szablon do otwarcia) nie ma pozycji tego typu:
+     prawdziwy hub startuje bez szablonu „standard” i bez tego wejścia obsady ani audytu nie dałoby się w ogóle wysłać. */
+  function przyciskiZmiany(pozycje) {
+    const typy = new Set((pozycje || []).map(p => p && p.typ));
+    const w = [];
+    if (!typy.has('obsada')) w.push({ a: 'obsada', nazwa: 'Obsada' });
+    w.push({ a: 'zdarzenie-obsady', nazwa: 'Zdarzenie obsady' });
+    if (!typy.has('bhp')) w.push({ a: 'audyt-bhp', nazwa: 'Audyt BHP' });
+    return w;
+  }
+
+  /* Czy w zgłoszeniu awarii coś już jest (maszyna, priorytet, notatka, zdjęcie). */
+  const zgloszenieZaczete = d => !!d && !!(d.maszyna || d.priorytet || String(d.opis || '').trim() || (d.zdjecia || []).length);
+
+  /* Formularz „Zgłoś awarię” stoi na górze ekranu ⚠️ Awaria, w treści ekranu — a ekran przerysowuje się co 20 s i po każdym
+     zdarzeniu. Budujemy go od nowa tylko, gdy trzeba: pierwszy raz, po zmianie linii albo na nowej zmianie, ale wtedy
+     tylko PUSTY. Zaczęte o 13:59 zgłoszenie nie może zniknąć liderowi spod palców o 14:00 — awaria nie należy do zmiany,
+     więc wysyła się normalnie. obecny = { linia, zmianaId, dane } albo null. */
+  function przebudowacZgloszenie(obecny, linia, zmianaId) {
+    if (!obecny || obecny.linia !== linia) return true;
+    return obecny.zmianaId !== zmianaId && !zgloszenieZaczete(obecny.dane);
+  }
+
+  /* Próba (UI etap 2): braki = suma kafelków wad — bez osobnego pola „Braki” (lider liczył je dwa razy: w kafelkach
+     i w polu), zgodne = sprawdzone − braki. Pole `braki` w zdarzeniu zostaje (kontrakt, raport §6.4, Panel) — z sumą.
+     Za dużo braków → zgodne NaN, a sprawdzProbe mówi, co poprawić. */
+  function liczbyProby(sprawdzone, wady) {
+    const braki = Object.values(wady || {}).reduce((s, n) => s + (Number.isInteger(n) && n > 0 ? n : 0), 0);
+    const s = sprawdzone === '' || sprawdzone === null || sprawdzone === undefined ? NaN : Number(sprawdzone);
+    return { sprawdzone: s, braki, zgodne: Number.isInteger(s) && s >= braki ? s - braki : NaN };
+  }
+
   global.LiderWidok = {
+    wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
+    opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
     godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
-    checklista, kodDlaLinii, doPrzypomnienia,
+    checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,
     awarie, sprawdzAwarie, aktywnaAwariaMaszyny, pytanieODuplikat,
     alertyDoPotwierdzenia, alertyLinii, proby, reklamacje, sprawdzProbe,
     raport, raz, przyWysylce,

@@ -140,9 +140,20 @@
     return lista.length;
   }
 
-  // Stan ekranu na element: filtr „Moje” i otwarty formularz (id, rodzaj, tekst, zdjęcia, wymagania).
+  // Stan ekranu na element: filtr „Moje”, otwarty formularz (id, rodzaj, tekst, zdjęcia, wymagania), osoba i OSTATNIE
+  // opcje rysowania. Słuchacze kliknięć wiszą na elemencie od pierwszego rysowania — opcje biorą stąd, a nie z chwili
+  // podłączenia: lider zmienia linię, a na wspólnym tablecie po liderze loguje się mistrz (inny dział) — ze starymi
+  // opcjami „Zrobione” zamykało formularz od razu i przerysowywało listę poprzedniej linii albo działu.
   const stany = new WeakMap();
-  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null }); return stany.get(el); };
+  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined }); return stany.get(el); };
+
+  /* Zdarzenie z treści TEGO ekranu zleceń. UR i KJ rysują wszystkie ekrany w jednym elemencie (#ekran), więc nasi
+     słuchacze zostają na nim także pod Awariami czy Przeglądami — tam chip „Moje” (data-filtr) przestawiał filtr zleceń
+     i na chwilę rysował listę zleceń w miejscu awarii. */
+  const zNaszejTresci = (ev, el) => {
+    const k = ev.target && ev.target.closest ? ev.target.closest('.hala-zlecenia') : null;
+    return !!k && (!el.contains || el.contains(k));
+  };
 
   const miniatury = ids => ids.map(id => `<img class="hala-zlecenie-foto" data-plik="${esc(id)}" alt="Zdjęcie" loading="lazy">`).join('');
 
@@ -181,7 +192,10 @@
 
   function rysuj(el, hala, opcje) {
     const s = stan(el);
+    s.opcje = opcje;
     const ja = hala.pracownik && hala.pracownik.id;
+    // Inna osoba na tym samym urządzeniu: nie dostaje cudzego filtra „Moje” ani cudzego otwartego formularza.
+    if (s.ja !== ja) { zwolnij(s.formularz); s.formularz = null; s.moje = false; s.ja = ja; }
     const lista = wiersze(hala.obiekty('zlecenie'), kontekst(hala, Object.assign({}, opcje, { moje: s.moje ? ja : null,
                                                                                     zostaw: s.formularz ? s.formularz.id : null })));
     // Formularz do zlecenia, które zniknęło (np. kierownik je anulował) — zamykamy.
@@ -228,17 +242,17 @@
     if (wPolu) { const p = el.querySelector('[data-pole]'); if (p) { p.focus(); p.setSelectionRange(p.value.length, p.value.length); } }
     if (!el.dataset.halaZlecenia) {
       el.dataset.halaZlecenia = '1';
-      el.addEventListener('click', ev => akcja(ev, el, hala, opcje));
+      el.addEventListener('click', ev => { if (zNaszejTresci(ev, el)) akcja(ev, el, hala, stan(el).opcje); });
       el.addEventListener('input', ev => {
-        if (ev.target.matches('[data-pole]') && s.formularz) { s.formularz.tekst = ev.target.value; odswiezBlokade(el, s.formularz); }
+        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pole]') && s.formularz) { s.formularz.tekst = ev.target.value; odswiezBlokade(el, s.formularz); }
       });
       el.addEventListener('change', ev => {
-        if (!ev.target.matches('[data-zdjecie]') || !s.formularz) return;
+        if (!zNaszejTresci(ev, el) || !ev.target.matches('[data-zdjecie]') || !s.formularz) return;
         // Podgląd z pliku w pamięci przeglądarki — do kolejki (hala.dodajPlik) trafia dopiero przy „Wyślij”.
         for (const plik of Array.from(ev.target.files || []).slice(0, MAKS_ZDJEC - s.formularz.pliki.length))
           s.formularz.pliki.push({ plik, url: URL.createObjectURL(plik) });
         s.formularz.blad = null;
-        rysuj(el, hala, opcje);
+        rysuj(el, hala, stan(el).opcje);
       });
     }
   }
@@ -247,18 +261,18 @@
     const s = stan(el);
     const b = ev.target.closest('button');
     if (!b) return;
-    if (b.dataset.filtr) { s.moje = b.dataset.filtr === 'moje'; return rysuj(el, hala, opcje); }
+    if (b.dataset.filtr) { s.moje = b.dataset.filtr === 'moje'; return rysuj(el, hala, s.opcje || opcje); }
     const art = b.closest('[data-id]');
     if (!art || !b.dataset.akcja) return;
     const id = art.dataset.id;
     try {
       if (b.dataset.akcja === 'przyjmij') await hala.zapisz('zlecenie.przyjete', id, {});
       if (b.dataset.akcja === 'wykonane' || b.dataset.akcja === 'nie-moge') {
-        const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, opcje, { moje: null, zostaw: id })))[0] || {};
+        const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, s.opcje || opcje, { moje: null, zostaw: id })))[0] || {};
         zwolnij(s.formularz);
         s.formularz = { id, rodzaj: b.dataset.akcja === 'wykonane' ? 'wykonane' : 'odrzucone', tekst: '', pliki: [], blad: null,
                         wymagania: { wymagajZdjecia: !!z.wymagajZdjecia, wymagajNotatki: !!z.wymagajNotatki } };
-        rysuj(el, hala, opcje);
+        rysuj(el, hala, s.opcje || opcje);
         // Z wymaganym zdjęciem zaczyna się od aparatu, a nie od klawiatury zasłaniającej pół ekranu.
         if (!s.formularz.wymagania.wymagajZdjecia) { const p = el.querySelector('[data-pole]'); if (p) p.focus(); }
         return;
@@ -266,13 +280,13 @@
       if (b.dataset.akcja === 'usun-zdjecie' && s.formularz) {
         const [p] = s.formularz.pliki.splice(+b.dataset.nr, 1);
         zwolnij({ pliki: p ? [p] : [] });
-        return rysuj(el, hala, opcje);
+        return rysuj(el, hala, s.opcje || opcje);
       }
-      if (b.dataset.akcja === 'anuluj-formularz') { zwolnij(s.formularz); s.formularz = null; return rysuj(el, hala, opcje); }
+      if (b.dataset.akcja === 'anuluj-formularz') { zwolnij(s.formularz); s.formularz = null; return rysuj(el, hala, s.opcje || opcje); }
       if (b.dataset.akcja === 'wyslij' && s.formularz) {
         const f = s.formularz, tekst = f.tekst.trim();
         const brak = brakuje(f.wymagania, f);
-        if (brak.length) { f.blad = tekstBraku(brak); return rysuj(el, hala, opcje); }
+        if (brak.length) { f.blad = tekstBraku(brak); return rysuj(el, hala, s.opcje || opcje); }
         // Stan „wysyła” w formularzu, a nie tylko na przycisku: zmniejszanie kilku zdjęć trwa sekundy, a każde zdarzenie
         // z hali w tym czasie przerysowuje ekran (rysuj) — przycisk wracał aktywny i drugie dotknięcie wysyłało zdjęcia
         // i „zlecenie.wykonane” drugi raz (przegląd 2026-10-06).
@@ -290,33 +304,47 @@
         }
         zwolnij(f);
         s.formularz = null;
-        rysuj(el, hala, opcje);
+        rysuj(el, hala, s.opcje || opcje);
       }
     } catch (e) {
-      if (s.formularz) { s.formularz.wysyla = false; s.formularz.blad = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'; rysuj(el, hala, opcje); }
+      if (s.formularz) { s.formularz.wysyla = false; s.formularz.blad = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'; rysuj(el, hala, s.opcje || opcje); }
       else alert((e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.');
     }
   }
 
   /* Nowe zlecenie dla mnie (mój dział, moja linia) — raz na zlecenie, nie po starcie ani po zalogowaniu
-     (to, co już było, człowiek zobaczy na liście). opcje() — funkcja, bo linia lidera może się zmienić. */
+     (to, co już było, człowiek zobaczy na liście). opcje() — funkcja, bo linia lidera może się zmienić.
+     Zlecenie ZWRÓCONE przez kierownika (zlecenie.zwrocone → znowu „nowe”, nowy czas_zwrotu) też woła fn — drugi argument
+     { zwrot: true, uwagi }; wcześniej znane id milczało i dział nie wiedział, że robota wróciła (hub nie wysyła za nie pusha). */
   function sledz(hala, opcje, fn) {
-    const znane = new Set();
+    const znane = new Map();                           // id → czas_zwrotu, który już widzieliśmy (null — bez zwrotu)
+    const zwrot = z => ((z && z.dane) || {}).czas_zwrotu || null;
     // Zaplanowanego (D47) nie zapamiętujemy jako znanego: gdy hub je zleci, dział ma dostać „Nowe zlecenie” jak przy każdym nowym.
-    const zapamietaj = () => { znane.clear(); for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.add(z.id); };
+    const dopisz = () => { for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.set(z.id, zwrot(z)); };
+    const zapamietaj = () => { znane.clear(); dopisz(); };
     hala.na('sesja', zapamietaj);
     hala.na('zmiana', ({ typ, id, obiekt }) => {
-      if (typ === '*') { for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.add(z.id); return; }
-      if (typ !== 'zlecenie' || !obiekt || znane.has(id) || obiekt.status === 'zaplanowane') return;
-      znane.add(id);
+      if (typ === '*') { dopisz(); return; }
+      if (typ !== 'zlecenie' || !obiekt || obiekt.status === 'zaplanowane') return;
+      const znany = znane.has(id), cz = zwrot(obiekt);
+      if (znany && (!cz || cz === znane.get(id))) return;
+      znane.set(id, cz);
       const o = opcje(), d = obiekt.dane || {};
       if (obiekt.status === 'nowe' && !obiekt._oczekuje && !przepadlo(obiekt, hala.teraz()) && d.dzial === o.dzial
-          && naLinii(d, o)) fn(obiekt);
+          && naLinii(d, o)) fn(obiekt, znany ? { zwrot: true, uwagi: d.uwagi_zwrotu || '' } : { zwrot: false });
     });
     zapamietaj();
   }
 
-  const HalaZlecenia = { wiersze, przepadlo, brakuje, tekstBraku, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz };
+  /* Jeden tekst komunikatu dla Lidera, UR i KJ (drugi argument `sledz`): zwrócone przez kierownika zlecenie nie jest
+     „nowe” — dział ma wiedzieć, że wróciło, i dostać uwagę kierownika. */
+  function opisPowiadomienia(z, o) {
+    const tytul = ((z && z.dane) || {}).tytul || '';
+    if (!(o && o.zwrot)) return `Nowe zlecenie od kierownika: ${tytul}`;
+    return `Zlecenie wróciło od kierownika: ${tytul}` + (o.uwagi ? ` — ${o.uwagi}` : '');
+  }
+
+  const HalaZlecenia = { wiersze, przepadlo, brakuje, tekstBraku, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

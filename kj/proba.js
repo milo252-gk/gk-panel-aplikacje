@@ -15,6 +15,16 @@
 
   // ------------------------------------------------------------ plan zmiany
 
+  /* Zlecenia od kierownika na Planie (UI etap 2 — bez osobnej zakładki „Zlecenia”). Jeden stały element: wspólny
+     HalaZlecenia.rysuj trzyma w nim stan (filtr „Moje”, otwarty formularz „Zrobione” ze zdjęciem) i swoich słuchaczy,
+     a przerysowanie planu tylko przekłada go z powrotem na górę — nowy element co rysowanie gubiłby wpisaną notatkę. */
+  const miejsceZlecen = document.createElement('section');
+  miejsceZlecen.className = 'grupa zlecenia-na-planie';
+
+  /* „Pomiń” przy próbie lidera ponad progiem — tylko w tym telefonie, dla tej osoby i zmiany (W.pomin; bez zdarzenia). */
+  const czytajPominiete = () => { try { return JSON.parse(localStorage.getItem('hala.kj.pominieteProbyLiderow') || 'null'); } catch (e) { return null; } };
+  const zapiszPominiete = z => { try { localStorage.setItem('hala.kj.pominieteProbyLiderow', JSON.stringify(z)); } catch (e) { /* bez pamięci wiersz wróci */ } };
+
   KJ.ekran('plan', {
     rysuj(el) {
       const zmiana = hala.zmianaTeraz();
@@ -23,29 +33,34 @@
       const moje = W.probyZmiany({ proby, zmiana, slowniki: hala.slowniki, zrodlo: 'kj' });
       const partie = W.partieZmiany(W.listaPartii({ partie: hala.obiekty('partia', p => p.aktywny), slowniki: hala.slowniki }), zmiana);
       // Etap 3: próby liderów z tej zmiany ponad progiem braków — decyzja o partii należy do KJ (D13).
-      const liderow = W.probyLiderowPonadProgiem({ proby, partie: hala.obiekty('partia'), zmiana, slowniki: hala.slowniki, prog: KJ.prog() });
+      // UI etap 2: bez tych, które kontroler pominął na tej zmianie.
+      const kluczPominietych = W.kluczPominietych(hala.pracownik && hala.pracownik.id, zmiana);
+      const liderow = W.bezPominietych(W.probyLiderowPonadProgiem({ proby, partie: hala.obiekty('partia'), zmiana, slowniki: hala.slowniki, prog: KJ.prog() }),
+                                       czytajPominiete(), kluczPominietych);
       const mogePartie = KJ.mozna('partia.oznaczona_brakowa');
       const proc = plan.plan ? Math.round(plan.zrobione * 100 / plan.plan) : 0;
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Plan próbkowania</h1><span class="licznik-planu ${plan.zrobione >= plan.plan && plan.plan ? 'tekst-ok' : ''}">${plan.zrobione}/${plan.plan}</span></div>
-        <div class="postep ${plan.zrobione >= plan.plan && plan.plan ? 'komplet' : ''}"><span style="width:${proc}%"></span></div>
-        ${KJ.mozna('proba.zarejestrowana') ? '<button type="button" class="glowny szeroki duzy" id="skanuj-stanowisko">Skanuj stanowisko</button>' : ''}
+        <div class="postep ${W.stanPaskaPlanu(plan, zmiana, hala.teraz())}"><span style="width:${proc}%"></span></div>
+        ${KJ.mozna('proba.zarejestrowana') ? `<button type="button" class="glowny szeroki duzy" id="skanuj-stanowisko">${esc(W.napisSkanu(hala.slowniki))}</button>` : ''}
         ${plan.linie.map(g => `
           <section class="grupa">
             <h2>${esc(g.nazwa)} <span class="slaby">${g.zrobione}/${g.plan}</span></h2>
             ${g.stanowiska.map(s => `
-              <a class="stanowisko ${s.gotowe ? 'gotowe' : 'czeka'}" href="#proba/${encodeURIComponent(s.kod)}">
-                <span class="nazwa">${esc(s.nazwa)} <span class="slaby">${esc(s.kod)}</span></span>
+              <a class="stanowisko ${s.gotowe ? 'gotowe' : 'czeka'}" href="${s.calaLinia ? '#proba' : `#proba/${encodeURIComponent(s.kod)}`}">
+                <span class="nazwa">${esc(s.nazwa)}${s.calaLinia ? '' : ` <span class="slaby">${esc(s.kod)}</span>`}</span>
                 <span class="stan">${s.gotowe ? '✓ ' : ''}${s.zrobione}/${s.plan}</span>
               </a>`).join('')}
-          </section>`).join('') || '<p class="pusto">Brak planu próbkowania. Kierownik KJ ustawia go w „Więcej → Katalog”.</p>'}
+          </section>`).join('') || '<p class="pusto">Brak planu próbkowania. Kierownik KJ ustawia go w „Więcej → Katalog, wyroby, plan → Plan próbkowania”.</p>'}
         ${plan.pozaPlanem ? `<p class="slaby">Poza planem na tej zmianie: ${plan.pozaPlanem}</p>` : ''}
         ${partie.tej.length || partie.starsze.length ? `<section class="grupa"><h2>Partie brakowe — ta zmiana <span class="znacznik ${partie.tej.length ? 'alarm' : 'neutral'}">${partie.tej.length}</span></h2>
           ${partie.tej.map(kartaPartii).join('')}
           ${partie.starsze.length ? `<a class="wstecz" href="#partie">Aktywne z wcześniejszych zmian: ${partie.starsze.length} ›</a>` : ''}</section>` : ''}
         ${liderow.length ? `<section class="grupa" id="proby-liderow"><h2>Próby liderów ponad progiem <span class="znacznik alarm">${liderow.length}</span></h2>
-          <p class="slaby">Braki ≥ ${esc(String(KJ.prog()).replace('.', ','))} % — sprawdź i zdecyduj o partii.</p>
-          ${liderow.map(p => `${kartaProby(p)}${mogePartie ? `<button type="button" class="alarm szeroki" data-partia-proby="${esc(p.id)}">Partia brakowa</button>` : ''}`).join('')}</section>` : ''}
+          <p class="slaby">Braki ≥ ${esc(W.procent(KJ.prog()))} % — sprawdź i zdecyduj o partii.</p>
+          ${liderow.map(p => `${kartaProby(p)}<div class="akcje-proby">
+            ${mogePartie ? `<button type="button" data-partia-proby="${esc(p.id)}">Partia brakowa</button>` : ''}
+            <button type="button" data-pomin-probe="${esc(p.id)}">Pomiń</button></div>`).join('')}</section>` : ''}
         <section class="grupa"><h2>Próby KJ na tej zmianie <span class="slaby">${moje.length}</span></h2>
           ${moje.map(kartaProby).join('') || '<p class="pusto">Jeszcze żadnej</p>'}</section>`;
       const b = el.querySelector('#skanuj-stanowisko');
@@ -58,18 +73,27 @@
           await zaproponujPartie(pr.id, Object.assign({ linia: pr.linia }, pr.dane), W.podpowiedzPartii(pr.dane, KJ.prog()));
         }));
       }
-      // Zaległe zlecenia od kierownika na samej górze (wspólna karta z ../wspolne/zlecenia.js) — przed planem,
-      // bo to, co miało być zrobione wcześniej, ma pierwszeństwo (jak „Zaległe dostawy” w GK Trasy).
-      const miejsce = document.createElement('div');
-      el.prepend(miejsce);
-      window.HalaZlecenia.rysujZalegle(miejsce, hala, { dzial: 'kj' }, () => KJ.idz('zlecenia'));
+      for (const x of el.querySelectorAll('[data-pomin-probe]')) {
+        x.addEventListener('click', () => {
+          zapiszPominiete(W.pomin(czytajPominiete(), kluczPominietych, x.dataset.pominProbe));
+          KJ.komunikat('Pominięta do końca zmiany');
+          KJ.odswiez('wymus');
+        });
+      }
+      // Zlecenia od kierownika na samej górze, tylko gdy jest co robić — zaległe pierwsze, z numerami kolejności
+      // (wspólny ekran z ../wspolne/zlecenia.js), bo to, co miało być zrobione wcześniej, ma pierwszeństwo.
+      if (W.pokazZleceniaNaPlanie(window.HalaZlecenia.doZrobienia(hala, { dzial: 'kj' }))) {
+        el.prepend(miejsceZlecen);
+        window.HalaZlecenia.rysuj(miejsceZlecen, hala, { dzial: 'kj' });
+      }
     },
   });
 
   function kartaProby(p) {
     const alarm = p.proc !== null && p.proc >= KJ.prog();
+    // Próba na całej linii (D51, bez stanowiska i maszyny): miejsce = linia, więc nie powtarzamy jej nazwy.
     return `<a class="karta proba" href="#wynik/${encodeURIComponent(p.id)}">
-      <div class="wiersz"><b>${esc(p.stanowisko)}</b> <span class="slaby">${esc(p.liniaNazwa)} · ${esc(W.godzina(p.czas))}</span>
+      <div class="wiersz"><b>${esc(p.stanowisko)}</b> <span class="slaby">${p.stanowisko === p.liniaNazwa ? '' : esc(p.liniaNazwa) + ' · '}${esc(W.godzina(p.czas))}</span>
         ${p.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
       <div class="wiersz"><span>Braki <b class="${alarm ? 'tekst-alarm' : ''}">${p.braki}/${p.sprawdzone}</b>${p.proc !== null ? ` (${String(p.proc).replace('.', ',')} %)` : ''}</span>
         ${p.zlecenie ? `<span class="slaby">zlec. ${esc(p.zlecenie)}</span>` : ''}</div>
@@ -88,13 +112,17 @@
 
   // ------------------------------------------------------------ próba: formularz
 
-  const pusty = () => ({ stanowisko: null, linia: null, qr: null, czas_rozpoczecia: null, zlecenie: '', zdjecie_zlecenia: null,
+  // maszyna: tylko do pokazania w formularzu (zeskanowana etykieta maszyny, D51) — do huba idzie jej qr, nie to pole.
+  const pusty = () => ({ stanowisko: null, linia: null, maszyna: null, qr: null, czas_rozpoczecia: null, zlecenie: '', zdjecie_zlecenia: null,
                          wyrob: '', sprawdzone: 0, braki: 0, wady: {}, zdjecia: [], wnioski: '', dzialania: '' });
   let f = pusty();
   // odrazu: skan (dowód obecności z godziną) i zdjęcie idą do telefonu natychmiast, nie po 300 ms —
   // przeładowanie albo padnięty telefon zaraz po skanie gubiły zeskanowane stanowisko (test w przeglądarce).
   const zapiszBrudnopis = odrazu => hala.brudnopis.zapisz(BRUDNOPIS, f, odrazu ? { odrazu: true } : undefined);
-  const rozpoczeta = () => !!(f.stanowisko || f.zlecenie || f.sprawdzone || f.braki || f.zdjecia.length || W.sumaWad(f.wady) ||
+  /* Jedna linia bez stanowisk (D51): miejsce ustawia się samo, bez godziny startu — samo w sobie nie jest „rozpoczętą
+     próbą” (czas_rozpoczecia ma tylko miejsce zeskanowane albo wybrane). */
+  const miejsceDomyslne = () => { if (!f.linia) { const l = W.domyslneMiejsce(hala.slowniki); if (l) f.linia = l; } };
+  const rozpoczeta = () => !!(f.stanowisko || f.czas_rozpoczecia || f.zlecenie || f.sprawdzone || f.braki || f.zdjecia.length || W.sumaWad(f.wady) ||
                                f.zdjecie_zlecenia || f.wyrob || (f.wnioski || '').trim() || (f.dzialania || '').trim());
   /* Pole liczby tak, jak je wpisano (W.liczbaZPola — to samo w korekcie): „12,5”, „-5”, „abc” zostają błędne. */
   const liczbaZPola = W.liczbaZPola;
@@ -103,7 +131,9 @@
     formularz: true,
     async rysuj(el, parametr) {
       if (!KJ.mozna('proba.zarejestrowana')) { el.innerHTML = '<p class="pusto">Próby rejestruje kontroler albo kierownik KJ.</p>'; return; }
-      f = Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS)) || {});
+      // Braki zawsze z wad (UI etap 2) — także w brudnopisie sprzed zmiany, gdzie wpisywało się je ręcznie.
+      f = W.brakiZWad(Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS)) || {}));
+      miejsceDomyslne();
       el.innerHTML = `
         <h1>Próba</h1>
         <form id="f-proba" class="formularz" autocomplete="off" novalidate>
@@ -119,11 +149,11 @@
             <h2>Wyniki</h2>
             <div class="liczniki">
               ${KJ.licznik('sprawdzone', f.sprawdzone, 'Sprawdzone')}
-              ${KJ.licznik('braki', f.braki, 'Braki')}
+              <div class="licznik-wyliczony"><span class="licznik-opis">Braki <span class="slaby">(suma wad)</span></span><output id="p-braki">${esc(f.braki)}</output></div>
             </div>
             <div class="zgodne" id="p-zgodne"></div>
           </section>
-          <section class="grupa"><h2>Wady <span class="slaby" id="p-suma-wad"></span></h2><div class="wady" id="p-wady"></div></section>
+          <section class="grupa"><h2>Wady</h2><div class="wady" id="p-wady"></div></section>
           <section class="grupa"><h2>Zdjęcia wad</h2><div class="zdjecia" id="p-zdjecia"></div></section>
           <details class="grupa" ${f.wnioski || f.dzialania ? 'open' : ''}><summary>Wnioski i działania <span class="slaby">(opcjonalnie)</span></summary>
             <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000">${esc(f.wnioski)}</textarea></label>
@@ -153,28 +183,34 @@
         skanujStanowisko(parametr === 'skanuj' ? null : parametr);
       }
     },
-    odswiez(el) { rysujStanowisko(el); rysujWyroby(el); rysujWady(el); },   // słowniki mogły się zmienić
+    odswiez(el) { miejsceDomyslne(); rysujStanowisko(el); rysujWyroby(el); rysujWady(el); },   // słowniki mogły się zmienić
   });
 
+  /* Miejsce kontroli: stanowisko, maszyna albo cała linia (D51 — zakład bez stanowisk). Lista „Wybierz z listy”
+     zostaje też po wyborze miejsca: z nieczytelnym kodem inaczej nie dało się zmienić miejsca bez „Wyczyść”. */
   function rysujStanowisko(el) {
     const box = el.querySelector('#p-stanowisko');
     if (!box) return;
-    if (!f.stanowisko) {
-      const opcje = Object.entries(hala.slowniki.stanowiska || {}).sort(([a], [b]) => a.localeCompare(b, 'pl'));
-      box.innerHTML = `<h2>Stanowisko</h2>
-        <button type="button" class="glowny szeroki duzy" data-akcja="skanuj-stanowisko">Skanuj stanowisko</button>
-        <details class="bez-skanu"><summary>Kod nieczytelny? Wybierz z listy</summary>
-          <select id="p-wybor-stanowiska"><option value="">— wybierz —</option>
-          ${opcje.map(([k, s]) => `<option value="${esc(k)}">${esc(W.nazwaLinii(hala.slowniki, s.linia))} · ${esc(s.nazwa)}</option>`).join('')}</select></details>`;
+    const sl = hala.slowniki;
+    const opcje = W.miejscaDoWyboru(sl);
+    const lista = opcje.length > (f.linia ? 1 : 0) ? `<details class="bez-skanu"><summary>${f.linia ? 'Inne miejsce? Wybierz z listy' : 'Kod nieczytelny? Wybierz z listy'}</summary>
+        <select id="p-wybor-stanowiska"><option value="">— wybierz —</option>
+        ${opcje.map(o => `<option value="${esc(o.wartosc)}">${esc(o.opis)}</option>`).join('')}</select></details>` : '';
+    if (!f.linia) {
+      box.innerHTML = `<h2>Miejsce kontroli</h2>
+        <button type="button" class="glowny szeroki duzy" data-akcja="skanuj-stanowisko">${esc(W.napisSkanu(sl))}</button>
+        ${lista || '<p class="pusto">Brak linii w systemie — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'}`;
       return;
     }
-    box.innerHTML = `<h2>Stanowisko</h2>
+    const miejsce = W.nazwaMiejsca(sl, f), linia = W.nazwaLinii(sl, f.linia);
+    box.innerHTML = `<h2>Miejsce kontroli</h2>
       <div class="wybrane-stanowisko">
-        <div><b>${esc(W.nazwaStanowiska(hala.slowniki, f.stanowisko))}</b> <span class="slaby">${esc(W.nazwaLinii(hala.slowniki, f.linia))}</span></div>
-        <div class="slaby">Start ${esc(W.kiedy(f.czas_rozpoczecia, hala.teraz()))} · ${f.qr ? '✓ zeskanowano' : '<span class="tekst-uwaga">bez skanu</span>'}</div>
+        <div><b>${esc(miejsce)}</b>${miejsce === linia ? '' : ` <span class="slaby">${esc(linia)}</span>`}</div>
+        <div class="slaby">${f.czas_rozpoczecia ? `Start ${esc(W.kiedy(f.czas_rozpoczecia, hala.teraz()))} · ` : ''}${f.qr ? '✓ zeskanowano' : '<span class="tekst-uwaga">bez skanu</span>'}</div>
         ${W.skanZInnejZmiany(f.czas_rozpoczecia, hala.zmianaTeraz()) ? '<div class="tekst-uwaga">Skan z innej zmiany — jeśli kontrola jest teraz, zeskanuj ponownie.</div>' : ''}
       </div>
-      <button type="button" data-akcja="skanuj-stanowisko">Zmień</button>`;
+      <button type="button" data-akcja="skanuj-stanowisko">${f.qr ? 'Zmień' : esc(W.napisSkanu(sl))}</button>
+      ${lista}`;
   }
 
   function rysujWyroby(el) {
@@ -195,9 +231,9 @@
     const spr = W.liczba(f.sprawdzone), br = W.liczba(f.braki);
     const p = W.podpowiedzPartii({ sprawdzone: spr, braki: br }, KJ.prog());
     const proc = spr > 0 ? Math.round(br * 1000 / spr) / 10 : null;
-    z.innerHTML = `Zgodne: <b>${spr - br >= 0 ? spr - br : '—'}</b>${proc !== null ? ` · braki <b class="${p ? 'tekst-alarm' : ''}">${String(proc).replace('.', ',')} %</b>` : ''}${p ? ` <span class="znacznik alarm">≥ ${KJ.prog()} % — partia brakowa?</span>` : ''}`;
-    const sw = el.querySelector('#p-suma-wad');
-    if (sw) sw.textContent = W.sumaWad(f.wady) ? `${W.sumaWad(f.wady)} z ${br} braków` : '';
+    z.innerHTML = `Zgodne: <b>${spr - br >= 0 ? spr - br : '—'}</b>${proc !== null ? ` · braki <b class="${p ? 'tekst-alarm' : ''}">${W.procent(proc)} %</b>` : ''}${p ? ` <span class="znacznik alarm">≥ ${esc(W.procent(KJ.prog()))} % — partia brakowa?</span>` : ''}`;
+    const b = el.querySelector('#p-braki');
+    if (b) b.textContent = br;
   }
 
   function rysujWady(el) {
@@ -242,21 +278,22 @@
     f.wnioski = String(d.get('wnioski') || '');
     f.dzialania = String(d.get('dzialania') || '');
     f.sprawdzone = liczbaZPola(d.get('sprawdzone'));
-    f.braki = liczbaZPola(d.get('braki'));
-    // Brak dodany przyciskiem „+” podnosi sprawdzone, jak na kartce. Wpisany z klawiatury — nie: literówka
-    // (30 zamiast 3) podniosłaby sprawdzone na stałe; takie wpisy łapie W.bledyProby przy zapisie.
-    if (cel && cel.name === 'braki' && cel.dataset.zPrzycisku && f.braki > f.sprawdzone) { f.sprawdzone = f.braki; form.elements.sprawdzone.value = f.sprawdzone; }
-    if (cel && cel.id === 'p-wybor-stanowiska' && cel.value) { ustawStanowisko(cel.value, null); return; }
+    f.braki = W.sumaWad(f.wady);                    // UI etap 2: braki tylko z kafelków wad
+    if (cel && cel.id === 'p-wybor-stanowiska') {
+      const m = cel.value && W.miejsceZWyboru(cel.value, hala.slowniki);
+      if (m) ustawMiejsce(m);
+      return;
+    }
     rysujWyniki(KJ.$('ekran'));
     zapiszBrudnopis();
   }
 
-  function ustawBraki(n) {
+  /* Braki = suma wad (UI etap 2). Wada dodana „+” ponad liczbę sprawdzonych podnosi sprawdzone, jak na kartce
+     (wcześniej robił to „+” przy brakach) — wpisane z klawiatury „Sprawdzone” nie spada samo. */
+  function ustawBraki() {
     const form = KJ.$('f-proba');
-    f.braki = n;
-    if (f.braki > f.sprawdzone) f.sprawdzone = f.braki;
-    form.elements.braki.value = f.braki;
-    form.elements.sprawdzone.value = f.sprawdzone;
+    f.braki = W.sumaWad(f.wady);
+    if (W.liczba(f.braki) > W.liczba(f.sprawdzone)) { f.sprawdzone = f.braki; form.elements.sprawdzone.value = f.sprawdzone; }
   }
 
   document.addEventListener('click', async ev => {
@@ -267,8 +304,8 @@
       const kod = krok.closest('[data-wada]').dataset.wada;
       const n = Math.max(0, (f.wady[kod] || 0) + (+krok.dataset.wadaKrok));
       if (n) f.wady[kod] = n; else delete f.wady[kod];
-      // Każda policzona wada to brak — licznik braków rośnie sam, żeby nie klikać dwa razy.
-      if (W.sumaWad(f.wady) > f.braki) ustawBraki(W.sumaWad(f.wady));
+      // Każda policzona wada to brak — braki liczą się same z kafelków (w obie strony).
+      ustawBraki();
       const kafel = krok.closest('[data-wada]');
       kafel.classList.toggle('wybrana', !!n);
       kafel.querySelector('.ile').textContent = n;
@@ -304,30 +341,27 @@
      to chwila skanu (KONTRAKT §10). Zapis do brudnopisu od razu — zanim kontroler
      zacznie liczyć sztuki, bo telefon może paść w trakcie.                     */
   async function skanujStanowisko(oczekiwane) {
-    const tytul = oczekiwane ? `Zeskanuj: ${W.nazwaStanowiska(hala.slowniki, oczekiwane)}` : 'Zeskanuj stanowisko';
-    const t = await KJ.skanuj(tytul, 'Kod stanowiska');
+    const tytul = oczekiwane ? `Zeskanuj: ${W.nazwaStanowiska(hala.slowniki, oczekiwane)}` : W.napisSkanu(hala.slowniki).replace('Skanuj', 'Zeskanuj');
+    const t = await KJ.skanuj(tytul, 'Kod z etykiety');
     if (!t) return;
-    let k = Hala.odczytajKod(t, hala.slowniki);
-    // Kod wpisany z ręki bez przedrostka („L1-S2”) — też go przyjmujemy, ale bez dowodu skanu.
-    if (!k.rodzaj && (hala.slowniki.stanowiska || {})[k.kod]) k = { rodzaj: 'stanowiska', kod: k.kod, wpis: hala.slowniki.stanowiska[k.kod], surowy: null };
-    if (k.rodzaj === 'stanowiska' && !k.wpis) {
-      KJ.komunikat(`Nie znam stanowiska „${k.kod}”. Sprawdź kod albo wybierz stanowisko z listy.`, 'alarm');
-      return;
-    }
-    if (k.rodzaj !== 'stanowiska' || !k.wpis) {
-      KJ.komunikat(k.rodzaj ? `To kod ${k.rodzaj === 'maszyny' ? 'maszyny' : k.rodzaj === 'linie' ? 'linii' : 'identyfikatora'}, a nie stanowiska. Zeskanuj kod na stanowisku.`
-                            : `Nie znam kodu „${t}”. Zeskanuj kod na stanowisku albo wybierz je z listy.`, 'alarm');
-      return;
-    }
-    if (oczekiwane && k.kod !== oczekiwane) KJ.komunikat(`Zeskanowano inne stanowisko: ${k.wpis.nazwa}`, 'uwaga');
-    if (f.stanowisko && f.stanowisko !== k.kod && (f.sprawdzone || W.sumaWad(f.wady)) &&
-        !(await KJ.potwierdz('Inne stanowisko?', `Wyniki wpisane dla „${W.nazwaStanowiska(hala.slowniki, f.stanowisko)}” przejdą na „${k.wpis.nazwa}”.`, 'Tak, zmień'))) return;
-    ustawStanowisko(k.kod, k.surowy);
+    // Stanowisko, maszyna (etykieta z Panelu, D51) albo linia; kod wpisany bez przedrostka przyjmujemy „bez skanu”.
+    const m = W.miejsceZeSkanu(Hala.odczytajKod(t, hala.slowniki), hala.slowniki);
+    if (m.blad) { KJ.komunikat(m.blad, 'alarm'); return; }
+    if (oczekiwane && m.stanowisko !== oczekiwane) KJ.komunikat(`Zeskanowano inne miejsce: ${W.nazwaMiejsca(hala.slowniki, m)}`, 'uwaga');
+    await ustawMiejsce(m);
   }
 
-  function ustawStanowisko(kod, qr) {
-    const s = (hala.slowniki.stanowiska || {})[kod] || {};
-    f.stanowisko = kod; f.linia = s.linia || null; f.qr = qr || null;
+  /* Ustawia miejsce próby (ze skanu albo z listy) i godzinę startu. Zmiana miejsca przy wpisanych wynikach — pytanie. */
+  async function ustawMiejsce(m) {
+    const cel = f;
+    const inne = (f.stanowisko || null) !== (m.stanowisko || null) || f.linia !== m.linia;
+    if ((f.stanowisko || f.czas_rozpoczecia) && inne && (f.sprawdzone || W.sumaWad(f.wady)) &&
+        !(await KJ.potwierdz('Inne miejsce?', `Wyniki wpisane dla „${W.nazwaMiejsca(hala.slowniki, f)}” przejdą na „${W.nazwaMiejsca(hala.slowniki, m)}”.`, 'Tak, zmień'))) {
+      rysujStanowisko(KJ.$('ekran'));            // lista wyboru wraca do „— wybierz —”
+      return;
+    }
+    if (f !== cel) return;                        // w trakcie pytania próbę zapisano albo wyczyszczono
+    f.stanowisko = m.stanowisko || null; f.linia = m.linia; f.maszyna = m.maszyna || null; f.qr = m.qr || null;
     f.czas_rozpoczecia = new Date(hala.teraz()).toISOString();
     zapiszBrudnopis(true);
     const el = KJ.$('ekran');
@@ -337,7 +371,7 @@
   async function skanujZlecenie() {
     const t = await KJ.skanuj('Zeskanuj kod przewodnika', 'Numer zlecenia');
     if (!t) return;
-    if (/^HALA:/i.test(t)) { KJ.komunikat('To kod stanowiska albo maszyny. Zeskanuj kod kreskowy z przewodnika.', 'alarm'); return; }
+    if (/^HALA:/i.test(t)) { KJ.komunikat('To kod maszyny (albo stanowiska). Zeskanuj kod kreskowy z przewodnika.', 'alarm'); return; }
     f.zlecenie = t;
     const form = KJ.$('f-proba');                  // kontroler mógł w tym czasie wyjść z ekranu próby
     if (form) form.elements.zlecenie.value = t;
@@ -346,6 +380,7 @@
 
   async function zapisz(form) {
     zmianaPola(form, null);
+    f.braki = W.brakiZWad(f).braki;                // w miejscu — zdjęcie w drodze sprawdza, czy to wciąż ten sam formularz
     const bledy = W.bledyProby(f);
     const b = form.querySelector('#bledy-proby');
     b.hidden = !bledy.length;
@@ -354,10 +389,10 @@
     if (!f.zlecenie.trim() && !f.zdjecie_zlecenia &&
         !(await KJ.potwierdz('Bez zlecenia?', 'Bez numeru ani zdjęcia przewodnika tej próby nie da się połączyć z partią.', 'Zapisz bez zlecenia'))) return;
     if (W.skanZInnejZmiany(f.czas_rozpoczecia, hala.zmianaTeraz()) &&
-        !(await KJ.potwierdz('Skan z innej zmiany', `Stanowisko zeskanowano ${W.kiedy(f.czas_rozpoczecia, hala.teraz())}. Próba policzy się do tamtej zmiany. Jeśli kontrola jest teraz — Anuluj i zeskanuj ponownie.`, 'Zapisz tak'))) return;
+        !(await KJ.potwierdz('Skan z innej zmiany', `${f.stanowisko ? 'Stanowisko' : 'Miejsce'} zeskanowano ${W.kiedy(f.czas_rozpoczecia, hala.teraz())}. Próba policzy się do tamtej zmiany. Jeśli kontrola jest teraz — Anuluj i zeskanuj ponownie.`, 'Zapisz tak'))) return;
     const id = hala.nowyId();
     const dane = W.daneProby(f);
-    await hala.zapisz('proba.zarejestrowana', id, dane);
+    if (!(await KJ.zapisz('proba.zarejestrowana', id, dane))) return;     // brudnopis zostaje — nic nie ginie
     await hala.brudnopis.usun(BRUDNOPIS);
     f = pusty();
     KJ.komunikat('Próba zapisana');
@@ -369,16 +404,20 @@
   // ------------------------------------------------------------ partia brakowa
 
   /* Podpowiedź progiem, decyzja człowieka (D13). Pola partii: zlecenie to TEKST
-     (numer), a nie obiekt jak w próbie. */
+     (numer), a nie obiekt jak w próbie. „Oznacz brakową” i „Partia brakowa” są grafitowe (STYL-GK §1) — czerwień
+     zostaje dla działań, które coś kasują (Wycofaj alert); oznaczenie partii to zwykła decyzja kontrolera.
+     Na planie przy każdej próbie lidera przycisk jest obrysowany — kilka czerwonych pasów krzyczało jak alarm. */
   async function zaproponujPartie(idProby, proba, podpowiedz) {
     const w = await KJ.okno({
-      tytul: podpowiedz ? `Braki ${String(podpowiedz.proc).replace('.', ',')} % — oznaczyć partię jako brakową?` : 'Oznaczyć partię jako brakową?',
-      tresc: `${podpowiedz ? `<p>Próg to ${podpowiedz.prog} %. Partia pojawi się na Panelu Kierownika.</p>` : ''}
+      tytul: podpowiedz ? `Braki ${W.procent(podpowiedz.proc)} % — oznaczyć partię jako brakową?` : 'Oznaczyć partię jako brakową?',
+      tresc: `${podpowiedz ? `<p>Próg to ${esc(W.procent(podpowiedz.prog))} %. Partia pojawi się na Panelu Kierownika.</p>` : ''}
         <label>Powód<textarea name="powod" rows="3" maxlength="2000">${esc(W.powodPartii(proba, hala.slowniki))}</textarea></label>
         <label>Numer partii <span class="slaby">(opcjonalnie)</span><input name="partia"></label>
-        <label>Ilość w partii, szt. <span class="slaby">(opcjonalnie)</span><input name="ilosc" type="number" inputmode="numeric" min="0"></label>`,
+        <label>Ilość w partii, szt. <span class="slaby">(opcjonalnie)</span><input name="ilosc" inputmode="numeric" autocomplete="off"></label>`,
+      // Pole tekstowe, nie type="number": przy „12,5” przeglądarka oddaje pusty napis i błąd przepadał po cichu.
       przyciski: [{ tekst: 'Nie oznaczaj', wartosc: false },
-                  { tekst: 'Oznacz brakową', wartosc: true, alarm: true, sprawdz: d => (String(d.get('powod') || '').trim() ? null : 'Wpisz powód.') }],
+                  { tekst: 'Oznacz brakową', wartosc: true, glowny: true,
+                    sprawdz: d => (String(d.get('powod') || '').trim() ? W.bladIlosci(d.get('ilosc')) : 'Wpisz powód.') }],
     });
     if (!w || !w.wartosc) return false;
     const dane = { linia: proba.linia, powod: String(w.dane.get('powod')).trim(), proba: idProby };
@@ -387,10 +426,9 @@
     if (proba.wyrob) dane.wyrob = proba.wyrob;
     const partia = String(w.dane.get('partia') || '').trim();
     if (partia) dane.partia = partia;
-    const ilosc = parseInt(w.dane.get('ilosc'), 10);
-    if (ilosc >= 0) dane.ilosc = ilosc;
+    if (String(w.dane.get('ilosc') || '').trim()) dane.ilosc = W.liczbaZPola(w.dane.get('ilosc'));   // sprawdzone w oknie
     if ((proba.zdjecia || []).length) dane.zdjecia = proba.zdjecia.slice();
-    await hala.zapisz('partia.oznaczona_brakowa', hala.nowyId(), dane);
+    if (!(await KJ.zapisz('partia.oznaczona_brakowa', hala.nowyId(), dane))) return false;
     KJ.komunikat('Partia oznaczona jako brakowa', 'uwaga');
     return true;
   }
@@ -436,7 +474,7 @@
                       { tekst: 'Zwolnij', wartosc: true, glowny: true, sprawdz: d => (String(d.get('decyzja') || '').trim() ? null : 'Wpisz decyzję — trafi do historii partii.') }],
         });
         if (!w || !w.wartosc) return;
-        await hala.zapisz('partia.zwolniona', p.id, { decyzja: String(w.dane.get('decyzja')).trim() });
+        if (!(await KJ.zapisz('partia.zwolniona', p.id, { decyzja: String(w.dane.get('decyzja')).trim() }))) return;
         KJ.komunikat('Partia zwolniona');
       });
     },
@@ -452,11 +490,13 @@
       const d = p.dane;
       const partia = hala.obiekty('partia', x => x.dane.proba === id)[0];
       const proc = d.sprawdzone ? Math.round(d.braki * 1000 / d.sprawdzone) / 10 : null;
+      // Miejsce: stanowisko, maszyna ze skanu albo cała linia (D51) — wcześniej bez stanowiska nagłówek był „—”.
+      const miejsce = W.nazwaMiejsca(hala.slowniki, Object.assign({ linia: p.linia }, d)), linia = W.nazwaLinii(hala.slowniki, p.linia);
       el.innerHTML = `<a class="wstecz" href="#plan">‹ Plan</a>
         <div class="wiersz"><span class="znacznik ${d.zrodlo === 'kj' ? 'info' : 'neutral'}">${d.zrodlo === 'kj' ? 'Próba KJ' : 'Próba lidera'}</span>
           <span class="slaby">${esc(W.kiedy(d.czas_rozpoczecia || p.utworzono, hala.teraz()))} · ${esc(W.nazwaPracownika(hala.pracownicy, d.kontrolowal) || '')}</span>
           ${p._oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
-        <h1>${esc(W.nazwaStanowiska(hala.slowniki, d.stanowisko))} <span class="slaby">${esc(W.nazwaLinii(hala.slowniki, p.linia))}</span></h1>
+        <h1>${esc(miejsce)}${miejsce === linia ? '' : ` <span class="slaby">${esc(linia)}</span>`}</h1>
         <div class="liczby-proby">
           <div><span>Sprawdzone</span><b>${esc(d.sprawdzone)}</b></div>
           <div><span>Zgodne</span><b>${esc(d.zgodne)}</b></div>
@@ -475,7 +515,7 @@
         <div class="zdjecia">${KJ.miniatury([].concat(d.zlecenie && d.zlecenie.zdjecie ? [d.zlecenie.zdjecie] : [], d.zdjecia || []))}</div>
         <div class="przyciski-formularza">
           ${KJ.mozna('proba.skorygowana') ? '<button type="button" id="koryguj">Korekta</button>' : ''}
-          ${!partia && d.braki > 0 && KJ.mozna('partia.oznaczona_brakowa') ? '<button type="button" id="oznacz" class="alarm">Partia brakowa</button>' : ''}
+          ${!partia && d.braki > 0 && KJ.mozna('partia.oznaczona_brakowa') ? '<button type="button" id="oznacz" class="glowny">Partia brakowa</button>' : ''}
         </div>`;
       const k = el.querySelector('#koryguj');
       if (k) k.addEventListener('click', () => koryguj(p));
@@ -506,7 +546,7 @@
     if (!w || !w.wartosc) return;
     const zmiany = W.korektaProby(d, zFormularza(w.dane));
     if (!Object.keys(zmiany).length) { KJ.komunikat('Nic się nie zmieniło'); return; }
-    await hala.zapisz('proba.skorygowana', p.id, zmiany);
+    if (!(await KJ.zapisz('proba.skorygowana', p.id, zmiany))) return;
     KJ.komunikat('Korekta zapisana');
   }
 })(window.KJ);

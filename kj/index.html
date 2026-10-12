@@ -62,11 +62,11 @@
       <div class="hala-menu-nazwa" id="menu-kto"></div>
       <div class="hala-menu-kto">GK Kontrola Jakości</div>
     </div>
-    <a href="#plan" data-ekran="plan"><span class="ikona" aria-hidden="true">🗓️</span>Plan</a>
+    <!-- UI etap 2: zlecenia od kierownika są na Planie (bez zakładki „Zlecenia”) — plakietka z ich liczbą przy „Plan”. -->
+    <a href="#plan" data-ekran="plan"><span class="ikona" aria-hidden="true">🗓️</span>Plan<b id="licznik-zlecen" class="plakietka" hidden></b></a>
     <a href="#proba" data-ekran="proba"><span class="ikona" aria-hidden="true">🧪</span>Próba</a>
     <a href="#alerty" data-ekran="alerty"><span class="ikona" aria-hidden="true">🚨</span>Alerty</a>
     <a href="#reklamacje" data-ekran="reklamacje"><span class="ikona" aria-hidden="true">📨</span>Reklamacje</a>
-    <a href="#zlecenia" data-ekran="zlecenia"><span class="ikona" aria-hidden="true">📋</span>Zlecenia<b id="licznik-zlecen" class="plakietka" hidden></b></a>
     <a href="#wiecej" data-ekran="wiecej"><span class="ikona" aria-hidden="true">⚙️</span>Więcej</a>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>

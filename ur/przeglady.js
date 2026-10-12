@@ -36,7 +36,7 @@
       <div class="wiersz"><span class="znacznik ${esc(w.stan.klasa)}">${esc(w.stan.nazwa)}</span>
         <span class="slaby">termin ${esc(!w.termin ? '—' : w.dzien === W.dzienZakladu(teraz) ? 'dziś' : W.data(w.termin))}</span>
         ${w.oczekuje ? '<span class="slaby">czeka na wysłanie</span>' : ''}</div>
-      <b class="tytul">${esc(w.maszynaNazwa)} <span class="slaby">${esc(w.maszyna)} · ${esc(w.liniaNazwa)}</span></b>
+      <b class="tytul">${esc(w.maszynaNazwa)} <span class="slaby">${esc(w.maszyna)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(w.liniaNazwa)}` : ''}</span></b>
       <div class="slaby">${esc(w.kartaNazwa)}${w.mechanikNazwa ? ` · ${esc(w.mechanikNazwa)}` : ''}</div>
       ${w.status === 'w_trakcie' || w.status === 'zrealizowany' ? `<div class="pasek-postepu ${p.zrobione === p.wszystkie ? 'komplet' : ''}"><span style="width:${p.wszystkie ? Math.round(p.zrobione * 100 / p.wszystkie) : 0}%"></span></div>
         <div class="slaby">${p.zrobione}/${p.wszystkie}${p.niezgodne.length ? ` · <span class="tekst-alarm">niezgodne: ${p.niezgodne.length}</span>` : ''}</div>` : ''}
@@ -80,7 +80,9 @@
   const zaplanuj = W.raz(async () => {
     const sl = hala.slowniki, dzis = W.dzienZakladu(hala.teraz());
     const maszyny = W.maszyny(sl);
-    const opcjeKart = m => W.kartyDlaMaszyny(sl, m).map(k => `<option value="${esc(k.kod)}">${esc(k.nazwa)}</option>`).join('');
+    // Najpierw karty tej maszyny, potem pozostałe z dopiskiem — jak w harmonogramie. Maszyna, której typ nie ma karty,
+    // dostawała pustą listę i nie dało się jej zaplanować (audyt 2026-10-12).
+    const opcjeKart = m => W.opcjeKart(sl, m).map(k => `<option value="${esc(k.kod)}">${esc(k.nazwa)}${k.pasuje ? '' : ' (inna maszyna)'}</option>`).join('');
     const pierwsza = maszyny[0] ? maszyny[0].kod : '';
     const mech = W.mechanicy(hala.pracownicy, null);
     const w = await UR.okno({
@@ -93,13 +95,18 @@
         sprawdz: f => W.bledyPlanowania(Object.fromEntries(f), sl, dzis)[0] || null }],
       przy: form => form.querySelector('#pl-maszyna').addEventListener('change', ev => {
         const k = form.querySelector('#pl-karta');
-        k.innerHTML = opcjeKart(ev.target.value) || '<option value="">Brak karty dla tej maszyny</option>';
+        k.innerHTML = opcjeKart(ev.target.value);
       }),
     });
     if (!w || !w.wartosc) return;
     const f = Object.fromEntries(w.dane);
     const klucz = W.kluczPrzegladu(f.maszyna, f.karta, f.dzien);
-    if (hala.obiekt('przeglad', klucz)) { UR.komunikat('Taki przegląd już jest w planie.', 'uwaga'); UR.idz(`przeglad/${encodeURIComponent(klucz)}`); return; }
+    const kolizja = W.kolizjaPlanowania(hala.obiekt('przeglad', klucz));
+    if (kolizja) {
+      UR.komunikat(kolizja.tekst, 'uwaga');
+      if (kolizja.otworz) UR.idz(`przeglad/${encodeURIComponent(klucz)}`);
+      return;
+    }
     const dane = { maszyna: f.maszyna, karta: f.karta, termin: W.koniecDnia(f.dzien) };
     const m = (sl.maszyny || {})[f.maszyna];
     if (m && m.linia) dane.linia = m.linia;
@@ -160,9 +167,9 @@
       <section class="karta przeglad ${esc(w.stan.kod)}">
         <div class="wiersz"><span class="znacznik ${esc(w.stan.klasa)}">${esc(w.stan.nazwa)}</span><span class="slaby">${esc(w.numer)}</span></div>
         <h1>${esc(w.maszynaNazwa)} <span class="slaby">${esc(w.maszyna)}</span></h1>
-        <div>${esc(w.kartaNazwa)} · ${esc(w.liniaNazwa)}</div>
+        <div>${esc(w.kartaNazwa)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(w.liniaNazwa)}` : ''}</div>
         <dl class="szczegoly">
-          <dt>Termin</dt><dd>${esc(W.data(d.termin))} (do końca dnia)</dd>
+          <dt>Termin</dt><dd>${esc(W.dataPelna(d.termin))} (do końca dnia)</dd>
           ${d.mechanik ? `<dt>Przydzielony</dt><dd>${esc(W.nazwaPracownika(k.pracownicy, d.mechanik))}</dd>` : ''}
           ${d.czas_rozpoczecia ? `<dt>Rozpoczął</dt><dd>${esc(W.nazwaPracownika(k.pracownicy, d.wykonawca))} · ${esc(W.kiedy(d.czas_rozpoczecia, k.teraz))}${d.qr ? ' · skan maszyny' : ''}</dd>` : ''}
           ${d.czas_zakonczenia ? `<dt>Zakończony</dt><dd>${esc(W.kiedy(d.czas_zakonczenia, k.teraz))}</dd>` : ''}
@@ -178,7 +185,7 @@
       ${!karta ? '<p class="pusto blad">Karty tego przeglądu nie ma w słowniku (usunięta?). Poproś kierownika UR o poprawkę planu.</p>' : ''}
       ${karta && p.status !== 'zaplanowany' ? `<h2>Punkty kontrolne</h2><div class="lista" id="punkty">${(karta.punkty || []).map(pk => rysujPunkt(pk, wyniki[pk.id], edycja)).join('')}</div>` : ''}
       ${karta && p.status === 'zaplanowany' ? `<h2>Punkty kontrolne (${(karta.punkty || []).length})</h2><ol>${(karta.punkty || []).map(pk => `<li>${esc(pk.nazwa)}${W.zakres(pk) ? ` <span class="slaby">(${esc(W.zakres(pk))})</span>` : ''}</li>`).join('')}</ol>` : ''}
-      ${edycja ? '<button type="button" class="zielony szeroki duzy" id="zakoncz" style="margin-top:14px">Zakończ przegląd</button>' : ''}
+      ${edycja ? '<button type="button" class="glowny szeroki duzy" id="zakoncz" style="margin-top:14px">Zakończ przegląd</button>' : ''}
       ${licznik && (licznik.dane || {}).czas_odczytu ? `<p class="slaby">Ostatni odczyt licznika: ${esc(opisLicznika(licznik.dane))} (${esc(W.kiedy(licznik.dane.czas_odczytu, k.teraz))})</p>` : ''}`;
 
     const zacznij = el.querySelector('#zacznij');
@@ -283,7 +290,7 @@
         <h3>Odczyt licznika ${licznikowy ? '' : '(opcjonalnie)'}</h3>
         <div class="dwa"><label>Motogodziny<input name="motogodziny" inputmode="decimal" value="${esc(b.motogodziny || '')}" placeholder="${esc(ostatni.motogodziny ?? '')}" data-bez-fokusu></label>
           <label>Cykle<input name="cykle" inputmode="numeric" value="${esc(b.cykle || '')}" placeholder="${esc(ostatni.cykle ?? '')}" data-bez-fokusu></label></div>`,
-      przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: post.brakujace.length ? 'Zakończ mimo braków' : 'Zakończ przegląd', wartosc: true, zielony: true,
+      przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: post.brakujace.length ? 'Zakończ mimo braków' : 'Zakończ przegląd', wartosc: true, glowny: true,
         sprawdz: f => {
           const odczyt = { motogodziny: String(f.get('motogodziny') || '').trim(), cykle: String(f.get('cykle') || '').trim() };
           const brak = W.bladOdczytuPrzegladu(harm, odczyt);
@@ -374,7 +381,7 @@
       el.innerHTML = `<a class="wstecz" href="#wiecej">‹ Więcej</a><h1>Liczniki maszyn</h1>
         <p class="slaby">Motogodziny i cykle z licznika na maszynie. Z nich plan liczy przeglądy „co N motogodzin”.</p>
         <div class="lista">${lista.map(m => `<button type="button" class="karta" data-licznik="${esc(m.kod)}" ${moge ? "" : "disabled"}>
-          <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)} · ${esc(m.liniaNazwa)}</span><br>
+          <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(m.liniaNazwa)}` : ''}</span><br>
           <span>${m.motogodziny !== null ? `${esc(m.motogodziny)} mth` : '— mth'} · ${m.cykle !== null ? `${esc(m.cykle)} ${W.odmiana(m.cykle, 'cykl', 'cykle', 'cykli')}` : '— cykli'}</span>
           <span class="slaby">${m.kiedy ? ` · odczyt ${esc(m.kiedy)}` : ''}</span></button>`).join('') || '<p class="pusto">Brak maszyn w słowniku.</p>'}</div>`;
       el.querySelector('.lista').addEventListener('click', ev => {

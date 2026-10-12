@@ -49,14 +49,34 @@
     el.textContent = tekst;
     if (klucz) el.dataset.klucz = klucz;
     pudlo.appendChild(el);
+    // Moje konto i Mój zespół to <dialog> w warstwie górnej — bez popovera dymek („Powiadomienia włączone”, błąd)
+    // leżał pod zasłoną okna. Jak UR.komunikat (hala.css → .komunikaty, popover="manual" w index.html).
+    if (pudlo.showPopover) { try { pudlo.hidePopover(); } catch (e) { /* nie był otwarty */ } try { pudlo.showPopover(); } catch (e) { /* stara przeglądarka */ } }
     while (pudlo.children.length > MAKS_KOMUNIKATOW) pudlo.firstElementChild.remove();
     setTimeout(() => el.classList.add('znika'), rodzaj === 'blad' ? 7000 : 3500);
     setTimeout(() => el.remove(), rodzaj === 'blad' ? 7600 : 4100);
   };
 
+  /* Skan kodu maszyny (obchód, próba, awaria). Kod wpisany ręcznie („WT-01”, małymi literami) działa jak skan naklejki
+     HALA:M:WT-01 (W.kodZeSkanu). Zły kod nie zamyka sprawy: okno skanera wraca od razu z błędem w tytule — wcześniej
+     skaner się zamykał, dymek znikał, a lider musiał od nowa szukać przycisku. sprawdz(tekst) → { ok, powod, … }.
+     Zwraca { tekst, …wynik sprawdz } albo null (Anuluj). */
+  Lider.skanujKod = async (opcje, sprawdz) => {
+    let blad = null;
+    for (;;) {
+      const surowy = await HalaSkaner.skanuj(Object.assign({}, opcje, blad ? { tytul: blad } : {}));
+      if (!surowy) return null;
+      const tekst = W.kodZeSkanu(surowy, hala.slowniki);
+      const wynik = sprawdz(tekst);
+      if (wynik.ok) return Object.assign({ tekst }, wynik);
+      blad = wynik.powod;
+      try { if (navigator.vibrate) navigator.vibrate([100, 60, 100, 60, 100]); } catch (e) { /* bez wibracji */ }
+    }
+  };
+
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
-    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
+    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś kierownika o rolę lidera albo mistrza.';
     // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo PIN, blokada na 5 minut…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
@@ -305,6 +325,7 @@
   };
 
   function wyborLinii() {
+    if (!W.wieleLinii(hala.slowniki)) return;      // jedna linia (D51) — nie ma czego wybierać
     // Mistrz z liniami z Panelu → Administracja widzi tylko je (D34, 2026-10-07); lider — wszystkie, obce jako przesunięcie.
     const linie = W.linieDoWyboru(hala.slowniki, hala.pracownik);
     Lider.okno({
@@ -342,11 +363,10 @@
     const { oczekuje, moje } = Lider.stan.kolejka;
     const kto = hala.pracownik && hala.pracownik.nazwa;
     const inne = oczekuje - (moje || 0);
-    const czesci = [];
-    if (moje && kto) czesci.push(`${W.liczebnik(moje, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na ${kto}`);
-    if (inne > 0) czesci.push(`${W.liczebnik(inne, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na inną osobę`);
-    $('czeka-na').hidden = !czesci.length;
-    $('czeka-na').textContent = czesci.length ? czesci.join(', ') + ' — wyślą się po jej zalogowaniu.' : '';
+    // Tekst w widok.js (W.opisCzekajacych) — wcześniej „2 zapisy czekają na Jan Kowalski … po jej zalogowaniu”.
+    const tekst = W.opisCzekajacych(moje, inne, kto);
+    $('czeka-na').hidden = !tekst;
+    $('czeka-na').textContent = tekst;
   }
 
   async function zaloguj(dane) {
@@ -425,15 +445,18 @@
         const ost = hala.polaczenie.ostatniaSynchronizacja;
         // D49: mistrz (i kierownik zakładu) prowadzi tu konta swoich liderów — Panelu mistrz nie otwiera (wspolne/zespol.js).
         const zespol = HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale);
-        el.innerHTML = `<fieldset><legend>Linia</legend>
+        // Jedna linia (D51): bez „Zmień linię” i bez „przypisz linie” — nie ma czego zmieniać ani przypisywać.
+        const wiele = W.wieleLinii(hala.slowniki);
+        el.innerHTML = `${wiele ? `<fieldset><legend>Linia</legend>
             <p class="hala-konto-drobne">${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</p>
-            <button type="button" data-a="linia">Zmień linię</button></fieldset>
+            <button type="button" data-a="linia">Zmień linię</button></fieldset>` : ''}
           ${zespol ? `<fieldset><legend>Mój zespół</legend>
-            <p class="hala-konto-drobne">Dodaj lidera, przypisz linie, ustaw hasło startowe albo zresetuj PIN.</p>
+            <p class="hala-konto-drobne">${wiele ? 'Dodaj lidera, przypisz linie, ustaw hasło startowe albo zresetuj PIN.' : 'Dodaj lidera, ustaw hasło startowe albo zresetuj PIN.'}</p>
             <button type="button" data-a="zespol">Mój zespół</button></fieldset>` : ''}
           <div data-powiadomienia></div>
           <p class="hala-konto-drobne">Ostatnia synchronizacja: ${esc(ost ? W.godzina(ost) : '—')}</p>`;
-        el.querySelector('[data-a=linia]').addEventListener('click', () => { el.closest('dialog').close(); wyborLinii(); });
+        const zmienLinie = el.querySelector('[data-a=linia]');
+        if (zmienLinie) zmienLinie.addEventListener('click', () => { el.closest('dialog').close(); wyborLinii(); });
         if (zespol) el.querySelector('[data-a=zespol]').addEventListener('click', () => {
           el.closest('dialog').close();
           HalaZespol.otworz(hala, { komunikat: Lider.komunikat });
@@ -441,7 +464,7 @@
         /* Jeden przycisk na powiadomienia: zgoda przeglądarki i push przy zamkniętej aplikacji (D28) naraz — wspólna
            sekcja z Panelem (konto.js → powiadomienia). lokalne: Lider sam pokazuje powiadomienia przy otwartej karcie. */
         HalaKonto.powiadomienia(el.querySelector('[data-powiadomienia]'), hala, {
-          opis: 'Przypomnienia z checklisty, Quality Alert i zlecenia od kierownika.', lokalne: true, komunikat: Lider.komunikat });
+          opis: 'Przypomnienia z checklisty, alerty jakości i zlecenia od kierownika.', lokalne: true, komunikat: Lider.komunikat });
       },
     });
   });
@@ -474,15 +497,15 @@
     const lista = await hala.odrzucone();
     const konf = Lider.stan.konflikty;
     Lider.okno({
-      tytul: 'Odrzucone i konflikty',
-      html: `<h3>Odrzucone przez hub</h3>
-        ${lista.length ? `<p class="slaby">Hub nie przyjął tych zapisów. Przepisz je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>` : '<p class="slaby">Brak.</p>'}
+      tytul: 'Nie wysłane i konflikty',
+      html: `<h3>Nie wysłane</h3>
+        ${lista.length ? `<p class="slaby">Serwer nie przyjął tych zapisów. Przepisz je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>` : '<p class="slaby">Brak.</p>'}
         <ul class="lista-prosta">${lista.map(o => `<li><b>${esc(Lider.nazwaTypu(o.zd.typ))}</b> ${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}
           <div class="tekst-alarm">${esc(o.powod)}</div>
           <details><summary>Treść</summary><pre>${esc(JSON.stringify(o.zd.dane, null, 1))}</pre></details>
           <button type="button" class="maly" data-usun="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>
         <h3>Konflikty (od uruchomienia)</h3>
-        ${konf.length ? '<p class="slaby">Hub zapisał zdarzenie, ale stan się nie zmienił — ktoś inny zdążył wcześniej.</p>' : '<p class="slaby">Brak.</p>'}
+        ${konf.length ? '<p class="slaby">Serwer zapisał zdarzenie, ale stan się nie zmienił — ktoś inny zdążył wcześniej.</p>' : '<p class="slaby">Brak.</p>'}
         <ul class="lista-prosta">${konf.map(k => `<li><b>${esc(Lider.nazwaTypu(k.typ))}</b> ${esc(W.godzina(k.czas))}<div>${esc(k.uwaga)}</div></li>`).join('')}</ul>`,
       poOtwarciu: el => el.querySelectorAll('[data-usun]').forEach(b => b.addEventListener('click', async () => {
         await hala.usunOdrzucone(b.dataset.usun);
@@ -508,11 +531,12 @@
     const n = k.moje || 0;
     // Dociąganie (sieć buforuje strumień, np. szybki tunel) to NIE brak połączenia — zmiany przychodzą co kilka sekund.
     const dociaga = p.dociaganie && !p.blad;
-    if (!p.online) { klasa = 'offline'; czesci.push(n ? `Brak sieci — ${n} czeka na wysłanie` : 'Brak sieci — zapisy zostają w telefonie'); }
-    else if (!p.strumien && !dociaga && !laska) { klasa = 'brak-huba'; czesci.push(`Brak połączenia z hubem${n ? ` — ${n} czeka na wysłanie` : ''}`); }
+    // Odmiana po liczebniku: „3 zapisy czekają”, „5 zapisów czeka” (wcześniej „3 czeka na wysłanie”).
+    if (!p.online) { klasa = 'offline'; czesci.push(n ? `Brak sieci — ${W.czekaNaWyslanie(n)}` : 'Brak sieci — zapisy zostają w telefonie'); }
+    else if (!p.strumien && !dociaga && !laska) { klasa = 'brak-huba'; czesci.push(`Brak połączenia z serwerem${n ? ` — ${W.czekaNaWyslanie(n)}` : ''}`); }
     else if (n) { klasa = 'kolejka'; czesci.push(`Wysyłanie… ${n}`); }
     else if (dociaga) { klasa = 'kolejka'; czesci.push('Odświeżanie co kilka sekund'); }
-    if (k.odrzucone) { klasa = 'odrzucone'; czesci.push(`Odrzucone: ${k.odrzucone} — dotknij`); }
+    if (k.odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${k.odrzucone} — dotknij`); }
     pasek.className = 'hala-polaczenie ' + klasa;
     pasek.textContent = czesci.join(' · ');
   }
@@ -522,7 +546,14 @@
 
   function rysujNaglowek() {
     const linia = Lider.stan.linia;
-    $('wybor-linii').innerHTML = `<b>${esc(linia || '—')}</b> <span>${esc(W.nazwaLinii(hala.slowniki, linia).replace(/^.*?—\s*/, ''))}</span> ▾`;
+    // Jedna linia w zakładzie (D51): sama nazwa, bez ▾ i bez okna wyboru z jedną pozycją.
+    const wiele = W.wieleLinii(hala.slowniki);
+    $('wybor-linii').classList.toggle('jedna', !wiele);
+    $('wybor-linii').tabIndex = wiele ? 0 : -1;
+    $('wybor-linii').setAttribute('aria-label', wiele ? 'Zmień linię' : 'Linia: ' + W.nazwaLinii(hala.slowniki, linia));
+    $('wybor-linii').innerHTML = wiele
+      ? `<b>${esc(linia || '—')}</b> <span>${esc(W.nazwaLinii(hala.slowniki, linia).replace(/^.*?—\s*/, ''))}</span> ▾`
+      : `<span>${esc(W.nazwaLinii(hala.slowniki, linia))}</span>`;
     const z = hala.zmianaTeraz();
     $('opis-zmiany').innerHTML = z
       ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '<span>Poza zmianą</span>';
@@ -576,9 +607,11 @@
   Lider.dzialZlecen = () => W.dzialZlecen(hala.pracownik, Lider.stan.linia, hala.slowniki);
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.dzialZlecen()) };
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
-  HalaZlecenia.sledz(hala, Lider.dzialZlecen, z => {
-    Lider.komunikat(`Nowe zlecenie od kierownika: ${(z.dane || {}).tytul || ''}`, 'info', 'zlecenie-' + z.id);
-    Lider.powiadom('Nowe zlecenie od kierownika', (z.dane || {}).tytul || '', { tag: 'zlecenie-' + z.id, adres: '#zlecenia' });
+  HalaZlecenia.sledz(hala, Lider.dzialZlecen, (z, o) => {
+    // Zwrócone przez kierownika (klient 0.16.0) to nie nowe zlecenie — mówimy, że wróciło, i z jaką uwagą.
+    const tytul = HalaZlecenia.opisPowiadomienia(z, o);
+    Lider.komunikat(tytul, 'info', 'zlecenie-' + z.id);
+    Lider.powiadom(o && o.zwrot ? 'Zlecenie wróciło od kierownika' : 'Nowe zlecenie od kierownika', (z.dane || {}).tytul || '', { tag: 'zlecenie-' + z.id, adres: '#zlecenia' });
   });
 
   Lider.plakietka = (nazwa, liczba) => {
@@ -619,7 +652,7 @@
   hala.na('polaczenie', () => rysujPasek());
   hala.na('kolejka', k => { Lider.stan.kolejka = k; rysujPasek(); });
   hala.na('odrzucone', ({ zdarzenie, plik, powod }) => {
-    Lider.komunikat(`${zdarzenie ? Lider.nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — hub nie przyjął: ${powod}`, 'blad');
+    Lider.komunikat(`${zdarzenie ? Lider.nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — serwer nie przyjął: ${powod}`, 'blad');
     rysujPasek();
   });
   hala.na('konflikt', ({ zdarzenie, uwaga }) => {

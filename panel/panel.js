@@ -94,6 +94,7 @@
     // Szablony checklist może zmieniać, komu kontrakt pozwala zapisywać ten słownik (kierownik, admin).
     const zapisSzablonow = (((hala.kontrakt || {}).slowniki || {}).szablony_checklist || {}).zapis || [];
     $('menu-checklisty').hidden = !(z && (hala.pracownik.role || []).some(r => r === 'admin' || zapisSzablonow.includes(r)));
+    if (z) requestAnimationFrame(dopasujMenu);        // liczba pozycji zależy od roli — mierzymy po ich pokazaniu
     rysujPasek(hala.polaczenie);
     // Raporty → „Do Excela” (D32): rysowany raz na sesję, nie co 20 s — inaczej zamykałby kalendarz w trakcie wyboru daty.
     if (z) HalaEksport.rysuj($('eksport-raporty'), hala, { komunikat });
@@ -106,15 +107,8 @@
     }
   }
 
-  function komunikatBledu(e) {
-    // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
-    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.ustawione) return e.message;               // D43: hasło i PIN ustawione, ale rola nie otwiera Panelu
-    if (e.kod === 403 && e.powod) return e.message;  // np. stara_wersja — tekst huba mówi, co zrobić
-    if (e.kod === 403) return 'To konto nie ma dostępu do Panelu. Zaloguj się kontem kierownika albo ekranu.';
-    if (e.kod === 429) return e.message || 'Za dużo prób. Odczekaj 5 minut i spróbuj ponownie.';
-    return e.message;
-  }
+  // Zasady w widok.js (W.tekstBledu — testowane): sieć → instrukcja, błąd z telefonu → jego polski tekst.
+  function komunikatBledu(e) { return W.tekstBledu(e); }
 
   /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (czytnik „pisze” go jak
      klawiatura i kończy Enterem) albo login — konto monitora w biurze nie ma karty. Enter z czytnika
@@ -221,7 +215,23 @@
   // ------------------------------------------------------------ zakładki
 
   // Podpis pozycji menu także w title — na monitorze (konto ekranu) menu pokazuje same ikony.
-  for (const b of document.querySelectorAll('.zakladki > button')) if (!b.title) b.title = b.textContent.trim();
+  // Na wąskim telefonie podpisy bywają schowane (dopasujMenu) — nazwa pozycji zostaje dla czytnika ekranu w aria-label.
+  for (const b of document.querySelectorAll('.zakladki > button')) {
+    if (!b.title) b.title = b.textContent.trim();
+    if (!b.hasAttribute('aria-label')) b.setAttribute('aria-label', b.title);
+  }
+
+  /* Dolny pasek na telefonie (szlif UI 2026-10-12): podpisy 13 px. Gdy którykolwiek się nie mieści (7 pozycji na 390 px —
+     „Administracja”, „Wskaźniki”), same ikony we WSZYSTKICH pozycjach — równy pasek zamiast uciętych słów. Mierzymy, a nie
+     zgadujemy progu: krój (Roboto, SF, Segoe) i liczba pozycji (rola) zmieniają szerokość podpisów. */
+  function dopasujMenu() {
+    const nav = document.querySelector('.zakladki');
+    nav.classList.remove('same-ikony');
+    if (!window.matchMedia('(max-width: 820px)').matches) return;
+    const ciasno = [...nav.querySelectorAll(':scope > button:not([hidden])')].some(b => b.scrollWidth > b.clientWidth + 1);
+    nav.classList.toggle('same-ikony', ciasno);
+  }
+  window.addEventListener('resize', dopasujMenu);
 
   const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'checklisty', 'administracja'];
   for (const b of document.querySelectorAll('.zakladki button[data-widok]')) {
@@ -271,13 +281,13 @@
       const opoz = k.opoznione.slice(0, 3).map(p => `<li>${esc(p.godz)} ${esc(p.nazwa)}</li>`).join('')
         + (k.opoznione.length > 3 ? `<li>+${k.opoznione.length - 3} więcej</li>` : '');
       return `<article class="kafelek kolor-${esc(k.kolor)}">
-        <header><h3>${esc(k.nazwa)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
+        <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
         <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${k.wszystkie}" aria-valuenow="${k.zrobione}"><span style="width:${proc}%"></span></div>
         <div class="liczby"><b>${k.zrobione}/${k.wszystkie}</b>${k.najblizsza ? ` <span>Następne ${esc(k.najblizsza.godz)} · ${esc(k.najblizsza.nazwa)}</span>` : k.wszystkie ? ' <span>Wszystko zrobione</span>' : ' <span>Brak planu</span>'}</div>
         ${k.opoznione.length ? `<ul class="opoznione" aria-label="Opóźnione">${opoz}</ul>` : ''}
       </article>`;
-    }).join('') || '<p class="pusto">Brak linii w słowniku. Dodaj je w administracji.</p>';
+    }).join('') || `<p class="pusto">${esc(W.pustyObchod(d.slowniki, d.zmiana))}</p>`;
     return kafelki;
   }
 
@@ -289,7 +299,7 @@
       <article class="awaria ${w.zatrzymuje ? 'zatrzymanie' : ''} ${w.czeka && w.czeka.alarm ? 'alarm-potwierdzenia' : ''} ${swieze('awaria|' + w.id) ? 'nowy' : ''}">
         <div class="licznik-przestoju" data-od="${esc(Date.parse(w.czasZgloszenia) || '')}">${esc(W.licznik(w.przestojMs))}</div>
         <div class="opis">
-          <div class="maszyna"><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)} · ${esc(w.liniaNazwa)}</span></div>
+          <div class="maszyna"><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)}${w.liniaNazwa ? ` · ${esc(w.liniaNazwa)}` : ''}</span></div>
           <div class="szczegoly">
             <span class="znacznik ${statusKlasa(w.status)}">${esc(w.etykieta)}</span>
             ${w.zatrzymuje ? '' : `<span class="znacznik neutral">${esc(w.priorytetNazwa)}</span>`}
@@ -313,13 +323,14 @@
     $('licznik-jakosci').innerHTML = w.lista.length ? `<span class="znacznik alarm">${w.lista.length}</span>` : '';
     $('lista-jakosci').innerHTML = w.lista.map(i => i.rodzaj === 'alert' ? `
       <article class="incydent alert ${swieze('alert|' + i.id) ? 'nowy' : ''}">
-        <div class="rodzaj"><span class="znacznik alarm">Quality Alert</span> <span class="slaby">${esc(i.numer)} · ${esc(i.godz)}</span></div>
+        <div class="rodzaj"><span class="znacznik alarm">Alert jakości</span> <span class="slaby">${esc(i.numer)} · ${esc(i.godz)}</span></div>
         <div class="tytul"><b>${esc(i.tytul)}</b></div>
-        <div class="potwierdzenia ${i.brakuje.length ? '' : 'komplet'}">Potwierdzenia liderów ${i.potwierdzone.length}/${i.linie.length}${i.brakuje.length ? ` <span class="slaby">— brak: ${esc(i.brakujeNazwy.join(', '))}</span>` : ''}</div>
+        <div class="potwierdzenia ${i.brakuje.length ? '' : 'komplet'}">Potwierdzenia liderów ${i.potwierdzone.length}/${i.linie.length}${i.brakujeNazwy.length ? ` <span class="slaby">— brak: ${esc(i.brakujeNazwy.join(', '))}</span>` : ''}</div>
       </article>` : `
       <article class="incydent partia">
         <div class="rodzaj"><span class="znacznik uwaga">Partia brakowa</span> <span class="slaby">${esc(i.numer)} · ${esc(i.godz)}</span></div>
-        <div class="tytul"><b>${esc(i.liniaNazwa)}</b>${i.wyrob ? ` · ${esc(i.wyrob)}` : ''}${i.ilosc !== null ? ` · ${esc(i.ilosc)} szt.` : ''}${i.zlecenie ? ` <span class="slaby">zlec. ${esc(i.zlecenie)}</span>` : ''}</div>
+        <div class="tytul">${[i.liniaNazwa ? `<b>${esc(i.liniaNazwa)}</b>` : '', i.wyrob ? esc(i.wyrob) : '', i.ilosc !== null ? `${esc(i.ilosc)} szt.` : '']
+          .filter(Boolean).join(' · ')}${i.zlecenie ? ` <span class="slaby">zlec. ${esc(i.zlecenie)}</span>` : ''}</div>
         ${i.powod ? `<div class="slaby tekst-opisu">${esc(i.powod)}</div>` : ''}
       </article>`).join('') || '<p class="pusto ok">Brak incydentów na tej zmianie</p>';
     const wcz = [];
@@ -347,7 +358,7 @@
     // Etap 3: zakończone zmiany bez raportu końcowego (2 doby) nad raportami — brak raportu też jest informacją.
     // Otwarte (lider zaczął i nie skończył) — na wierzchu; nieotwarte z szablonem (po weekendzie to szum) — zwinięte.
     const brak = bezRaportu(d), otw = brak.filter(b => b.otwarta), nieotw = brak.filter(b => !b.otwarta);
-    const wiersz = b => `<li><span class="kiedy">${esc(b.zmianaOpis)}</span> <b>${esc(b.liniaNazwa)}</b>
+    const wiersz = b => `<li><span class="kiedy">${esc(b.zmianaOpis)}</span>${b.liniaNazwa ? ` <b>${esc(b.liniaNazwa)}</b>` : ''}
         ${b.otwarta ? '<span class="znacznik alarm">otwarta, bez raportu</span>' : ''}${b.lider ? ` <span class="slaby">${esc(b.lider)}</span>` : ''}</li>`;
     $('bez-raportu').hidden = !brak.length;
     $('bez-raportu').innerHTML = !brak.length ? '' : `
@@ -360,28 +371,42 @@
       <details class="raport" data-klucz="${esc(r.klucz)}" ${otwarteRaporty.has(r.klucz) ? 'open' : ''}>
         <summary>
           <span class="kiedy">${esc(r.zmianaOpis)}</span>
-          <b>${esc(r.liniaNazwa)}</b>
+          ${r.liniaNazwa ? `<b>${esc(r.liniaNazwa)}</b>` : ''}
           <span class="slaby">${esc(r.lider || '')}</span>
           <span class="skrot">
-            ${r.checklista.wszystkie !== null ? `<span class="znacznik ${r.checklista.opoznione ? 'uwaga' : 'ok'}">Checklista ${r.checklista.zrobione}/${r.checklista.wszystkie}${r.checklista.opoznione ? ` · ${r.checklista.opoznione} po czasie` : ''}</span>` : ''}
+            ${r.checklista.wszystkie !== null ? `<span class="znacznik ${r.checklista.opoznione ? 'uwaga' : 'ok'}">Checklista ${esc(r.checklista.zrobione)}/${esc(r.checklista.wszystkie)}${r.checklista.opoznione ? ` · ${esc(r.checklista.opoznione)} po czasie` : ''}</span>` : ''}
             ${r.awarie ? `<span class="znacznik alarm">Awarie ${r.awarie} · ${esc(Hala.formatCzasu(r.przestojMin * 60000))}</span>` : '<span class="znacznik ok">Bez awarii</span>'}
-            ${r.proby.liczba ? `<span class="znacznik ${r.proby.braki ? 'uwaga' : 'ok'}">Braki ${r.proby.braki}/${r.proby.sprawdzone}</span>` : ''}
-            ${r.bhp ? `<span class="znacznik alarm">BHP ${r.bhp}</span>` : ''}
+            ${r.proby.liczba ? `<span class="znacznik ${r.proby.braki ? 'uwaga' : 'ok'}">Braki ${esc(r.proby.braki)}/${esc(r.proby.sprawdzone)}</span>` : ''}
+            ${r.bhp ? `<span class="znacznik alarm">BHP ${esc(r.bhp)}</span>` : ''}
           </span>
         </summary>
         <dl>
           ${r.obsada ? `<dt>Obsada</dt><dd>${esc(r.obsada.obecna ?? '—')} z ${esc(r.obsada.planowana ?? '—')}</dd>` : ''}
-          <dt>Checklista</dt><dd>${r.checklista.wszystkie !== null ? `${r.checklista.zrobione}/${r.checklista.wszystkie}, opóźnione: ${r.checklista.opoznione}, pominięte: ${r.checklista.pominiete}` : '—'}</dd>
+          <dt>Checklista</dt><dd>${r.checklista.wszystkie !== null ? `${esc(r.checklista.zrobione)}/${esc(r.checklista.wszystkie)}, opóźnione: ${esc(r.checklista.opoznione)}, pominięte: ${esc(r.checklista.pominiete)}` : '—'}</dd>
           <dt>Awarie</dt><dd>${r.awarieLista.map(a => `${esc(a.numer)} ${esc(a.maszyna)} (${esc(Hala.formatCzasu(a.przestojMin * 60000))})`).join(', ') || 'brak'}</dd>
-          <dt>Próby</dt><dd>${r.proby.liczba ? `${r.proby.liczba}, sprawdzone ${r.proby.sprawdzone}, braki ${r.proby.braki}${r.proby.proc !== null ? ` (${r.proby.proc} %)` : ''}` : 'brak'}</dd>
+          <dt>Próby</dt><dd>${r.proby.liczba ? `${esc(r.proby.liczba)}, sprawdzone ${esc(r.proby.sprawdzone)}, braki ${esc(r.proby.braki)}${r.proby.proc !== null ? ` (${esc(r.proby.proc)} %)` : ''}` : 'brak'}</dd>
           ${r.uwagi ? `<dt>Uwagi lidera</dt><dd>${esc(r.uwagi)}</dd>` : ''}
           <dt>Zamknięta</dt><dd>${esc(W.dataKrotka(r.czas))} ${esc(W.godzina(r.czas))}</dd>
         </dl>
       </details>`).join('') || '<p class="pusto">Brak raportów z ostatnich dwóch dni</p>';
   }
 
+  /* Sygnał bez rysowania. Schowana karta (Panel pod innym oknem, zminimalizowany) nie dostaje klatek
+     (requestAnimationFrame stoi), więc sygnał liczony tylko przy rysowaniu milczał akurat wtedy, gdy kierownik nie patrzy
+     (przegląd 2026-10-12). Po powrocie na kartę rysowanie widzi te alarmy jako znane — sygnał nie gra drugi raz, a miganie
+     zostaje (swiezeDo). */
+  function sygnalWTle() {
+    if (!hala.zalogowany()) return;
+    const d = dane();
+    const wiersze = W.awarie({ awarie: hala.obiekty('awaria', a => a.aktywny), slowniki: d.slowniki, pracownicy: d.pracownicy,
+                               stale: d.stale, teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30) });
+    const jakosc = W.incydenty({ partie: hala.obiekty('partia'), alerty: hala.obiekty('alert'), slowniki: d.slowniki, zmiana: d.zmiana, teraz: d.teraz });
+    sprawdzAlarmy(wiersze, jakosc.lista);
+  }
+
   let zaplanowane = false;
   function narysuj() {
+    if (document.hidden) sygnalWTle();
     // Strumień potrafi przynieść kilkadziesiąt zdarzeń naraz (np. po powrocie sieci) — rysujemy raz na klatkę.
     if (zaplanowane) return;
     zaplanowane = true;
@@ -404,7 +429,8 @@
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
         rysujJakosc(jakosc);
-        rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d) }));
+        rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
+                                slowniki: d.slowniki }));
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {
         rysujZlecenia(d, zlecenia);
@@ -422,38 +448,43 @@
 
   // ------------------------------------------------------------ pulpit: kafelki liczb (jak GK Flota)
 
+  // Tylko kafelki z liczbą > 0 (W.kafelkiDoPokazania); same zera — jedno spokojne zdanie zamiast rzędu szarych „0”.
   function rysujLiczby(lista) {
-    $('kafelki-liczb').innerHTML = lista.map(k => `
+    const w = W.kafelkiDoPokazania(lista);
+    $('kafelki-liczb').innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie stoi, nic nie czeka</p>' : w.kafelki.map(k => `
       <button type="button" class="${esc(k.klasa)}" data-kafel="${esc(k.kod)}"><span class="etykieta">${esc(k.etykieta)}</span><b>${k.liczba}</b></button>`).join('');
   }
-  // Kafelki zleceń prowadzą do zleceń (po terminie — od razu z tym filtrem) — reszta jest na tym samym ekranie.
+  // Kafelki zleceń prowadzą do zleceń — „po terminie” do „W toku”, gdzie spóźnione stoją na górze z ⏰ (UI etap 2:
+  // osobnego filtra „Po terminie” już nie ma). Reszta jest na tym samym ekranie.
   $('kafelki-liczb').addEventListener('click', ev => {
     const k = ev.target.closest('[data-kafel]');
     if (k && k.dataset.kafel === 'zlecenia') Panel.pokazZlecenia(null, 'biezace');
-    if (k && k.dataset.kafel === 'po-terminie') Panel.pokazZlecenia('po-terminie', 'biezace');
+    if (k && k.dataset.kafel === 'po-terminie') Panel.pokazZlecenia('otwarte', 'biezace');
     if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();
   });
 
   // ------------------------------------------------------------ zlecenia dla działów (kierownik)
 
   let filtrZlecen = 'otwarte', trybZlecen = 'biezace';
-  /* Wybór filtra albo trybu z zewnątrz (kafelek „Po terminie” na pulpicie). */
+  /* Wybór filtra albo trybu z zewnątrz (kafelek „Zlecenia po terminie” na pulpicie, push). */
   Panel.pokazZlecenia = (filtr, tryb) => {
     if (filtr) filtrZlecen = filtr;
     if (tryb) trybZlecen = tryb;
     document.querySelector('.zakladki [data-widok="zlecenia"]').click();
+    $('lista-zlecen').scrollTop = 0;       // spóźnione są na górze listy — tam ma patrzeć kierownik
   };
   /* Adres #zlecenia = dotknięte powiadomienie „Po terminie” (hala-push-sw.js otwiera ./#zlecenia albo przysyła
-     otwartemu Panelowi {typ:'otworz'}): od razu Zlecenia z filtrem „Po terminie”. Adres czyścimy, żeby następne
-     powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie przełączało widoku. Przed
-     zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
+     otwartemu Panelowi {typ:'otworz'}): od razu Zlecenia „W toku” — spóźnione stoją tam na górze z ⏰ (UI etap 2).
+     Adres czyścimy, żeby następne powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie
+     przełączało widoku. Przed zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
   function obsluzAdres() {
     if (!hala.zalogowany() || !['#zlecenia', '#administracja'].includes(location.hash)) return;
     const adres = location.hash;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* stary adres zostanie — bez szkody */ }
     // #administracja = dotknięty alarm huba (etap 2: kopia, adres na Pages, token, miejsce) — tylko administrator ma ten widok.
+    // Nad częściami świeci czerwona wstęga, a przy każdym alarmie „Pokaż” prowadzi tam, gdzie się go naprawia.
     if (adres === '#administracja') { if (!$('menu-administracja').hidden) $('menu-administracja').click(); return; }
-    Panel.pokazZlecenia('po-terminie', 'biezace');
+    Panel.pokazZlecenia('otwarte', 'biezace');
   }
   window.addEventListener('hashchange', obsluzAdres);
   if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => {
@@ -473,9 +504,7 @@
              przepadlo: 'alarm', zaplanowane: 'neutral' }[status] || 'neutral';
   }
 
-  const PUSTE_ZLECENIA = { otwarte: 'Żadne zlecenie nie jest w toku', 'po-terminie': 'Nic nie jest po terminie',
-                           'do-zamkniecia': 'Nic nie czeka na przyjęcie', zaplanowane: 'Nic nie jest zaplanowane na później',
-                           przepadle: 'Żadne zadanie zmianowe nie przepadło (ostatnie dwa dni)',
+  const PUSTE_ZLECENIA = { otwarte: 'Żadne zlecenie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na przyjęcie',
                            zamkniete: 'Brak zamkniętych zleceń z ostatnich dwóch dni' };
 
   const mozeZapisacStale = () => {
@@ -495,13 +524,13 @@
     if (trybZlecen === 'stale') { if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d); return; }
     const wiersze = W.zlecenia({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: filtrZlecen,
                                  ja: hala.pracownik });
-    // Liczby na chipach — kierownik widzi od razu, ile jest po terminie i ile czeka na niego.
-    for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) {
-      const n = W.zlecenia({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: b.dataset.filtr }).length;
-      if (!b.dataset.napis) b.dataset.napis = b.textContent;
-      b.textContent = b.dataset.filtr !== 'zamkniete' && n ? `${b.dataset.napis} · ${n}` : b.dataset.napis;
-      // Po terminie i przepadłe (D35) — na czerwono: to jest do dopilnowania, a nie tylko do przeczytania.
-      b.classList.toggle('spoznione', (b.dataset.filtr === 'po-terminie' || b.dataset.filtr === 'przepadle') && n > 0);
+    // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego.
+    // Po terminie i przepadłe (D35) — chip na czerwono: to jest do dopilnowania, a nie tylko do przeczytania.
+    for (const c of W.chipyZlecen(lista, d.teraz)) {
+      const b = document.querySelector(`#filtr-zlecen [data-filtr="${c.filtr}"]`);
+      if (!b) continue;
+      if (b.textContent !== c.napis) b.textContent = c.napis;
+      b.classList.toggle('spoznione', c.alarm);
     }
     const kier = mozeWyslac('zlecenie.zamkniete');
     const stale = mozeZapisacStale();
@@ -536,7 +565,7 @@
           ${kier && z.moznaAnulowac ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
           ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz jako zlecenie stałe">🔁 Jako stałe</button>' : ''}
         </div>
-      </article>`).join('') || `<p class="pusto ${filtrZlecen === 'po-terminie' || filtrZlecen === 'przepadle' ? 'ok' : ''}">${PUSTE_ZLECENIA[filtrZlecen]}</p>`;
+      </article>`).join('') || `<p class="pusto">${PUSTE_ZLECENIA[filtrZlecen] || 'Brak zleceń'}</p>`;
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
     for (const e of $('lista-zlecen').querySelectorAll('img[data-plik]'))
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
@@ -650,17 +679,18 @@
       .map(p => [p.id, p.nazwa]);
   }
   /* „Nowe zlecenie” — puste albo wypełnione zleceniem stałym („Zleć teraz”, D31). Wymagania domyślnie zaznaczone:
-     egzekwowanie ma być zasadą, a kierownik odznacza je świadomie. D47: kierownik zakładu może je „Zaplanować na” później,
-     a zaplanowane — zmienić tym samym oknem (edycja = obiekt zlecenia; dział, linia i maszyna wtedy bez zmian). */
-  const mozePlanowac = () => mozeWyslac('zlecenie.zaplanowane');
+     egzekwowanie ma być zasadą, a kierownik odznacza je świadomie. D47: zlecenie zaplanowane wcześniej (zanim UI etap 2
+     zabrał „Zaplanuj na” z tego okna — dziś powtarzalne zadania na później to Zlecenia stałe) zmienia się tym samym oknem
+     (edycja = obiekt zlecenia; dział, linia i maszyna wtedy bez zmian). */
   function pokazPlan() {
-    const plan = !!fz.plan_dzien.value || !!fz.edycja.value;
+    const plan = !!fz.edycja.value;
+    $('zlecenie-plan').hidden = !plan;
     $('zlecenie-termin').hidden = plan;
     $('zlecenie-termin-po').hidden = !plan;
     const w = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
-    $('zlecenie-plan-opis').textContent = !fz.plan_dzien.value ? 'Puste — zlecenie idzie do działu od razu.'
+    $('zlecenie-plan-opis').textContent = !plan ? '' : !fz.plan_dzien.value ? 'Wybierz dzień startu.'
       : w.blad ? w.blad : `Dział zobaczy je ${w.opis} i wtedy dostanie powiadomienie.`;
-    fz.querySelector('button[type="submit"]').textContent = fz.edycja.value ? 'Zapisz zmiany' : fz.plan_dzien.value ? 'Zaplanuj' : 'Zleć';
+    fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz zmiany' : 'Zleć';
   }
   Panel.noweZlecenie = (wstepne, edycja) => {
     const w = edycja ? Object.assign({}, edycja.dane, { pilne: (edycja.dane || {}).priorytet === 'pilne' }) : (wstepne || {});
@@ -682,9 +712,8 @@
     fz.stale.value = edycja ? '' : (w.stale || '');
     fz.edycja.value = edycja ? edycja.id : '';
     if (edycja) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; }
-    // Plan (D47): tylko kierownik zakładu (i admin) i nie dla „Zleć teraz” ze zlecenia stałego.
-    $('zlecenie-plan').hidden = !(edycja || (mozePlanowac() && !w.stale));
-    $('zlecenie-plan').querySelector('legend').textContent = edycja ? 'Zaplanuj na' : 'Zaplanuj na (opcjonalnie — puste = zleć od razu)';
+    // „Więcej opcji” rozwinięte, gdy coś w środku jest już wypełnione (W.wiecejOpcjiZlecenia) — inaczej zwinięte.
+    $('zlecenie-wiecej').open = W.wiecejOpcjiZlecenia(wstepne, !!edycja);
     const start = edycja ? Date.parse(w.zaplanowane_na) : NaN;
     fz.plan_dzien.value = isNaN(start) ? '' : W.poleCzasu(start).slice(0, 10);
     fz.plan_godzina.value = isNaN(start) ? '' : W.poleCzasu(start).slice(11, 16);
@@ -724,16 +753,14 @@
                    wymagaj_zdjecia: fz.wymagaj_zdjecia.checked, wymagaj_notatki: fz.wymagaj_notatki.checked };
     for (const pole of ['opis', 'linia', 'maszyna', 'wykonawca', 'stale']) if (fz[pole].value.trim()) dane[pole] = fz[pole].value.trim();
     const edycja = fz.edycja.value;
-    const plan = (edycja || fz.plan_dzien.value)
-      ? W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() }) : { na: null };
-    if (plan.blad) { blad(plan.blad); return; }
-    if (edycja && !plan.na) { blad('Wybierz dzień startu — albo zamknij okno i użyj „Zleć teraz”.'); return; }
-    const po = plan.na ? W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value) : { min: null };
-    if (po.blad) { blad(po.blad); return; }
-    if (!plan.na && fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
     try {
       if (edycja) {
         // Zmiana planu (D47): wszystkie pola do zmiany naraz — puste czyści (null), dział, linia i maszyna zostają.
+        const plan = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
+        if (plan.blad) { blad(plan.blad); return; }
+        if (!plan.na) { blad('Wybierz dzień startu — albo zamknij okno i użyj „Zleć teraz”.'); return; }
+        const po = W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value);
+        if (po.blad) { blad(po.blad); return; }
         await hala.zapisz('zlecenie.plan_zmieniony', edycja, { tytul: dane.tytul, opis: dane.opis || '', priorytet: dane.priorytet,
           wykonawca: dane.wykonawca || '', zaplanowane_na: plan.na, termin_po_min: po.min, termin: null,
           wymagaj_zdjecia: dane.wymagaj_zdjecia, wymagaj_notatki: dane.wymagaj_notatki });
@@ -741,15 +768,9 @@
         komunikat(`Zmienione — zleci się ${plan.opis}`, 'ok');
         return;
       }
+      // UI etap 2: nowe zlecenie idzie do działu od razu — planowania na później to okno już nie robi (Zlecenia stałe).
+      if (fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
       if (fz.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fz.zdjecie.files[0])];
-      if (plan.na) {
-        delete dane.stale;
-        await hala.zapisz('zlecenie.zaplanowane', hala.nowyId(), Object.assign(dane, { zaplanowane_na: plan.na }, po.min ? { termin_po_min: po.min } : {}));
-        $('okno-zlecenia').close();
-        komunikat(`Zaplanowane — dział zobaczy je ${plan.opis}`, 'ok');
-        Panel.pokazZlecenia('zaplanowane', 'biezace');
-        return;
-      }
       await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
       $('okno-zlecenia').close();
       komunikat('Zlecone', 'ok');
@@ -759,17 +780,51 @@
 
   // Zgłoszenie awarii z Panelu — trafia do UR jak od lidera (awaria.zgloszona).
   const fa = $('formularz-awarii');
+  const MASZYNA_WYBIERZ = '— wybierz —';
+
+  /* Pole zdjęcia (hala.css → .hala-zdjecie): przycisk „📷 Dodaj zdjęcie” zamiast surowego „Wybierz plik / Nie wybrano
+     pliku”. Po wyborze — miniatura, nazwa pliku i „Zmień zdjęcie”; reset formularza (nowe okno) wraca do pustego. */
+  function poleZdjecia(input) {
+    const pole = input.closest('.hala-zdjecie');
+    const napis = pole.querySelector('[data-zdjecie-napis]'), img = pole.querySelector('.hala-zdjecie-miniatura');
+    const nazwa = pole.querySelector('.hala-zdjecie-nazwa');
+    const pusto = { napis: napis.textContent, nazwa: nazwa.textContent };
+    let adres = null;
+    const pokaz = () => {
+      const plik = input.files && input.files[0];
+      if (adres) { URL.revokeObjectURL(adres); adres = null; }
+      if (plik) adres = URL.createObjectURL(plik);
+      img.hidden = !adres;
+      if (adres) img.src = adres; else img.removeAttribute('src');
+      napis.textContent = plik ? '📷 Zmień zdjęcie' : pusto.napis;
+      nazwa.textContent = plik ? plik.name : pusto.nazwa;
+    };
+    input.addEventListener('change', pokaz);
+    // „reset” przychodzi PRZED wyczyszczeniem pól — stan czytamy chwilę później.
+    input.form.addEventListener('reset', () => setTimeout(pokaz, 0));
+  }
+  poleZdjecia(fz.zdjecie);
+  poleZdjecia(fa.zdjecie);
   $('menu-awaria').addEventListener('click', () => {
+    // Bez maszyn w oknie nie ma czego wybrać (przegląd 2026-10-12) — mówimy, gdzie je dodać, zamiast otwierać puste okno.
+    const brak = W.brakMaszyn(hala.slowniki);
+    if (brak) { komunikat(brak, 'uwaga'); return; }
     fa.reset();
     const wiele = pokazPolaLinii(fa);
+    // Schowane pole nie może być wymagane: przeglądarka nie pokaże przy nim błędu, tylko po cichu wstrzyma „Zgłoś do UR”.
+    fa.linia.required = wiele;
     fa.linia.innerHTML = opcje(linieLista());
-    fa.maszyna.innerHTML = opcje(maszynyLinii(wiele ? fa.linia.value : ''));
-    fa.priorytet.innerHTML = opcje(((hala.kontrakt.stale || {}).priorytety || []).map(p => [p.kod, p.nazwa]));
+    // Szlif UI 2026-10-12: maszyna NIE jest wybrana z góry — pierwsza z listy po cichu szła do UR, gdy kierownik
+    // zapomniał zmienić pole. „— wybierz —” ma pustą wartość, więc required każe wybrać.
+    fa.maszyna.innerHTML = opcje(maszynyLinii(wiele ? fa.linia.value : ''), MASZYNA_WYBIERZ);
+    // Jedna linia (D51): zatrzymujący priorytet nazywa się „Maszyna stoi” (W.priorytetyDoWyboru).
+    fa.priorytet.innerHTML = opcje(W.priorytetyDoWyboru(hala.kontrakt.stale, hala.slowniki));
     otworzOkno($('okno-awarii'));
   });
-  fa.linia.addEventListener('change', () => { fa.maszyna.innerHTML = opcje(maszynyLinii(fa.linia.value)); });
+  fa.linia.addEventListener('change', () => { fa.maszyna.innerHTML = opcje(maszynyLinii(fa.linia.value), MASZYNA_WYBIERZ); });
   fa.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
+    if (!fa.maszyna.value) { const b = fa.querySelector('.blad'); b.textContent = 'Wybierz maszynę.'; b.hidden = false; fa.maszyna.focus(); return; }
     try {
       // D47: zdjęcie i notatka nieobowiązkowe — bez nich zgłoszenie idzie tak samo (przestój liczy się od „Zgłoś”).
       // Pole linii schowane (jedna linia) — awaria idzie na linię maszyny.
@@ -783,9 +838,9 @@
     } catch (e) { const b = fa.querySelector('.blad'); b.textContent = komunikatBledu(e); b.hidden = false; }
   }));
 
-  // ------------------------------------------------------------ sygnał: nowe zatrzymanie linii albo Quality Alert
+  // ------------------------------------------------------------ sygnał: nowe zatrzymanie albo alert jakości
 
-  /* Kierownik nie patrzy na monitor bez przerwy. Nowe zatrzymanie linii i nowy Quality Alert migają
+  /* Kierownik nie patrzy na monitor bez przerwy. Nowe zatrzymanie i nowy alert jakości (Quality Alert) migają
      na ekranie przez minutę i (gdy dźwięk jest włączony) dają krótki sygnał. Dźwięk przeglądarka
      wpuszcza dopiero po kliknięciu albo klawiszu na stronie — dlatego przycisk w nagłówku mówi,
      kiedy trzeba kliknąć. Na monitorze w biurze można tego uniknąć flagą Chrome (INSTRUKCJA §7). */
@@ -817,7 +872,8 @@
     const wl = dzwiekWlaczony();
     const czeka = wl && (!dzwiekKontekst || dzwiekKontekst.state !== 'running');
     b.textContent = wl ? (czeka ? '🔔 Kliknij' : '🔔') : '🔕';
-    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : 'Dźwięk przy zatrzymaniu linii włączony') : 'Dźwięk wyłączony';
+    const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
+    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy ${co} i alercie jakości włączony`) : 'Dźwięk wyłączony';
     b.setAttribute('aria-pressed', String(wl));
     b.classList.toggle('czeka', czeka);
   }
@@ -950,7 +1006,7 @@
   });
   /* Hub nie przyjął zapisu kierownika (np. brak uprawnień, zła maszyna) albo przyjął bez zmiany stanu (ktoś był
      szybszy) — wcześniej Panel milczał i kierownik myślał, że zlecenie poszło. */
-  hala.na('odrzucone', ({ zdarzenie, powod }) => komunikat(`${zdarzenie ? nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — hub nie przyjął: ${powod}`, 'blad'));
+  hala.na('odrzucone', ({ zdarzenie, powod }) => komunikat(`${zdarzenie ? nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — serwer nie przyjął: ${powod}`, 'blad'));
   hala.na('konflikt', ({ zdarzenie, uwaga }) => komunikat(`${zdarzenie ? nazwaTypu(zdarzenie.typ) : 'Zapis'}: ${uwaga} — sprawdź, co jest teraz.`, 'uwaga'));
 
   await hala.start();

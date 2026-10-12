@@ -2,18 +2,23 @@
    ze swoim zespołem, zakres z huba, wspolne/klient/zespol.js). 2026-09-28: login to imię i nazwisko (D26),
    więc pracowników, PIN-y i karty prowadzi się tutaj, a nie tylko plikiem wspolne/narzedzia/zaladuj.py.
 
-   Trzy części:
+   Cztery części (UI etap 2, właściciel 2026-10-12 — wcześniej sześć chipów):
    - Pracownicy: dodaj, zmień dane, role, linie, nowy PIN, karta (zgubiona → usuń), wyłącz konto, odblokuj po złych PIN-ach.
      Hub: GET/POST /api/v1/admin/… przez hala.admin (rolę sprawdza hub). PIN-ów i kart nie widać — w bazie są tylko skróty.
    - Maszyny (bez linii i stanowisk — 2026-10-12): słownik przez zdarzenia slownik.zapisany / slownik.usuniety.
+     „🖨 Drukuj etykiety” drukuje naklejki QR (dawny chip „Etykiety QR” — te same opcje i ten sam druk).
    - Ustawienia: sieć zakładu i progi (hub sprawdza zakresy przy zapisie), kopie poza komputerem (etap 2: folder,
-     przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST /api/v1/admin/kopie).
-   - Nad wszystkim czerwona wstęga alarmów huba (GET /api/v1/admin/alarmy): kopia, adres na Pages, token GitHub, miejsce.
-   - Połączenia GK (D32): klucze programów GK Trasy i GK Flota, które biorą konta z huba (wspolne/GK-KONTA.md §3).
-     Jedno konto osoby we wszystkich aplikacjach GK — role transportu w oknie osoby, w osobnych grupach.
-     GK Foto i GK Czytnik (D40, GK-KONTA.md §6) logują się samym kontem GK, bez klucza — tu tylko informacja.
-   - Dostęp z telefonów (D33): stan tunelu, adresy czterech aplikacji na GitHub Pages z kodami QR, „Wyślij aplikacje na
-     GitHub”, wersja na Pages. Ustawienia tunelu i tokenów — Ustawienia → „Tunel i GitHub” (tokeny nigdy nie wracają z huba).
+     przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST /api/v1/admin/kopie), tunel i tokeny GitHub.
+   - Serwis — dwie zwijane części, nad nimi niezwinięty alarm „Sieć zakładu”:
+     · Dostęp z telefonów (D33): stan tunelu, adresy czterech aplikacji na GitHub Pages z kodami QR, „Wyślij aplikacje na
+       GitHub”, wersja na Pages, logowanie z internetu (D35). Ustawienia tunelu i tokenów — Ustawienia → „Tunel i GitHub”
+       (tokeny nigdy nie wracają z huba).
+     · Połączenia GK (D32): klucze programów GK Trasy i GK Flota, które biorą konta z huba (wspolne/GK-KONTA.md §3).
+       Jedno konto osoby we wszystkich aplikacjach GK — role transportu w oknie osoby, w osobnych grupach.
+       GK Foto (D40, GK-KONTA.md §6) loguje się samym kontem GK, bez klucza — tu tylko informacja. GK Czytnik od 3.13
+       działa bez logowania (D52).
+   - Nad wszystkim czerwona wstęga alarmów huba (GET /api/v1/admin/alarmy): kopia, adres na Pages, token GitHub, miejsce —
+     przy alarmie „Pokaż” prowadzi do części, w której się go naprawia (W.alarmyAdmina → gdzie).
    Co pokazać i czy formularz jest dobry, liczy widok.js (testy: panel/testy/widok-testy.js). */
 
 (() => {
@@ -58,11 +63,38 @@
   function rysujAlarmy() {
     const el = $('admin-alarmy');
     if (!el) return;
-    const tresc = alarmy.map(a => `<p><b>${esc(a.tytul)}</b> ${esc(a.opis)}</p>`).join('');
+    // UI etap 2: „Pokaż” przy alarmie — od kiedy dostęp z telefonów siedzi w zwiniętym Serwisie, sam napis „Administracja →
+    // Serwis → …” to za mało; przycisk przełącza część, rozwija ją i przewija do miejsca naprawy.
+    const tresc = alarmy.map(a => `<p><b>${esc(a.tytul)}</b> ${esc(a.opis)}${a.gdzie
+      ? ` <button type="button" class="maly" data-alarm-czesc="${esc(a.gdzie.czesc)}" data-alarm-sekcja="${esc(a.gdzie.sekcja)}">Pokaż</button>` : ''}</p>`).join('');
     if (el.dataset.tresc === tresc) return;
     el.dataset.tresc = tresc;
     el.innerHTML = tresc;
     el.hidden = !alarmy.length;
+  }
+  $('admin-alarmy').addEventListener('click', ev => {
+    const b = ev.target.closest('[data-alarm-czesc]');
+    if (b) pokaz(b.dataset.alarmCzesc, b.dataset.alarmSekcja);
+  });
+
+  /* Przejście do części (chip) — czyści treść, żeby rysowanie zaczęło od szkieletu tej części. */
+  function przejdz(nowa) {
+    if (czesc === 'serwis' && nowa !== 'serwis') nowyKlucz = null;   // klucz programu znika z ekranu
+    czesc = nowa;
+    const el = $('admin-tresc');
+    el.innerHTML = ''; delete el.dataset.odcisk;
+    // Wejście w Serwis — od razu świeży stan tunelu i nowa próba Połączeń GK.
+    if (czesc === 'serwis') { polaczenia = null; bladPolaczen = ''; dostepCzas = 0; }
+    rysuj();
+  }
+
+  /* „Pokaż” przy alarmie: część + miejsce w niej (Serwis — rozwinięta część „dostep” / „polaczenia”; Ustawienia —
+     id formularza). Bez przewinięcia administrator szukałby formularza tokenu pod godzinami zmian. */
+  function pokaz(nowa, sekcja) {
+    if (nowa === 'serwis' && sekcja) serwisOtwarte[sekcja] = true;
+    przejdz(nowa);
+    const cel = nowa === 'serwis' ? $(`serwis-${sekcja}`) : sekcja && $(sekcja);
+    if (cel) cel.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function rysuj() {
@@ -77,9 +109,7 @@
     const el = $('admin-tresc');
     if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'maszyny') rysujMaszyny(el);
-    else if (czesc === 'etykiety') rysujEtykiety(el);
-    else if (czesc === 'polaczenia') rysujPolaczenia(el);
-    else if (czesc === 'dostep') rysujDostep(el);
+    else if (czesc === 'serwis') rysujSerwis(el);
     else rysujUstawienia(el);
   }
 
@@ -105,15 +135,15 @@
         </div>
         <div id="admin-lista" class="lista"></div>`;
     }
-    const linie = (hala.slowniki && hala.slowniki.linie) || {};
-    const wiersze = W.pracownicyAdmin({ lista, szukaj, nieaktywni, stale: hala.kontrakt && hala.kontrakt.stale });
+    // Linie osoby nazwami — przy jednej linii (D51) bez nich: „Hala” przy każdym liderze to szum.
+    const wiersze = W.pracownicyAdmin({ lista, szukaj, nieaktywni, stale: hala.kontrakt && hala.kontrakt.stale, slowniki: hala.slowniki });
     $('admin-lista').innerHTML = wiersze.map(p => `
       <article class="admin-osoba ${p.aktywny === false ? 'wylaczona' : ''} ${p.zablokowany ? 'zablokowana' : ''}" data-id="${esc(p.id)}">
         <div class="opis">
           <div><b>${esc(p.nazwa)}</b> <span class="slaby">${esc(p.id)}</span></div>
           <div class="szczegoly">
             ${p.roleNazwy.map(r => `<span class="znacznik neutral">${esc(r)}</span>`).join('')}
-            ${(p.linie || []).map(l => `<span>${esc((linie[l] || {}).nazwa || l)}</span>`).join('')}
+            ${p.linieNazwy.map(l => `<span>${esc(l)}</span>`).join('')}
             ${p.ma_karte ? '<span class="slaby">karta ✓</span>' : ''}${W.stanHasla(p).znacznik ? `<span class="${W.stanHasla(p).klasa}">${esc(W.stanHasla(p).znacznik)}</span>` : ''}
             ${p.telefon ? `<span class="slaby">☎ ${esc(p.telefon)}</span>` : ''}
             ${p.aktywny === false ? '<span class="znacznik neutral">Wyłączone</span>' : ''}
@@ -148,7 +178,7 @@
     const linie = Object.entries((hala.slowniki && hala.slowniki.linie) || {}).filter(([kod]) => !u.linie || u.linie.includes(kod));
     $('osoba-linie').innerHTML = linie.map(([kod, l]) =>
       `<label class="zaznacz"><input type="checkbox" name="linie" value="${esc(kod)}" ${osoba && (osoba.linie || []).includes(kod) ? 'checked' : ''}> ${esc((l && l.nazwa) || kod)}</label>`).join('')
-      || '<span class="slaby">Najpierw dodaj linie</span>';
+      || '<span class="slaby">Brak linii do wyboru</span>';   // D51: linii w Panelu się nie zakłada — „Najpierw dodaj” nie miało gdzie
     fp.telefon.value = (osoba && osoba.telefon) || '';
     $('osoba-loginy').textContent = osoba && (osoba.loginy || []).length
       ? `Stare loginy z programów (też logują): ${osoba.loginy.join(', ')}` : '';
@@ -233,11 +263,12 @@
   /* „Wyloguj wszędzie” (D43 §2): wszystkie sesje i zaufanie urządzeń tej osoby — następne logowanie wszędzie hasłem. */
   $('osoba-wyloguj').addEventListener('click', async () => {
     const o = edytowany;
-    if (!o || !(await P.potwierdz('Wylogować wszędzie?', `${o.nazwa} zostanie wylogowana we wszystkich aplikacjach i na wszystkich `
+    // Zdania bez rodzaju osoby (imię i nazwisko bywa męskie i żeńskie — przegląd 2026-10-12): mówimy o koncie.
+    if (!o || !(await P.potwierdz('Wylogować wszędzie?', `Konto ${o.nazwa} zostanie wylogowane we wszystkich aplikacjach i na wszystkich `
           + 'urządzeniach. Następne logowanie — hasłem.', 'Wyloguj wszędzie'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/wyloguj-wszedzie', { pracownik: o.id });
-      P.komunikat(`${o.nazwa}: wylogowana wszędzie.`, 'ok');
+      P.komunikat(`${o.nazwa} — wylogowano wszędzie.`, 'ok');
     } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
@@ -270,7 +301,7 @@
     try {
       await hala.admin('POST', '/api/v1/admin/usun-pracownika', { pracownik: o.id, nazwa: fu.nazwa.value });
       $('okno-usun-osobe').close();
-      P.komunikat(`${o.nazwa}: usunięta. Historia zostaje.`, 'ok');
+      P.komunikat(`${o.nazwa} — usunięto. Historia zostaje.`, 'ok');
       edytowany = null;
       await wczytajPracownikow();
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
@@ -314,23 +345,46 @@
   /* 2026-10-12 (właściciel): w Panelu wyznacza się tylko maszyny — bez linii i stanowisk. Maszyny stoją na jednej
      linii-hali (W.liniaDomyslna, zakładana z pierwszą maszyną), bo Lider, UR i obchody dalej liczą na linii.
      Linia przy maszynie pokazuje się tylko przy starszych danych z kilkoma liniami (W.wieleLinii). */
+  /* UI etap 2: etykiety QR drukuje przycisk nad listą maszyn (dawny osobny chip). Szkielet rysujemy raz — przerysowanie
+     co 20 s nie może kasować zaznaczeń w opcjach druku ani migać listą; listę podmieniamy tylko, gdy się zmieniła. */
+  let etykietyOtwarte = false;
   function rysujMaszyny(el) {
     const sl = hala.slowniki || {};
     const linie = sl.linie || {}, wiele = W.wieleLinii(sl);
     const maszyny = Object.entries(sl.maszyny || {})
       .sort(([ka, a], [kb, b]) => String((a || {}).nazwa || ka).localeCompare(String((b || {}).nazwa || kb), 'pl', { numeric: true }));
-    el.innerHTML = `
-      <div class="admin-pasek">
-        <button type="button" class="glowny" data-akcja="nowa-maszyna">+ Maszyna</button>
-      </div>
-      <section class="admin-linia">
-        ${maszyny.map(([mk, m]) => `
+    if (!el.querySelector('#lista-maszyn')) {
+      el.innerHTML = `
+        <div class="admin-pasek">
+          <button type="button" class="glowny" data-akcja="nowa-maszyna">+ Maszyna</button>
+          <button type="button" id="drukuj-etykiety" data-akcja="etykiety" aria-expanded="false">🖨 Drukuj etykiety</button>
+        </div>
+        <div id="etykiety-opcje" hidden></div>
+        <section class="admin-linia" id="lista-maszyn"></section>
+        <p class="slaby">Kod maszyny to napis na etykiecie QR (HALA:M:…) — po wydrukowaniu etykiet go nie zmieniaj.</p>`;
+    }
+    const lista = maszyny.map(([mk, m]) => `
           <div class="admin-maszyna"><span><b>${esc(m.nazwa)}</b> <span class="slaby">${esc(mk)}${m.typ ? ` · ${esc(m.typ)}` : ''}${wiele ? ` · ${esc((linie[m.linia] || {}).nazwa || m.linia)}` : ''}</span></span>
             <span><button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
             <button type="button" class="maly" data-akcja="wycofaj" data-kod="${esc(mk)}">Wycofaj</button></span></div>`).join('')
-          || '<p class="pusto">Nie ma jeszcze maszyn</p>'}
-      </section>
-      <p class="slaby">Kod maszyny to napis na etykiecie QR (HALA:M:…) — po wydrukowaniu etykiet go nie zmieniaj.</p>`;
+          || '<p class="pusto">Nie ma jeszcze maszyn</p>';
+    const el2 = $('lista-maszyn');
+    if (el2.dataset.odcisk !== lista) { el2.dataset.odcisk = lista; el2.innerHTML = lista; }
+    // Nic do druku (pusty słownik) — przycisk nieczynny, zamiast pustego arkusza.
+    const doDruku = window.PanelEtykiety.pozycje(sl, { linie: [], rodzaje: window.PanelEtykiety.rodzajeDoWyboru(sl) }).length;
+    $('drukuj-etykiety').disabled = !doDruku;
+    const opcje = etykietyOtwarte && window.PanelEtykiety.opcjeDoWyboru(sl);
+    $('etykiety-opcje').hidden = !opcje;
+    $('drukuj-etykiety').setAttribute('aria-expanded', String(!!opcje));
+    if (opcje) rysujEtykiety($('etykiety-opcje'));
+  }
+
+  /* „🖨 Drukuj etykiety”: przy jednej linii i samych maszynach nie ma czego wybierać — drukuje od razu (arkusz wszystkich
+     maszyn). Przy kilku liniach albo stanowiskach rozwija/zwija dawne opcje druku (linie, co drukować) z ich przyciskiem. */
+  async function przyciskEtykiet() {
+    if (!window.PanelEtykiety.opcjeDoWyboru(hala.slowniki || {})) { await drukujEtykiety(); return; }
+    etykietyOtwarte = !etykietyOtwarte;
+    rysuj();
   }
 
   const fs = $('formularz-pozycji');
@@ -351,16 +405,18 @@
     fs.typ.value = w.typ || '';
     fs.querySelector('.blad').hidden = true;
     $('okno-pozycji').showModal();
-    (kod ? fs.nazwa : fs.kod).focus();
+    fs.nazwa.focus();          // nazwa jest pierwsza w oknie (kod z etykiety QR — obok)
   }
 
   fs.addEventListener('submit', async ev => {
     ev.preventDefault();
     const sl = hala.slowniki || {};
     const byla = edytowanaMaszyna ? (sl.maszyny || {})[edytowanaMaszyna] || {} : {};
-    // Stanowisko (dawny ekran linii) zostaje przy maszynie, jakie było — Panel go już nie pokazuje.
+    // Stanowisko (dawny ekran linii) zostaje przy maszynie, jakie było — Panel go już nie pokazuje. Wycofane albo z innej
+    // linii (maszyna przeniesiona) odpada samo (stanowiskoZachowane) — nie ma pola, w którym dałoby się je poprawić.
     const w = W.pozycjaZFormularza('maszyny', { kod: fs.kod.value, nazwa: fs.nazwa.value, typ: fs.typ.value,
-                                               linia: W.wieleLinii(sl) ? fs.linia.value : '', stanowisko: byla.stanowisko || '' }, sl, edytowanaMaszyna);
+                                               linia: W.wieleLinii(sl) ? fs.linia.value : '', stanowisko: byla.stanowisko || '',
+                                               stanowiskoZachowane: true }, sl, edytowanaMaszyna);
     const blad = fs.querySelector('.blad');
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     try {
@@ -372,11 +428,12 @@
 
   // ------------------------------------------------------------ ustawienia
 
+  /* UI etap 2 (właściciel 2026-10-12): bez pól „Sesja na telefonie (godziny)” i „Sesja monitora w biurze (dni)” — nikt
+     ich nie zmienia, a od D43 o logowaniu i tak decyduje hasło raz na 12 godzin na urządzeniu. Hub trzyma swoje wartości
+     (zapisane albo domyślne 14 h / 90 dni) — formularz ich nie wysyła, więc niczego nie nadpisze. */
   const USTAWIENIA = [
     ['prog_zolty_min', 'Kafelek żółknie tyle minut przed terminem pozycji checklisty', 30],
     ['alarm_potwierdzenia_min', 'Alarm, gdy lider nie potwierdza naprawy dłużej niż (min)', 30],
-    ['sesja_godz', 'Sesja na telefonie (godziny)', 14],
-    ['sesja_ekran_dni', 'Sesja monitora w biurze (dni)', 90],
   ];
 
   function rysujUstawienia(el) {
@@ -388,8 +445,8 @@
         <label>Sieć zakładu (adresy internetu wifi zakładu, po przecinku)
           <input name="siec_zakladu" value="${esc(wart('siec_zakladu', ''))}" placeholder="np. 203.0.113.7">
           <span class="slaby">${twojAdres ? `Ten komputer łączy się z adresu <b>${esc(twojAdres)}</b> — jeśli jesteś w zakładzie, to jest adres zakładu.` : ''}
-            Złe PIN-y z tej sieci nie blokują kont z internetu (D35); sieci lokalne (192.168…, 10…) liczą się zawsze.
-            Najprościej: Dostęp z telefonów → „Wpisz mój adres”.</span></label>
+            Złe PIN-y z tej sieci nie blokują kont z internetu; sieci lokalne (192.168…, 10…) liczą się zawsze.
+            Najprościej: Serwis → „Wpisz mój adres”.</span></label>
         ${USTAWIENIA.map(([k, opis, d]) => `<label>${esc(opis)}<input name="${k}" type="number" min="${W.ZAKRESY_USTAWIEN[k][0]}" max="${W.ZAKRESY_USTAWIEN[k][1]}" value="${esc(wart(k, d))}">
           <span class="blad-pola" data-blad="${k}" hidden></span></label>`).join('')}
         <p class="blad" role="alert" hidden></p>
@@ -398,6 +455,7 @@
       <form id="formularz-zmian" class="admin-ustawienia">
         <h3>Godziny zmian</h3>
         <p class="slaby">Zmiana nocna kończy się następnego dnia (np. 22:00–06:00). Obchody, raporty i „ta zmiana” w Panelu liczą się od tych godzin.</p>
+        <div class="naglowek-zmian" aria-hidden="true"><span>Nr</span><span>Nazwa</span><span>Od</span><span>Do</span><span></span></div>
         <div id="wiersze-zmian"></div>
         <button type="button" id="dodaj-zmiane">+ Zmiana</button>
         <p class="blad" role="alert" hidden></p>
@@ -409,10 +467,10 @@
         <label>Folder kopii
           <input name="kopia_folder" placeholder="np. E:\\GK-kopie" autocapitalize="none" spellcheck="false">
           <span class="slaby">np. E:\\GK-kopie (dysk zewnętrzny) albo folder OneDrive/Dysk Google — tylko na kopie, nigdy na żywą bazę.
-            Raz na dobę hub kładzie tu kopię bazy (bez tokenów i kluczy) i nowe zdjęcia; trzyma 7 dziennych, 4 tygodniowe i 12 miesięcznych.</span></label>
+            Raz na dobę serwer kładzie tu kopię bazy (bez tokenów i kluczy) i nowe zdjęcia; trzyma 7 dziennych, 4 tygodniowe i 12 miesięcznych.</span></label>
         <label>Przechowuj zdjęcia (miesięcy)
           <input name="retencja_zdjec_mies" type="number" min="1" max="120" placeholder="puste = bez kasowania">
-          <span class="slaby">Starsze zdjęcia znikają z huba i z kopii (RODO). Puste pole — nic nie kasujemy.</span></label>
+          <span class="slaby">Starsze zdjęcia znikają z serwera i z kopii (RODO). Puste pole — nic nie kasujemy.</span></label>
         <ul id="kopie-lista" class="slaby"></ul>
         <p class="blad" role="alert" hidden></p>
         <div class="przyciski"><button type="button" data-akcja="kopia-teraz">Zrób kopię teraz</button>
@@ -420,8 +478,8 @@
       </form>
       <form id="formularz-dostepu" class="admin-ustawienia" autocomplete="off">
         <h3>Tunel i GitHub</h3>
-        <p class="slaby">Telefony otwierają aplikacje z GitHub Pages, a dane idą do huba przez tunel Cloudflare (D33). Stan, adresy
-          i kody QR: Administracja → Dostęp z telefonów. Token GitHub robi się raz — INSTRUKCJA-BIURO.md.</p>
+        <p class="slaby">Telefony otwierają aplikacje z GitHub Pages, a dane idą do serwera przez tunel Cloudflare. Stan, adresy
+          i kody QR: Administracja → Serwis → Dostęp z telefonów. Token GitHub robi się raz — INSTRUKCJA-BIURO.md.</p>
         <div id="pola-dostepu"><p class="slaby">Wczytuję…</p></div>
       </form>`;
     const wierszZmiany = (nr, z) => `<div class="wiersz-zmiany"><input name="nr" value="${esc(nr)}" aria-label="Numer zmiany" maxlength="4">
@@ -464,7 +522,7 @@
       const w = W.kopieZFormularza({ kopia_folder: f.kopia_folder.value, retencja_zdjec_mies: f.retencja_zdjec_mies.value });
       if (w.bledy.length) { blad.hidden = false; blad.className = 'blad'; blad.textContent = w.bledy.join(' '); return; }
       if (w.dane.retencja_zdjec_mies && w.dane.retencja_zdjec_mies !== ((kopieStan || {}).ustawienia || {}).retencja_zdjec_mies
-          && !(await P.potwierdz('Kasować stare zdjęcia?', `Zdjęcia starsze niż ${w.dane.retencja_zdjec_mies} mies. znikną z huba i z kopii `
+          && !(await P.potwierdz('Kasować stare zdjęcia?', `Zdjęcia starsze niż ${w.dane.retencja_zdjec_mies} mies. znikną z serwera i z kopii `
             + 'poza komputerem — na zawsze. Zdarzenia (awarie, zlecenia) zostają.', 'Kasuj stare'))) return;
       try {
         kopieStan = await hala.admin('POST', '/api/v1/admin/kopie', w.dane);
@@ -491,7 +549,7 @@
         wypelnijDostep(true);
         const b2 = $('formularz-dostepu').querySelector('.blad');
         b2.hidden = false; b2.className = 'ok';
-        b2.textContent = 'Zapisane. Stan tunelu: Administracja → Dostęp z telefonów.';
+        b2.textContent = 'Zapisane. Stan tunelu: Administracja → Serwis → Dostęp z telefonów.';
       } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
     });
     $('formularz-ustawien').addEventListener('submit', async ev => {
@@ -569,8 +627,39 @@
     wczytujeDostep = hala.admin('GET', '/api/v1/admin/dostep')
       .then(r => { dostepStan = r; bladDostepu = ''; dostepCzas = Date.now(); })
       .catch(e => { bladDostepu = P.komunikatBledu(e); bladDostepuCzas = Date.now(); })
-      .finally(() => { wczytujeDostep = null; if (czesc === 'dostep') rysuj(); });
+      .finally(() => { wczytujeDostep = null; if (czesc === 'serwis') rysuj(); });
     return wczytujeDostep;
+  }
+
+  // ------------------------------------------------------------ serwis (UI etap 2)
+
+  /* Serwis (właściciel 2026-10-12): rzeczy, do których administrator zagląda rzadko — dostęp z telefonów (tunel, Pages,
+     kody QR, logowanie z internetu) i Połączenia GK — w jednej części, każda zwinięta pod nagłówkiem ze stanem, żeby
+     było widać „czy wszystko gra” bez rozwijania. Czerwona karta „Sieć zakładu” stoi nad nimi, niezwinięta — to alarm.
+     Rozwinięcie pamiętamy do wylogowania (przerysowanie co 20 s go nie zwija); Dostęp pierwszy raz rozwija się sam,
+     gdy jest w nim coś do zrobienia (alarm sieci, konta zablokowane z internetu). */
+  let serwisOtwarte = { dostep: null, polaczenia: false };
+
+  function rysujSerwis(el) {
+    if (!el.querySelector('#serwis-dostep')) {
+      el.innerHTML = `
+        <div id="serwis-siec"></div>
+        <details class="serwis-czesc" id="serwis-dostep" data-sekcja="dostep" ${serwisOtwarte.dostep ? 'open' : ''}>
+          <summary><h3>📱 Dostęp z telefonów</h3><span id="serwis-dostep-stan"></span></summary>
+          <div class="serwis-czesc-tresc" id="serwis-dostep-tresc"></div>
+        </details>
+        <details class="serwis-czesc" id="serwis-polaczenia" data-sekcja="polaczenia" ${serwisOtwarte.polaczenia ? 'open' : ''}>
+          <summary><h3>Połączenia GK</h3><span id="serwis-polaczenia-stan"></span></summary>
+          <div class="serwis-czesc-tresc" id="serwis-polaczenia-tresc"></div>
+        </details>`;
+    }
+    rysujDostep($('serwis-dostep-tresc'));
+    rysujPolaczenia($('serwis-polaczenia-tresc'));
+  }
+
+  /* Wstawia HTML tylko, gdy się zmienił — nagłówki i karta alarmu są przerysowywane co 20 s (P.narysuj). */
+  function wstaw(el, html) {
+    if (el && el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; }
   }
 
   /* Pola formularza „Tunel i GitHub” — raz po wczytaniu (i po zapisie), żeby przerysowanie nie kasowało wpisywanego. */
@@ -586,7 +675,7 @@
       <label>Tunel Cloudflare
         <select name="tunel_tryb">${opcja('brak', 'Wyłączony — tylko sieć firmowa')}${opcja('szybki', 'Szybki — adres losowy, zmienia się sam (zalecany)')}${opcja('staly', 'Stały — własna domena w Cloudflare')}</select></label>
       <div id="pola-stalego" class="admin-ustawienia" ${u.tunel_tryb === 'staly' ? '' : 'hidden'}>
-        <label>Adres tunelu stałego<input name="tunel_adres" value="${esc(u.tunel_adres || '')}" placeholder="https://hub.twojafirma.pl" autocapitalize="none"></label>
+        <label>Adres tunelu stałego<input name="tunel_adres" value="${esc(u.tunel_adres || '')}" placeholder="https://serwer.twojafirma.pl" autocapitalize="none"></label>
         <label>Token tunelu stałego (panel Cloudflare)
           <input name="tunel_token" type="password" autocomplete="off" placeholder="${u.tunel_token_ustawiony ? 'zapisany — zostaw puste, żeby nie zmieniać' : 'wklej token albo całe polecenie z panelu Cloudflare'}"></label>
         ${zapisany('tunel_token', 'token tunelu')}
@@ -605,6 +694,18 @@
     const s = W.dostepZTelefonow(dostepStan, hala.teraz());
     const lz = W.logowanieZInternetu(dostepStan.logowanie, hala.teraz());
     const programy = W.programyNaPages(dostepStan, hala.teraz());
+    // Serwis: alarm sieci zakładu nad zwiniętymi częściami, stan tunelu i wersji w nagłówku Dostępu.
+    wstaw($('serwis-siec'), lz.alarm ? `<section class="admin-linia alarm-sieci" role="alert">
+        <h3><span>Sieć zakładu <span class="znacznik alarm">Ustaw</span></span>
+          ${lz.alarm.wpis ? '<button type="button" class="maly glowny" data-akcja="wpisz-moj-adres">Wpisz mój adres</button>' : ''}</h3>
+        <p class="tekst-alarm">${esc(lz.alarm.opis)}</p>
+      </section>` : '');
+    const zablokowanych = lz.zablokowane.length;
+    wstaw($('serwis-dostep-stan'), `<span class="znacznik ${s.tunel.kolor}">Tunel: ${esc(s.tunel.stan)}</span>
+      <span class="znacznik ${s.wersja.kolor}">GitHub Pages: ${esc(s.wersja.stan)}</span>
+      ${zablokowanych ? `<span class="znacznik alarm">Zablokowane z internetu: ${zablokowanych}</span>` : ''}`);
+    const det = $('serwis-dostep');
+    if (det && serwisOtwarte.dostep === null) { serwisOtwarte.dostep = !!(lz.alarm || zablokowanych); det.open = serwisOtwarte.dostep; }
     // Odcisk: przerysowanie co 20 s (P.narysuj) nie może migać kodami QR ani kasować zaznaczenia adresu. Godzina
     // sprawdzenia przez strażnika (co 2 min) zmienia tylko swój akapit — bez niej w odcisku.
     const straznik = s.tunel.straznik;
@@ -618,13 +719,8 @@
     const link = a => (a ? `<a href="${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>` : '');
     el.innerHTML = `
       <p class="slaby opis-widoku">Telefony otwierają aplikacje ze stałych adresów na jednej stronie GitHub Pages (sam wygląd, bez danych):
-        cztery aplikacje hali oraz GK Trasy i GK Flota. Dane idą tunelem do huba i do programów w biurze. Pokaż kod QR albo
+        cztery aplikacje hali oraz GK Trasy i GK Flota. Dane idą tunelem do serwera i do programów w biurze. Pokaż kod QR albo
         wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
-      ${lz.alarm ? `<section class="admin-linia alarm-sieci" role="alert">
-        <h3><span>Sieć zakładu <span class="znacznik alarm">Ustaw</span></span>
-          ${lz.alarm.wpis ? '<button type="button" class="maly glowny" data-akcja="wpisz-moj-adres">Wpisz mój adres</button>' : ''}</h3>
-        <p class="tekst-alarm">${esc(lz.alarm.opis)}</p>
-      </section>` : ''}
       <section class="admin-linia">
         <h3><span>Logowanie z internetu <span class="znacznik ${lz.licznik.kolor}">${esc(String((dostepStan.logowanie || {}).zle_proby_godzina || 0))}</span></span></h3>
         <p class="slaby">${esc(lz.licznik.tekst)}. Konto po 10 złych PIN-ach z internetu czeka 15 minut, po trzech takich seriach
@@ -636,7 +732,7 @@
       <section class="admin-linia">
         <h3><span>Tunel <span class="znacznik ${s.tunel.kolor}">${esc(s.tunel.stan)}</span></span>
           <button type="button" class="maly" data-akcja="odswiez-dostep">Odśwież</button></h3>
-        ${s.tunel.adres ? `<p class="dostep-adres">Adres huba: ${link(s.tunel.adres)}</p>` : ''}
+        ${s.tunel.adres ? `<p class="dostep-adres">Adres serwera: ${link(s.tunel.adres)}</p>` : ''}
         ${straznik ? `<p data-straznik class="${straznik.kolor === 'alarm' ? 'tekst-alarm' : 'slaby'}">${esc(straznik.tekst)}</p>` : ''}
         <p class="slaby">${esc(s.tunel.opis)}</p>
       </section>
@@ -656,7 +752,7 @@
       </section>
       <section class="admin-linia">
         <h3><span>GK Trasy i GK Flota</span></h3>
-        <p class="slaby">Programy na tym komputerze same mówią hubowi swój adres tunelu, a hub wysyła ich aplikacje na tę samą
+        <p class="slaby">Programy na tym komputerze same mówią serwerowi swój adres tunelu, a serwer wysyła ich aplikacje na tę samą
           stronę tym samym tokenem. W programach nic nie trzeba ustawiać.</p>
         ${programy.map(p => `<div class="admin-maszyna"><span><b>${esc(p.nazwa)}</b> <span class="znacznik ${p.kolor}">${esc(p.stan)}</span>
           <span class="${p.kolor === 'alarm' ? 'tekst-alarm' : 'slaby'}">${esc(p.opis)}</span>
@@ -693,7 +789,7 @@
 
   async function wyslijNaPages() {
     if (!(await P.potwierdz('Wysłać aplikacje na GitHub?', 'Na publiczną stronę GitHub Pages trafia sam wygląd czterech aplikacji hali i adres '
-      + 'tunelu — bez danych firmy. Telefony wezmą nową wersję same. GK Trasy i GK Flota hub wysyła sam, bez tego przycisku.', 'Wyślij'))) return;
+      + 'tunelu — bez danych firmy. Telefony wezmą nową wersję same. GK Trasy i GK Flota serwer wysyła sam, bez tego przycisku.', 'Wyślij'))) return;
     wysyla = true; rysuj();
     try {
       const r = await hala.admin('POST', '/api/v1/admin/dostep/publikuj', {});
@@ -724,26 +820,35 @@
   /* Klucz programu pokazujemy RAZ (w hubie jest tylko jego skrót) — po przerysowaniu go nie ma, więc trzymamy go
      w pamięci strony do zamknięcia tej części albo wylogowania. Nowy klucz czyści przypięcie instalacji programu. */
   let polaczenia = null, bladPolaczen = '', bladPolaczenCzas = 0, nowyKlucz = null, polaczeniaLokalne = false;
+  // Jedno pytanie naraz: w Serwisie rysuje się też Dostęp (co 15 s), a każde rysowanie przed odpowiedzią pytałoby od nowa.
+  let wczytujePolaczenia = null;
 
-  async function wczytajPolaczenia() {
-    try {
-      const r = await hala.admin('GET', '/api/v1/admin/polaczenia');
-      polaczenia = r.polaczenia; polaczeniaLokalne = !!r.lokalne; bladPolaczen = '';
-    }
-    catch (e) { bladPolaczen = P.komunikatBledu(e); bladPolaczenCzas = Date.now(); }
-    if (czesc === 'polaczenia') rysuj();
+  function wczytajPolaczenia() {
+    if (wczytujePolaczenia) return wczytujePolaczenia;
+    wczytujePolaczenia = hala.admin('GET', '/api/v1/admin/polaczenia')
+      .then(r => { polaczenia = r.polaczenia; polaczeniaLokalne = !!r.lokalne; bladPolaczen = ''; })
+      .catch(e => { bladPolaczen = P.komunikatBledu(e); bladPolaczenCzas = Date.now(); })
+      .finally(() => { wczytujePolaczenia = null; if (czesc === 'serwis') rysuj(); });
+    return wczytujePolaczenia;
   }
 
   function rysujPolaczenia(el) {
-    if (polaczenia === null) { el.innerHTML = `<p class="pusto">${esc(bladPolaczen || 'Wczytuję…')}</p>`; if (W.wczytacPonownie(bladPolaczen, bladPolaczenCzas, Date.now())) wczytajPolaczenia(); return; }
+    if (polaczenia === null) {
+      el.innerHTML = `<p class="pusto">${esc(bladPolaczen || 'Wczytuję…')}</p>`; delete el.dataset.odcisk;
+      if (W.wczytacPonownie(bladPolaczen, bladPolaczenCzas, Date.now())) wczytajPolaczenia();
+      return;
+    }
+    // Serwis: stan każdego programu w nagłówku zwiniętej części — „Połączone” widać bez rozwijania.
+    wstaw($('serwis-polaczenia-stan'), polaczenia.map(p => { const s = W.polaczenieGK(p, hala.teraz());
+      return `<span class="znacznik ${s.kolor}">${esc(p.nazwa)}: ${esc(s.stan)}</span>`; }).join(' '));
     // Pole z kluczem rysujemy tylko raz — przerysowanie co 20 s nie może kasować zaznaczenia przy kopiowaniu.
     const odcisk = JSON.stringify([polaczenia, nowyKlucz, polaczeniaLokalne]);
     if (el.dataset.odcisk === odcisk) return;
     el.dataset.odcisk = odcisk;
     el.innerHTML = `
       <p class="slaby opis-widoku">Konta wszystkich aplikacji GK zakłada się tutaj (Pracownicy). <b>Programy na tym komputerze łączą
-        się same</b> — hub robi dla nich klucz i podaje go przez plik w profilu Windows, nic nie trzeba wklejać. Klucz ręczny
-        („Utwórz klucz”) jest dla programu na innym komputerze: wpisz go tam razem z adresem huba. Klucz widać tylko raz.</p>
+        się same</b> — serwer robi dla nich klucz i podaje go przez plik w profilu Windows, nic nie trzeba wklejać. Klucz ręczny
+        („Utwórz klucz”) jest dla programu na innym komputerze: wpisz go tam razem z adresem serwera. Klucz widać tylko raz.</p>
       ${polaczenia.map(p => {
         const s = W.polaczenieGK(p, hala.teraz());
         const tutaj = polaczeniaLokalne && (!p.wlaczone || !p.lokalny);
@@ -758,8 +863,9 @@
             <button type="button" class="maly" data-akcja="kopiuj-klucz">Kopiuj</button></div>` : ''}
         </section>`;
       }).join('')}
-      <p class="slaby">GK Foto i GK Czytnik (Marketing) logują się kontem GK — imieniem i nazwiskiem i PIN-em z listy
-        Pracownicy. Klucza nie potrzebują. Osobie, która pracuje tylko w nich, nadaj rolę „Marketing”.</p>
+      <p class="slaby">GK Foto (Marketing) loguje się kontem GK z listy Pracownicy — imię i nazwisko, hasło raz na 12 godzin, na co dzień PIN.
+        Klucza nie potrzebuje. Osobie, która pracuje tylko w nim, nadaj rolę „Marketing”. GK Czytnik od wersji 3.13
+        działa bez logowania — konta nie potrzebuje.</p>
       <div class="admin-pasek"><button type="button" data-akcja="odswiez-polaczenia">Odśwież stan</button></div>`;
   }
 
@@ -773,28 +879,29 @@
     await wczytajPolaczenia();
   }
 
-  // ------------------------------------------------------------ etykiety QR (druk)
+  // ------------------------------------------------------------ etykiety QR (druk — Maszyny → „🖨 Drukuj etykiety”)
 
-  let etykietyLinie = [], etykietyRodzaje = ['linie', 'stanowiska', 'maszyny'];
+  // etykietyRodzaje null = wszystko, co jest do wyboru (D51: przy jednej linii bez stanowisk — same maszyny).
+  let etykietyLinie = [], etykietyRodzaje = null;
+  const rodzajeEtykiet = sl => etykietyRodzaje || window.PanelEtykiety.rodzajeDoWyboru(sl);
 
   function rysujEtykiety(el) {
     const sl = hala.slowniki || {};
-    const lista = window.PanelEtykiety.pozycje(sl, { linie: etykietyLinie, rodzaje: etykietyRodzaje });
+    const lista = window.PanelEtykiety.pozycje(sl, { linie: etykietyLinie, rodzaje: rodzajeEtykiet(sl) });
     if (!el.querySelector('#formularz-etykiet')) {
       el.innerHTML = `
-        <form id="formularz-etykiet" class="admin-ustawienia" onsubmit="return false">
+        <form id="formularz-etykiet" class="admin-ustawienia admin-linia" onsubmit="return false">
           <p class="slaby">Naklejki z kodami do obchodów i zgłoszeń ze skanu. Arkusz A4, 3 kolumny — drukuj w skali 100 %
-            na papierze samoprzylepnym albo zwykłym i zalaminuj. Kod QR to napis HALA:… z Administracji.</p>
+            na papierze samoprzylepnym albo zwykłym i zalaminuj.</p>
           <fieldset ${W.wieleLinii(sl) ? '' : 'hidden'}><legend>Linie (nic nie zaznaczone = wszystkie)</legend><div class="zaznaczenia">
             ${Object.entries(sl.linie || {}).map(([k, l]) => `<label class="zaznacz"><input type="checkbox" name="linie" value="${esc(k)}"> ${esc((l && l.nazwa) || k)}</label>`).join('')}
           </div></fieldset>
           <fieldset><legend>Co drukować</legend><div class="zaznaczenia">
-            <label class="zaznacz"><input type="checkbox" name="rodzaje" value="linie" checked> Linie</label>
-            <label class="zaznacz"><input type="checkbox" name="rodzaje" value="stanowiska" checked> Stanowiska</label>
-            <label class="zaznacz"><input type="checkbox" name="rodzaje" value="maszyny" checked> Maszyny</label>
+            ${window.PanelEtykiety.rodzajeDoWyboru(sl).map(r => `<label class="zaznacz"><input type="checkbox" name="rodzaje" value="${r}"
+              ${rodzajeEtykiet(sl).includes(r) ? 'checked' : ''}> ${{ linie: 'Linie', stanowiska: 'Stanowiska', maszyny: 'Maszyny' }[r]}</label>`).join('')}
           </div></fieldset>
           <div class="przyciski"><span id="etykiet-ile" class="slaby"></span>
-            <button type="button" class="glowny" data-akcja="drukuj-etykiety">🖨 Drukuj etykiety</button></div>
+            <button type="button" class="glowny" data-akcja="drukuj-etykiety">🖨 Drukuj</button></div>
         </form>`;
       $('formularz-etykiet').addEventListener('change', () => {
         const f = $('formularz-etykiet');
@@ -813,13 +920,13 @@
       const s = document.createElement('script');
       s.src = '../wspolne/skaner-zxing.js';
       s.onload = () => ok(window.ZXing);
-      s.onerror = () => zle(new Error('Nie udało się wczytać kodera QR. Sprawdź połączenie z hubem i spróbuj jeszcze raz.'));
+      s.onerror = () => zle(new Error('Nie udało się wczytać kodera QR. Sprawdź połączenie z serwerem i spróbuj jeszcze raz.'));
       document.head.appendChild(s);
     });
   }
 
   async function drukujEtykiety() {
-    const lista = window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: etykietyLinie, rodzaje: etykietyRodzaje });
+    const lista = window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: etykietyLinie, rodzaje: rodzajeEtykiet(hala.slowniki || {}) });
     if (!lista.length) return;
     const ZX = await wczytajZXing();
     $('etykiety-druk').innerHTML = window.PanelEtykiety.arkusz(lista, ZX);
@@ -829,17 +936,11 @@
 
   // ------------------------------------------------------------ zdarzenia
 
-  for (const b of document.querySelectorAll('#administracja .chip')) {
-    b.addEventListener('click', () => {
-      if (czesc === 'polaczenia' && b.dataset.czesc !== 'polaczenia') nowyKlucz = null;   // klucz znika z ekranu
-      czesc = b.dataset.czesc;
-      const el = $('admin-tresc');
-      el.innerHTML = ''; delete el.dataset.odcisk;
-      if (czesc === 'polaczenia') { polaczenia = null; bladPolaczen = ''; }   // wejście w część — od razu nowa próba
-      if (czesc === 'dostep') dostepCzas = 0;           // wejście w część — świeży stan tunelu
-      rysuj();
-    });
-  }
+  for (const b of document.querySelectorAll('#administracja .chip')) b.addEventListener('click', () => przejdz(b.dataset.czesc));
+  // Rozwinięcie części Serwisu (także przez „Pokaż” przy alarmie) — zapamiętane na kolejne wejścia i przerysowania.
+  $('admin-tresc').addEventListener('toggle', ev => {
+    if (ev.target.matches && ev.target.matches('details.serwis-czesc')) serwisOtwarte[ev.target.dataset.sekcja] = ev.target.open;
+  }, true);
   $('admin-tresc').addEventListener('input', ev => {
     if (ev.target.id === 'admin-szukaj') { szukaj = ev.target.value; rysuj(); }
   });
@@ -856,11 +957,12 @@
       if (akcja === 'odblokuj') {
         await hala.admin('POST', '/api/v1/admin/odblokuj', { pracownik: id });
         await wczytajPracownikow();
-        if (czesc === 'dostep') await wczytajDostep();
+        if (czesc === 'serwis') await wczytajDostep();
       }
       if (akcja === 'wpisz-moj-adres') await wpiszMojAdres();
       if (akcja === 'kopia-teraz') await kopiaTeraz();
       if (akcja === 'nowa-maszyna') otworzMaszyne();
+      if (akcja === 'etykiety') await przyciskEtykiet();
       if (akcja === 'drukuj-etykiety') await drukujEtykiety();
       const program = (b.closest('[data-program]') || {}).dataset?.program;
       const nazwaProgramu = program && ((polaczenia || []).find(p => p.program === program) || {}).nazwa;
@@ -888,7 +990,8 @@
         catch (e) { pole.select(); P.komunikat('Zaznaczyłem klucz — skopiuj go (Ctrl+C).', 'uwaga'); }
       }
       if (akcja === 'maszyna') otworzMaszyne(b.dataset.kod);
-      if (akcja === 'wycofaj' && confirm(`Wycofać maszynę ${b.dataset.kod}? Zostanie w historii awarii i przeglądów.`))
+      // Okno aplikacji (D30), nie systemowe okienko przeglądarki — ten sam wygląd co reszta pytań i nie wstrzymuje strony.
+      if (akcja === 'wycofaj' && await P.potwierdz('Wycofać maszynę?', `${b.dataset.kod} — zostanie w historii awarii i przeglądów.`, 'Wycofaj'))
         await hala.zapisz('slownik.usuniety', `maszyny/${b.dataset.kod}`, { slownik: 'maszyny', klucz: b.dataset.kod });
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   });
@@ -897,7 +1000,7 @@
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
     lista = null; zakres = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
-    kopieStan = null; alarmy = []; alarmyCzas = 0;
+    kopieStan = null; alarmy = []; alarmyCzas = 0; serwisOtwarte = { dostep: null, polaczenia: false }; etykietyOtwarte = false;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;
     rysujAlarmy();
     $('admin-zespol').hidden = true; $('admin-zespol').textContent = '';

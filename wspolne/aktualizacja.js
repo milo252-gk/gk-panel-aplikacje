@@ -9,7 +9,7 @@
    - przy PIERWSZEJ instalacji też pada controllerchange, choć nic się nie zmieniło — odświeżamy tylko,
      gdy stronę prowadził już jakiś worker (inaczej każde pierwsze wejście mignęłoby ekranem);
    - nie spod palca: przy otwartym oknie, skanerze, formularzu albo polu, w którym ktoś pisze, tylko
-     mówimy „Jest nowa wersja — odświeży się po zamknięciu okna” i czekamy, aż się zwolni;
+     mówimy „Jest nowa wersja — odświeży się, gdy skończysz…” i czekamy, aż się zwolni;
    - dokładnie raz (strażnik przeladowano) — żadnej pętli odświeżania;
    - sprawdzenie nowej wersji co godzinę i po powrocie na kartę (telefon wyjęty z kieszeni).
 
@@ -25,6 +25,7 @@
   const doc = global.document;
   const SPRAWDZ_CO_MS = 3600 * 1000;
   const CZEKAJ_CO_MS = 2000;
+  const TEKST_CZEKA = 'Jest nowa wersja — odświeży się, gdy skończysz (zamkniesz okno albo wyślesz formularz)';
 
   /* Wspólne „zajęte” dla wszystkich aplikacji: okno modalne (<dialog> UR, KJ, Panelu), skaner
      (skaner.js), formularz zlecenia (zlecenia.js) i pole z wpisanym tekstem pod kursorem. Puste pole
@@ -60,7 +61,8 @@
     function sprobuj() {
       if (przeladowano) return;
       if (!zajety()) { przeladuj(); return; }
-      if (!czeka) { czeka = true; komunikat('Jest nowa wersja — odświeży się po zamknięciu okna'); }
+      // Czekamy nie tylko na okno: też na skaner, formularz zlecenia i wpisany tekst — mówimy więc „gdy skończysz”.
+      if (!czeka) { czeka = true; komunikat(TEKST_CZEKA); }
       setTimeout(sprobuj, CZEKAJ_CO_MS);
     }
 

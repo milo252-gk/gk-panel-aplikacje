@@ -36,6 +36,23 @@
 
   const RODZAJE = { linie: ['L', 'Linia'], stanowiska: ['S', 'Stanowisko'], maszyny: ['M', 'Maszyna'] };
 
+  /* Co dać do wyboru w „Co drukować” (D51: w Panelu zakłada się tylko maszyny). Etykieta linii — tylko przy kilku liniach
+     (przy jednej obchód zalicza każdy kod z hali, więc naklejka „Linia Hala” jest zbędna), stanowiska — tylko gdy jeszcze
+     są w słowniku (starsze dane). Kolejność jak na arkuszu. */
+  function rodzajeDoWyboru(slowniki) {
+    const sl = slowniki || {};
+    return ['linie', 'stanowiska', 'maszyny'].filter(r => r === 'maszyny'
+      || (r === 'linie' && Object.keys(sl.linie || {}).length > 1)
+      || (r === 'stanowiska' && Object.keys(sl.stanowiska || {}).length > 0));
+  }
+
+  /* Czy przed drukiem jest co wybrać (UI etap 2 — „🖨 Drukuj etykiety” w Maszynach): kilka linii (wtedy są też etykiety
+     linii) albo stanowiska. Przy jednej linii i samych maszynach przycisk drukuje od razu — okienko z jednym zaznaczonym
+     „Maszyny” to zbędny krok. */
+  function opcjeDoWyboru(slowniki) {
+    return rodzajeDoWyboru(slowniki).length > 1;
+  }
+
   /* Co drukujemy: pozycje wybranych słowników dla wybranych linii (pusta lista = wszystkie), w kolejności linii,
      w linii: linia → stanowiska → maszyny. Kod QR z pola „qr” słownika (kody zastane w zakładzie), inaczej HALA:<litera>:<kod>. */
   function pozycje(slowniki, { linie, rodzaje }) {
@@ -72,7 +89,7 @@
       </div>`).join('');
   }
 
-  const PanelEtykiety = { macierz, svgQR, pozycje, arkusz };
+  const PanelEtykiety = { macierz, svgQR, pozycje, arkusz, rodzajeDoWyboru, opcjeDoWyboru };
   global.PanelEtykiety = PanelEtykiety;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelEtykiety;
 })(typeof window !== 'undefined' ? window : globalThis);

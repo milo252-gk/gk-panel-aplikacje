@@ -24,16 +24,16 @@
 
   UR.ja = () => (hala.pracownik ? hala.pracownik.id : null);
   UR.mozna = (typ, slownik) => W.mozna(hala.kontrakt, hala.pracownik, typ, slownik);
-  UR.kierownikUR = () => !!hala.pracownik && (hala.pracownik.role || []).some(r => r === 'kierownik_ur' || r === 'admin');
+  // Plan i KPI (UI etap 2: KPI też tylko kierownik UR) — jedna reguła w widok.js (W.kierownikUR, testowana).
+  UR.kierownikUR = () => W.kierownikUR(hala.pracownik);
   UR.stale = () => (hala.kontrakt && hala.kontrakt.stale) || {};
   UR.kontekst = () => ({ slowniki: hala.slowniki, pracownicy: hala.pracownicy, stale: UR.stale(), teraz: hala.teraz(),
                          ja: UR.ja(), kontrakt: hala.kontrakt, pracownik: hala.pracownik });
 
-  /* Adresy rozszerzenia UR (/api/v1/ur/…: KPI za długie okresy, generator planu). hala.js nie ma
-     jeszcze publicznej metody na trasy rozszerzeń — prośba 2026-09-25-ur-zapytanie-rozszerzenia.md.
-     Do czasu decyzji jedno przejście przez wewnętrzne api klienta (ten sam token, adres huba, korekta
-     zegara) — nigdy własny fetch. Bez sieci rzuca błąd jak każde zapytanie.                     */
-  UR.zapytaj = (metoda, sciezka, cialo) => (hala.zapytaj ? hala.zapytaj(metoda, sciezka, cialo) : hala._wewn.api(metoda, sciezka, cialo));
+  /* Adresy rozszerzenia UR (/api/v1/ur/…: KPI za długie okresy, generator planu) — publiczne hala.zapytaj (prośba
+     2026-09-25-ur-zapytanie-rozszerzenia.md spełniona; zapasowe przejście przez wewnętrzne api klienta usunięte
+     w audycie 2026-10-12). Bez sieci rzuca błąd jak każde zapytanie.                                              */
+  UR.zapytaj = (metoda, sciezka, cialo) => hala.zapytaj(metoda, sciezka, cialo);
 
   // ------------------------------------------------------------ komunikaty i okna
 
@@ -190,17 +190,18 @@
   };
 
   /* Skan maszyny jako dowód obecności (awaria „Na miejscu”, start przeglądu). Zła maszyna
-     jest odrzucana w telefonie, zanim cokolwiek pójdzie do huba. Zwraca tekst skanu albo null. */
+     jest odrzucana w telefonie, zanim cokolwiek pójdzie do huba. Wpisany sam kod („WT-01”) działa
+     jak skan naklejki (W.sprawdzMaszyne → qr „HALA:M:WT-01”). Zły kod: okno skanera wraca od razu z błędem
+     w tytule — bez okna „Zła maszyna” i drugiego dotknięcia „Skanuj jeszcze raz”. Zwraca qr albo null (Anuluj). */
   UR.skanujMaszyne = async (maszyna, tytul) => {
+    let blad = null;
     for (;;) {
-      const t = await UR.skanuj(tytul || 'Zeskanuj maszynę', `Kod ${maszyna}`);
+      const t = await UR.skanuj(blad || tytul || 'Zeskanuj maszynę', `Kod ${maszyna}`);
       if (t === null) return null;
       const s = W.sprawdzMaszyne(t, hala.slowniki, maszyna);
-      if (s.ok) return t;
+      if (s.ok) return s.qr;
       UR.brzeczyk.blad();
-      const w = await UR.okno({ tytul: 'Zła maszyna', tresc: `<p class="blad">${esc(s.blad)}</p>`,
-        przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: 'Skanuj jeszcze raz', wartosc: true, glowny: true }] });
-      if (!w || !w.wartosc) return null;
+      blad = s.blad;
     }
   };
 
@@ -281,7 +282,8 @@
   let paczkaPowiadomien = [], paczkaZegar = null;
   hala.na('zdarzenie', z => {
     if (!hala.zalogowany()) return;
-    const p = W.powiadomienie(z, UR.kontekst());
+    // Awaria z telefonu: „naprawa nie pomogła” dzwoni tylko u mechanika, który ją prowadzi (audyt 2026-10-12).
+    const p = W.powiadomienie(z, Object.assign(UR.kontekst(), { awaria: z && z.obiekt ? hala.obiekt('awaria', z.obiekt) : null }));
     if (!p || !W.swieze(z, hala.teraz())) return;
     paczkaPowiadomien.push(p);
     clearTimeout(paczkaZegar);
@@ -316,7 +318,7 @@
   UR.ekran = (nazwa, def) => { UR.ekrany[nazwa] = def; };
   // Zlecenia od kierownika (Panel → dział „ur”): wspólny ekran z wspolne/zlecenia.js.
   UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur' }) });
-  global.HalaZlecenia.sledz(hala, () => ({ dzial: 'ur' }), z => UR.komunikat(`Nowe zlecenie od kierownika: ${(z.dane || {}).tytul || ''}`));
+  global.HalaZlecenia.sledz(hala, () => ({ dzial: 'ur' }), (z, o) => UR.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
   UR.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };
 
   // #awaria/<id> bez tej awarii w telefonie (np. dotknięty push przed synchronizacją) → lista (URWidok.ekranZAdresu).
@@ -407,7 +409,7 @@
 
   function komunikatBledu(e) {
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
-    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.';
+    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
     if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo kierownika UR.';
     // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Złe imię i nazwisko albo PIN”, blokada na 5 min).
@@ -498,13 +500,13 @@
         czesci.push('Odświeżanie co kilka sekund' + (kolejka.moje ? ` — wysyłam: ${kolejka.moje}` : ''));
       } else if (!p.strumien && !laska) {
         klasa = p.online ? 'brak-huba' : 'offline';
-        czesci.push(p.online ? 'Brak połączenia z hubem' + (kolejka.moje ? ` — ${kolejka.moje} czeka na wysłanie` : '')
+        czesci.push(p.online ? 'Brak połączenia z serwerem' + (kolejka.moje ? ` — ${W.czekaNaWyslanie(kolejka.moje)}` : '')
           : 'Brak sieci — zapisy zostają w telefonie' + (kolejka.moje ? ` (${kolejka.moje})` : ''));   // STYL-GK §6, jak Lider
       } else if (kolejka.moje) {
         klasa = 'kolejka';
         czesci.push(`Wysyłam: ${kolejka.moje}`);
       }
-      if (kolejka.odrzucone) { klasa = 'odrzucone'; czesci.push(`Odrzucone: ${kolejka.odrzucone} — dotknij`); }
+      if (kolejka.odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${kolejka.odrzucone} — dotknij`); }
     }
     pasek.className = 'hala-polaczenie ' + klasa;
     pasek.textContent = czesci.join(' · ');
@@ -513,11 +515,11 @@
   $('pasek').addEventListener('click', () => { if (kolejka.odrzucone) UR.idz('odrzucone'); });
   UR.online = () => !!hala.polaczenie.strumien || !!(hala.polaczenie.dociaganie && !hala.polaczenie.blad) || (hala.polaczenie.online && !hala.polaczenie.blad);
 
-  // Odrzucone przez hub: nic nie znika samo — człowiek czyta powód i decyduje (KONTRAKT §5.2).
+  // „Nie wysłane” = zapisy odrzucone przez serwer (na ekranie nie „hub” — tak mówią ludzie): nic nie znika samo — człowiek czyta powód i decyduje (KONTRAKT §5.2).
   UR.ekran('odrzucone', {
     zakladka: 'wiecej',
     async rysuj(el) {
-      el.innerHTML = '<h1>Odrzucone przez hub</h1><div class="lista" id="lista-odrzuconych"><p class="pusto">Wczytuję…</p></div>';
+      el.innerHTML = '<h1>Nie wysłane</h1><div class="lista" id="lista-odrzuconych"><p class="pusto">Wczytuję…</p></div>';
       const lista = await hala.odrzucone();
       $('lista-odrzuconych').innerHTML = lista.map(o => `
         <article class="karta">
@@ -525,14 +527,14 @@
           <p class="blad">${esc(o.powod)}</p>
           <details><summary>Co było w zapisie</summary><pre>${esc(JSON.stringify(o.zd.dane, null, 1))}</pre></details>
           <button type="button" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button>
-        </article>`).join('') || '<p class="pusto ok">Nic nie zostało odrzucone</p>';
+        </article>`).join('') || '<p class="pusto ok">Wszystko wysłane</p>';
     },
     odswiez() { /* lista czyta IndexedDB — przerysowanie na każde zdarzenie migałoby */ },
   });
   document.addEventListener('click', async ev => {
     const b = ev.target.closest && ev.target.closest('[data-usun-odrzucone]');
     if (!b) return;
-    if (!(await UR.potwierdz('Usunąć z listy?', 'Ten zapis nie trafił do huba. Po usunięciu trzeba go wprowadzić jeszcze raz.', 'Usuń', true))) return;
+    if (!(await UR.potwierdz('Usunąć z listy?', 'Ten zapis nie trafił na serwer. Po usunięciu trzeba go wprowadzić jeszcze raz.', 'Usuń', true))) return;
     await hala.usunOdrzucone(b.dataset.usunOdrzucone);
     pokazEkran();
   });
@@ -576,7 +578,7 @@
         <nav class="menu">
           <a class="przycisk" href="#liczniki">Liczniki maszyn (motogodziny, cykle)</a>
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
-          <a class="przycisk" href="#odrzucone">Odrzucone przez hub${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
+          <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
         <h2>Powiadomienia o awariach</h2>
         <p class="slaby">Dźwięk i wibracja działają, gdy aplikacja jest otwarta (także w tle).</p>
@@ -608,7 +610,7 @@
   }
   hala.na('odrzucone', ({ zdarzenie, powod }) => {
     UR.brzeczyk.blad();
-    UR.komunikat(`Hub nie przyjął zapisu: ${powod}${zachowajOpisNaprawy(zdarzenie) ? ' Opis naprawy zachowany.' : ''}`, 'alarm');
+    UR.komunikat(`Serwer nie przyjął zapisu: ${powod}${zachowajOpisNaprawy(zdarzenie) ? ' Opis naprawy zachowany.' : ''}`, 'alarm');
   });
   /* Konflikt (KONTRAKT §5.2): hub zapisał, ale stan się nie zmienił — najczęściej drugi mechanik
      był szybszy. Stan po nim dociąga synchronizacja, więc komunikat składamy chwilę później. */

@@ -54,15 +54,10 @@
 
   async function skanujObecnosc(p, kk) {
     const k = kk || L.kontekst();
-    const t = await HalaSkaner.skanuj({ tytul: p.nazwa, podpowiedz: 'Albo wpisz kod z naklejki' });
-    if (!t) return null;
-    const wynik = W.kodDlaLinii(Hala.odczytajKod(t, hala.slowniki), k.linia, p.cel);
-    if (!wynik.ok) {
-      L.komunikat(wynik.powod, 'blad');
-      try { if (navigator.vibrate) navigator.vibrate([100, 60, 100, 60, 100]); } catch (e) { /* bez wibracji */ }
-      return null;
-    }
-    return t;
+    // Wpisany „WT-01” = skan HALA:M:WT-01; zły kod — skaner zostaje otwarty z błędem (L.skanujKod).
+    const s = await L.skanujKod({ tytul: p.nazwa, podpowiedz: 'Albo wpisz kod z naklejki' },
+      t => W.kodDlaLinii(Hala.odczytajKod(t, hala.slowniki), k.linia, p.cel));
+    return s ? s.tekst : null;
   }
 
   // ------------------------------------------------------------ pozycja
@@ -158,6 +153,14 @@
     },
   };
 
+  /* Przyciski pod checklistą (UI etap 2 — każda czynność w jednym miejscu): „Zdarzenie obsady” zawsze, a Obsada i Audyt BHP
+     tylko, gdy checklista (otwarta albo szablon do otwarcia) nie ma pozycji tego typu — W.przyciskiZmiany. Prawdziwy hub
+     startuje bez szablonu „standard” i bez tego wejścia nie dałoby się ich wysłać (audyt 2026-10-12). Próba i zgłoszenie
+     BHP są na ekranie Jakość. Wysłany formularz odhacza pierwszą wolną pozycję swojego typu, gdy szablon ją ma (L.odhaczTyp). */
+  const przyciskiZmiany = pozycje => `<div class="przyciski-rzad">
+        ${W.przyciskiZmiany(pozycje).map(p => `<button type="button" data-a="${esc(p.a)}">${esc(p.nazwa)}</button>`).join('')}
+      </div>`;
+
   function rysujZmiane(el) {
     const k = L.kontekst();
     if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian. Sprawdź słownik zmian.</p>'; return; }
@@ -169,7 +172,7 @@
         <article class="karta otwarcie">
           <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))} · <span class="znacznik neutral">Raport wysłany</span></p>
-          <p class="slaby">Zmiana zamknięta raportem. Poprawiony raport wyślesz w „Koniec”.</p>
+          <p class="slaby">Zmiana zamknięta raportem. Poprawiony raport wyślesz na ekranie „Koniec”.</p>
         </article>`;
       return;
     }
@@ -184,7 +187,8 @@
             <ul class="lista podglad">${podglad.map(p => `<li class="wiersz"><span class="czas">${esc(W.godzina(p.termin))}</span><span class="tresc">${esc(p.nazwa)}</span></li>`).join('')}</ul>
             <button type="button" class="glowny szeroki duzy" data-a="rozpocznij">Rozpocznij zmianę</button>`
             : '<p class="blad">Brak szablonu checklisty dla tej linii. Poproś kierownika o dodanie szablonu.</p>'}
-        </article>`;
+        </article>
+        ${przyciskiZmiany(podglad)}`;
       return;
     }
     const c = W.checklista(k.zl, hala.teraz(), prog());
@@ -203,11 +207,7 @@
           <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}</span>
           <span class="stan">${w.stan === 'wykonana' ? '✔' : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
         </li>`).join('')}</ul>
-      <div class="przyciski-rzad">
-        <button type="button" data-a="zdarzenie-obsady">Zdarzenie obsady</button>
-        <button type="button" data-a="bhp">Zgłoszenie BHP</button>
-        <button type="button" data-a="proba">Dodatkowa próba</button>
-      </div>`;
+      ${przyciskiZmiany(pozycje)}`;
   }
 
   L.$('ekran-zmiana').addEventListener('click', async ev => {
@@ -220,9 +220,9 @@
     }
     const a = t.dataset.a;
     if (a === 'rozpocznij') rozpocznij();
+    else if (a === 'obsada') L.formularzObsady({});
+    else if (a === 'audyt-bhp') L.formularzAudytuBhp({});
     else if (a === 'zdarzenie-obsady') L.formularzZdarzeniaObsady();
-    else if (a === 'bhp') L.formularzBhp({});
-    else if (a === 'proba') L.formularzProby({});
   });
   L.$('ekran-zmiana').addEventListener('keydown', ev => {
     const t = ev.target.closest('[data-pozycja]');
@@ -248,7 +248,7 @@
     if (!nowe.length) return;
     for (const p of nowe) {
       juz.add(p.id);
-      L.powiadom(`${p.godz} · ${p.nazwa}`, `Za ${Math.max(0, p.zaMin)} min — linia ${k.linia}`, { tag: 'poz-' + p.id, adres: '#zmiana' });
+      L.powiadom(`${p.godz} · ${p.nazwa}`, `Za ${Math.max(0, p.zaMin)} min${W.wieleLinii(hala.slowniki) ? ' — linia ' + k.linia : ''}`, { tag: 'poz-' + p.id, adres: '#zmiana' });
       L.komunikat(`Za ${Math.max(0, p.zaMin)} min: ${p.nazwa}`, 'info');
     }
     L.pamiec.zapisz('przypomniane', JSON.stringify({ klucz: k.klucz, ids: Array.from(juz) }));

@@ -81,7 +81,9 @@ details.grupa { padding: 0 12px; }
 details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
 
 .postep { height: 10px; border-radius: 5px; background: var(--tlo-neutralne); overflow: hidden; margin: 6px 0; }
-.postep span { display: block; height: 100%; background: var(--czerwony); transition: width .4s; }
+/* Pasek w trakcie neutralny (grafit); czerwony tylko „alarm” (koniec zmiany bez planu, alert bez potwierdzeń) — W.stanPaskaPlanu. */
+.postep span { display: block; height: 100%; background: var(--granat); transition: width .4s; }
+.postep.alarm span { background: var(--czerwony); }
 .postep.komplet span { background: var(--zielony); }
 .potwierdzenia { font-size: .9em; color: var(--czerwony); font-weight: 600; }
 .potwierdzenia.komplet { color: var(--zielony); }
@@ -125,7 +127,14 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .licznik.male .licznik-opis { grid-column: 1; font-weight: 400; }
 .licznik.male button { min-height: 44px; }
 .licznik.male input { min-height: 44px; font-size: 1.15em; }
+/* Braki w próbie (UI etap 2) liczą się same z kafelków wad — liczba jak w liczniku, ale bez − / + i bez pisania. */
+.licznik-wyliczony { display: grid; gap: 6px; align-content: start; }
+.licznik-wyliczony .licznik-opis { font-weight: 600; font-size: .9em; }
+.licznik-wyliczony output { min-height: var(--dotyk); display: flex; align-items: center; justify-content: center; font-size: 1.5em; font-weight: 700;
+  border: 1px dashed var(--ramka-mocna); border-radius: 10px; background: var(--tlo-neutralne); font-variant-numeric: tabular-nums; }
 @media (max-width: 380px) { .liczniki { grid-template-columns: 1fr; } }
+/* Próba lidera ponad progiem na Planie: „Partia brakowa” i „Pomiń” obok siebie (UI etap 2). */
+.akcje-proby { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 6px 0 12px; }
 .zgodne { margin-top: 10px; font-size: 1.05em; }
 
 /* Kafelki wad: dotknięcie nazwy = +1, licznik pod spodem. */
@@ -202,8 +211,8 @@ pre { white-space: pre-wrap; font-size: .8em; background: var(--tlo); padding: 8
 .pareto-wiersz .nazwa { overflow-wrap: anywhere; }
 .pareto-wiersz .slupek { display: flex; align-items: center; gap: 6px; }
 .pareto-wiersz .pasek { height: 18px; min-width: 2px; background: var(--akcent); border-radius: 0 4px 4px 0; }
-.pareto-wiersz .slupek b { font-variant-numeric: tabular-nums; }
-.pareto-wiersz .skumulowany { display: flex; flex-direction: column; gap: 2px; font-size: .85em; color: var(--tekst-slaby); font-variant-numeric: tabular-nums; }
+.pareto-wiersz .slupek b { font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }   /* „128” nie łamie się pod wąskim słupkiem */
+.pareto-wiersz .skumulowany { white-space: nowrap; display: flex; flex-direction: column; gap: 2px; font-size: .85em; color: var(--tekst-slaby); font-variant-numeric: tabular-nums; }
 .pareto-wiersz .tor { height: 4px; background: var(--tlo-neutralne); border-radius: 2px; overflow: hidden; }
 .pareto-wiersz .tor span { display: block; height: 100%; background: var(--tekst-slaby); }
 .legenda-pareto { font-size: .85em; }

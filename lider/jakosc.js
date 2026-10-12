@@ -1,5 +1,6 @@
-/* Jakość: Quality Alerty (ekran blokujący + cyfrowe potwierdzenie), wyniki prób KJ
-   na mojej linii, reklamacje klientów i otwarte zgłoszenia BHP.
+/* Jakość: alerty jakości (ekran blokujący + cyfrowe potwierdzenie), reklamacje klientów, moje próby
+   i otwarte zgłoszenia BHP. Listy prób KJ tu nie ma (UI etap 2, wybór właściciela): ekran pokazuje tylko to,
+   co lider ma zrobić (alerty, reklamacje, BHP), i to, co sam zapisał.
 
    Alert przychodzi strumieniem w ciągu sekundy (KONTRAKT §6.3). Dopóki moja linia
    go nie potwierdzi, zasłania cały ekran — tak chce specyfikacja („wymóg cyfrowego
@@ -26,10 +27,12 @@
       return;
     }
     const a = lista[0];
+    // Jedna linia w zakładzie (D51) — bez „na linii FH6”: kod schowanej linii nic liderowi nie mówi.
+    const naLinii = W.wieleLinii(hala.slowniki) ? ' na linii ' + linia : '';
     for (const x of lista) {
       if (!widziane.has(x.id)) {
         widziane.add(x.id);
-        L.powiadom('Quality Alert: ' + ((x.dane || {}).tytul || ''), 'Potwierdź zapoznanie się na linii ' + linia,
+        L.powiadom('Alert jakości: ' + ((x.dane || {}).tytul || ''), 'Potwierdź zapoznanie się' + naLinii,
                    { tag: 'alert-' + x.id, wibracja: [300, 100, 300, 100, 300], adres: '#jakosc' });
       }
     }
@@ -38,9 +41,9 @@
     const d = a.dane || {};
     el.innerHTML = `<div class="blokada-karta">
       <div class="blokada-gora">
-        <span class="znacznik alarm">Quality Alert</span>
+        <span class="znacznik alarm">Alert jakości</span>
         <span class="slaby">${esc(a.numer || '—')} · ${esc(W.godzina(d.czas_publikacji || a.utworzono))}${lista.length > 1 ? ` · 1 z ${lista.length}` : ''}</span>
-        <button type="button" class="alarm maly" data-awaria>⚠ Awaria</button>
+        <button type="button" class="alarm maly" data-awaria>⚠️ Awaria</button>
       </div>
       <h2 id="blokada-tytul">${esc(d.tytul || 'Alert jakościowy')}</h2>
       ${d.wyrob ? `<p class="slaby">Wyrób: ${esc(d.wyrob)}</p>` : ''}
@@ -49,7 +52,7 @@
       <div class="zdjecia-alertu"><div data-z="wzor"></div><div data-z="wada"></div></div>
       <form class="formularz">
         <textarea name="uwagi" rows="2" maxlength="1000" placeholder="Uwagi (opcjonalnie)"></textarea>
-        <button type="submit" class="glowny szeroki duzy">Zapoznałem się i wdrożyłem na linii ${esc(linia)}</button>
+        <button type="submit" class="glowny szeroki duzy">Zapoznałem się i wdrożyłem${esc(naLinii)}</button>
       </form></div>`;
     el.hidden = false;
     document.body.classList.add('z-blokada');
@@ -57,6 +60,9 @@
     L.galeria(el.querySelector('[data-z=wada]'), d.zdjecie_wady, 'Wada — tak nie może być');
     el.querySelector('[data-awaria]').addEventListener('click', () => L.zglosAwarie());
     const form = el.querySelector('form');
+    // Od razu, zanim brudnopis wczyta się z IndexedDB: szybkie dotknięcie „Zapoznałem się” wysyłało formularz zwyczajnie
+    // (przeładowanie strony z ?uwagi=), a alert zostawał niepotwierdzony.
+    form.addEventListener('submit', ev => ev.preventDefault());
     L.formularz('alert:' + a.id, { uwagi: '' }).then(f => {
       f.powiaz(form);
       form.addEventListener('submit', W.przyWysylce(async ev => {
@@ -79,7 +85,7 @@
     if (!a) return;
     const d = a.dane || {}, p = (d.potwierdzenia || {})[L.linia()];
     L.okno({
-      tytul: d.tytul || 'Quality Alert',
+      tytul: d.tytul || 'Alert jakości',
       html: `<p class="slaby">${esc(a.numer || '—')} · ${esc(W.dataKrotka(d.czas_publikacji))} ${esc(W.godzina(d.czas_publikacji))} · ${esc(a.etykieta || a.status)}</p>
         <p>${esc(d.opis || '')}</p>
         <div class="instrukcja"><b>Co robić na linii</b><p>${esc(d.instrukcja || '')}</p></div>
@@ -129,7 +135,7 @@
     L.okno({
       tytul: `Próba ${w.zrodlo === 'kj' ? 'KJ' : 'lidera'} · ${w.dzien} ${w.godz}`,
       html: `<dl class="dane">
-          <dt>Stanowisko</dt><dd>${esc(w.stanowisko || '—')}</dd>
+          <dt>${esc(w.miejsceEtykieta)}</dt><dd>${esc(w.miejsce || '—')}</dd>
           <dt>Kontrolował</dt><dd>${esc(W.nazwaPracownika(hala.pracownicy, d.kontrolowal) || '—')}</dd>
           <dt>Zlecenie</dt><dd>${esc(w.zlecenie || '—')}</dd>
           <dt>Sprawdzone</dt><dd>${esc(w.sprawdzone)}</dd>
@@ -154,7 +160,7 @@
 
   const wierszProby = p => `<li class="wiersz" data-proba="${esc(p.id)}">
       <span class="czas">${esc(p.dzien)} ${esc(p.godz)}</span>
-      <span class="tresc">${esc(p.stanowisko || '—')}${p.wady.length ? ` <span class="slaby">· ${esc(p.wady.join(', '))}</span>` : ''}</span>
+      <span class="tresc">${esc(p.miejsce || '—')}${p.wady.length ? ` <span class="slaby">· ${esc(p.wady.join(', '))}</span>` : ''}</span>
       <span class="znacznik ${p.braki ? 'uwaga' : 'ok'}">${esc(p.braki)}/${esc(p.sprawdzone)}</span>
       ${p.czeka ? '<span class="znacznik info">czeka</span>' : ''}</li>`;
 
@@ -164,7 +170,6 @@
       const ja = hala.pracownik && hala.pracownik.id;
       const alerty = W.alertyLinii(hala.obiekty('alert'), linia, hala.teraz()).filter(a => a.aktywny || !a.potwierdzony);
       const rekl = W.reklamacje(hala.obiekty('reklamacja'), linia, ja).filter(r => r.otwarta || !r.przeczytana);
-      const probyKJ = W.proby(hala.obiekty('proba'), linia, 'kj', hala.slowniki).slice(0, 15);
       const moje = W.proby(hala.obiekty('proba'), linia, 'lider', hala.slowniki).slice(0, 10);
       const bhp = hala.obiekty('bhp_zgloszenie', b => b.linia === linia && b.aktywny);
       const rodzajeBhp = {};
@@ -174,7 +179,7 @@
           <button type="button" data-a="proba">+ Próba</button>
           <button type="button" data-a="bhp">+ Zgłoszenie BHP</button>
         </div>
-        <h2>Quality Alerty</h2>
+        <h2>Alerty jakości</h2>
         <ul class="lista">${alerty.map(a => `<li class="wiersz ${a.potwierdzony || !a.aktywny ? '' : 'pilne'}" data-alert="${esc(a.id)}">
             <span class="czas">${esc(W.dataKrotka(a.czas))}</span>
             <span class="tresc"><b>${esc(a.tytul)}</b> <span class="slaby">${esc(a.numer)}</span></span>
@@ -186,8 +191,6 @@
             <span class="tresc"><b>${esc(r.numer)}</b> ${esc(r.wyrob)} <span class="slaby">${esc(r.opis.slice(0, 80))}</span></span>
             <span class="znacznik ${r.przeczytana ? 'neutral' : 'uwaga'}">${r.przeczytana ? (r.otwarta ? 'Otwarta' : 'Zamknięta') : 'Nowa'}</span></li>`).join('')
           || '<li class="pusto ok">Brak reklamacji dla linii</li>'}</ul>
-        <h2>Próby KJ na linii</h2>
-        <ul class="lista">${probyKJ.map(wierszProby).join('') || '<li class="pusto">Brak prób KJ z ostatnich dni</li>'}</ul>
         <h2>Moje próby</h2>
         <ul class="lista">${moje.map(wierszProby).join('') || '<li class="pusto">Brak</li>'}</ul>
         <h2>Zgłoszenia BHP — otwarte</h2>

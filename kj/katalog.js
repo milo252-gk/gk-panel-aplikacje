@@ -31,13 +31,14 @@
     return wynik;
   }
 
+  // W.wysylaNaZywo: w trybie dociągania (szybki tunel) zapis wychodzi od razu — to nie „po wysłaniu do huba”.
   async function zapiszSlownik(slownik, klucz, wartosc) {
-    await hala.zapisz('slownik.zapisany', `${slownik}/${klucz}`, { slownik, klucz, wartosc });
-    KJ.komunikat(hala.polaczenie.strumien ? 'Zapisane' : 'Zapisane — pojawi się na liście po wysłaniu do huba');
+    if (!(await KJ.zapisz('slownik.zapisany', `${slownik}/${klucz}`, { slownik, klucz, wartosc }))) return;
+    KJ.komunikat(W.wysylaNaZywo(hala.polaczenie) ? 'Zapisane' : 'Zapisane — pojawi się na liście po wysłaniu na serwer');
   }
   async function wycofaj(slownik, klucz) {
-    await hala.zapisz('slownik.usuniety', `${slownik}/${klucz}`, { slownik, klucz });
-    KJ.komunikat(hala.polaczenie.strumien ? 'Wycofane' : 'Wycofane — zniknie z listy po wysłaniu do huba');
+    if (!(await KJ.zapisz('slownik.usuniety', `${slownik}/${klucz}`, { slownik, klucz }))) return;
+    KJ.komunikat(W.wysylaNaZywo(hala.polaczenie) ? 'Wycofane' : 'Wycofane — zniknie z listy po wysłaniu na serwer');
   }
 
   /* Formularz, bo plan próbkowania to liczniki w trakcie edycji — przerysowanie
@@ -101,12 +102,13 @@
 
   async function oknoWady(kod) {
     const w = kod ? hala.slowniki.katalog_wad[kod] || {} : {};
-    const nastepna = W.katalogWad(hala.slowniki).reduce((m, x) => Math.max(m, x.kolejnosc || 0), 0) + 1;
+    // Zmiana nazwy nie przestawia kafelka: wada bez kolejności zostaje bez niej (W.kolejnoscWOknie).
+    const kolejnosc = W.kolejnoscWOknie(w, W.katalogWad(hala.slowniki), !!kod);
     const o = await KJ.okno({
       tytul: kod ? 'Zmień wadę' : 'Nowa wada',
       tresc: `<label>Nazwa<input name="nazwa" maxlength="80" value="${esc(w.nazwa || '')}" placeholder="np. Zadrapanie"></label>
         <label>Kategoria <span class="slaby">(opcjonalnie)</span><input name="kategoria" maxlength="80" value="${esc(w.kategoria || '')}" placeholder="np. Wizualna"></label>
-        <label>Kolejność na liście<input name="kolejnosc" type="number" inputmode="numeric" min="1" value="${esc(w.kolejnosc || nastepna)}"></label>
+        <label>Kolejność na liście<input name="kolejnosc" type="number" inputmode="numeric" min="1" value="${esc(kolejnosc)}"></label>
         ${kod ? `<p class="slaby">Kod: ${esc(kod)} (nie zmienia się)</p>` : '<p class="slaby">Kod nada się sam z nazwy i już się nie zmieni.</p>'}`,
       przyciski: [{ tekst: 'Anuluj', wartosc: false },
                   { tekst: 'Zapisz', wartosc: true, glowny: true, sprawdz: d => (String(d.get('nazwa') || '').trim() ? null : 'Wpisz nazwę wady.') }],
@@ -151,7 +153,8 @@
       tresc: `${kod ? '' : '<label>Kod wyrobu<input name="kod" maxlength="60" autocapitalize="characters" placeholder="np. W-400"></label>'}
         <label>Nazwa<input name="nazwa" maxlength="120" value="${esc(w.nazwa || '')}"></label>
         <label>Linia<select name="linia"><option value="">— wybierz —</option>${W.linie(hala.slowniki).map(l =>
-          `<option value="${esc(l.kod)}" ${w.linia === l.kod ? 'selected' : ''}>${esc(l.nazwa)}</option>`).join('')}</select></label>`,
+          // Jedna linia (D51): od razu wybrana — inaczej każdy nowy wyrób kończył się „Wybierz linię.”
+          `<option value="${esc(l.kod)}" ${(w.linia || W.jedynaLinia(hala.slowniki)) === l.kod ? 'selected' : ''}>${esc(l.nazwa)}</option>`).join('')}</select></label>`,
       przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: 'Zapisz', wartosc: true, glowny: true, sprawdz: d => {
         if (!kod) {
           const k = String(d.get('kod') || '').trim();
@@ -173,17 +176,15 @@
   // ------------------------------------------------------------ plan próbkowania
 
   function rysujPlan(box) {
-    const plan = hala.slowniki.plan_probkowania || {};
     const edycja = moznaPisac('plan_probkowania');
-    const stanowiska = Object.entries(hala.slowniki.stanowiska || {});
-    box.innerHTML = `<p class="slaby">Ile prób KJ na zmianę na każdym stanowisku. 0 = poza planem.</p>
-      <form id="f-plan">${W.linie(hala.slowniki).map(l => {
-        const st = stanowiska.filter(([, s]) => s.linia === l.kod).sort(([a], [b]) => a.localeCompare(b, 'pl'));
-        if (!st.length) return '';
-        return `<section class="grupa"><h2>${esc(l.nazwa)}</h2>${st.map(([k, s]) => edycja
-          ? KJ.licznik(k, (plan[k] && plan[k].na_zmiane) || 0, `${s.nazwa} (${k})`, true)
-          : `<div class="wiersz-planu"><span>${esc(s.nazwa)}</span><b>${esc((plan[k] && plan[k].na_zmiane) || 0)}</b></div>`).join('')}</section>`;
-      }).join('')}
+    // D51: linia bez stanowisk (zakład GK: jedna linia, same maszyny) ma jeden wiersz „Cała linia” — wcześniej
+    // ekran był pusty i planu nie dało się ustawić wcale.
+    const grupy = W.wierszePlanu(hala.slowniki);
+    if (!grupy.length) { box.innerHTML = '<p class="pusto">Brak linii — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
+    box.innerHTML = `<p class="slaby">Ile prób KJ na zmianę: na każdym stanowisku, a na linii bez stanowisk — na całej linii. 0 = poza planem.</p>
+      <form id="f-plan">${grupy.map(g => `<section class="grupa"><h2>${esc(g.nazwa)}</h2>${g.pozycje.map(x => edycja
+          ? KJ.licznik(x.pole, x.na_zmiane, x.nazwa, true)
+          : `<div class="wiersz-planu"><span>${esc(x.nazwa)}</span><b>${esc(x.na_zmiane)}</b></div>`).join('')}</section>`).join('')}
       ${edycja ? '<div class="przyciski-formularza"><button type="submit" class="glowny">Zapisz plan</button></div>' : ''}</form>`;
     if (!edycja) return;
     // Wysyłamy wiersze, których dotknął kierownik, porównane z planem PO kolejce (bez sieci drugi zapis
@@ -195,17 +196,20 @@
       const d = new FormData(form);
       const teraz = slownikZKolejka('plan_probkowania');
       let zmiany = 0;
-      for (const [k, s] of stanowiska) {
-        if (d.get(k) === null || !dotkniete.has(k)) continue;
-        const n = Math.max(0, parseInt(d.get(k), 10) || 0);
-        const bylo = (teraz[k] && teraz[k].na_zmiane) || 0;
+      for (const x of grupy.flatMap(g => g.pozycje)) {
+        if (d.get(x.pole) === null || !dotkniete.has(x.pole)) continue;
+        const n = Math.max(0, parseInt(d.get(x.pole), 10) || 0);
+        const bylo = (teraz[x.klucz] && teraz[x.klucz].na_zmiane) || 0;
         if (n === bylo) continue;
+        const ok = n ? await KJ.zapisz('slownik.zapisany', `plan_probkowania/${x.klucz}`, { slownik: 'plan_probkowania', klucz: x.klucz, wartosc: Object.assign({}, x.wartosc, { na_zmiane: n }) })
+                     : await KJ.zapisz('slownik.usuniety', `plan_probkowania/${x.klucz}`, { slownik: 'plan_probkowania', klucz: x.klucz });
+        if (!ok) return;                         // komunikat już jest; niezapisane wiersze zostają „dotknięte”
+        dotkniete.delete(x.pole);
         zmiany++;
-        if (n) await hala.zapisz('slownik.zapisany', `plan_probkowania/${k}`, { slownik: 'plan_probkowania', klucz: k, wartosc: { linia: s.linia, stanowisko: k, na_zmiane: n } });
-        else await hala.zapisz('slownik.usuniety', `plan_probkowania/${k}`, { slownik: 'plan_probkowania', klucz: k });
       }
       dotkniete.clear();
-      KJ.komunikat(zmiany ? `Plan zapisany: ${zmiany} ${W.odmiana(zmiany, 'zmiana', 'zmiany', 'zmian')}` : 'Nic się nie zmieniło');
+      // „zmiany” w tej aplikacji to zmiany robocze (I, II, III) — „Plan zapisany: 2 zmiany” czytało się jak dwie zmiany.
+      KJ.komunikat(zmiany ? `Plan zapisany — zmienione pozycje: ${zmiany}` : 'Nic się nie zmieniło');
     });
   }
 })(window.KJ);

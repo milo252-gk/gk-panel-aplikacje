@@ -43,7 +43,7 @@
       <span class="godzina slaby"></span>
       <input class="nazwa" value="${esc(p.nazwa || '')}" placeholder="Co zrobić" aria-label="Nazwa pozycji">
       <select class="typ" aria-label="Rodzaj">${typy}</select>
-      <input class="cel" value="${esc(p.cel || '')}" placeholder="punkt QR" aria-label="Stanowisko do zeskanowania (opcjonalnie)" ${p.typ === 'obchod' ? '' : 'hidden'}>
+      <input class="cel" value="${esc(p.cel || '')}" placeholder="kod maszyny" aria-label="Punkt QR — kod maszyny do zeskanowania (opcjonalnie)" ${p.typ === 'obchod' ? '' : 'hidden'}>
       <span class="przyciski-wiersza">
         <button type="button" class="maly" data-ruch="-1" aria-label="W górę">↑</button>
         <button type="button" class="maly" data-ruch="1" aria-label="W dół">↓</button>
@@ -133,7 +133,8 @@
     if (b.dataset.akcja === 'kopiuj') otworz(kod, true);
     if (b.dataset.akcja === 'usun') {
       const s = (hala.slowniki.szablony_checklist || {})[kod] || {};
-      if (!confirm(`Usunąć szablon „${s.nazwa || kod}”? Zmiany, które już trwają, zostają przy swojej checkliście.`)) return;
+      // Okno aplikacji (D30) zamiast systemowego okienka przeglądarki — jak pozostałe pytania Panelu.
+      if (!(await P.potwierdz('Usunąć szablon?', `„${s.nazwa || kod}”. Zmiany, które już trwają, zostają przy swojej checkliście.`, 'Usuń'))) return;
       try { await hala.zapisz('slownik.usuniety', `szablony_checklist/${kod}`, { slownik: 'szablony_checklist', klucz: kod }); }
       catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
     }

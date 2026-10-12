@@ -52,6 +52,11 @@
              do: wpisane.do ? z.do : dzis.do, wpisane };
   }
 
+  /* Komunikat po nieudanym pobraniu (czysta funkcja — testy: reduktor-testy.js). e.odHuba === false: odpowiedź spoza huba
+     (Cloudflare 530 przy zgaszonym tunelu, bramka 502) — to też brak połączenia; wcześniej człowiek widział „HTTP 530”. */
+  const tekstBledu = e => (!e || e instanceof TypeError || !e.kod || e.odHuba === false
+    ? 'Pobieranie wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.' : e.message);
+
   const stan = new Map();          // klucz paska → { rodzaj, od, do, wpisane: {od, do} }
   const esc = s => String(s === null || s === undefined ? '' : s)
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -73,7 +78,7 @@
         <label>od <input type="date" name="od" value="${esc(s.od)}"></label>
         <label>do <input type="date" name="do" value="${esc(s.do)}"></label>
         <button type="submit" class="glowny">⬇ Pobierz CSV</button>
-        <span class="hala-eksport-uwaga">${hala.polaczenie && hala.polaczenie.online === false ? 'Brak sieci — pobieranie wymaga połączenia z hubem.' : 'Wymaga połączenia z hubem.'}</span>
+        <span class="hala-eksport-uwaga">${hala.polaczenie && hala.polaczenie.online === false ? 'Brak sieci — pobieranie wymaga połączenia z serwerem.' : 'Wymaga połączenia z serwerem.'}</span>
       </form>`;
     const f = el.querySelector('form');
     f.addEventListener('change', ev => {
@@ -94,13 +99,13 @@
         await hala.pobierz(a.sciezka, a.plik);
         powiedz(`Pobrano: ${a.plik}`, 'ok');
       } catch (e) {
-        powiedz(!e || e instanceof TypeError || !e.kod ? 'Pobieranie wymaga połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.' : e.message, 'blad');
+        powiedz(tekstBledu(e), 'blad');
       } finally {
         b.disabled = false;
       }
     });
   }
 
-  global.HalaEksport = { RODZAJE, dlaRol, okres, wybor, adres, rysuj };
+  global.HalaEksport = { RODZAJE, dlaRol, okres, wybor, adres, rysuj, tekstBledu };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaEksport;
 })(typeof window !== 'undefined' ? window : globalThis);

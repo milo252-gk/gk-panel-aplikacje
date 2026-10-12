@@ -19,16 +19,17 @@
 
   /* Generator w hubie widzi plan dopiero, gdy zapis dojdzie do huba — czekamy chwilę na kolejkę. */
   async function zaplanujTeraz(cicho) {
-    if (!UR.online()) { if (!cicho) UR.komunikat('Bez sieci — hub zaplanuje przeglądy sam, gdy dostanie plan.', 'uwaga'); return; }
+    if (!UR.online()) { if (!cicho) UR.komunikat('Bez sieci — serwer zaplanuje przeglądy sam, gdy dostanie plan.', 'uwaga'); return; }
     for (let i = 0; i < 20 && hala.stanKolejki().moje; i++) { hala.synchronizuj(); await new Promise(ok => setTimeout(ok, 300)); }
     try {
       const r = await UR.zapytaj('POST', '/api/v1/ur/plan/generuj', {});
       const czesci = [];
       if (r.zaplanowane) czesci.push(`zaplanowane: ${r.zaplanowane}`);
       if (r.usuniete) czesci.push(`usunięte stare terminy: ${r.usuniete}`);
+      if (r.przypisane) czesci.push(`nowy mechanik: ${r.przypisane}`);
       UR.komunikat(czesci.length ? `Przeglądy — ${czesci.join(', ')}` : 'Plan aktualny — nic do zmiany.');
     } catch (e) {
-      if (!cicho) UR.komunikat(`Hub nie zaplanował: ${UR.komunikatBledu(e)}`, 'alarm');
+      if (!cicho) UR.komunikat(`Serwer nie zaplanował: ${W.bladZapytania(e)}`, 'alarm');
     }
   }
 
@@ -41,10 +42,14 @@
       const karty = Object.entries(sl.karty_przegladow || {}).map(([kod, k]) => Object.assign({ kod }, k))
         .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
       const harm = W.listaHarmonogramu(sl, hala.pracownicy);
+      // Maszyny bez żadnej pozycji harmonogramu nie dostaną przeglądu nigdy — karta po typie sama niczego nie planuje
+      // (audyt 2026-10-12). Lista z szybkim „＋ Dodaj” zaraz pod harmonogramem.
+      const bezPlanu = karty.length ? W.maszynyBezHarmonogramu(sl) : [];
       const dlaKogo = k => (k.typ_maszyny ? `typ: ${k.typ_maszyny}` : (k.maszyny || []).map(m => W.nazwaMaszyny(sl, m)).join(', ')) || '—';
       el.innerHTML = `<h1>Plan przeglądów</h1>
         ${!karty.length ? `<div class="grupa"><p>Nie ma jeszcze kart przeglądów. Wstaw przykładowy plan (karta dla każdego typu maszyny,
-            przegląd co miesiąc albo co tydzień) i popraw go pod swoje maszyny — albo dodaj karty od zera.</p>
+            przegląd co miesiąc albo co tydzień, pierwsze terminy rozłożone na kolejne dni robocze) i popraw go pod swoje
+            maszyny — albo dodaj karty od zera.</p>
             <button type="button" class="glowny szeroki" id="przyklad">Wstaw przykładowy plan</button></div>` : ''}
         <h2>Karty przeglądów <span class="znacznik neutral">${karty.length}</span></h2>
         <div class="lista">${karty.map(k => `<a class="karta" href="#karta/${encodeURIComponent(k.kod)}"><b class="tytul">${esc(k.nazwa)}</b>
@@ -53,13 +58,17 @@
         <h2>Harmonogram <span class="znacznik neutral">${harm.length}</span></h2>
         <div class="lista" id="harmonogram">${harm.map(h => `<button type="button" class="karta" data-harmonogram="${esc(h.klucz)}" style="text-align:left">
           <b>${esc(h.maszynaNazwa)}</b> <span class="slaby">${esc(h.maszyna)}</span><br>
-          <span>${esc(h.kartaNazwa)} · ${esc(h.co_ile)}</span> <span class="slaby">od ${esc(h.od)}${h.mechanikNazwa ? ' · ' + esc(h.mechanikNazwa) : ''}</span>
+          <span>${esc(h.kartaNazwa)} · ${esc(h.co_ile)}</span> <span class="slaby">od ${esc(W.dataPelna(h.od))}${h.mechanikNazwa ? ' · ' + esc(h.mechanikNazwa) : ''}</span>
           ${h.zepsuty ? '<br><span class="zepsuty">Maszyny albo karty już nie ma — popraw albo usuń</span>' : ''}</button>`).join('') || '<p class="pusto">Harmonogram jest pusty.</p>'}</div>
+        ${bezPlanu.length ? `<h2 class="tekst-uwaga">Maszyny bez harmonogramu <span class="znacznik uwaga">${bezPlanu.length}</span></h2>
+          <p class="slaby">Te maszyny nie dostaną żadnego przeglądu, dopóki nie dodasz ich do harmonogramu.</p>
+          <div class="lista" id="bez-harmonogramu">${bezPlanu.map(m => `<button type="button" class="karta" data-dodaj-maszyne="${esc(m.kod)}" style="text-align:left">
+            <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)}${m.typ ? ' · ' + esc(m.typ) : ''}</span> <span class="slaby">＋ Dodaj</span></button>`).join('')}</div>` : ''}
         <div class="przyciski-formularza" style="margin-top:10px">
           <button type="button" id="zaplanuj-teraz" ${harm.length ? '' : 'disabled'}>Zaplanuj teraz</button>
           <button type="button" class="glowny" id="dodaj-harmonogram" ${karty.length ? '' : 'disabled'}>＋ Dodaj do harmonogramu</button>
         </div>
-        <p class="slaby stopka">Hub zakłada przeglądy z harmonogramu co godzinę, na 14 dni do przodu. Przegląd „co N motogodzin/cykli” pojawia się, gdy licznik maszyny urośnie o N od ostatniego przeglądu.</p>`;
+        <p class="slaby stopka">Serwer zakłada przeglądy z harmonogramu co godzinę, na 14 dni do przodu. Przegląd „co N motogodzin/cykli” pojawia się, gdy licznik maszyny urośnie o N od ostatniego przeglądu (nie wcześniej niż w dniu pierwszego przeglądu) — na jego zrobienie jest 7 dni.</p>`;
       const p = el.querySelector('#przyklad');
       if (p) p.addEventListener('click', wstawPrzyklad);
       el.querySelector('#dodaj-harmonogram').addEventListener('click', () => edytujHarmonogram(null));
@@ -67,6 +76,11 @@
       el.querySelector('#harmonogram').addEventListener('click', ev => {
         const b = ev.target.closest('[data-harmonogram]');
         if (b) edytujHarmonogram(b.dataset.harmonogram);
+      });
+      const bh = el.querySelector('#bez-harmonogramu');
+      if (bh) bh.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-dodaj-maszyne]');
+        if (b) edytujHarmonogram(null, b.dataset.dodajMaszyne);
       });
     },
   });
@@ -81,19 +95,15 @@
     zaplanujTeraz(true);
   });
 
-  const edytujHarmonogram = W.raz(async klucz => {
+  const edytujHarmonogram = W.raz(async (klucz, maszynaStart) => {
     const sl = hala.slowniki;
     const byl = klucz ? (sl.harmonogram_przegladow || {})[klucz] : null;
-    const w0 = Object.assign({ maszyna: '', karta: '', interwal: 'miesiac', co: 1, od: W.dzienZakladu(hala.teraz()), mechanik: '', start: '' }, byl || {});
+    const w0 = Object.assign({ maszyna: maszynaStart || '', karta: '', interwal: 'miesiac', co: 1, od: W.dzienZakladu(hala.teraz()), mechanik: '', start: '' }, byl || {});
     const maszyny = W.maszyny(sl);
     if (!w0.maszyna && maszyny[0]) w0.maszyna = maszyny[0].kod;
-    // Karty: najpierw te dla maszyny (po kodzie albo typie), ale kierownik może wybrać dowolną.
-    const opcjeKart = m => {
-      const pasujace = W.kartyDlaMaszyny(sl, m).map(k => k.kod);
-      const wszystkie = Object.entries(sl.karty_przegladow || {}).map(([kod, k]) => ({ kod, nazwa: k.nazwa }))
-        .sort((a, b) => (pasujace.includes(b.kod) - pasujace.includes(a.kod)) || String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
-      return wszystkie.map(k => `<option value="${esc(k.kod)}" ${k.kod === w0.karta ? 'selected' : ''}>${esc(k.nazwa)}${pasujace.includes(k.kod) ? '' : ' (inna maszyna)'}</option>`).join('');
-    };
+    // Karty: najpierw te dla maszyny (po kodzie albo typie), ale kierownik może wybrać dowolną (W.opcjeKart — to samo
+    // co w „Zaplanuj” na zakładce Przeglądy).
+    const opcjeKart = m => W.opcjeKart(sl, m).map(k => `<option value="${esc(k.kod)}" ${k.kod === w0.karta ? 'selected' : ''}>${esc(k.nazwa)}${k.pasuje ? '' : ' (inna maszyna)'}</option>`).join('');
     const mech = W.mechanicy(hala.pracownicy, null);
     const licznikowy = i => i === 'motogodziny' || i === 'cykle';
     const przyciski = [{ tekst: 'Anuluj', wartosc: false }];
@@ -108,7 +118,7 @@
         <h3>Co ile</h3>${UR.chipy('interwal', W.INTERWALY, [w0.interwal])}
         <div class="dwa"><label>Co<input name="co" inputmode="decimal" value="${esc(w0.co)}" data-bez-fokusu></label>
           <label>Pierwszy przegląd<input type="date" name="od" value="${esc(w0.od)}"></label></div>
-        <label id="h-start" ${licznikowy(w0.interwal) ? '' : 'hidden'}>Odczyt licznika w dniu startu<input name="start" inputmode="decimal" value="${esc(w0.start ?? '')}" data-bez-fokusu></label>
+        <label id="h-start" ${licznikowy(w0.interwal) ? '' : 'hidden'}>Odczyt licznika w dniu startu (z maszyny)<input name="start" inputmode="decimal" value="${esc(w0.start ?? '')}" data-bez-fokusu></label>
         <label>Mechanik (opcjonalnie)<select name="mechanik"><option value="">— każdy —</option>${mech.map(p => `<option value="${esc(p.id)}" ${p.id === w0.mechanik ? 'selected' : ''}>${esc(p.nazwa)}</option>`).join('')}</select></label>
         ${klucz ? '<p class="slaby">Maszyny i karty nie da się zmienić — usuń pozycję i dodaj nową.</p>' : ''}`,
       przyciski,
@@ -272,6 +282,7 @@
 
   UR.ekran('karta', {
     zakladka: 'plan',
+    formularz: true,      // nowa wersja nie przeładuje edytora w połowie pracy (ur.js → HalaAktualizacja.pilnuj; audyt 2026-10-12)
     rysuj: rysujEdytor,
     odswiez() { /* formularz — zmiany z huba nie przerysowują go spod palca */ },
   });

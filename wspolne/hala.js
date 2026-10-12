@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.15.0';
+  const WERSJA_KLIENTA = '0.16.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -237,13 +237,19 @@
     return kandydaci.length ? { kod: kandydaci[0][0], ...kandydaci[0][1] } : null;
   }
 
-  /* Migawka pozycji z bezwzględnymi terminami — idzie w zdarzeniu zmiana.rozpoczeta. */
+  /* Migawka pozycji z bezwzględnymi terminami — idzie w zdarzeniu zmiana.rozpoczeta.
+     termin_min liczymy na zegarze zakładu (22:00 + 465 min = 05:45), a nie w minutach rzeczywistych: w nocy zmiany czasu
+     zmiana III trwa 7 h (wiosna) albo 9 h (jesień), a minuty rzeczywiste dawały „Przekazanie zmiany” godzinę po końcu
+     zmiany (wiosna) albo godzinę za wcześnie (jesień). Termin nigdy nie wypada po końcu zmiany (zmiana.do). */
   function pozycjeZSzablonu(szablon, zmiana) {
     if (!szablon || !zmiana) return [];
-    const start = Date.parse(zmiana.od);
-    return (szablon.pozycje || []).map(p => ({
-      id: p.id, nazwa: p.nazwa, typ: p.typ || 'zadanie', wymaga_qr: !!p.wymaga_qr, cel: p.cel || null,
-      termin: iso(start + (p.termin_min || 0) * 60000) }));
+    const start = Date.parse(zmiana.od), koniec = Date.parse(zmiana.do);
+    const l = lokalny(start);
+    return (szablon.pozycje || []).map(p => {
+      let t = zLokalnego(l.rok, l.miesiac, l.dzien, l.godz, l.min + (p.termin_min || 0));
+      if (!isNaN(koniec) && t > koniec) t = koniec;
+      return { id: p.id, nazwa: p.nazwa, typ: p.typ || 'zadanie', wymaga_qr: !!p.wymaga_qr, cel: p.cel || null, termin: iso(t) };
+    });
   }
 
   /* Kolor kafelka / paska lidera. JEDNA definicja dla Lidera i Panelu:
@@ -488,13 +494,15 @@
     return !zZakladu(osoba && osoba.role) || zZakladu(pracownik && pracownik.role);
   }
 
-  /* Licznik, który tyka na ekranie (przestój, czekanie na lidera): do godziny z sekundami („4:07”),
-     bo „0 min” przez pierwszą minutę wygląda na zawieszony. Od godziny — jak formatCzasu. */
+  /* Licznik, który tyka na ekranie (przestój, czekanie na lidera): do godziny z sekundami („4 min 07 s”, „40 s”),
+     bo „0 min” przez pierwszą minutę wygląda na zawieszony. Jednostki słowami (ocena UI 2026-10-12): „0:40” czytano
+     jak godziny i minuty. Od godziny — jak formatCzasu. */
   function formatLicznika(ms) {
     if (ms === null || ms === undefined || isNaN(ms)) return '—';
     const s = Math.max(0, Math.floor(ms / 1000));
     if (s >= 3600) return formatCzasu(ms);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s < 60) return `${s} s`;
+    return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
   }
 
   function formatCzasu(ms) {
@@ -623,23 +631,30 @@
   // ---------------------------------------------------------------- zdjęcia
 
   async function zmniejszZdjecie(plik, maks, jakosc) {
-    let obraz;
+    let obraz, adres = null;
     try {
       obraz = await createImageBitmap(plik, { imageOrientation: 'from-image' });
     } catch (e) {
+      // Adres obrazka zwalniamy po narysowaniu (finally niżej) — bez tego każde zdjęcie z tej drogi (starsze Safari)
+      // zostawało w pamięci strony do jej zamknięcia, a telefon lidera ma ją otwartą całą zmianę.
+      adres = URL.createObjectURL(plik);
       obraz = await new Promise((ok, zle) => {
         const img = new Image();
         img.onload = () => ok(img);
-        img.onerror = () => zle(new Error('Nie da się odczytać zdjęcia (format HEIC? ustaw w aparacie „Najbardziej zgodne”)'));
-        img.src = URL.createObjectURL(plik);
+        img.onerror = () => { URL.revokeObjectURL(adres); zle(new Error('Nie da się odczytać zdjęcia (format HEIC? ustaw w aparacie „Najbardziej zgodne”)')); };
+        img.src = adres;
       });
     }
-    const w = obraz.width, h = obraz.height;
-    const skala = Math.min(1, maks / Math.max(w, h));
-    const c = document.createElement('canvas');
-    c.width = Math.round(w * skala); c.height = Math.round(h * skala);
-    c.getContext('2d').drawImage(obraz, 0, 0, c.width, c.height);
-    return new Promise(ok => c.toBlob(ok, 'image/jpeg', jakosc));
+    try {
+      const w = obraz.width, h = obraz.height;
+      const skala = Math.min(1, maks / Math.max(w, h));
+      const c = document.createElement('canvas');
+      c.width = Math.round(w * skala); c.height = Math.round(h * skala);
+      c.getContext('2d').drawImage(obraz, 0, 0, c.width, c.height);
+      return await new Promise(ok => c.toBlob(ok, 'image/jpeg', jakosc));
+    } finally {
+      if (adres) URL.revokeObjectURL(adres);
+    }
   }
 
   // ---------------------------------------------------------------- klient
@@ -649,10 +664,14 @@
     // czekajWitajMs: hub wysyła „witaj” od razu po otwarciu; bez niego sieć zatrzymuje strumień (buforuje),
     // więc przechodzimy na dociąganie co dociaganieMs, a strumienia próbujemy znowu po ponowStrumienMs.
     // sprawdzAdresCoMs: najczęściej co tyle ms czytamy konfiguracja.json po błędach sieci (D33: adres tunelu się zmienia).
-    const o = Object.assign({ aplikacja: null, typy: [], dni: 3, hub: null, ciszaStrumieniaMs: 45000,
+    // pamiec: nazwa pamięci w przeglądarce (IndexedDB hala-<pamiec>, klucze hala.<pamiec>.…), domyślnie = aplikacja.
+    // Narzędzie, które loguje się do huba jako inna aplikacja (podgląd zdarzeń jako „panel”), musi mieć własną pamięć —
+    // inaczej zabierało Panelowi na tym komputerze sesję, stan i kursor seq (wylogowanie podglądu wylogowywało Panel).
+    const o = Object.assign({ aplikacja: null, pamiec: null, typy: [], dni: 3, hub: null, ciszaStrumieniaMs: 45000,
                               czekajWitajMs: 5000, dociaganieMs: 4000, ponowStrumienMs: 300000,
                               sprawdzAdresCoMs: 30000 }, opcje || {});
     if (!o.aplikacja) throw new Error('Hala.utworz: podaj aplikacja');
+    const nazwaPamieci = o.pamiec || o.aplikacja;
     const ls = bezpiecznyLocalStorage();
     const sluchacze = {};
     const stanSerwera = new Map();       // 'typ|id' -> obiekt (ostatni stan z huba)
@@ -847,17 +866,14 @@
     h.zmienPin = async (stary, nowy) => {
       const z = h.pracownik ? znacznikDla(h.pracownik.nazwa) : null;
       const r = await api('POST', '/api/v1/zmien-pin', { stary: String(stary || ''), nowy: String(nowy || ''), znacznik: z ? z.znacznik : null });
-      if (r && r.znacznik) zapamietajZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
+      if (r && r.znacznik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
       return r;
     };
     /* Zmiana własnego hasła (D43 §4): obecne hasło + nowe. Hub kończy inne sesje i zaufanie WSZYSTKICH urządzeń osoby,
        a to urządzenie dostaje nowy znacznik (12 h) — zapisujemy go od razu. */
     h.zmienHaslo = async (stare, nowe) => {
       const r = await api('POST', '/api/v1/zmien-haslo', { stare: String(stare || ''), nowe: String(nowe || '') });
-      if (r && r.znacznik && h.pracownik) {
-        zapomnijOsobe(h.pracownik);
-        zapamietajZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
-      }
+      if (r && r.znacznik && h.pracownik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
       return r;
     };
     /* Zestawienie CSV z huba (GET /api/v1/eksport/<rodzaj>.csv?od=&do=) jako plik w urządzeniu. Plik idzie z tokenem
@@ -877,7 +893,10 @@
         try { dane = await r.json(); } catch (e) { dane = null; }
         if (toNieHub(r.status, dane)) bladSieci();
         if (r.status === 401 && tokenZapytania && token === tokenZapytania) await utracSesje();
-        const e = new Error((dane && dane.blad) || `HTTP ${r.status}`); e.kod = r.status; throw e;
+        // odHuba jak w api(): „HTTP 530” od Cloudflare (zgaszony tunel) to brak połączenia, a nie odmowa huba —
+        // pasek „Do Excela” mówi wtedy po polsku, że potrzebne jest połączenie, zamiast pokazać kod.
+        const e = new Error((dane && dane.blad) || `HTTP ${r.status}`); e.kod = r.status; e.odHuba = !!(dane && typeof dane === 'object');
+        throw e;
       }
       const plik = await r.blob();
       const z = /filename="([^"]+)"/.exec(r.headers && r.headers.get ? r.headers.get('Content-Disposition') || '' : '');
@@ -1025,11 +1044,23 @@
       return id;
     };
 
-    const adresyLokalne = new Map();
+    /* Adresy blob: podglądów zdjęć z telefonu. Najwyżej MAKS_ADRESOW naraz — najstarszy zwalniamy: telefon lidera i monitor
+       mają stronę otwartą całą zmianę (albo tygodniami), a każdy adres trzyma zdjęcie w pamięci do zamknięcia strony.
+       Zwolniony adres przy następnym rysowaniu ekran dostaje od nowa. */
+    const adresyLokalne = new Map(), MAKS_ADRESOW = 40;
     h.adresPliku = async id => {
       if (adresyLokalne.has(id)) return adresyLokalne.get(id);
       const w = await dzialanie(db, 'pliki', 'readonly', s => s.get(id));
-      if (w && w.blob) { const u = URL.createObjectURL(w.blob); adresyLokalne.set(id, u); return u; }
+      if (w && w.blob) {
+        const u = URL.createObjectURL(w.blob);
+        adresyLokalne.set(id, u);
+        while (adresyLokalne.size > MAKS_ADRESOW) {
+          const [najstarszy, stary] = adresyLokalne.entries().next().value;
+          adresyLokalne.delete(najstarszy);
+          try { URL.revokeObjectURL(stary); } catch (e) { /* stara przeglądarka */ }
+        }
+        return u;
+      }
       return `${hub}/api/v1/pliki/${encodeURIComponent(id)}`;
     };
 
@@ -1040,12 +1071,20 @@
 
     // --- synchronizacja: najpierw pliki, potem zdarzenia, potem to, co nowego w hubie
     h.synchronizuj = async () => {
-      if (synchronizuje || !token || !db) return;
+      if (!token || !db) return;
+      // Trwa wysyłka: ten zapis mógł przyjść już po wyliczeniu paczki (np. w czasie dociągania) — bez ponowienia czekałby
+      // na następny cykl co 20 s, a to bywa zgłoszenie awarii. Jedno ponowienie zaraz po bieżącej wysyłce.
+      if (synchronizuje) { synchronizujPonownie = true; return; }
       synchronizuje = true;
+      // Osoba i jej token z jednej chwili: gdy w trakcie zaloguje się ktoś inny, nie wysyłamy jego zapisów ani plików
+      // tokenem poprzedniej osoby (ani odwrotnie) — przerywamy, a ponowienie wyśle je już właściwym tokenem.
+      const mojToken = token, ja = h.pracownik.id;
+      const innaOsoba = () => token !== mojToken;
       try {
         const pliki = await dzialanie(db, 'pliki', 'readonly', s => s.getAll());
         let bladPlikow = null;
-        for (const p of pliki.filter(p => !p.wyslany && !p.odrzucony && (!p.autor || p.autor === h.pracownik.id))) {
+        for (const p of pliki.filter(p => !p.wyslany && !p.odrzucony && (!p.autor || p.autor === ja))) {
+          if (innaOsoba()) break;
           try {
             await api('PUT', `/api/v1/pliki/${encodeURIComponent(p.id)}`, p.blob, { naglowki: { 'Content-Type': p.mime || 'image/jpeg' } });
             p.wyslany = true; p.wyslanyKiedy = Date.now();
@@ -1061,9 +1100,9 @@
           }
           await dzialanie(db, 'pliki', 'readwrite', s => s.put(p));
         }
-        let moje = kolejkaCache.filter(w => w.autor === h.pracownik.id);
+        let moje = kolejkaCache.filter(w => w.autor === ja);
         let rozmiar = PACZKA;
-        while (moje.length) {
+        while (moje.length && !innaOsoba()) {
           const paczka = moje.slice(0, rozmiar);
           let r;
           try {
@@ -1090,7 +1129,7 @@
           });
           for (const w of paczka) { const x = wyniki.get(w.zd.id); if (x && x.status === 'odrzucone') emituj('odrzucone', { zdarzenie: w.zd, powod: x.powod }); }
           await odswiezKolejke();
-          moje = kolejkaCache.filter(w => w.autor === h.pracownik.id);
+          moje = kolejkaCache.filter(w => w.autor === ja);
           if (paczka.every(w => !wyniki.has(w.zd.id))) break;       // hub nic nie rozpoznał — nie kręcimy się w kółko
         }
         await dociagnij();
@@ -1103,6 +1142,7 @@
         h.polaczenie.blad = e.message;
       } finally {
         synchronizuje = false;
+        if (innaOsoba()) synchronizujPonownie = true;
         emituj('polaczenie', Object.assign({}, h.polaczenie));
         if (synchronizujPonownie) { synchronizujPonownie = false; setTimeout(() => h.synchronizuj(), 0); }
       }
@@ -1242,11 +1282,11 @@
        Wylogowanie go nie kasuje — po to jest: następne logowanie tej osoby PIN-em. */
     // Klucz zawsze z przedrostkiem 'hala.' (t_dostep.py → WspolneZrodlo sprawdza wszystkie getItem/setItem).
     function czytajZnaczniki() {
-      try { const m = JSON.parse((ls && ls.getItem('hala.' + o.aplikacja + '.znaczniki')) || '{}'); return m && typeof m === 'object' ? m : {}; }
+      try { const m = JSON.parse((ls && ls.getItem('hala.' + nazwaPamieci + '.znaczniki')) || '{}'); return m && typeof m === 'object' ? m : {}; }
       catch (e) { return {}; }
     }
     function zapiszZnaczniki(m) {
-      try { if (ls) ls.setItem('hala.' + o.aplikacja + '.znaczniki', JSON.stringify(m)); } catch (e) { /* pełna pamięć — następnym razem hasło */ }
+      try { if (ls) ls.setItem('hala.' + nazwaPamieci + '.znaczniki', JSON.stringify(m)); } catch (e) { /* pełna pamięć — następnym razem hasło */ }
     }
     function znacznikDla(ident) {
       const k = loginZNazwy(ident);
@@ -1266,8 +1306,16 @@
       for (const k of Object.keys(m)) if (m[k] && m[k].znacznik === znacznik) delete m[k];
       zapiszZnaczniki(m);
     }
-    function zapomnijOsobe(p) {
-      for (const k of [p && p.nazwa, p && p.id]) { const z = znacznikDla(k); if (z) zapomnijZnacznik(z.znacznik); }
+    /* Nowy znacznik osoby (logowanie hasłem, zmiana hasła albo PIN-u, „Ustaw hasło i PIN”): pod podanymi kluczami i pod
+       KAŻDYM innym, który trzymał jej poprzedni znacznik (np. karta K1001, gdy tym razem wpisała imię i nazwisko). Hub
+       stary znacznik unieważnia — zostawiony pod kartą dawał przy następnym logowaniu kartą pole PIN, a po wpisaniu
+       PIN-u „wpisz hasło”. */
+    function przepiszZnacznik(r, klucze) {
+      const m = czytajZnaczniki();
+      const kl = klucze.map(loginZNazwy).filter(Boolean);
+      const stare = new Set(kl.map(k => m[k] && m[k].znacznik).filter(Boolean));
+      for (const k of Object.keys(m)) if (m[k] && stare.has(m[k].znacznik)) kl.push(k);
+      zapamietajZnacznik(r, kl);
     }
     /* 'pin' — ta osoba ma na tym urządzeniu ważny znacznik (pole „PIN (4 cyfry)”), inaczej 'haslo'. */
     h.trybLogowania = ident => (znacznikDla(ident) ? 'pin' : 'haslo');
@@ -1292,7 +1340,7 @@
         if (e && e.powod === 'wymagane_haslo' && z) zapomnijZnacznik(z.znacznik);
         throw e;
       }
-      if (r.znacznik) zapamietajZnacznik(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
+      if (r.znacznik) przepiszZnacznik(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
       if (r.do_ustawienia && r.do_ustawienia.length) {
         ustawienie = { token: r.token, pracownik: r.pracownik, doUstawienia: r.do_ustawienia.slice(), ident };
         const e = new Error('Ustaw nowe hasło i PIN.');
@@ -1311,19 +1359,18 @@
       const r = await api('POST', '/api/v1/ustaw-konto', { haslo: String((dane && dane.haslo) || ''), pin: String((dane && dane.pin) || '') },
                           { bezSesji: true, naglowki: { Authorization: 'Bearer ' + u.token } });
       ustawienie = null;
-      if (r.znacznik) {
-        zapomnijOsobe(r.pracownik);
-        zapamietajZnacznik(r, [u.ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
-      }
+      if (r.znacznik) przepiszZnacznik(r, [u.ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
       if (!r.token) { const e = new Error(r.brak_dostepu || 'Brak dostępu do tej aplikacji'); e.kod = 403; e.ustawione = true; throw e; }
       return zakonczLogowanie(r);
     };
     h.anulujUstawienie = () => { ustawienie = null; };
     async function zakonczLogowanie(r) {
+      // Osoba i token RAZEM, bez await pomiędzy: synchronizacja, która wpadła między nie (co 20 s, zmiana osoby bez
+      // „Wyjdź”), wysyłała zapisy nowej osoby tokenem poprzedniej — hub przypisywał je nie temu człowiekowi.
       h.pracownik = r.pracownik;
-      await pamiec.zapisz('pracownik', h.pracownik);     // najpierw osoba, potem token (patrz start)
       token = r.token;
       przerwijBiezacyStrumien();                         // zmiana osoby bez „Wyjdź”: strumień poprzedniej sesji
+      await pamiec.zapisz('pracownik', h.pracownik);     // na dysk najpierw osoba, potem token (patrz start)
       await pamiec.zapisz('token', token);
       try {
         await wczytajKontrakt();
@@ -1344,19 +1391,34 @@
       await pamiec.usun('token');
       // Kolejka ZOSTAJE: zapisy tej osoby poczekają, aż zaloguje się ponownie.
       emituj('sesja', { zalogowany: false, pracownik: h.pracownik });
+      // Podglądy zdjęć tej osoby (adresy blob:) zwalniamy — następna osoba ma swoje ekrany, a pamięć strony nie rośnie.
+      for (const u of adresyLokalne.values()) { try { URL.revokeObjectURL(u); } catch (e) { /* stara przeglądarka */ } }
+      adresyLokalne.clear();
       // Wylogowanie w hubie w tle, bez czekania: przy hubie, który nie odpowiada (wifi jest, huba nie ma),
       // „Wyjdź” wisiało do limitu TCP, a następna osoba nie mogła się zalogować.
-      if (stary && navigator.onLine) {
-        const naglowki = { Authorization: 'Bearer ' + stary, 'X-Hala-Urzadzenie': urzadzenie(), 'Content-Type': 'application/json' };
-        // Najpierw wypisanie telefonu z powiadomień push TEJ osoby (wspólny telefon: następna osoba nie może
-        // dostawać cudzych awarii), dopiero potem koniec sesji — po nim stary token już nic nie może.
-        subskrypcjaPush()
-          .then(sub => sub && fetch(hub + '/api/v1/push/wypisz', { method: 'POST', cache: 'no-store', headers: naglowki,
-                                                                  body: JSON.stringify({ endpoint: sub.endpoint }) }))
-          .catch(() => {})
-          .then(() => fetch(hub + '/api/v1/wyloguj', { method: 'POST', cache: 'no-store', body: '{}', headers: naglowki }))
-          .catch(() => {});
-      }
+      if (!stary) return;
+      const naglowki = { Authorization: 'Bearer ' + stary, 'X-Hala-Urzadzenie': urzadzenie(), 'Content-Type': 'application/json' };
+      // Najpierw wypisanie telefonu z powiadomień push TEJ osoby (wspólny telefon: następna osoba nie może
+      // dostawać cudzych awarii), dopiero potem koniec sesji — po nim stary token już nic nie może. Gdy hub telefonu
+      // nie wypisał (brak sieci, hub nie odpowiada), wypisujemy go u serwera push przeglądarki — wcześniej przy
+      // wylogowaniu bez sieci telefon dalej dostawał awarie osoby, która wyszła. Następne logowanie zapisze go od nowa
+      // (odnowPush — zgoda już jest), a hub sam usunie martwy adres po odpowiedzi 410.
+      const wypiszPush = async () => {
+        const sub = await subskrypcjaPush();
+        if (!sub) return;
+        try {
+          if (!navigator.onLine) throw new Error('bez sieci');
+          const r = await fetch(hub + '/api/v1/push/wypisz', { method: 'POST', cache: 'no-store', headers: naglowki,
+                                                               body: JSON.stringify({ endpoint: sub.endpoint }) });
+          if (!r || !r.ok) throw new Error('HTTP ' + (r && r.status));
+        } catch (e) {
+          try { await sub.unsubscribe(); } catch (e2) { /* i tak próbowaliśmy */ }
+        }
+      };
+      wypiszPush()
+        .catch(() => {})
+        .then(() => (navigator.onLine ? fetch(hub + '/api/v1/wyloguj', { method: 'POST', cache: 'no-store', body: '{}', headers: naglowki }) : null))
+        .catch(() => {});
     };
 
     // --- powiadomienia push przy zamkniętej aplikacji (O4 → D28)
@@ -1460,7 +1522,7 @@
 
     // --- start
     h.start = async () => {
-      db = await otworzBaze('hala-' + o.aplikacja);
+      db = await otworzBaze('hala-' + nazwaPamieci);
       hub = await ustalHub();
       token = (await pamiec.czytaj('token')) || null;
       h.pracownik = (await pamiec.czytaj('pracownik')) || null;

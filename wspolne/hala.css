@@ -333,8 +333,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
   }
   .hala-uklad > .hala-menu > :is(a, button) {
     flex: 1 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    min-height: 0; margin: 0; padding: 6px 2px; border: 0; border-radius: 0; background: none; box-shadow: none; filter: none;
-    font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--tekst-slaby); text-decoration: none; text-align: center;
+    min-height: 0; margin: 0; padding: 6px 0; border: 0; border-radius: 0; background: none; box-shadow: none; filter: none;
+    /* 13 px (szlif UI 2026-10-12): 11 px było za drobne do czytania na hali. Bez bocznego odstępu i z odrobinę ciaśniejszymi
+       literami „Reklamacje” (KJ) i „Przeglądy” (UR) mieszczą się w 6 pozycjach na 390 px. Dłuższy podpis przycinamy w swojej
+       pozycji, zamiast pozwolić mu wjechać na sąsiada (Panel z 7 pozycjami chowa podpisy na wąskim telefonie — panel.css). */
+    font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: -.2px; color: var(--tekst-slaby); text-decoration: none;
+    text-align: center; overflow: hidden; white-space: nowrap;
   }
   .hala-uklad > .hala-menu .ikona { font-size: 20px; line-height: 1; }
   .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny) {
@@ -386,6 +390,22 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-zlecenie-zdjecie { display: flex; align-items: center; justify-content: center; min-height: var(--dotyk); border: 1px dashed var(--ramka-mocna);
                          border-radius: 10px; font-weight: 600; cursor: pointer; }
 .hala-zlecenie-blad { margin: 0; color: var(--czerwony); font-weight: 700; }
+/* Zdjęcie do formularza (szlif UI 2026-10-12) — wspólne dla aplikacji hali: przycisk „📷 Dodaj zdjęcie” zamiast surowego
+   „Wybierz plik / Nie wybrano pliku” przeglądarki; po wyborze obok miniatura i nazwa pliku. Pole pliku leży niewidoczne NA
+   przycisku (dotknięcie trafia prosto w nie — iPhone nie otwiera aparatu z input.click()), fokus z klawiatury obrysowuje przycisk.
+   <div class="hala-zdjecie"><label class="hala-zdjecie-przycisk"><input type="file" accept="image/*"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
+     <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span></div>
+   Selektor z rodzicem (.hala-zdjecie > label) — mocniejszy niż „dialog.okno label” aplikacji, więc przycisk wygląda wszędzie tak samo. */
+.hala-zdjecie { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hala-zdjecie > label.hala-zdjecie-przycisk { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--dotyk); padding: 0 16px; box-sizing: border-box; border: 1px dashed var(--ramka-mocna); border-radius: 10px;
+  background: var(--pole-tlo); color: var(--tekst); font-size: 15px; font-weight: 600; cursor: pointer; }
+.hala-zdjecie > label.hala-zdjecie-przycisk:hover { filter: brightness(var(--hover-jasnosc)); }
+.hala-zdjecie > label.hala-zdjecie-przycisk:focus-within { outline: 2px solid var(--akcent); outline-offset: 1px; }
+.hala-zdjecie > label.hala-zdjecie-przycisk > input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0;
+  margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.hala-zdjecie-miniatura { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); }
+.hala-zdjecie-nazwa { flex: 1 1 120px; min-width: 0; font-size: 13px; color: var(--tekst-slaby); overflow-wrap: anywhere; }
 /* D31: termin po ludzku, zdjęcia i notatka jako dowód wykonania (jak dowód dostawy w GK Trasy). */
 .hala-zlecenie-termin { margin-top: 6px; font-weight: 700; }
 .hala-zlecenie-termin.po-terminie-tekst { color: var(--czerwony); }

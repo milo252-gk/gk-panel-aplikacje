@@ -28,7 +28,7 @@
   const tytul = klucz => `title="${esc(M.title(klucz))}"`;
   function kafle(k, plan) {
     return `<div class="kafle-liczb">
-      <div ${tytul('awarie')}><span>Awarie${M.przycisk('awarie')}</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone} · zatrzymania linii ${k.zatrzymania}</small></div>
+      <div ${tytul('awarie')}><span>Awarie${M.przycisk('awarie')}</span><b>${k.liczba}</b><small>zakończone ${k.zakonczone} · ${W.wieleLinii(hala.slowniki) ? 'zatrzymania linii' : 'zatrzymania maszyn'} ${k.zatrzymania}</small></div>
       <div ${tytul('mttr')}><span>MTTR${M.przycisk('mttr')}</span><b>${esc(czas(k.mttrMs))}</b><small>średni czas naprawy</small></div>
       <div ${tytul('mtbf')}><span>MTBF${M.przycisk('mtbf')}</span><b>${esc(czas(k.mtbfMs))}</b><small>średni czas pracy między awariami zatrzymującymi</small></div>
       <div ${tytul('reakcja')}><span>Reakcja${M.przycisk('reakcja')}</span><b>${esc(czas(k.reakcjaMs))}</b><small>do przyjęcia</small></div>
@@ -61,8 +61,14 @@
 
   UR.ekran('kpi', {
     rysuj(el) {
+      // UI etap 2: KPI ogląda kierownik UR (zakładka schowana mechanikom) — stary adres #kpi u mechanika nic nie liczy.
+      if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">KPI ogląda kierownik UR.</p>'; return; }
       const k = UR.kontekst();
       const u = Object.assign({ okres: '30', linia: '', maszyna: '' }, ustawienia.czytaj());
+      // Filtr z pamięci telefonu sprawdzony ze słownikami: linia/maszyna, której już nie ma, dawała same zera przy
+      // liście „Wszystkie” (audyt 2026-10-12). Przy jednej linii filtra linii nie ma (D51).
+      const wiele = W.wieleLinii(k.slowniki);
+      Object.assign(u, W.filtryKpi(u, k.slowniki));
       // „Zakres” tylko z dziś (HalaMiary.pamiecZakresu); jutro KPI wraca do 30 dni.
       const zd = pamiecZakresu.czytaj();
       if (u.okres === 'zakres' && !zd.wybrany) u.okres = '30';
@@ -70,9 +76,10 @@
       if (u.okres === 'zakres' && zakres.blad) bladZakresu = zakres.blad;
       const okres = W.okresKpi(u.okres, k.teraz, zakres.blad ? null : zakres);
       // Telefon trzyma przeglądy z ~30 dni: dla dłuższych okresów kafel planu mówi uczciwie „30 dni”,
-      // zamiast pokazywać miesiąc pod etykietą roku (błąd z przeglądu kodu).
-      const plan = Object.assign(W.wykonaniePlanu({ przeglady: hala.obiekty('przeglad'),
-        od: okres.zHuba ? W.okresKpi('30', k.teraz).od : okres.od, do: okres.doPlanu, teraz: k.teraz }), { tylko30: okres.zHuba });
+      // zamiast pokazywać miesiąc pod etykietą roku (błąd z przeglądu kodu); zakres w całości starszy — bez kafla.
+      const okno = W.oknoPlanuKpi(okres, k.teraz);
+      const plan = okno ? Object.assign(W.wykonaniePlanu({ przeglady: hala.obiekty('przeglad'), od: okno.od, do: okno.do, teraz: k.teraz }),
+        { tylko30: okno.tylko30 }) : null;
       const klucz = `${u.okres === 'zakres' ? `${okres.od}~${okres.do}` : u.okres}|${u.linia}|${u.maszyna}`;
       let wynik = null, zrodlo = '';
       if (!okres.zHuba) {
@@ -83,14 +90,14 @@
         zrodlo = 'Policzone w telefonie.';
       } else if (zHuba.has(klucz)) {
         wynik = zHuba.get(klucz).wynik;
-        zrodlo = `Policzone przez hub o ${W.godzina(zHuba.get(klucz).kiedy)}.`;
+        zrodlo = `Policzone na serwerze o ${W.godzina(zHuba.get(klucz).kiedy)}.`;
       }
       const maszyny = W.maszyny(k.slowniki).filter(m => !u.linia || m.linia === u.linia);
       el.innerHTML = `<h1>KPI</h1>
         <div class="filtry">
           <div class="wybor" id="okres">${W.OKRESY.map(o => `<button type="button" data-okres="${o.kod}" aria-pressed="${u.okres === o.kod}">${esc(o.nazwa)}</button>`).join('')}<button type="button" data-okres="zakres" aria-pressed="${u.okres === 'zakres'}">Zakres</button></div>
           <div class="filtry-listy">
-            <select id="f-linia" aria-label="Linia"><option value="">Wszystkie linie</option>${W.linie(k.slowniki).map(l => `<option value="${esc(l.kod)}" ${u.linia === l.kod ? 'selected' : ''}>${esc(l.nazwa)}</option>`).join('')}</select>
+            ${wiele ? `<select id="f-linia" aria-label="Linia"><option value="">Wszystkie linie</option>${W.linie(k.slowniki).map(l => `<option value="${esc(l.kod)}" ${u.linia === l.kod ? 'selected' : ''}>${esc(l.nazwa)}</option>`).join('')}</select>` : ''}
             <select id="f-maszyna" aria-label="Maszyna"><option value="">Wszystkie maszyny</option>${maszyny.map(m => `<option value="${esc(m.kod)}" ${u.maszyna === m.kod ? 'selected' : ''}>${esc(m.nazwa)}</option>`).join('')}</select>
           </div>
         </div>
@@ -98,10 +105,10 @@
         ${u.okres === 'zakres' && !bladZakresu ? `<p class="slaby">Zakres: ${esc(okres.nazwa)}</p>` : ''}
         <div id="wynik-kpi">${bladZakresu && u.okres === 'zakres' ? '' : wynik ? `${kafle(wynik, plan)}
           <h2>Maszyny — najdłuższy przestój</h2>${tabelaMaszyn(wynik.maszyny)}
-          ${u.linia ? '' : `<h2>Linie</h2>${tabelaLinii(wynik.linie)}`}
+          ${u.linia || !wiele ? '' : `<h2>Linie</h2>${tabelaLinii(wynik.linie)}`}
           <h2>Typy usterek</h2>${tabelaTypow(wynik.typy, k.stale)}
           <p class="slaby stopka">${esc(zrodlo)} MTTR: od zgłoszenia do „Zakończona przez UR”. Przestój: do potwierdzenia lidera. Anulowane się nie liczą.</p>`
-          : `<p class="pusto" id="kpi-hub">${UR.online() ? 'Liczę w hubie…' : 'Dłuższe okresy liczy hub — potrzebna sieć. Bez sieci wybierz 7 albo 30 dni.'}</p>`}</div>
+          : `<p class="pusto" id="kpi-hub">${UR.online() ? 'Liczę na serwerze…' : 'Dłuższe okresy liczy serwer — potrzebna sieć. Bez sieci wybierz 7 albo 30 dni.'}</p>`}</div>
         <div id="eksport-csv"></div>`;
       // Kierownik UR: awarie do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32; mechanik go nie widzi).
       global.HalaEksport.rysuj(el.querySelector('#eksport-csv'), hala, { rodzaje: ['awarie'], komunikat: (t, r) => UR.komunikat(t, r) });
@@ -126,7 +133,7 @@
         UR.odswiez('wymus');
       });
       M.podlacz(el);
-      el.querySelector('#f-linia').addEventListener('change', ev => { ustawienia.zapisz(Object.assign(u, { linia: ev.target.value, maszyna: '' })); UR.odswiez('wymus'); });
+      if (wiele) el.querySelector('#f-linia').addEventListener('change', ev => { ustawienia.zapisz(Object.assign(u, { linia: ev.target.value, maszyna: '' })); UR.odswiez('wymus'); });
       el.querySelector('#f-maszyna').addEventListener('change', ev => { ustawienia.zapisz(Object.assign(u, { maszyna: ev.target.value })); UR.odswiez('wymus'); });
       if (okres.zHuba && !wynik && UR.online() && !(u.okres === 'zakres' && bladZakresu)) pobierz(klucz, okres, u);
     },
@@ -150,7 +157,8 @@
       UR.odswiez('wymus');
     } catch (e) {
       const p = document.getElementById('kpi-hub');
-      const tekst = e.kod === 403 ? 'To konto nie widzi KPI z huba.' : `Hub nie policzył KPI: ${UR.komunikatBledu(e)} Spróbuj za minutę.`;
+      // W.bladZapytania, nie komunikat logowania: było „…Sprawdź sieć i spróbuj jeszcze raz. Spróbuj za minutę.” (audyt 2026-10-12).
+      const tekst = e.kod === 403 ? 'To konto nie widzi KPI z serwera.' : `Serwer nie policzył KPI: ${W.bladZapytania(e)} Spróbuj za minutę.`;
       bledy.set(klucz, { tekst, do: Date.now() + 60000 });
       if (p) p.textContent = tekst;
     } finally {

@@ -27,6 +27,9 @@
       .map(([kod, w]) => ({ kod, nazwa: (w && w.nazwa) || kod }));
 
   const nazwaLinii = (slowniki, kod) => (((slowniki || {}).linie || {})[kod] || {}).nazwa || kod || '—';
+  /* D51: zakład z jedną (schowaną) linią „Hala” — jej nazwa przy awarii, raporcie czy osobie to szum („WT-02 · Hala”).
+     Pusto, gdy linia jest jedna; nazwa, gdy w słowniku są dwie albo więcej (starsze dane, zakład testowy). */
+  const liniaWidoczna = (slowniki, kod) => (wieleLinii(slowniki) ? nazwaLinii(slowniki, kod) : '');
 
   /* Godzina zakładu (Europe/Warsaw), niezależnie od strefy ustawionej w monitorze. */
   function godzina(chwila) {
@@ -62,6 +65,7 @@
   function obchody({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale }) {
     if (!zmiana) return [];
     const zatrzymuje = kodyZatrzymujace(stale);
+    const wiele = wieleLinii(slowniki);
     return liniePosortowane(slowniki).map(({ kod, nazwa }) => {
       const klucz = `${kod}/${zmiana.id}`;
       const zl = zmianaLinii(klucz);
@@ -75,6 +79,8 @@
       const naLinii = (awarie || []).filter(a => a.aktywny && a.linia === kod);
       return {
         linia: kod, nazwa, klucz,
+        // Jedna linia (D51): kafelek to po prostu checklista lidera — nazwa „Hala” nic tu nie mówi.
+        naglowek: wiele ? nazwa : 'Checklista lidera',
         kolor: k.kolor, zrobione: k.zrobione, wszystkie: k.wszystkie,
         otwarta: !!(zl && zl.status === 'otwarta' && !wirtualna),
         zamknieta: !!(zl && zl.status === 'zamknieta'),
@@ -96,6 +102,18 @@
     return new Set(lista.filter(p => p.zatrzymuje).map(p => p.kod));
   }
 
+  /* Nazwa priorytetu na ekranie. Kontrakt mówi „Zatrzymanie linii”, ale w zakładzie z jedną (schowaną) linią stoi
+     maszyna, nie linia — kierownik widzi „Maszyna stoi”. Kod priorytetu się nie zmienia (UR, raporty, wskaźniki). */
+  const MASZYNA_STOI = 'Maszyna stoi';
+  function nazwaPriorytetu(p, slowniki) {
+    if (!p) return '—';
+    return p.zatrzymuje && !wieleLinii(slowniki) ? MASZYNA_STOI : (p.nazwa || p.kod || '—');
+  }
+  /* Opcje „Priorytet” w oknie „Zgłoś awarię”: [[kod, nazwa]] w kolejności kontraktu. */
+  function priorytetyDoWyboru(stale, slowniki) {
+    return ((stale && stale.priorytety) || []).map(p => [p.kod, nazwaPriorytetu(p, slowniki)]);
+  }
+
   /* Najpierw zatrzymania linii, potem od najdłuższego przestoju (KONTRAKT §6.1).
      Awaria, którą UR skończył, a lider nie potwierdził dłużej niż
      alarm_potwierdzenia_min, dostaje alarm — linia pewnie już stoi „na papierze”. */
@@ -106,7 +124,7 @@
     const maszyny = (slowniki && slowniki.maszyny) || {};
     const wiersze = (lista || []).filter(a => a && a.aktywny).map(a => {
       const d = a.dane || {};
-      const p = priorytety.get(d.priorytet) || { kod: d.priorytet, nazwa: d.priorytet || '—' };
+      const p = priorytety.get(d.priorytet) || { kod: d.priorytet, nazwa: d.priorytet || '—', zatrzymuje: zatrzymuje.has(d.priorytet) };
       let etykieta = a.etykieta || a.status;
       if (a.status === 'wstrzymana' && d.powod_wstrzymania)
         etykieta = `Wstrzymana — ${powody.get(d.powod_wstrzymania) || d.powod_wstrzymania}`;
@@ -118,8 +136,8 @@
       return {
         id: a.id, numer: a.numer || '—', oczekuje: !!a._oczekuje,
         maszyna: d.maszyna || '—', maszynaNazwa: (maszyny[d.maszyna] || {}).nazwa || d.maszyna || '—',
-        linia: a.linia, liniaNazwa: nazwaLinii(slowniki, a.linia),
-        priorytet: p.kod, priorytetNazwa: p.nazwa, zatrzymuje: zatrzymuje.has(d.priorytet),
+        linia: a.linia, liniaNazwa: liniaWidoczna(slowniki, a.linia),       // jedna linia — pusto (wiersz: samo „WT-02”)
+        priorytet: p.kod, priorytetNazwa: nazwaPriorytetu(p, slowniki), zatrzymuje: zatrzymuje.has(d.priorytet),
         status: a.status, etykieta,
         mechanik: nazwaPracownika(pracownicy, d.mechanik),
         opis: d.opis || '',
@@ -140,7 +158,7 @@
     return !isNaN(t) && t >= Date.parse(zmiana.od) && t < Date.parse(zmiana.do);
   };
 
-  /* Partie brakowe i nowe Quality Alerty z BIEŻĄCEJ zmiany (specyfikacja 2.1).
+  /* Partie brakowe i nowe alerty jakości (Quality Alert) z BIEŻĄCEJ zmiany (specyfikacja 2.1).
      Aktywne z wcześniejszych zmian tylko liczymy — kierownik ma wiedzieć, że są,
      ale lista „co się dziś stało” nie może nimi zarosnąć.                       */
   function incydenty({ partie, alerty, slowniki, zmiana, teraz }) {
@@ -154,7 +172,7 @@
       if (!wOknie(d.czas_oznaczenia, zmiana)) { wynik.wczesniej.partie++; continue; }
       wynik.lista.push({
         rodzaj: 'partia', id: p.id, numer: p.numer || '—', czas: d.czas_oznaczenia, godz: godzina(d.czas_oznaczenia),
-        linia: p.linia || d.linia, liniaNazwa: nazwaLinii(slowniki, p.linia || d.linia),
+        linia: p.linia || d.linia, liniaNazwa: liniaWidoczna(slowniki, p.linia || d.linia),
         wyrob: d.wyrob ? ((wyroby[d.wyrob] || {}).nazwa || d.wyrob) : null,
         zlecenie: d.zlecenie || d.partia || null, ilosc: d.ilosc === undefined ? null : d.ilosc, powod: d.powod || '',
       });
@@ -171,7 +189,8 @@
         rodzaj: 'alert', id: a.id, numer: a.numer || '—', czas: d.czas_publikacji, godz: godzina(d.czas_publikacji),
         tytul: d.tytul || '', wszystkieLinie: !(d.linie && d.linie.length),
         linie, potwierdzone: linie.filter(l => potw[l]), brakuje: linie.filter(l => !potw[l]),
-        brakujeNazwy: linie.filter(l => !potw[l]).map(l => nazwaLinii(slowniki, l)),
+        // Jedna linia: „brak: Hala” nic nie mówi — samo „0/1” wystarczy.
+        brakujeNazwy: wieleLinii(slowniki) ? linie.filter(l => !potw[l]).map(l => nazwaLinii(slowniki, l)) : [],
       });
     }
     wynik.lista.sort((x, y) => String(y.czas).localeCompare(String(x.czas)));
@@ -202,7 +221,7 @@
         if (zl && zl.dane && zl.dane.raport) continue;
         const szablon = H().szablonDla(slowniki, l.kod, z.nr);
         if (!zl && !(szablon && (szablon.pozycje || []).length)) continue;
-        wynik.push({ klucz: `${l.kod}/${z.id}`, linia: l.kod, liniaNazwa: l.nazwa, zmiana: z.id, zmianaOpis: opisZmiany(z.id, slowniki),
+        wynik.push({ klucz: `${l.kod}/${z.id}`, linia: l.kod, liniaNazwa: liniaWidoczna(slowniki, l.kod), zmiana: z.id, zmianaOpis: opisZmiany(z.id, slowniki),
                      koniec: z.do, otwarta: !!(zl && ((zl.dane || {}).pozycje || []).length), lider: zl ? nazwaPracownika(pracownicy, (zl.dane || {}).lider) : null });
       }
     }
@@ -210,6 +229,8 @@
   }
 
   // ------------------------------------------------------------ raporty zmian (D16)
+
+  const liczbaLubNull = v => (typeof v === 'number' && isFinite(v) ? v : null);
 
   function raporty({ zmianyLinii, slowniki, pracownicy, limit }) {
     return (zmianyLinii || [])
@@ -223,19 +244,21 @@
         const pr = r.proby || {};
         return {
           klucz: z.id, czas: d.czas_zamkniecia || z.zmieniono,
-          linia: r.linia || z.linia || linia, liniaNazwa: nazwaLinii(slowniki, r.linia || z.linia || linia),
+          linia: r.linia || z.linia || linia, liniaNazwa: liniaWidoczna(slowniki, r.linia || z.linia || linia),
           zmiana: idZmiany, zmianaOpis: opisZmiany(idZmiany, slowniki),
           lider: nazwaPracownika(pracownicy, r.lider || d.lider),
-          checklista: { zrobione: ch.zrobione === undefined ? null : ch.zrobione, wszystkie: ch.wszystkie === undefined ? null : ch.wszystkie,
-                        opoznione: (ch.opoznione || []).length, pominiete: (ch.pominiete || []).length },
+          // Podsumowanie pisze telefon lidera, a hub sprawdza tylko, że to obiekt — liczby muszą być liczbami,
+          // inaczej tekst z raportu trafiłby do innerHTML Panelu kierownika (XSS).
+          checklista: { zrobione: liczbaLubNull(ch.zrobione), wszystkie: liczbaLubNull(ch.wszystkie),
+                        opoznione: Array.isArray(ch.opoznione) ? ch.opoznione.length : 0, pominiete: Array.isArray(ch.pominiete) ? ch.pominiete.length : 0 },
           obsada: r.obsada || null,
           // Raport wersja 2 (etap 3) niesie przestój LINII (nakładające się awarie raz, przycięty do zmiany);
           // stary raport (wersja 1) go nie ma — wtedy jak dotąd suma przestojów awarii.
           awarie: aw.length, przestojMin: (r.wersja >= 2 && typeof r.przestoj_min === 'number') ? r.przestoj_min : aw.reduce((s, a) => s + (+a.przestoj_min || 0), 0),
           awarieLista: aw.map(a => ({ numer: a.numer || '—', maszyna: a.maszyna || '—', przestojMin: +a.przestoj_min || 0 })),
-          proby: { liczba: pr.liczba || 0, sprawdzone: pr.sprawdzone || 0, braki: pr.braki || 0,
-                   proc: pr.sprawdzone ? Math.round((pr.braki || 0) * 1000 / pr.sprawdzone) / 10 : null },
-          bhp: (r.bhp && r.bhp.zgloszenia) || 0,
+          proby: { liczba: liczbaLubNull(pr.liczba) || 0, sprawdzone: liczbaLubNull(pr.sprawdzone) || 0, braki: liczbaLubNull(pr.braki) || 0,
+                   proc: liczbaLubNull(pr.sprawdzone) ? Math.round((liczbaLubNull(pr.braki) || 0) * 1000 / pr.sprawdzone) / 10 : null },
+          bhp: (r.bhp && liczbaLubNull(r.bhp.zgloszenia)) || 0,
           uwagi: r.uwagi || '',
         };
       })
@@ -253,21 +276,20 @@
     return !isNaN(t) && OTWARTE.has(z.status) && t < teraz;
   };
 
-  /* Wiersze zleceń. filtr: 'otwarte' (dział jeszcze robi) | 'po-terminie' (otwarte, termin minął — egzekwowanie, D31)
-     | 'do-zamkniecia' (dział skończył albo nie może — kierownik przyjmuje albo zwraca) | 'przepadle' (zadanie zmianowe,
-     którego dział nie zrobił do końca swojej zmiany — D35) | 'zamkniete' (także przepadłe) | 'zaplanowane' (D47: kierownik
-     zakładu zaplanował na później — dział jeszcze go nie widzi; od najbliższego startu).
-     Najpierw po terminie (najdłużej spóźnione), potem pilne, potem najstarsze.
+  /* Wiersze zleceń. UI etap 2 (właściciel 2026-10-12) — trzy filtry zamiast sześciu:
+     'otwarte' = „W toku” (dział jeszcze robi; także po terminie i zaplanowane na później — D47, dział ich jeszcze nie widzi)
+     | 'do-zamkniecia' = „Do przyjęcia” (dział skończył albo nie może — kierownik przyjmuje albo zwraca)
+     | 'zamkniete' (także przepadłe zadania zmianowe — D35); inny filtr = wszystkie.
+     Po terminie, przepadłe i zaplanowane to znaczniki na wierszu, nie osobne listy: kierownik widzi je tam, gdzie i tak
+     patrzy. Kolejność: po terminie (najdłużej spóźnione) na górze — tam prowadzi kafelek „Zlecenia po terminie” i push —
+     potem przepadłe, pilne, najstarsze; zaplanowane na samym dole, od najbliższego startu.
      ja = zalogowana osoba: moznaAnulowac — zlecenia kierownika zakładu nie anuluje kierownik UR/KJ (D45, Hala.moznaAnulowacZlecenie). */
   function zlecenia({ zlecenia: lista, slowniki, pracownicy, stale, teraz, filtr, ja }) {
     const dzialy = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
     const maszyny = (slowniki && slowniki.maszyny) || {};
     const szablony = (slowniki && slowniki.zlecenia_stale) || {};
-    const pasuje = z => filtr === 'otwarte' ? OTWARTE.has(z.status)
-      : filtr === 'po-terminie' ? poTerminie(z, teraz)
+    const pasuje = z => filtr === 'otwarte' ? OTWARTE.has(z.status) || z.status === 'zaplanowane'
       : filtr === 'do-zamkniecia' ? DO_ZAMKNIECIA.has(z.status)
-      : filtr === 'przepadle' ? z.status === 'przepadlo'
-      : filtr === 'zaplanowane' ? z.status === 'zaplanowane'
       : filtr === 'zamkniete' ? !z.aktywny : true;
     const zZakladu = ((ja && ja.role) || []).some(r => r === 'kierownik' || r === 'admin');
     return (lista || []).filter(z => z && pasuje(z)).map(z => {
@@ -285,7 +307,7 @@
         id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
         tytul: d.tytul || '', opis: d.opis || '',
         dzial: d.dzial, dzialNazwa: dzialy.get(d.dzial) || d.dzial || '—',
-        liniaNazwa: d.linia ? nazwaLinii(slowniki, d.linia) : null,
+        liniaNazwa: d.linia ? liniaWidoczna(slowniki, d.linia) || null : null,
         maszyna: d.maszyna ? ((maszyny[d.maszyna] || {}).nazwa || d.maszyna) : null,
         pilne: d.priorytet === 'pilne',
         kto: nazwaPracownika(pracownicy, kto),
@@ -294,9 +316,10 @@
         zlecono: godzina(d.czas_zlecenia), zleconoDzien: dataKrotka(d.czas_zlecenia),
         termin: isNaN(termin) ? null : `${dataKrotka(termin)} ${godzina(termin)}`,
         poTerminie: po,
-        spoznienie: po ? `spóźnione o ${H().formatCzasu(teraz - termin)}`
+        // ⏰ — znacznik „po terminie” na wierszu (UI etap 2: osobnego filtra już nie ma).
+        spoznienie: po ? `⏰ spóźnione o ${H().formatCzasu(teraz - termin)}`
           : spoznioneWykonanie ? `wykonane ${H().formatCzasu(wykonano - termin)} po terminie`
-          : przepadlo ? `nie zrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})` : null,
+          : przepadlo ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})` : null,
         przepadlo,
         odpowiedz: d.powod_odrzucenia ? `Nie może: ${d.powod_odrzucenia}` : null,
         notatka: d.uwagi_wykonania || null,
@@ -314,9 +337,39 @@
         moznaZmienic: zaplanowane && zZakladu,
         czas: d.czas_zlecenia || d.czas_zaplanowania || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
       };
-    }).sort((a, b) => (a.zaplanowane && b.zaplanowane ? (a.zaplanowaneMs || 0) - (b.zaplanowaneMs || 0) : 0)
+    }).sort((a, b) => (a.zaplanowane - b.zaplanowane)
+      || (a.zaplanowane && b.zaplanowane ? (a.zaplanowaneMs || 0) - (b.zaplanowaneMs || 0) : 0)
       || (b.poTerminie - a.poTerminie) || (a.poTerminie && b.poTerminie ? a.terminMs - b.terminMs : 0)
+      || (b.przepadlo - a.przepadlo)
       || (b.pilne - a.pilne) || String(a.czas).localeCompare(String(b.czas)));
+  }
+
+  /* Napisy trzech chipów filtra zleceń (UI etap 2). Liczby jak dotąd przy „W toku” i „Do przyjęcia”; to, co miało
+     własne czerwone chipy, zostaje sygnałem na chipie swojej listy — „W toku · 5 · ⏰ 2” (po terminie) i „Zamknięte ·
+     przepadło 1” (D35, dwie ostatnie doby) na czerwono (alarm), żeby egzekwowanie nie zniknęło razem z filtrami. */
+  function chipyZlecen(lista, teraz) {
+    const l = (lista || []).filter(Boolean);
+    const wToku = l.filter(z => OTWARTE.has(z.status) || z.status === 'zaplanowane').length;
+    const po = l.filter(z => poTerminie(z, teraz)).length;
+    const doPrzyjecia = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length;
+    const przepadlo = l.filter(z => z.status === 'przepadlo').length;
+    return [
+      { filtr: 'otwarte', napis: `W toku${wToku ? ` · ${wToku}` : ''}${po ? ` · ⏰ ${po}` : ''}`, alarm: po > 0 },
+      { filtr: 'do-zamkniecia', napis: `Do przyjęcia${doPrzyjecia ? ` · ${doPrzyjecia}` : ''}`, alarm: false },
+      { filtr: 'zamkniete', napis: `Zamknięte${przepadlo ? ` · przepadło ${przepadlo}` : ''}`, alarm: przepadlo > 0 },
+    ];
+  }
+
+  /* Czy w oknie „Nowe zlecenie” rozwinąć „Więcej opcji” (UI etap 2). Na co dzień zwinięte — kierownik wpisuje co, dział,
+     kto i termin. Rozwinięte, gdy w środku jest już coś wypełnione, żeby nie wysłać zlecenia z polem, którego nie widział:
+     zmiana zaplanowanego (edycja), „Zleć teraz” ze zlecenia stałego, opis, linia, maszyna, pilne albo wymagania inne niż
+     domyślne (zdjęcie i notatka wymagane). */
+  function wiecejOpcjiZlecenia(w, edycja) {
+    if (edycja) return true;
+    const d = w || {};
+    const inneNizDomyslne = k => d[k] !== undefined && d[k] !== true;
+    return !!(d.stale || String(d.opis || '').trim() || d.linia || d.maszyna || d.pilne
+              || inneNizDomyslne('wymagaj_zdjecia') || inneNizDomyslne('wymagaj_notatki'));
   }
 
   // ------------------------------------------------------------ zlecenia zaplanowane (D47)
@@ -388,9 +441,11 @@
   }
 
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
-  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: lista, teraz, bezRaportu }) {
+  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: lista, teraz, bezRaportu, slowniki }) {
     // „Stoi linii” liczy LINIE (etap 3): dwie zatrzymane maszyny na jednej linii to jedna stojąca linia.
-    const stoi = new Set((wierszeAwarii || []).filter(w => w.zatrzymuje).map(w => w.linia)).size;
+    // D51: zakład z jedną linią (slowniki podane, linia jedna) — liczą się MASZYNY, a kafelek mówi „Maszyna stoi”.
+    const naMaszyny = slowniki !== undefined && !wieleLinii(slowniki);
+    const stoi = new Set((wierszeAwarii || []).filter(w => w.zatrzymuje).map(w => (naMaszyny ? w.maszyna : w.linia))).size;
     const opoznione = (kafelkiLinii || []).filter(k => k.kolor === 'czerwony').length;
     const jakosc = ((inc && inc.lista) || []).length;
     const otwarte = (lista || []).filter(z => OTWARTE.has(z.status)).length;
@@ -398,11 +453,12 @@
     const spoznione = (lista || []).filter(z => poTerminie(z, teraz === undefined ? Date.now() : teraz)).length;
     const klasa = (n, zla) => (!n ? 'zero' : zla);
     return [
-      { kod: 'stoi', etykieta: 'Stoi linii', liczba: stoi, klasa: klasa(stoi, 'pilne') },
+      { kod: 'stoi', etykieta: naMaszyny ? MASZYNA_STOI : 'Stoi linii', liczba: stoi, klasa: klasa(stoi, 'pilne') },
       { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'uwaga') },
       { kod: 'obchody', etykieta: 'Opóźnione obchody', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
       { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'uwaga') },
-      { kod: 'zlecenia', etykieta: doZamkniecia ? `Zlecenia · ${doZamkniecia} do zamknięcia` : 'Zlecenia w toku',
+      // „do przyjęcia” — tak samo jak chip w Zleceniach (kierownik przyjmuje albo zwraca); dwie nazwy jednej listy myliły.
+      { kod: 'zlecenia', etykieta: doZamkniecia ? `Zlecenia · ${doZamkniecia} do przyjęcia` : 'Zlecenia w toku',
         liczba: otwarte + doZamkniecia, klasa: doZamkniecia ? 'dobrze' : klasa(otwarte, 'uwaga') },
       { kod: 'po-terminie', etykieta: 'Zlecenia po terminie', liczba: spoznione, klasa: klasa(spoznione, 'pilne') },
     ].concat(bezRaportu === undefined ? [] : [
@@ -410,6 +466,14 @@
       // (np. po weekendzie) to szum, więc są tylko w „Raporty”, zwinięte. Klik prowadzi do „Raporty”.
       { kod: 'bez-raportu', etykieta: 'Zmiany bez raportu', liczba: (bezRaportu || []).filter(b => b.otwarta).length,
         klasa: klasa((bezRaportu || []).filter(b => b.otwarta).length, 'uwaga') }]);
+  }
+
+  /* Które kafelki pokazać (szlif UI 2026-10-12): rząd zer na monitorze to szum, w którym ginie jedyna ważna liczba —
+     zostają tylko kafelki z liczbą większą od zera. Gdy nie zostaje żaden, ekran mówi spokojnie „Wszystko w porządku”
+     (spokoj = true), zamiast pustego miejsca, które wyglądałoby na błąd. */
+  function kafelkiDoPokazania(lista) {
+    const widoczne = (lista || []).filter(k => k && k.liczba > 0);
+    return { kafelki: widoczne, spokoj: !widoczne.length };
   }
 
   // ------------------------------------------------------------ zlecenia stałe (D31)
@@ -574,7 +638,8 @@
       return {
         kod, tytul: s.tytul || kod, opis: s.opis || '',
         dzialNazwa: dzialy.get(s.dzial) || s.dzial || '—',
-        liniaNazwa: s.linia === LINIA_KAZDA ? 'każda linia osobno' : s.linia ? nazwaLinii(slowniki, s.linia) : null,
+        // D51: przy jednej linii jej pola są schowane — „każda linia osobno” ani nazwa jedynej linii nic tu nie mówią.
+        liniaNazwa: !wieleLinii(slowniki) ? null : s.linia === LINIA_KAZDA ? 'każda linia osobno' : s.linia ? nazwaLinii(slowniki, s.linia) : null,
         maszyna: s.maszyna ? ((maszyny[s.maszyna] || {}).nazwa || s.maszyna) : null,
         osoba: nazwaPracownika(pracownicy, s.wykonawca),
         harmonogram: harmonogramPoLudzku(s, slowniki),
@@ -694,11 +759,13 @@
       .replace(/[._-]+/g, ' ').split(/\s+/).filter(Boolean).join(' ');
   }
 
-  function pracownicyAdmin({ lista, szukaj, nieaktywni, stale }) {
+  /* linieNazwy: linie osoby nazwami — przy jednej linii pusto (D51: „Hala” przy każdym liderze to szum). */
+  function pracownicyAdmin({ lista, szukaj, nieaktywni, stale, slowniki }) {
     const role = (stale && stale.role) || {};
     const s = loginZNazwy(szukaj);
     return (lista || []).filter(p => (nieaktywni || p.aktywny !== false) && (!s || loginZNazwy(p.nazwa).includes(s) || loginZNazwy(p.id).includes(s)))
-      .map(p => Object.assign({}, p, { roleNazwy: (p.role || []).map(r => role[r] || r) }))
+      .map(p => Object.assign({}, p, { roleNazwy: (p.role || []).map(r => role[r] || r),
+                                       linieNazwy: (p.linie || []).map(l => liniaWidoczna(slowniki, l)).filter(Boolean) }))
       .sort((a, b) => (b.zablokowany - a.zablokowany) || (b.aktywny !== false) - (a.aktywny !== false) || a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
 
@@ -815,12 +882,12 @@
     return ((d && d.programy) || []).map(p => {
       const n = p.na_pages || {}, plik = p.plik || {};
       let stan, kolor, opis;
-      if (p.stan === 'wylaczone') { stan = 'Nie dotyczy'; kolor = 'neutral'; opis = 'Ten hub nie widzi programów z tego komputera (dane testowe).'; }
+      if (p.stan === 'wylaczone') { stan = 'Nie dotyczy'; kolor = 'neutral'; opis = 'Ten serwer nie widzi programów z tego komputera (dane testowe).'; }
       else if (p.stan === 'brak' || !p.plik) { stan = 'Brak programu'; kolor = 'neutral'; opis = `${p.nazwa} nie działa na tym komputerze albo jeszcze się nie zgłosił (zgłasza się sam przy starcie).`; }
       else if (p.stan === 'bez_tunelu') { stan = 'Bez tunelu'; kolor = 'uwaga'; opis = `${p.nazwa} nie ma tunelu — telefony spoza firmy go nie znajdą. Włącz tunel w ustawieniach programu.`; }
       else if (p.blad) { stan = p.stan === 'bez_tokenu' ? 'Bez tokenu' : 'Błąd'; kolor = 'alarm'; opis = p.blad; }
       else if (p.stan === 'aktualne') { stan = 'Aktualne'; kolor = 'ok'; opis = `Na Pages wersja ${n.wersja_aplikacji || '?'} (wysłana ${kiedy(n.opublikowano)}), adres danych wpisany ${kiedy(n.adres_zmieniono)}.`; }
-      else { stan = 'Wysyłam'; kolor = 'uwaga'; opis = 'Nowy adres albo nowa wersja programu — hub wysyła je na Pages sam, chwilę to trwa.'; }
+      else { stan = 'Wysyłam'; kolor = 'uwaga'; opis = 'Nowy adres albo nowa wersja programu — serwer wysyła je na Pages sam, chwilę to trwa.'; }
       return { program: p.program, nazwa: p.nazwa, stan, kolor, opis, adres: p.adres || '', adres_danych: plik.adres || '',
                na_pages: !!n.opublikowano };
     });
@@ -842,9 +909,9 @@
     let tunel;
     if (t.wstrzymany) tunel = { stan: 'Wstrzymany', kolor: 'neutral', opis: t.wstrzymany };
     else if ((t.ustawiony || t.tryb) === 'brak') tunel = { stan: 'Wyłączony', kolor: 'neutral',
-      opis: 'Telefony spoza sieci firmowej nie połączą się z hubem. Włącz tunel: Ustawienia → Tunel i GitHub.' };
+      opis: 'Telefony spoza sieci firmowej nie połączą się z serwerem. Włącz tunel: Ustawienia → Tunel i GitHub.' };
     else if (t.stan === 'dziala') tunel = { stan: 'Działa', kolor: 'ok', opis: t.tryb === 'staly' ? 'Tunel stały — adres się nie zmienia.'
-      : 'Adres zmienia się po każdym uruchomieniu huba — hub wpisuje go na GitHub, a telefony znajdują go same.' };
+      : 'Adres zmienia się po każdym uruchomieniu serwera — serwer wpisuje go na GitHub, a telefony znajdują go same.' };
     else if (t.stan === 'blad') tunel = { stan: 'Błąd', kolor: 'alarm', opis: t.blad || 'Tunel nie działa.' };
     else tunel = { stan: 'Łączy się', kolor: 'uwaga', opis: 'Za chwilę pojawi się adres (pierwsze włączenie pobiera program tunelu).' };
     tunel.adres = t.stan === 'dziala' ? t.adres || '' : '';
@@ -857,10 +924,10 @@
     if (tunel.stan === 'Wyłączony' || tunel.stan === 'Wstrzymany') { /* strażnik śpi razem z tunelem */ }
     else if (s.wynik === 'odpowiada') tunel.straznik = { kolor: 'ok', tekst: `Sprawdzony ${godz(s.sprawdzony)} — odpowiada.` };
     else if (s.wynik === 'brak_internetu') tunel.straznik = { kolor: 'uwaga',
-      tekst: `Brak internetu w biurze (sprawdzony ${godz(s.sprawdzony)}) — nowy tunel hub uruchomi, gdy internet wróci.` };
+      tekst: `Brak internetu w biurze (sprawdzony ${godz(s.sprawdzony)}) — nowy tunel serwer uruchomi, gdy internet wróci.` };
     else if (s.wynik === 'nie_odpowiada' || s.nie_odpowiada_od) {
       tunel.straznik = { kolor: 'alarm', tekst: `Nie odpowiada od ${godz(s.nie_odpowiada_od)} (${proby(s.proby || 0)})` +
-        (s.restarty ? ` — hub uruchomił nowy tunel ${s.restarty}×.` : ' — po 3 próbach hub uruchomi nowy tunel.') +
+        (s.restarty ? ` — serwer uruchomił nowy tunel ${s.restarty}×.` : ' — po 3 próbach serwer uruchomi nowy tunel.') +
         (s.powod ? ` Ostatnio: ${s.powod}.` : '') };
       if (t.stan === 'dziala') { tunel.stan = 'Nie odpowiada'; tunel.kolor = 'alarm'; }
     }
@@ -870,17 +937,17 @@
     let wersja;
     if (!wersje.some(([, w]) => w.na_pages)) wersja = { stan: 'Nie wysłano', kolor: 'uwaga',
       opis: 'Wyślij aplikacje na GitHub — inaczej telefony nie mają czego otworzyć pod adresami niżej.' };
-    else if (p.aktualne) wersja = { stan: 'Aktualna', kolor: 'ok', opis: 'Na GitHub Pages jest ta sama wersja aplikacji co w hubie.' };
+    else if (p.aktualne) wersja = { stan: 'Aktualna', kolor: 'ok', opis: 'Na GitHub Pages jest ta sama wersja aplikacji co na serwerze.' };
     else wersja = { stan: 'Starsza wersja', kolor: 'alarm', opis: `Wyślij aplikacje na GitHub — na Pages jest starsza wersja (${stare.join(', ')}).` };
     const o = p.opublikowano;
     wersja.ostatnio = o ? `Wysłano ${kiedy(o.czas)}${o.kto ? ` (${o.kto})` : ''}` : '';
 
     const c = p.cichy || {};
     let adres;
-    if (!u.github_token_ustawiony) adres = { kolor: 'uwaga', opis: 'Bez tokenu GitHub hub nie wpisze nowego adresu tunelu na Pages — wklej go w Ustawienia → Tunel i GitHub.' };
+    if (!u.github_token_ustawiony) adres = { kolor: 'uwaga', opis: 'Bez tokenu GitHub serwer nie wpisze nowego adresu tunelu na Pages — wklej go w Ustawienia → Tunel i GitHub.' };
     else if (c.blad) adres = { kolor: 'alarm', opis: `Adresu nie udało się wpisać na GitHub (${kiedy(c.czas)}): ${c.blad}` };
-    else if (tunel.adres && p.adres_huba === tunel.adres) adres = { kolor: 'ok', opis: `Telefony dostają bieżący adres huba (wpisany ${kiedy(c.czas)}).` };
-    else if (tunel.adres) adres = { kolor: 'uwaga', opis: 'Bieżącego adresu tunelu jeszcze nie ma na GitHub — hub wpisuje go sam, chwilę to trwa.' };
+    else if (tunel.adres && p.adres_huba === tunel.adres) adres = { kolor: 'ok', opis: `Telefony dostają bieżący adres serwera (wpisany ${kiedy(c.czas)}).` };
+    else if (tunel.adres) adres = { kolor: 'uwaga', opis: 'Bieżącego adresu tunelu jeszcze nie ma na GitHub — serwer wpisuje go sam, chwilę to trwa.' };
     else adres = { kolor: 'neutral', opis: p.adres_huba ? `Na GitHub jest adres ${p.adres_huba} — zadziała, gdy ruszy tunel.` : '' };
 
     let powod = '';
@@ -898,7 +965,7 @@
     const wpis = l.twoj_wpis || l.twoj_adres || '';
     let alarm = null;
     if (l.alarm === 'lokalny') alarm = { wpis: '', opis: `Sieć zakładu nie jest ustawiona, a telefony łączą się przez internet. `
-      + `Ten komputer łączy się z sieci lokalnej (${l.twoj_adres || '?'}), więc hub nie widzi stąd adresu internetu biura. `
+      + `Ten komputer łączy się z sieci lokalnej (${l.twoj_adres || '?'}), więc serwer nie widzi stąd adresu internetu biura. `
       + 'Otwórz Panel z adresu na GitHub Pages (kod QR niżej) na komputerze w biurze i tam naciśnij „Wpisz mój adres”.' };
     else if (l.alarm === 'pusta') alarm = { wpis, opis: 'Sieć zakładu nie jest ustawiona, a telefony łączą się przez internet — '
       + `złe PIN-y obcych mogą zablokować logowanie telefonom w firmie. Jesteś teraz w firmowej sieci? Wpisz jej adres: ${wpis}.` };
@@ -943,12 +1010,24 @@
              lokalna: s.lokalna ? `Kopia na tym komputerze (co godzinę): ${kiedy(s.lokalna)}` : '' };
   }
 
+  /* Gdzie w Administracji naprawia się alarm (UI etap 2): część (chip) i miejsce w niej. Dostęp z telefonów jest od
+     teraz w „Serwis” — tekst z huba („Administracja → Dostęp z telefonów”) poprawiamy tutaj, bo te same zdania idą też
+     w pushu, a hub i Panel mają mówić o tym samym miejscu. Miejsce na dysku i tunel bez odpowiedzi naprawia się poza
+     Panelem — tunel prowadzi do stanu tunelu, miejsce nigdzie. */
+  const GDZIE_ALARMU = {
+    pages: { czesc: 'serwis', sekcja: 'dostep' }, tunel: { czesc: 'serwis', sekcja: 'dostep' },
+    token: { czesc: 'ustawienia', sekcja: 'formularz-dostepu' }, kopia: { czesc: 'ustawienia', sekcja: 'formularz-kopii' },
+  };
+  const gdzieAlarmu = kod => GDZIE_ALARMU[kod] || (/^pages_/.test(String(kod || '')) ? GDZIE_ALARMU.pages : null);
+
   /* Alarmy huba dla administratora (GET /api/v1/admin/alarmy) → wstęga nad Administracją. Kolejność: najpierw to,
-     co odcina telefony (adres huba, token), potem kopie i miejsce. */
+     co odcina telefony (adres huba, token), potem kopie i miejsce. gdzie — przycisk „Pokaż” przy alarmie. */
   function alarmyAdmina(lista) {
     const waga = { pages: 0, pages_trasy: 0, pages_flota: 0, token: 1, kopia: 2, miejsce: 3 };
     return (lista || []).slice().sort((a, b) => (waga[a.kod] ?? 9) - (waga[b.kod] ?? 9))
-      .map(a => ({ kod: a.kod, tytul: a.tytul || 'Alarm', opis: a.opis || '' }));
+      .map(a => ({ kod: a.kod, tytul: a.tytul || 'Alarm',
+                   opis: String(a.opis || '').replace(/Administracja → (📱 )?Dostęp z telefonów/g, 'Administracja → Serwis → Dostęp z telefonów'),
+                   gdzie: gdzieAlarmu(a.kod) }));
   }
 
   /* Formularz „Tunel i GitHub” → { bledy, dane } dla POST /api/v1/admin/dostep. Puste pole tokenu = bez zmian
@@ -998,7 +1077,9 @@
   function pozycjaZFormularza(rodzaj, f, slowniki, istniejacyKod) {
     const bledy = [];
     const kod = istniejacyKod || String(f.kod || '').trim().toUpperCase();
-    if (!RE_KOD.test(kod)) bledy.push('Kod: wielkie litery, cyfry i myślnik, np. L4, L1-S3 albo WT-03.');
+    // D51: w Panelu zakłada się tylko maszyny — przykłady kodów linii i stanowisk (L4, L1-S3) tylko myliły.
+    if (!RE_KOD.test(kod)) bledy.push(rodzaj === 'maszyny' ? 'Kod: wielkie litery, cyfry i myślnik, np. FH6-1 albo WT-03.'
+      : 'Kod: wielkie litery, cyfry i myślnik, np. L4, L1-S3 albo WT-03.');
     const sl = (slowniki && slowniki[rodzaj]) || {};
     const byl = istniejacyKod ? sl[kod] || {} : {};
     if (!istniejacyKod && sl[kod]) bledy.push(`Kod ${kod} już jest.`);
@@ -1022,7 +1103,9 @@
         const typ = String(f.typ || '').trim().toLowerCase();
         if (typ) wartosc.typ = typ;
         const st = ((slowniki && slowniki.stanowiska) || {})[f.stanowisko];
-        if (f.stanowisko && (!st || st.linia !== linia)) bledy.push('Stanowisko musi być na tej samej linii co maszyna.');
+        // stanowiskoZachowane: stanowisko przepisane ze słownika, którego od D51 nie ma w oknie maszyny. Gdy go już nie ma
+        // albo maszyna przechodzi na inną linię — odpada po cichu; błąd o polu, którego nie widać, blokował zapis na zawsze.
+        if (f.stanowisko && (!st || st.linia !== linia)) { if (!f.stanowiskoZachowane) bledy.push('Stanowisko musi być na tej samej linii co maszyna.'); }
         else if (f.stanowisko) wartosc.stanowisko = f.stanowisko;
       }
     }
@@ -1118,8 +1201,8 @@
   /* Wynik zapisu, na który czekamy na przyjęcie przez hub (Panel.zapiszWHubie): „Zapisane.” dopiero, gdy hub przyjął. */
   function wynikZapisu(w) {
     if (!w || w.zmian === 0) return { klasa: 'ok', tekst: 'Nic się nie zmieniło.' };
-    if ((w.odrzucone || []).length) return { klasa: 'blad', tekst: `Hub nie przyjął: ${w.odrzucone.map(o => o.powod).join('; ')}` };
-    if (w.czeka) return { klasa: 'uwaga', tekst: 'Czeka na wysłanie — zapisze się, gdy hub odpowie (pasek u góry pokazuje kolejkę).' };
+    if ((w.odrzucone || []).length) return { klasa: 'blad', tekst: `Serwer nie przyjął: ${w.odrzucone.map(o => o.powod).join('; ')}` };
+    if (w.czeka) return { klasa: 'uwaga', tekst: 'Czeka na wysłanie — zapisze się, gdy serwer odpowie (pasek u góry pokazuje kolejkę).' };
     return { klasa: 'ok', tekst: 'Zapisane.' };
   }
 
@@ -1153,6 +1236,8 @@
   function zakresSzablonu(s, slowniki) {
     const linie = (s.linie || []).map(l => nazwaLinii(slowniki, l));
     const zmiany = (s.zmiany || []).map(z => (((slowniki || {}).zmiany || {})[z] || {}).nazwa || `Zmiana ${z}`);
+    // D51: przy jednej linii Panel nie pokazuje linii nigdzie — „Wszystkie linie” mówiłoby o czymś, czego kierownik nie widzi.
+    if (!wieleLinii(slowniki)) return zmiany.length ? zmiany.join(', ') : 'Wszystkie zmiany';
     return `${linie.length ? linie.join(', ') : 'Wszystkie linie'} · ${zmiany.length ? zmiany.join(', ') : 'wszystkie zmiany'}`;
   }
 
@@ -1273,6 +1358,17 @@
       .map(kod => { const x = zKpi.get(kod) || {};
         return { kod, nazwa: nazwaLinii(slowniki, kod), awarie: x.liczba || 0, zatrzymania: x.zatrzymania || 0,
                  przestojMs: x.przestojMs || 0, mttrMs: x.mttrMs === undefined ? null : x.mttrMs }; });
+    // D51: przy jednej linii „Przestój na linię” to jeden pasek zawsze na 100 % — zamiast niego przestój na maszynę
+    // (te same liczby z kpiAwarii → maszyny; tylko maszyny z awarią albo przestojem w okresie, najdłuższy przestój wyżej).
+    const naMaszyne = !wieleLinii(slowniki);
+    const slMaszyn = (slowniki && slowniki.maszyny) || {};
+    const maszyny = (k.maszyny || []).map(x => ({ kod: x.kod, nazwa: (slMaszyn[x.kod] || {}).nazwa || x.kod, awarie: x.liczba || 0,
+      zatrzymania: x.zatrzymania || 0, przestojMs: x.przestojMs || 0, mttrMs: x.mttrMs === undefined ? null : x.mttrMs }));
+    // Pasek liczony z tego, co widać: „0 min” (20 s przestoju) to pusty pasek, a nie pełny obok samych zer.
+    const minuty = ms => Math.max(0, Math.floor((ms || 0) / 60000));
+    const zPaskiem = lista => { const maks = Math.max(0, ...lista.map(x => minuty(x.przestojMs)));
+      return lista.map(x => Object.assign(x, { proc: maks ? Math.round(minuty(x.przestojMs) * 100 / maks) : 0 })); };
+    zPaskiem(linie); zPaskiem(maszyny);
 
     const { liczba: proby, sprawdzone, braki } = s.proby;
     const katalog = (slowniki && slowniki.katalog_wad) || {};
@@ -1289,7 +1385,7 @@
     const razem = t.wTerminie + t.poTerminie;
     return {
       awarie: k.liczba, zatrzymania: k.zatrzymania, przestojMs: k.przestojMs, mttrMs: k.mttrMs, reakcjaMs: k.reakcjaMs, mtbfMs: k.mtbfMs,
-      linie, maksPrzestojMs: Math.max(0, ...linie.map(x => x.przestojMs)),
+      linie, maksPrzestojMs: Math.max(0, ...linie.map(x => x.przestojMs)), naMaszyne, maszyny,
       proby, sprawdzone, braki, brakiProc: sprawdzone ? Math.round(braki * 1000 / sprawdzone) / 10 : null, pareto,
       zlecenia: s.zlecenia.liczba, zleceniaWykonane: s.zlecenia.wykonane,
       terminowosc: { wTerminie: t.wTerminie, poTerminie: t.poTerminie, proc: razem ? Math.round(t.wTerminie * 100 / razem) : null,
@@ -1311,12 +1407,12 @@
      wygląda na monitorze jak zawieszony. Od godziny — jak wszędzie w systemie (Hala.formatCzasu). */
   const licznik = ms => H().formatLicznika(ms);
 
-  /* Co jest NOWE od poprzedniego rysowania: zatrzymanie linii albo Quality Alert. Przy pierwszym
+  /* Co jest NOWE od poprzedniego rysowania: zatrzymanie (linii albo maszyny) albo alert jakości. Przy pierwszym
      rysowaniu (znane === null) niczego nie ogłaszamy — to, co już było, kierownik zobaczy na ekranie,
      a sygnał po każdym odświeżeniu strony przestałby cokolwiek znaczyć. */
   function noweAlarmy(znane, wierszeAwarii, incydentyLista) {
     const teraz = new Map();
-    for (const w of wierszeAwarii || []) if (w.zatrzymuje) teraz.set('awaria|' + w.id, { rodzaj: 'zatrzymanie', id: w.id, opis: `${w.maszynaNazwa} · ${w.liniaNazwa}` });
+    for (const w of wierszeAwarii || []) if (w.zatrzymuje) teraz.set('awaria|' + w.id, { rodzaj: 'zatrzymanie', id: w.id, opis: [w.maszynaNazwa, w.liniaNazwa].filter(Boolean).join(' · ') });
     for (const i of incydentyLista || []) if (i.rodzaj === 'alert') teraz.set('alert|' + i.id, { rodzaj: 'alert', id: i.id, opis: i.tytul });
     const nowe = znane ? Array.from(teraz).filter(([k]) => !znane.has(k)).map(([, v]) => v) : [];
     return { nowe, znane: new Set(teraz.keys()) };
@@ -1334,7 +1430,7 @@
       if (p.dociaganie && !p.blad) { klasa = 'kolejka'; tekst = 'Odświeżanie co kilka sekund — sieć nie przepuszcza zmian na żywo'; }
       else {
         klasa = p.online ? 'brak-huba' : 'offline';
-        tekst = laska || !ostatnio ? 'Łączenie z hubem…'
+        tekst = laska || !ostatnio ? 'Łączenie z serwerem…'
           : `Brak połączenia od ${dataKrotka(ostatnio) === dataKrotka(teraz) ? '' : dataKrotka(ostatnio) + ' '}${godzina(ostatnio)} — dane mogą być nieaktualne`;
         if (k.moje) tekst += ` · ${k.moje} czeka na wysłanie`;
       }
@@ -1376,6 +1472,35 @@
     };
   }
 
+  // ------------------------------------------------------------ puste ekrany i błędy (przegląd 2026-10-12)
+
+  /* Bez maszyn nie da się zgłosić awarii (okno „Zgłoś awarię” nie ma czego wybrać) — mówimy, gdzie je dodać. null = są.
+     Od D51 w Panelu zakłada się tylko maszyny; pierwsza zakłada też linię „Hala”. */
+  function brakMaszyn(slowniki) {
+    return Object.keys((slowniki && slowniki.maszyny) || {}).length ? null : 'Brak maszyn — dodaj je: Administracja → Maszyny.';
+  }
+
+  /* Napis zamiast kafelków obchodów. Obchody są puste także poza godzinami zmian (zmiana = null) — wtedy „brak linii”
+     wprowadzał w błąd, a „Dodaj je w administracji” od D51 nie ma gdzie zrobić (linii w Panelu się nie zakłada). */
+  function pustyObchod(slowniki, zmiana) {
+    if (!zmiana) return 'Teraz nie trwa żadna zmiana.';
+    return brakMaszyn(slowniki) || 'Brak linii w słowniku.';
+  }
+
+  /* Błąd → zdanie dla kierownika. fetch bez sieci rzuca TypeError (angielski tekst przeglądarki), przerwane zapytanie
+     AbortError — to brak połączenia. Zwykły Error bez kodu HTTP to błąd z telefonu z polskim tekstem (np. hala.zapisz:
+     brak wymaganego zdjęcia) — wcześniej też wychodził jako „Brak połączenia z hubem”, choć sieć była w porządku. */
+  function tekstBledu(e) {
+    const polaczenie = 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
+    if (!e || e instanceof TypeError) return polaczenie;
+    if (!e.kod) return e.name === 'Error' && e.message ? e.message : polaczenie;
+    if (e.ustawione) return e.message;               // D43: hasło i PIN ustawione, ale rola nie otwiera Panelu
+    if (e.kod === 403 && e.powod) return e.message;  // np. stara_wersja — tekst huba mówi, co zrobić
+    if (e.kod === 403) return 'To konto nie ma dostępu do Panelu. Zaloguj się kontem kierownika albo ekranu.';
+    if (e.kod === 429) return e.message || 'Za dużo prób. Odczekaj 5 minut i spróbuj ponownie.';
+    return e.message;
+  }
+
   // ------------------------------------------------------------ pasek zmiany
 
   function opisBiezacejZmiany(zmiana, teraz) {
@@ -1387,8 +1512,9 @@
   const PanelWidok = { obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
-                       zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
+                       zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza,
+                       brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -25,6 +25,11 @@
 @media (max-width: 820px) {
   .aplikacja { padding-bottom: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); }
   .zakladki > button.menu-akcja { color: var(--czerwony); }
+  /* Panel ma w dolnym pasku do 7 pozycji. Podpisy mają 13 px (hala.css), więc na wąskim telefonie „Administracja”
+     czy „Wskaźniki” się nie mieszczą — panel.js → dopasujMenu mierzy to i wtedy zostawia same ikony (większe),
+     wszystkie naraz; podpis zostaje w title i aria-label. */
+  .zakladki.same-ikony > button > span:not(.ikona):not(.plakietka) { display: none; }
+  .zakladki.same-ikony > button .ikona { font-size: 24px; }
 }
 @media (min-width: 821px) {
   .zakladki > button.menu-akcja { margin-top: 10px; color: var(--na-marce); }
@@ -43,8 +48,12 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   flex: 1;
 }
-/* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. */
-.kafelki-liczb { grid-area: liczby; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+/* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. Pokazujemy tylko kafelki z liczbą
+   (W.kafelkiDoPokazania), więc kolumny stałej szerokości (auto-fill): dwa kafelki nie rozjeżdżają się na cały ekran. */
+.kafelki-liczb { grid-area: liczby; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+/* Same zera — jedno spokojne zdanie zamiast kafelków. */
+.kafelki-liczb > .spokoj { grid-column: 1 / -1; margin: 0; background: none; padding: 4px 8px; text-align: left;
+  color: var(--zielony); font-weight: 600; }
 .kafelki-liczb > button { cursor: default; }
 .kafelki-liczb > button:is([data-kafel="zlecenia"], [data-kafel="po-terminie"]) { cursor: pointer; }
 .kafelki-liczb > button:hover { filter: none; }
@@ -72,7 +81,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 }
 @media (max-width: 900px) {
   .na-zywo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "awarie" "jakosc"; grid-template-rows: auto; }
-  .kafelki-liczb { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .kafelki-liczb { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 }
 /* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
 @media (max-width: 600px) {
@@ -105,13 +114,16 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 
 /* ---------------------------------------------------------------- awarie */
 
+/* Licznik „4 min 07 s” / „59 min 59 s” / „1 h 05 min” (Hala.formatLicznika) w jednej linii i stałej szerokości we
+   własnych em — wiersze awarii trzymają kolumnę licznika równo, także w większych literach konta ekranu. */
 .awaria {
-  display: grid; grid-template-columns: 7.5em minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center;
   border: 1px solid var(--ramka); border-left: 8px solid var(--zolty); border-radius: var(--promien); padding: 8px 12px;
   background: var(--karta);
 }
 .awaria.zatrzymanie { border-left-color: var(--czerwony); }
-.licznik-przestoju { font-size: 1.5em; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.licznik-przestoju { font-size: 1.5em; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1;
+  min-width: 6.6em; white-space: nowrap; }
 .awaria.zatrzymanie .licznik-przestoju { color: var(--czerwony); }
 .awaria .maszyna { font-size: 1.05em; }
 .awaria .szczegoly { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: .9em; }
@@ -120,12 +132,13 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .awaria.alarm-potwierdzenia { outline: 3px solid var(--czerwony); outline-offset: -3px; animation: pulsuj 2s ease-in-out infinite; }
 @keyframes pulsuj { 50% { outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .awaria.alarm-potwierdzenia { animation: none; } }
-/* Telefon: trzy kolumny zostawiały opisowi ~60 px (nazwa maszyny litera pod literą) — numer schodzi pod opis. */
+/* Telefon: trzy kolumny zostawiały opisowi ~60 px (nazwa maszyny litera pod literą). Licznik („4 min 07 s”) i numer
+   w górnym rzędzie, opis na całą szerokość pod nimi — licznik nie łamie się, a nazwa maszyny ma miejsce. */
 @media (max-width: 600px) {
-  .awaria { grid-template-columns: 5.5em minmax(0, 1fr); gap: 4px 10px; padding: 8px 10px; }
-  .awaria .licznik-przestoju { font-size: 1.25em; }
-  .awaria .numer { grid-column: 2; text-align: left; }
-  .awaria .numer br { display: none; }
+  .awaria { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "licznik numer" "opis opis"; gap: 4px 10px; padding: 8px 10px; }
+  .awaria .licznik-przestoju { grid-area: licznik; min-width: 0; font-size: 1.3em; }
+  .awaria .opis { grid-area: opis; }
+  .awaria .numer { grid-area: numer; }
 }
 
 /* ---------------------------------------------------------------- jakość */
@@ -178,6 +191,21 @@ dialog.okno .dwie { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 dialog.okno .przyciski { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 dialog.okno .blad { color: var(--czerwony); font-weight: 600; margin: 0; }
 @media (max-width: 600px) { dialog.okno .dwie { grid-template-columns: 1fr; } }
+/* Jedna linia (D51): pole linii schowane — maszyna zajmuje cały rząd, a nie połowę z pustym miejscem obok. */
+dialog.okno .dwie:has(> .pole-linii[hidden]) { grid-template-columns: 1fr; }
+/* Zwijane części (UI etap 2): „Więcej opcji” w „Nowe zlecenie” i części Administracji → Serwis. Nagłówek wysoki
+   jak pole dotyku (D29), strzałka ▸ / ▾ jednakowa w każdej przeglądarce (bez znacznika systemowego). */
+.wiecej-opcji > summary, .serwis-czesc > summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-height: var(--dotyk); cursor: pointer; list-style: none; }
+.wiecej-opcji > summary { font-weight: 700; color: var(--tekst-slaby); }
+:is(.wiecej-opcji, .serwis-czesc) > summary::-webkit-details-marker { display: none; }
+:is(.wiecej-opcji, .serwis-czesc) > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
+:is(.wiecej-opcji, .serwis-czesc)[open] > summary::before { transform: rotate(90deg); }
+.wiecej-opcji-tresc { display: grid; gap: 12px; padding-top: 4px; }
+.serwis-czesc { border: 1px solid var(--ramka); border-radius: var(--promien); padding: 0 12px; margin-bottom: 12px; background: var(--karta); }
+.serwis-czesc > summary h3 { margin: 0; font-size: 1.05em; }
+.serwis-czesc[open] > summary { border-bottom: 1px solid var(--ramka); margin-bottom: 10px; }
+.serwis-czesc-tresc { padding-bottom: 6px; }
 .raport { border: 1px solid var(--ramka); border-radius: var(--promien); }
 .raport summary {
   display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 10px 12px;
@@ -232,6 +260,7 @@ body.tryb-ekran .zakladki button { min-height: 44px; }
   padding: 10px 14px; margin: 0 0 12px; color: var(--tekst); }
 .admin-alarmy p { margin: 4px 0; }
 .admin-alarmy b { color: var(--czerwony); }
+.admin-alarmy button { margin-left: 6px; vertical-align: middle; }   /* „Pokaż” — do miejsca naprawy (UI etap 2) */
 .admin-ustawienia { display: grid; gap: 14px; max-width: 640px; }
 .admin-ustawienia label { display: grid; gap: 4px; font-weight: 700; font-size: 14px; }
 .admin-ustawienia label input { font-weight: 400; }
@@ -276,9 +305,8 @@ dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
   section h2 { flex-wrap: wrap; }
 }
 
-/* ---------------------------------------------------------------- stanowiska, zmiany, etykiety QR */
+/* ---------------------------------------------------------------- zmiany, etykiety QR */
 
-.admin-stanowisko { font-size: .95em; }
 .admin-ustawienia h3 { margin: 18px 0 0; }
 .admin-ustawienia select { font-weight: 400; }
 /* Dostęp z telefonów (D33): kody QR czterech aplikacji — duże, żeby telefon złapał je z monitora. */
@@ -289,7 +317,9 @@ dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
 .dostep-kod { width: 180px; height: 180px; display: grid; place-items: center; font-size: 13px; color: var(--tekst-slaby); }
 .dostep-kod svg { width: 100%; height: 100%; display: block; }
 .dostep-qr figcaption { display: grid; gap: 2px; font-size: 13px; overflow-wrap: anywhere; }
-.wiersz-zmiany { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px 90px auto; gap: 6px; margin-bottom: 6px; }
+.wiersz-zmiany, .naglowek-zmian { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px 90px 52px; gap: 6px; margin-bottom: 6px; }
+/* Podpisy kolumn nad wierszami godzin zmian — same pola z „06:00” nie mówiły, co jest czym. */
+.naglowek-zmian { margin-bottom: 0; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .wiersz-zmiany input { font-weight: 400; }
 #formularz-etykiet .przyciski { align-items: center; }
 #formularz-etykiet .przyciski .slaby { margin-right: auto; }

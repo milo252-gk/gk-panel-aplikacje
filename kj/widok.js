@@ -52,6 +52,16 @@
     return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')}`;
   }
 
+  /* Data z rokiem „15.10.2026” (STYL-GK §6) — „Ważny do” alertu to data, którą liderzy czytają dosłownie;
+     samo „15.10” bez roku na przełomie roku myliło. */
+  function dataPelna(chwila) {
+    if (chwila === null || chwila === undefined || chwila === '') return '—';
+    const t = ms(chwila);
+    if (isNaN(t)) return '—';
+    const l = H().lokalny(t);
+    return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')}.${l.rok}`;
+  }
+
   /* „dziś 14:05” / „24.09 14:05” — kontroler przegląda listy z kilku dni. */
   function kiedy(chwila, teraz) {
     if (chwila === null || chwila === undefined || chwila === '') return '—';
@@ -131,7 +141,7 @@
     const spr = liczba(f.sprawdzone), br = liczba(f.braki);
     const podaneZgodne = f.zgodne !== undefined;
     const zg = podaneZgodne ? liczba(f.zgodne) : spr - br;
-    if (!f.linia) b.push('Zeskanuj stanowisko albo wybierz je z listy.');
+    if (!f.linia) b.push('Zeskanuj stanowisko albo maszynę albo wybierz miejsce z listy.');
     const wady = Object.values(f.wady || {}).map(liczba);
     if (![spr, br].concat(podaneZgodne ? [zg] : [], wady).every(n => Number.isInteger(n) && n >= 0)) b.push('Liczby sztuk muszą być całe i nieujemne.');
     else {
@@ -193,6 +203,93 @@
     return zmiany;
   }
 
+  // ------------------------------------------------------------ miejsce próby (stanowisko, maszyna albo linia)
+
+  /* D51 (2026-10-12): w zakładzie jest jedna linia („Hala”) i same maszyny, bez stanowisk — Panel wyznacza tylko
+     maszyny. Próba szła wcześniej WYŁĄCZNIE ze stanowiska (linia brana ze stanowiska), więc bez stanowisk nie dało się
+     jej zapisać. Teraz miejsce to stanowisko, maszyna (etykieta QR drukowana w Panelu, jak u lidera) albo cała linia. */
+  const LINIA_W_LISCIE = 'linia:';
+
+  /* Jedyna linia ze słownika (kod) albo null — przy jednej linii nie każemy jej wybierać (jak Panel od D51). */
+  const jedynaLinia = slowniki => { const l = linie(slowniki); return l.length === 1 ? l[0].kod : null; };
+
+  /* „Kod nieczytelny? Wybierz z listy”: stanowiska, a linie bez stanowisk — jako „cała linia”. */
+  function miejscaDoWyboru(slowniki) {
+    const st = (slowniki || {}).stanowiska || {};
+    const zeStanowiskami = new Set(Object.values(st).map(s => s && s.linia));
+    return Object.entries(st).sort(([a], [b]) => a.localeCompare(b, 'pl'))
+      .map(([k, s]) => ({ wartosc: k, opis: `${nazwaLinii(slowniki, s && s.linia)} · ${(s && s.nazwa) || k}` }))
+      .concat(linie(slowniki).filter(l => !zeStanowiskami.has(l.kod)).map(l => ({ wartosc: LINIA_W_LISCIE + l.kod, opis: `${l.nazwa} · cała linia` })));
+  }
+
+  /* Wartość z listy → miejsce {linia, stanowisko} bez skanu (qr: null); nieznana → null. */
+  function miejsceZWyboru(wartosc, slowniki) {
+    const w = String(wartosc || '');
+    if (w.startsWith(LINIA_W_LISCIE)) {
+      const l = w.slice(LINIA_W_LISCIE.length);
+      return ((slowniki || {}).linie || {})[l] ? { linia: l, stanowisko: null, maszyna: null, qr: null } : null;
+    }
+    const s = ((slowniki || {}).stanowiska || {})[w];
+    return s && s.linia ? { linia: s.linia, stanowisko: w, maszyna: null, qr: null } : null;
+  }
+
+  /* Przy jednej linii bez stanowisk miejsce jest oczywiste — formularz próby ustawia je sam, BEZ godziny startu
+     (ta przychodzi ze skanu albo z wyboru; bez niej czasem próby jest chwila zapisu, a nie otwarcia formularza). */
+  function domyslneMiejsce(slowniki) {
+    const m = miejscaDoWyboru(slowniki);
+    return m.length === 1 && m[0].wartosc.startsWith(LINIA_W_LISCIE) ? m[0].wartosc.slice(LINIA_W_LISCIE.length) : null;
+  }
+
+  /* Napis przycisku skanu: bez stanowisk w słowniku na hali wiszą tylko etykiety maszyn. */
+  const napisSkanu = slowniki => (Object.keys((slowniki || {}).stanowiska || {}).length ? 'Skanuj stanowisko' : 'Skanuj maszynę');
+
+  /* Wynik Hala.odczytajKod(tekst) → miejsce {linia, stanowisko, maszyna, qr} albo {blad}. qr = zeskanowany tekst
+     (dowód obecności, KONTRAKT §10) tylko dla kodu HALA:… albo qr ze słownika; kod wpisany bez przedrostka
+     („WT-01”, „L1-S2”) przyjmujemy, ale „bez skanu”. */
+  function miejsceZeSkanu(k, slowniki) {
+    const sl = slowniki || {};
+    const st = sl.stanowiska || {}, masz = sl.maszyny || {}, lin = sl.linie || {};
+    if (!k) return { blad: 'Nie odczytano kodu. Spróbuj jeszcze raz albo wybierz miejsce z listy.' };
+    let rodzaj = k.rodzaj, wpis = k.wpis, qr = k.surowy || null;
+    const kod = k.kod;
+    if (!rodzaj) {
+      qr = null;
+      if (st[kod]) { rodzaj = 'stanowiska'; wpis = st[kod]; }
+      else if (masz[kod]) { rodzaj = 'maszyny'; wpis = masz[kod]; }
+      else if (lin[kod]) { rodzaj = 'linie'; wpis = lin[kod]; }
+      else return { blad: `Nie znam kodu „${kod}”. Zeskanuj etykietę maszyny albo stanowiska albo wybierz miejsce z listy.` };
+    }
+    if (rodzaj === 'pracownik') return { blad: 'To kod identyfikatora, a nie miejsca kontroli. Zeskanuj etykietę maszyny albo stanowiska.' };
+    if (rodzaj === 'stanowiska') {
+      if (!wpis) return { blad: `Nie znam stanowiska „${kod}”. Sprawdź kod albo wybierz miejsce z listy.` };
+      if (!wpis.linia) return { blad: `Stanowisko „${wpis.nazwa || kod}” nie ma linii w słowniku — zgłoś to administratorowi albo wybierz miejsce z listy.` };
+      return { linia: wpis.linia, stanowisko: kod, maszyna: null, qr };
+    }
+    if (rodzaj === 'maszyny') {
+      if (!wpis) return { blad: `Nie znam maszyny „${kod}”. Sprawdź kod albo wybierz miejsce z listy.` };
+      // Stanowisko maszyny tylko wtedy, gdy jest w słowniku (D51: Panel ich nie zakłada, stare zostają przy maszynach).
+      const stanowisko = wpis.stanowisko && st[wpis.stanowisko] ? wpis.stanowisko : null;
+      const linia = wpis.linia || (stanowisko && st[stanowisko].linia) || jedynaLinia(sl);
+      if (!linia) return { blad: `Maszyna „${wpis.nazwa || kod}” nie ma linii w słowniku — zgłoś to administratorowi albo wybierz miejsce z listy.` };
+      return { linia, stanowisko, maszyna: kod, qr };
+    }
+    if (rodzaj === 'linie') {
+      if (!wpis) return { blad: `Nie znam linii „${kod}”. Sprawdź kod albo wybierz miejsce z listy.` };
+      return { linia: kod, stanowisko: null, maszyna: null, qr };
+    }
+    return { blad: `Nie znam kodu „${kod}”. Zeskanuj etykietę maszyny albo stanowiska albo wybierz miejsce z listy.` };
+  }
+
+  /* Nazwa miejsca próby: stanowisko, bez niego maszyna (pole maszyna formularza albo qr „HALA:M:…”), a bez niej
+     linia. Na liście prób bez stanowiska stało „—”, co kontrolerowi nic nie mówiło. */
+  function nazwaMiejsca(slowniki, d) {
+    const x = d || {};
+    if (x.stanowisko) return nazwaStanowiska(slowniki, x.stanowisko);
+    const m = x.maszyna || (/^HALA:M:(.+)$/i.exec(String(x.qr || '')) || [])[1];
+    if (m) return ((((slowniki || {}).maszyny || {})[m]) || {}).nazwa || m;
+    return nazwaLinii(slowniki, x.linia);
+  }
+
   /* Brudnopis próby może przeleżeć zmianę (skan 13:55, zapis 14:30 albo następnego dnia). Próba liczy się
      do zmiany z chwili skanu, więc w planie bieżącej zmiany by jej nie było — kontroler musi o tym wiedzieć. */
   function skanZInnejZmiany(czasSkanu, zmiana) {
@@ -205,27 +302,36 @@
   const wOknie = (chwila, od, do_) => { const t = ms(chwila); return t >= ms(od) && t < ms(do_); };
   const czasProby = p => (p.dane && p.dane.czas_rozpoczecia) || p.utworzono;
 
-  /* Plan zmiany: stanowiska z plan_probkowania, ile prób KJ zrobiono w oknie zmiany.
-     Liczą się tylko próby KJ (zrodlo === 'kj') — próby lidera to jego obchód, nie plan KJ. */
+  /* Wpis planu „na całą linię” (D51 — zakład bez stanowisk): klucz = kod linii, wartość {linia, na_zmiane} BEZ pola
+     stanowisko. Wpisy stanowisk zawsze mają pole stanowisko (tak je zapisuje katalog), więc stare plany się nie mylą,
+     a stara wersja aplikacji pokaże taki wpis najwyżej jako stanowisko o kodzie linii. */
+  const wpisLinii = (kod, w) => !!w && !w.stanowisko && w.linia === kod;
+
+  /* Plan zmiany: stanowiska (albo całe linie) z plan_probkowania, ile prób KJ zrobiono w oknie zmiany.
+     Liczą się tylko próby KJ (zrodlo === 'kj') — próby lidera to jego obchód, nie plan KJ. Próba bez stanowiska
+     z planu (np. ze skanu maszyny) zalicza plan swojej linii, jeśli linia ma plan „na całą linię”. */
   function planZmiany({ slowniki, proby, zmiana }) {
     const plan = (slowniki || {}).plan_probkowania || {};
-    const zrobione = {};
+    const zrobione = {}, zrobioneLinii = {};
     let pozaPlanem = 0;
     for (const p of proby || []) {
       if (!zmiana || !p.dane || p.dane.zrodlo !== 'kj' || !wOknie(czasProby(p), zmiana.od, zmiana.do)) continue;
-      const st = p.dane.stanowisko;
-      if (st && plan[st]) zrobione[st] = (zrobione[st] || 0) + 1; else pozaPlanem++;
+      const st = p.dane.stanowisko, lin = p.linia || p.dane.linia;
+      if (st && plan[st] && !wpisLinii(st, plan[st])) zrobione[st] = (zrobione[st] || 0) + 1;
+      else if (lin && wpisLinii(lin, plan[lin])) zrobioneLinii[lin] = (zrobioneLinii[lin] || 0) + 1;
+      else pozaPlanem++;
     }
     const grupy = new Map();
     for (const l of linie(slowniki)) grupy.set(l.kod, { linia: l.kod, nazwa: l.nazwa, stanowiska: [] });
     for (const [kod, w] of Object.entries(plan)) {
       const naZmiane = Math.max(0, liczba(w && w.na_zmiane));
       if (!naZmiane) continue;
+      const calaLinia = wpisLinii(kod, w);
       const liniaKod = (w && w.linia) || (((slowniki || {}).stanowiska || {})[kod] || {}).linia || '?';
       if (!grupy.has(liniaKod)) grupy.set(liniaKod, { linia: liniaKod, nazwa: nazwaLinii(slowniki, liniaKod), stanowiska: [] });
-      const z = zrobione[kod] || 0;
-      grupy.get(liniaKod).stanowiska.push({ kod, nazwa: nazwaStanowiska(slowniki, kod), zrobione: z, plan: naZmiane,
-                                            gotowe: z >= naZmiane });
+      const z = (calaLinia ? zrobioneLinii[kod] : zrobione[kod]) || 0;
+      grupy.get(liniaKod).stanowiska.push({ kod, nazwa: calaLinia ? 'Cała linia' : nazwaStanowiska(slowniki, kod), calaLinia,
+                                            zrobione: z, plan: naZmiane, gotowe: z >= naZmiane });
     }
     const wynik = [];
     let wszystkie = 0, gotowe = 0;
@@ -241,13 +347,30 @@
     return { linie: wynik, zrobione: gotowe, plan: wszystkie, pozaPlanem };
   }
 
+  /* Wiersze edycji planu (kierownik KJ): na linii ze stanowiskami — stanowiska, na linii bez nich — jeden wiersz
+     „Cała linia”. pole = nazwa pola formularza (z przedrostkiem, żeby kod linii nie zderzył się z kodem stanowiska),
+     klucz = klucz w słowniku, wartosc = wpis bez na_zmiane. */
+  function wierszePlanu(slowniki) {
+    const plan = (slowniki || {}).plan_probkowania || {};
+    const st = Object.entries((slowniki || {}).stanowiska || {});
+    return linie(slowniki).map(l => {
+      const ze = st.filter(([, s]) => s && s.linia === l.kod).sort(([a], [b]) => a.localeCompare(b, 'pl'));
+      const pozycje = ze.length
+        ? ze.map(([k, s]) => ({ pole: k, klucz: k, nazwa: `${s.nazwa || k} (${k})`, wartosc: { linia: l.kod, stanowisko: k },
+                                na_zmiane: (plan[k] && !wpisLinii(k, plan[k]) && liczba(plan[k].na_zmiane)) || 0 }))
+        : [{ pole: LINIA_W_LISCIE + l.kod, klucz: l.kod, nazwa: 'Cała linia', wartosc: { linia: l.kod },
+             na_zmiane: (wpisLinii(l.kod, plan[l.kod]) && liczba(plan[l.kod].na_zmiane)) || 0 }];
+      return { linia: l.kod, nazwa: l.nazwa, pozycje };
+    });
+  }
+
   /* Próby z bieżącej zmiany (najnowsze na górze) do listy pod planem. */
   function probyZmiany({ proby, zmiana, slowniki, zrodlo }) {
     return (proby || [])
       .filter(p => p.dane && (!zrodlo || p.dane.zrodlo === zrodlo) && zmiana && wOknie(czasProby(p), zmiana.od, zmiana.do))
       .sort((a, b) => ms(czasProby(b)) - ms(czasProby(a)))
       .map(p => ({ id: p.id, czas: czasProby(p), linia: p.linia || p.dane.linia, liniaNazwa: nazwaLinii(slowniki, p.linia || p.dane.linia),
-                   stanowisko: nazwaStanowiska(slowniki, p.dane.stanowisko), zlecenie: ((p.dane.zlecenie || {}).numer) || null,
+                   stanowisko: nazwaMiejsca(slowniki, Object.assign({ linia: p.linia }, p.dane)), zlecenie: ((p.dane.zlecenie || {}).numer) || null,
                    sprawdzone: p.dane.sprawdzone, braki: p.dane.braki, oczekuje: !!p._oczekuje,
                    proc: p.dane.sprawdzone ? Math.round(p.dane.braki * 1000 / p.dane.sprawdzone) / 10 : null }));
   }
@@ -310,6 +433,22 @@
     return { od: new Date(teraz - dni * DZIEN).toISOString(), do: new Date(teraz + 1).toISOString() };
   }
 
+  /* Stopka Pareto mówi o WYBRANYM okresie — stało zawsze „z ostatnich 30 dni”, także przy „7 dni” i „Ta zmiana”. */
+  function stopkaPareto(nazwa) {
+    const z = { zmiana: 'z tej zmiany', dzis: 'z dzisiaj', 7: 'z ostatnich 7 dni', 30: 'z ostatnich 30 dni' }[nazwa] || 'z ostatnich 30 dni';
+    return `Dane ${z} — z prób zapisanych w tym telefonie.`;
+  }
+
+  /* Kolor paska planu zmiany: w trakcie zmiany neutralny — niezrobiony plan o 7:00 to nie błąd, a czerwony pasek od
+     początku zmiany uczył, że czerwień nic nie znaczy. Czerwony dopiero w ostatniej godzinie zmiany (albo po niej)
+     bez wykonanego planu; zielony, gdy plan zrobiony. Bez zmiany (poza godzinami) i bez planu — neutralny. */
+  const OSTATNIA_GODZINA_MS = 60 * 60000;
+  function stanPaskaPlanu(plan, zmiana, teraz) {
+    if (!plan || !plan.plan) return '';
+    if (plan.zrobione >= plan.plan) return 'komplet';
+    return zmiana && ms(zmiana.do) - teraz <= OSTATNIA_GODZINA_MS ? 'alarm' : '';
+  }
+
   // ------------------------------------------------------------ alerty
 
   /* Linie, których dotyczy alert: pusta lista = wszystkie linie ze słownika. */
@@ -367,7 +506,9 @@
     return (alerty || []).map(a => {
       const p = postepAlertu(a, slowniki, pracownicy);
       const wd = a.dane.wazny_do;
-      return { id: a.id, numer: numer(a), tytul: a.dane.tytul, aktywny: a.status === 'aktywny', status: a.status,
+      // Po „Ważny do” lider go nie widzi ani nie potwierdzi (Hala.alertAktywny) — na liście KJ to archiwum, nie aktywny.
+      const wygasl = a.status === 'aktywny' && teraz !== undefined && !H().alertAktywny(a, teraz);
+      return { id: a.id, numer: numer(a), tytul: a.dane.tytul, aktywny: a.status === 'aktywny' && !wygasl, status: a.status, wygasl, waznyDo: wd || null,
                etykieta: a.etykieta, czas: a.dane.czas_publikacji || a.utworzono, oczekuje: !!a._oczekuje,
                potwierdzone: p.potwierdzone, wszystkie: p.wszystkie, komplet: p.komplet,
                brakuje: p.wiersze.filter(w => !w.potwierdzone).map(w => w.nazwa),
@@ -397,8 +538,31 @@
     return d;
   }
 
-  /* Komunikat po rejestracji: do której linii poszła (liderzy tej linii dostają powiadomienie, etap 3). */
-  const komunikatReklamacji = (slowniki, linia) => `Reklamacja przekazana liderom: ${nazwaLinii(slowniki, linia)}`;
+  /* Komunikat po rejestracji: do której linii poszła (liderzy tej linii dostają powiadomienie, etap 3).
+     wyslana === false (zapis czeka w telefonie): nie wolno mówić „przekazana” — liderzy jeszcze jej nie mają. */
+  const komunikatReklamacji = (slowniki, linia, wyslana) => (wyslana === false
+    ? `Reklamacja zapisana — trafi do liderów (${nazwaLinii(slowniki, linia)}), gdy wróci połączenie`
+    : `Reklamacja przekazana liderom: ${nazwaLinii(slowniki, linia)}`);
+
+  /* Linia reklamacji po zmianie kodu wyrobu (stan formularza f: linia, liniaRecznie, liniaZWyrobu).
+     - wyrób ze słownika podpowiada linię, chyba że kontroler świadomie wybrał inną przy znanym wyrobie;
+     - podpowiedź z wyrobu, który przestał pasować (poprawiony kod), znika — nie zostaje po cichu stara linia;
+     - przy jednej linii jest ona wybrana od razu (D51). */
+  function liniaPoWyrobie(f, liniaZWyrobu, jedyna) {
+    const n = Object.assign({}, f);
+    if (liniaZWyrobu) { if (!n.liniaRecznie) { n.linia = liniaZWyrobu; n.liniaZWyrobu = true; } }
+    else if (n.liniaZWyrobu) { n.linia = ''; n.liniaZWyrobu = false; }
+    if (!n.linia && jedyna) n.linia = jedyna;
+    return n;
+  }
+
+  /* Linia dotknięta ręcznie. „Ręcznie” (nie nadpisze jej podpowiedź) tylko wtedy, gdy wyrób już jest znany i ma inną
+     linię — linia wybrana PRZED wpisaniem kodu wyrobu blokowała wcześniej podpowiedź na zawsze, bez ostrzeżenia. */
+  const liniaKliknieta = (f, linia, liniaZWyrobu) =>
+    Object.assign({}, f, { linia, liniaRecznie: !!liniaZWyrobu && linia !== liniaZWyrobu, liniaZWyrobu: false });
+
+  /* „Odczytał: Anna” / „Odczytali: Anna, Piotr”. */
+  const naglowekOdczytow = n => (n > 1 ? 'Odczytali' : 'Odczytał');
 
   /* Kto z liderów odczytał reklamację (mapa odczyty kluczowana autorem). */
   function odczytyReklamacji(r, pracownicy) {
@@ -429,6 +593,14 @@
     })).sort((a, b) => (b.aktywna - a.aktywna) || ms(b.czas) - ms(a.czas));
   }
 
+  /* „Ilość w partii” (opcjonalna): puste = brak, inaczej liczba całych sztuk. Wcześniej parseInt zamieniał po cichu
+     „12,5” na 12 i „1e3” na 1 — wbrew zasadzie z liczbaZPola. null = dobrze. */
+  function bladIlosci(v) {
+    if (String(v === null || v === undefined ? '' : v).trim() === '') return null;
+    const n = liczbaZPola(v);
+    return Number.isInteger(n) && n >= 0 ? null : 'Ilość w partii: liczba całych sztuk, np. 200 (albo zostaw puste).';
+  }
+
   /* Plan zmiany pokazuje partie z BIEŻĄCEJ zmiany (tak jak Panel); starsze aktywne tylko liczymy —
      po miesiącu pracy lista pod planem miała kilkaset kart. */
   function partieZmiany(lista, zmiana) {
@@ -450,14 +622,71 @@
     for (let i = 2; ; i++) if (!zajete.has(`${kod}_${i}`)) return `${kod}_${i}`;
   }
 
+  /* Pole „Kolejność” w oknie wady: nowa wada — następna wolna, zmieniana — jej własna albo PUSTE. Wcześniej wada bez
+     kolejności dostawała przy samej zmianie nazwy „następną” i jej kafelek skakał na koniec listy (także u lidera). */
+  function kolejnoscWOknie(wada, katalog, edycja) {
+    if (edycja) return wada && wada.kolejnosc !== undefined && wada.kolejnosc !== null ? String(wada.kolejnosc) : '';
+    return String((katalog || []).reduce((m, x) => Math.max(m, x.kolejnosc || 0), 0) + 1);
+  }
+
+  // ------------------------------------------------------------ teksty i zapis
+
+  /* Liczba z ułamkiem po polsku: 2.5 → „2,5”. */
+  const procent = n => String(n).replace('.', ',');
+
+  /* „2 z 3 braków”, ale „1 z 1 braku”. */
+  const opisWad = (suma, braki) => `${suma} z ${braki} ${odmiana(braki, 'braku', 'braków', 'braków')}`;
+
+  /* Czy zapis wyjdzie do huba od razu: strumień albo dociąganie (szybki tunel — zapisy wychodzą normalnie, tylko
+     zmiany od innych przychodzą co kilka sekund; ta sama reguła co pasek w kj.js). Bez tego alert w trybie dociągania
+     mówił „wyśle się, gdy wróci sieć”, choć już poszedł. */
+  const wysylaNaZywo = p => !!p && (!!p.strumien || (!!p.dociaganie && !p.blad));
+
+  /* Komunikat, gdy zapis w telefonie się nie udał (hala.zapisz rzuca: nikt nie zalogowany, brak wymaganego pola —
+     po polsku; pamięć telefonu pełna — DOMException po angielsku). Wcześniej błąd ginął bez słowa. */
+  function komunikatBleduZapisu(e) {
+    // hala.zapisz rzuca zwykłe Error z polskim zdaniem; DOMException (QuotaExceededError…) i TypeError mają inne name.
+    const polski = !!e && e.name === 'Error' && !!e.message;
+    return polski ? `Nie zapisano: ${e.message}`
+                  : 'Nie zapisano — telefon nie przyjął zapisu (np. brak miejsca). Spróbuj jeszcze raz; formularz został w telefonie.';
+  }
+
   const katalogWad = slowniki => posortowane((slowniki || {}).katalog_wad).map(w => ({ kod: w.kod, nazwa: w.nazwa || w.kod,
     kategoria: w.kategoria || null, kolejnosc: w.kolejnosc === undefined ? null : w.kolejnosc }));
 
+  // ------------------------------------------------------------ UI etap 2 (2026-10-12, wybór właściciela)
+
+  /* Próba: braki = suma kafelków wad (bez osobnego licznika „Braki” — kontroler liczył je dwa razy). Pole `braki`
+     w zdarzeniu zostaje (kontrakt, Pareto, Panel) — z sumą. Brudnopis sprzed zmiany (z ręcznymi brakami) też liczy się
+     od nowa z wad, żeby nie zapisać liczby, której na ekranie już nie widać. */
+  const brakiZWad = f => Object.assign({}, f, { braki: sumaWad((f || {}).wady) });
+
+  /* „Pomiń” przy próbie lidera ponad progiem: tylko chowa wiersz u TEGO kontrolera do końca zmiany — bez zdarzenia
+     (decyzja „nie oznaczam partii” nie jest faktem dla Panelu, a kolega na drugim telefonie może zdecydować inaczej).
+     Jeden wpis w telefonie { klucz: <osoba>|<zmiana>, ids } — nowa zmiana albo inna osoba zaczyna od pustej listy,
+     więc nic się nie zbiera. */
+  const kluczPominietych = (ja, zmiana) => `${ja || '-'}|${(zmiana && zmiana.id) || '-'}`;
+  function pominiete(zapis, klucz) {
+    return new Set(zapis && zapis.klucz === klucz && Array.isArray(zapis.ids) ? zapis.ids : []);
+  }
+  function pomin(zapis, klucz, id) {
+    const ids = pominiete(zapis, klucz);
+    if (id) ids.add(id);
+    return { klucz, ids: Array.from(ids) };
+  }
+  const bezPominietych = (lista, zapis, klucz) => { const p = pominiete(zapis, klucz); return (lista || []).filter(x => !p.has(x.id)); };
+
+  /* Zlecenia od kierownika na Planie (zamiast osobnej zakładki): sekcja tylko, gdy coś jest do zrobienia. */
+  const pokazZleceniaNaPlanie = doZrobienia => Number(doZrobienia) > 0;
+
   global.KJWidok = {
-    raz, odmiana, liczba, linie, nazwaLinii, nazwaStanowiska, nazwaWyrobu, nazwaWady, nazwaPracownika, godzina, data, kiedy, numer,
+    raz, odmiana, liczba, linie, nazwaLinii, nazwaStanowiska, nazwaWyrobu, nazwaWady, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
     koniecDnia, mozna, sumaWad, MAKS_ZDJEC, skanZInnejZmiany, bledyProby, daneProby, podpowiedzPartii, powodPartii, korektaProby,
     liczbaZPola, korektaZFormularza, dzisZakladu, probyLiderowPonadProgiem, komunikatReklamacji,
-    planZmiany, probyZmiany, pareto, okres, linieAlertu, postepAlertu, bledyAlertu, daneAlertu, listaAlertow,
+    planZmiany, stanPaskaPlanu, probyZmiany, pareto, okres, stopkaPareto, linieAlertu, postepAlertu, bledyAlertu, daneAlertu, listaAlertow,
     liniaWyrobu, bledyReklamacji, daneReklamacji, odczytyReklamacji, listaReklamacji, listaPartii, partieZmiany, kodZNazwy, katalogWad,
+    jedynaLinia, miejscaDoWyboru, miejsceZWyboru, domyslneMiejsce, napisSkanu, miejsceZeSkanu, nazwaMiejsca, wierszePlanu,
+    liniaPoWyrobie, liniaKliknieta, naglowekOdczytow, bladIlosci, kolejnoscWOknie, procent, opisWad, wysylaNaZywo, komunikatBleduZapisu,
+    brakiZWad, kluczPominietych, pominiete, pomin, bezPominietych, pokazZleceniaNaPlanie,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

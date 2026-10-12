@@ -16,7 +16,12 @@
      w parametrach okna — L.okno zapisuje je w brudnopisie, więc przeżywają przeładowanie karty. Wysyłka bierze
      wyłącznie ten kontekst (ctx), nigdy „teraz”: raport zaczęty 13:55 i wysłany 14:01 idzie do zmiany I.
      ctx(o) za każdym razem czyta świeży stan zmiany (pozycje, przekazanie) — zmienia się tylko stan, nie zmiana. */
-  const ctx = o => L.kontekst(o.zmianaId ? W.zmianaPoId(o.zmianaId, hala.slowniki.zmiany) : null, o.linia);
+  const ctx = o => {
+    // Zapamiętanej zmiany nie da się odtworzyć (ktoś zmienił godziny zmian) → kontekst bez zmiany, a wysyłka zatrzymuje się
+    // na brakZmiany. Wcześniej L.kontekst(null) brał po cichu bieżącą zmianę — raport zmiany I szedł do zmiany II.
+    const z = W.zmianaFormularza(o.zmianaId, hala.slowniki.zmiany, hala.zmianaTeraz());
+    return z ? L.kontekst(z, o.linia) : { linia: o.linia, zmiana: null, klucz: null, zl: null };
+  };
   function ustalKontekst(o) {
     Object.assign(o, W.kontekstFormularza(o, hala.zmianaTeraz(), L.linia()));
     return ctx(o);
@@ -34,9 +39,11 @@
     return !bledy.length;
   }
 
-  function brakZmiany(k) {
+  function brakZmiany(k, o) {
     if (k.zmiana) return false;
-    L.komunikat('Poza godzinami zmian — nie ma zmiany, do której można to zapisać.', 'blad');
+    L.komunikat(o && o.zmianaId
+      ? 'Godziny zmian się zmieniły i nie wiem, do której zmiany to zapisać. Zamknij okno i otwórz formularz jeszcze raz.'
+      : 'Poza godzinami zmian — nie ma zmiany, do której można to zapisać.', 'blad');
     return true;
   }
 
@@ -47,37 +54,45 @@
     const linia = ustalKontekst(o).linia;
     const f = await L.formularz(W.kluczBrudnopisuProby(linia, o.zmianaId, o.pozycja), {
       start: new Date(hala.teraz()).toISOString(), stanowisko: '', qr: o.qr || '', numer: '', zdjecieZlecenia: [], wyrob: '',
-      sprawdzone: '', zgodne: '', braki: '', zgodneAuto: true, wady: {}, zdjecia: [], wnioski: '', dzialania: '' });
+      sprawdzone: '', wady: {}, zdjecia: [], wnioski: '', dzialania: '' });
     const d = f.dane;
     if (o.qr && !d.qr) d.qr = o.qr;
     const wyroby = W.wyrobyLinii(hala.slowniki, linia);
     const wady = W.katalogWad(hala.slowniki);
+    // Od D51 maszyny nie mają stanowisk — linia bez stanowisk: zamiast pustej listy sam skan maszyny (dowód obecności).
+    const zeStanowiskami = W.stanowiskaLinii(hala.slowniki, linia).length > 0;
+    // UI etap 2: zlecenie, wnioski i działania rzadko się wypełnia — zwinięte pod „Więcej”. Rozwinięte, gdy brudnopis
+    // już coś w nich ma (inaczej wpisane wcześniej słowa schowałyby się liderowi przed oczami).
+    const wiecejOtwarte = !!(d.numer || (d.zdjecieZlecenia || []).length || d.wnioski || d.dzialania);
     L.okno({
       tytul: o.pozycja ? 'Próba jakościowa' : 'Dodatkowa próba', klucz: 'proba', parametry: o,
       html: `<form class="formularz" novalidate>
-        <label>Stanowisko
+        ${zeStanowiskami ? `<label>Stanowisko
           <div class="rzad"><select name="stanowisko">${opcjeStanowisk(linia, d.stanowisko)}</select>
-          <button type="button" data-skan="stanowisko" aria-label="Skanuj stanowisko">📷</button></div></label>
-        <fieldset><legend>Zlecenie</legend>
-          <div class="pole-zlecenia"></div>
-          <div class="rzad"><input name="numer" placeholder="Numer zlecenia (opcjonalnie)" autocapitalize="characters">
-          <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">📷</button></div>
-        </fieldset>
+          <button type="button" data-skan="stanowisko" aria-label="Skanuj stanowisko albo maszynę">📷</button></div></label>`
+          : '<button type="button" data-skan="stanowisko">📷 Skanuj QR maszyny</button>'}
         ${wyroby.length ? `<label>Wyrób<select name="wyrob"><option value="">—</option>${wyroby.map(w => `<option value="${esc(w.kod)}">${esc(w.kod)} ${esc(w.nazwa)}</option>`).join('')}</select></label>` : ''}
         <div class="liczby-proby">
           <label>Sprawdzone<input name="sprawdzone" type="number" inputmode="numeric" min="1" step="1"></label>
-          <label>Braki<input name="braki" type="number" inputmode="numeric" min="0" step="1"></label>
-          <label>Zgodne<input name="zgodne" type="number" inputmode="numeric" min="0" step="1"></label>
+          <div class="liczba-wyliczona"><span>Braki</span><output class="braki">0</output></div>
+          <div class="liczba-wyliczona"><span>Zgodne</span><output class="zgodne">—</output></div>
         </div>
-        <fieldset><legend>Wady <span class="slaby suma-wad"></span></legend>
+        <fieldset><legend>Wady <span class="slaby">(braki = suma)</span></legend>
           <div class="wady">${wady.map(w => `<div class="wada" data-kod="${esc(w.kod)}"><span>${esc(w.nazwa)}</span>
             <button type="button" data-d="-1" aria-label="Mniej">−</button><b class="ile">0</b><button type="button" data-d="1" aria-label="Więcej">+</button></div>`).join('')
             || '<p class="slaby">Katalog wad jest pusty.</p>'}</div>
         </fieldset>
         <div class="pole-zdjec"></div>
-        <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000"></textarea></label>
-        <label>Działania korygujące<textarea name="dzialania" rows="2" maxlength="2000"></textarea></label>
-        ${d.qr ? `<p class="slaby">Kod obecności: ${esc(d.qr)}</p>` : ''}
+        <details class="wiecej" ${wiecejOtwarte ? 'open' : ''}><summary>Więcej</summary>
+          <fieldset><legend>Zlecenie</legend>
+            <div class="pole-zlecenia"></div>
+            <div class="rzad"><input name="numer" placeholder="Numer zlecenia (opcjonalnie)" autocapitalize="characters">
+            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">📷</button></div>
+          </fieldset>
+          <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000"></textarea></label>
+          <label>Działania korygujące<textarea name="dzialania" rows="2" maxlength="2000"></textarea></label>
+        </details>
+        <p class="slaby kod-obecnosci" ${d.qr ? '' : 'hidden'}>Kod obecności: ${esc(d.qr)}</p>
         <ul class="bledy" hidden></ul>
         <button type="submit" class="glowny szeroki duzy">Zapisz próbę</button>
       </form>`,
@@ -86,23 +101,17 @@
         f.powiaz(form);
         L.poleZdjec(form.querySelector('.pole-zlecenia'), d.zdjecieZlecenia, () => f.zmieniono(), { maks: 1, etykieta: 'Zdjęcie przewodnika' });
         L.poleZdjec(form.querySelector('.pole-zdjec'), d.zdjecia, () => f.zmieniono(), { etykieta: 'Zdjęcie wadliwego detalu' });
-        const auto = () => {
-          const s = liczba(d.sprawdzone), b = liczba(d.braki);
-          if (d.zgodneAuto && Number.isInteger(s) && Number.isInteger(b) && s >= b) { d.zgodne = String(s - b); form.zgodne.value = d.zgodne; f.zmieniono(); }
-        };
-        form.sprawdzone.addEventListener('input', auto);
-        form.braki.addEventListener('input', () => { auto(); rysujWady(); });
-        form.zgodne.addEventListener('input', () => { d.zgodneAuto = form.zgodne.value === ''; f.zmieniono(); });
+        // Braki i zgodne tylko się pokazują (W.liczbyProby) — liczą się z kafelków wad i „Sprawdzone”.
+        form.sprawdzone.addEventListener('input', () => rysujWady());
         function rysujWady() {
-          let suma = 0;
           for (const w of form.querySelectorAll('.wada')) {
             const n = d.wady[w.dataset.kod] || 0;
-            suma += n;
             w.querySelector('.ile').textContent = n;
             w.classList.toggle('jest', n > 0);
           }
-          const b = liczba(d.braki);
-          form.querySelector('.suma-wad').textContent = suma ? `${suma}${Number.isInteger(b) ? ` z ${b} braków` : ''}` : '';
+          const l = W.liczbyProby(d.sprawdzone, d.wady);
+          form.querySelector('output.braki').textContent = l.braki;
+          form.querySelector('output.zgodne').textContent = Number.isInteger(l.zgodne) ? l.zgodne : '—';
         }
         form.querySelector('.wady').addEventListener('click', ev => {
           const b = ev.target.closest('[data-d]');
@@ -115,19 +124,28 @@
         });
         rysujWady();
         form.querySelectorAll('[data-skan]').forEach(b => b.addEventListener('click', async () => {
-          const t = await HalaSkaner.skanuj({ tytul: b.dataset.skan === 'numer' ? 'Zeskanuj numer zlecenia' : 'Zeskanuj stanowisko' });
-          if (!t) return;
-          if (b.dataset.skan === 'numer') { d.numer = t; form.numer.value = t; f.zmieniono(); return; }
-          const kod = Hala.odczytajKod(t, hala.slowniki);
-          const st = kod.rodzaj === 'stanowiska' ? kod.kod : kod.rodzaj === 'maszyny' && kod.wpis ? kod.wpis.stanowisko : null;
-          const ok = W.kodDlaLinii(kod, linia);
-          if (!st || !ok.ok) { L.komunikat(ok.ok ? 'Ten kod nie wskazuje stanowiska. Wybierz je z listy.' : ok.powod, 'blad'); return; }
-          d.stanowisko = st; d.qr = t; form.stanowisko.value = st; f.zmieniono();
+          if (b.dataset.skan === 'numer') {
+            const t = await HalaSkaner.skanuj({ tytul: 'Zeskanuj numer zlecenia' });
+            if (t) { d.numer = t; form.numer.value = t; f.zmieniono(); }
+            return;
+          }
+          // Maszyna bez stanowiska (D51) to też dowód obecności — wcześniej „Ten kod nie wskazuje stanowiska” i skan przepadał.
+          // Wpisany „WT-01” = skan HALA:M:WT-01; zły kod — skaner zostaje otwarty z błędem (L.skanujKod).
+          const skan = await L.skanujKod({ tytul: zeStanowiskami ? 'Zeskanuj stanowisko albo maszynę' : 'Zeskanuj maszynę' },
+            t => W.skanProby(Hala.odczytajKod(t, hala.slowniki), linia));
+          if (!skan) return;
+          const t = skan.tekst;
+          d.qr = t;
+          if (skan.stanowisko) { d.stanowisko = skan.stanowisko; if (form.stanowisko) form.stanowisko.value = skan.stanowisko; }
+          const kodEl = form.querySelector('.kod-obecnosci');
+          kodEl.textContent = 'Kod obecności: ' + t; kodEl.hidden = false;
+          f.zmieniono();
         }));
         form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const lista = Object.entries(d.wady).filter(([, n]) => n > 0).map(([kod, ilosc]) => ({ kod, ilosc }));
-          const dane = { sprawdzone: liczba(d.sprawdzone), zgodne: liczba(d.zgodne), braki: liczba(d.braki), wady: lista };
+          const l = W.liczbyProby(d.sprawdzone, d.wady);
+          const dane = { sprawdzone: l.sprawdzone, zgodne: l.zgodne, braki: l.braki, wady: lista };
           if (!pokazBledy(form, W.sprawdzProbe(dane, hala.slowniki))) return;
           const id = hala.nowyId();
           const zd = await L.zapisz('proba.zarejestrowana', id, L.bezPustych(Object.assign({
@@ -138,7 +156,7 @@
           if (o.pozycja) await L.odhacz(o.pozycja, { proba: id, qr: d.qr }, ctx(o));
           await f.usun();
           L.zamknijOkno();
-          L.poZapisie(`Próba zapisana: ${dane.braki}/${dane.sprawdzone} braków`);
+          L.poZapisie(`Próba zapisana: braki ${dane.braki} z ${dane.sprawdzone}`);
         }));
       },
     });
@@ -190,6 +208,7 @@
           if (!Number.isInteger(ob) || ob < 0) bledy.push('Wpisz, ile osób jest obecnych.');
           if (!pokazBledy(form, bledy)) return;
           const kk = ctx(o);
+          if (brakZmiany(kk, o)) return;
           const zd = await L.zapisz('obsada.zgloszona', kk.klucz, L.bezPustych({
             linia: kk.linia, zmiana: kk.zmiana.id, planowana: p, obecna: ob,
             nieobecni: String(d.nieobecni || '').split('\n').map(s => s.trim()).filter(Boolean), uwagi: (d.uwagi || '').trim() }));
@@ -209,9 +228,11 @@
     const o = opcje || {};
     const k = ustalKontekst(o);
     if (brakZmiany(k)) return;
-    const f = await L.formularz('obsada-zd:' + k.linia, { rodzaj: '', pracownik: '', na_linie: '', opis: '' });
+    // Brudnopis na tę zmianę — wczorajszy porzucony nie wstaje dziś (jak awaria i próba).
+    const f = await L.formularz(W.kluczBrudnopisu('obsada-zd', k.linia, o.zmianaId), { rodzaj: '', pracownik: '', na_linie: '', opis: '' });
     const d = f.dane;
-    const rodzaje = stale().rodzaje_zdarzen_obsady || [];
+    // Jedna linia (D51): bez „Przesunięcie między liniami” — lista „Na linię” byłaby pusta.
+    const rodzaje = W.rodzajeZdarzenObsady(stale(), hala.slowniki);
     const linie = W.liniePosortowane(hala.slowniki).filter(l => l.kod !== k.linia);
     L.okno({
       tytul: 'Zdarzenie obsady', klucz: 'obsada-zd', parametry: o,
@@ -241,6 +262,7 @@
           ev.preventDefault();
           if (!pokazBledy(form, d.rodzaj ? [] : ['Wybierz, co się stało.'])) return;
           const kk = ctx(o);
+          if (brakZmiany(kk, o)) return;
           const zd = await L.zapisz('obsada.zdarzenie', kk.klucz, L.bezPustych({
             linia: kk.linia, zmiana: kk.zmiana.id, rodzaj: d.rodzaj, pracownik: (d.pracownik || '').trim(),
             na_linie: d.rodzaj === 'przesuniecie' ? d.na_linie : '', opis: (d.opis || '').trim() }));
@@ -261,17 +283,18 @@
     const o = opcje || {};
     const k = ustalKontekst(o);
     if (brakZmiany(k)) return;
-    const stanowiska = W.stanowiskaLinii(hala.slowniki, k.linia);
+    // Punkty audytu: maszyny linii (od D51 tylko je wyznacza Panel), linia bez maszyn — stanowiska (W.punktyAudytuBhp).
+    const stanowiska = W.punktyAudytuBhp(hala.slowniki, k.linia);
     const f = await L.formularz('audyt:' + k.klucz, { oceny: {}, uwagi: '' });
     const d = f.dane;
     L.okno({
-      tytul: 'Audyt BHP stanowisk', klucz: 'audyt', parametry: o,
+      tytul: 'Audyt BHP', klucz: 'audyt', parametry: o,
       html: `<form class="formularz" novalidate>
         <ul class="audyt">${stanowiska.map(s => `<li data-st="${esc(s.kod)}">
           <div class="nazwa-st">${esc(s.nazwa)} <span class="slaby">${esc(s.kod)}</span></div>
           <div class="przelacznik"><button type="button" data-z="1">Zgodne</button><button type="button" data-z="0">Niezgodne</button></div>
           <input class="uwagi-st" placeholder="Co jest nie tak?" maxlength="500" hidden></li>`).join('')
-          || '<li class="slaby">Linia nie ma stanowisk w słowniku — wpisz uwagi ogólne.</li>'}</ul>
+          || '<li class="slaby">Linia nie ma maszyn ani stanowisk w słowniku — wpisz uwagi ogólne.</li>'}</ul>
         <label>Uwagi ogólne<textarea name="uwagi" rows="2" maxlength="2000"></textarea></label>
         <ul class="bledy" hidden></ul>
         <button type="submit" class="glowny szeroki duzy">Zapisz audyt</button>
@@ -307,19 +330,23 @@
         form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const brak = stanowiska.filter(s => typeof (d.oceny[s.kod] || {}).zgodne !== 'boolean');
-          if (!pokazBledy(form, brak.length ? [`Oceń wszystkie stanowiska (brakuje: ${brak.map(s => s.kod).join(', ')}).`] : [])) return;
-          const pozycje = stanowiska.map(s => L.bezPustych({ stanowisko: s.kod, zgodne: d.oceny[s.kod].zgodne, uwagi: (d.oceny[s.kod].uwagi || '').trim() }));
+          if (!pokazBledy(form, brak.length ? [`Oceń wszystkie punkty (brakuje: ${brak.map(s => s.kod).join(', ')}).`] : [])) return;
+          // Pole pozycji według punktu: { maszyna } albo { stanowisko } (W.punktyAudytuBhp).
+          const pozycje = stanowiska.map(s => L.bezPustych({ [s.pole]: s.kod, zgodne: d.oceny[s.kod].zgodne, uwagi: (d.oceny[s.kod].uwagi || '').trim() }));
           const kk = ctx(o);
+          if (brakZmiany(kk, o)) return;
           const zd = await L.zapisz('bhp.audyt', kk.klucz, L.bezPustych({ linia: kk.linia, zmiana: kk.zmiana.id, pozycje, uwagi: (d.uwagi || '').trim() }));
           if (!zd) return;
           await L.odhaczTyp('bhp', o.pozycja, { qr: o.qr }, ctx(o));
           await f.usun();
-          const niezgodne = pozycje.filter(p => p.zgodne === false);
+          const niezgodne = stanowiska.filter(s => d.oceny[s.kod].zgodne === false);
           L.zamknijOkno();
           L.poZapisie(niezgodne.length ? `Audyt zapisany — niezgodne: ${niezgodne.length}` : 'Audyt zapisany — wszystko zgodne');
           if (niezgodne.length) {
-            // Odstępstwo z audytu od razu jako zgłoszenie BHP (z numerem BHP-…), żeby ktoś je zamknął.
-            formularzBhp({ linia: kk.linia, stanowisko: niezgodne[0].stanowisko, rodzaj: 'odstepstwo', opis: niezgodne.map(p => `${p.stanowisko}: ${p.uwagi || 'niezgodne'}`).join('\n') });
+            // Odstępstwo z audytu od razu jako zgłoszenie BHP (z numerem BHP-…), żeby ktoś je zamknął. zAudytu = id zdarzenia
+            // audytu: własny brudnopis, więc stary brudnopis „+ Zgłoszenie BHP” nie przykryje niezgodności (audyt 2026-10-12).
+            formularzBhp({ linia: kk.linia, zmianaId: o.zmianaId, zAudytu: zd.id || hala.nowyId(), stanowisko: niezgodne[0].stanowisko, rodzaj: 'odstepstwo',
+                           opis: niezgodne.map(s => `${s.kod}: ${(d.oceny[s.kod].uwagi || '').trim() || 'niezgodne'}`).join('\n') });
           }
         }));
       },
@@ -331,14 +358,18 @@
   async function formularzBhp(opcje) {
     const o = opcje || {};
     const linia = ustalKontekst(o).linia;
-    const f = await L.formularz('bhp:' + linia, { rodzaj: o.rodzaj || '', stanowisko: o.stanowisko || '', opis: o.opis || '', zdjecia: [] });
+    // Zgłoszenie z audytu ma własny brudnopis (zAudytu) — wcześniej stary brudnopis 'bhp:<linia>' wygrywał z niezgodnościami
+    // podanymi przez audyt. Zwykłe zgłoszenie: brudnopis na tę zmianę.
+    const f = await L.formularz(W.kluczBrudnopisu('bhp', linia, o.zmianaId, o.zAudytu ? 'audyt-' + o.zAudytu : ''),
+      { rodzaj: o.rodzaj || '', stanowisko: o.stanowisko || '', opis: o.opis || '', zdjecia: [] });
     const d = f.dane;
     const rodzaje = stale().rodzaje_bhp || [];
+    // Linia bez stanowisk (D51 — same maszyny): bez pustej listy „— stanowisko —”, której i tak nie dało się wypełnić.
     L.okno({
       tytul: 'Zgłoszenie BHP', klucz: 'bhp', parametry: o,
       html: `<form class="formularz" novalidate>
         <div class="siatka-wyboru" data-grupa="rodzaj">${rodzaje.map(r => `<button type="button" data-wartosc="${esc(r.kod)}">${esc(r.nazwa)}</button>`).join('')}</div>
-        <label>Stanowisko<select name="stanowisko">${opcjeStanowisk(linia, d.stanowisko)}</select></label>
+        ${W.stanowiskaLinii(hala.slowniki, linia).length ? `<label>Stanowisko<select name="stanowisko">${opcjeStanowisk(linia, d.stanowisko)}</select></label>` : ''}
         <label>Opis<textarea name="opis" rows="3" maxlength="4000" placeholder="Co się stało albo co grozi?"></textarea></label>
         <div class="pole-zdjec"></div>
         <ul class="bledy" hidden></ul>
@@ -395,7 +426,7 @@
     L.okno({
       tytul: 'Przekazanie zmiany', klucz: 'przekazanie', parametry: o,
       html: `<form class="formularz" novalidate>
-        <p class="slaby">${esc(W.opisZmiany(k.zmiana.id, hala.slowniki))} · ${esc(k.linia)}${bylo ? ' · już wysłane — możesz poprawić' : ''}</p>
+        <p class="slaby">${esc(W.opisZmiany(k.zmiana.id, hala.slowniki))}${W.wieleLinii(hala.slowniki) ? ' · ' + esc(k.linia) : ''}${bylo ? ' · już wysłane — możesz poprawić' : ''}</p>
         <label>Stan maszyn<textarea name="maszyny" rows="3" maxlength="4000"></textarea></label>
         <label>Braki materiałowe<textarea name="braki_materialowe" rows="2" maxlength="4000"></textarea></label>
         <label>Do dokończenia<textarea name="do_dokonczenia" rows="2" maxlength="4000"></textarea></label>
@@ -472,6 +503,7 @@
         form.addEventListener('submit', W.przyWysylce(async ev => {
           ev.preventDefault();
           const kk = ctx(o);
+          if (brakZmiany(kk, o)) return;
           const zd = await L.zapisz('zmiana.raport', kk.klucz, { linia: kk.linia, zmiana: kk.zmiana.id, podsumowanie: zbudujRaport(kk, f.dane.uwagi) });
           if (!zd) return;
           await f.usun();
@@ -489,7 +521,9 @@
   function kartaKonca(k, tytul) {
     const d = (k.zl && k.zl.dane) || {};
     const r = zbudujRaport(k, '');
-    const zmianaId = k.zmiana.id === (hala.zmianaTeraz() || {}).id ? '' : k.zmiana.id;
+    // Zawsze id tej karty (audyt 2026-10-12): z pustym id „Ta zmiana” narysowana 13:59:50 i dotknięta 14:00:05 otwierała
+    // raport zmiany II, choć karta mówiła o zmianie I.
+    const zmianaId = k.zmiana.id;
     // Zaległy raport wysyła każdy lider tej linii albo mistrz — niech widzi, czyją zmianę zamyka.
     const otworzyl = d.lider && d.lider !== (hala.pracownik && hala.pracownik.id) ? W.nazwaPracownika(hala.pracownicy, d.lider) : '';
     return `<article class="karta koniec">

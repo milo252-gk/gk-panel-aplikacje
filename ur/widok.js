@@ -28,6 +28,9 @@
       .map(([kod, w]) => Object.assign({ kod }, w || {}));
 
   const linie = slowniki => posortowane((slowniki || {}).linie).map(l => ({ kod: l.kod, nazwa: l.nazwa || l.kod }));
+  /* Zakład z jedną (ukrytą) linią „Hala” (D51): wybór linii, tabela linii i „· Hala” przy każdej pozycji to szum —
+     znikają jak w Panelu (W.wieleLinii). Dwie albo więcej linii (starsze dane, --demo) — wracają. */
+  const wieleLinii = slowniki => linie(slowniki).length > 1;
   const nazwaLinii = (slowniki, kod) => (((slowniki || {}).linie || {})[kod] || {}).nazwa || kod || '—';
   const nazwaMaszyny = (slowniki, kod) => (((slowniki || {}).maszyny || {})[kod] || {}).nazwa || kod || '—';
   const nazwaStanowiska = (slowniki, kod) => (((slowniki || {}).stanowiska || {})[kod] || {}).nazwa || kod || null;
@@ -66,6 +69,17 @@
     if (isNaN(t)) return '—';
     const l = H().lokalny(t);
     return `${dwie(l.dzien)}.${dwie(l.miesiac)}`;
+  }
+
+  /* Data z rokiem „01.09.2026” (STYL-GK §6) — dla chwili albo dnia 'RRRR-MM-DD' (pole daty, harmonogram „od”).
+     Plan pokazywał „od 2026-09-01”, czyli zapis z bazy, a nie datę, jaką ludzie piszą. */
+  function dataPelna(chwilaAlboDzien) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(chwilaAlboDzien || ''));
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+    const t = ms(chwilaAlboDzien);
+    if (chwilaAlboDzien === null || chwilaAlboDzien === undefined || chwilaAlboDzien === '' || isNaN(t)) return '—';
+    const l = H().lokalny(t);
+    return `${dwie(l.dzien)}.${dwie(l.miesiac)}.${l.rok}`;
   }
 
   /* „14:05” dziś, „24.09 14:05” wcześniej. */
@@ -151,6 +165,10 @@
   const priorytetInfo = (stale, kod) => ((stale && stale.priorytety) || []).find(p => p.kod === kod) || { kod, nazwa: kod || '—', kolejnosc: 9, zatrzymuje: false };
   const nazwaZeStalej = (stale, lista, kod) => (((stale && stale[lista]) || []).find(p => p.kod === kod) || {}).nazwa || kod || null;
   const zatrzymuje = (awaria, stale) => !!priorytetInfo(stale, ((awaria && awaria.dane) || {}).priorytet).zatrzymuje;
+  /* Nazwa priorytetu na ekranie. Przy jednej linii (D51) staje maszyna, nie „linia” — „Zatrzymanie linii” i czerwone
+     „Stoi linia” myliły mechanika (reszta hali pracuje), więc priorytet zatrzymujący to „Maszyna stoi”. Kod bez zmian. */
+  const nazwaPriorytetu = (pr, slowniki) => (pr && pr.zatrzymuje && !wieleLinii(slowniki) ? 'Maszyna stoi' : ((pr && pr.nazwa) || '—'));
+  const napisStoi = slowniki => (wieleLinii(slowniki) ? 'Stoi linia' : 'Maszyna stoi');
 
   /* Wiersz listy / nagłówek karty awarii. Etykieta statusu z kontraktu (a.etykieta),
      żeby mechanik, lider i Panel widzieli te same słowa (D9). */
@@ -162,10 +180,10 @@
       maszyna: d.maszyna || '—', maszynaNazwa: nazwaMaszyny(slowniki, d.maszyna),
       linia: a.linia || d.linia || null, liniaNazwa: nazwaLinii(slowniki, a.linia || d.linia),
       stanowiskoNazwa: nazwaStanowiska(slowniki, d.stanowisko),
-      opis: d.opis || '', zdjec: (d.zdjecia || []).length, priorytet: pr.kod, priorytetNazwa: pr.nazwa, zatrzymuje: !!pr.zatrzymuje, kolejnosc: pr.kolejnosc || 9,
+      opis: d.opis || '', zdjec: (d.zdjecia || []).length, priorytet: pr.kod, priorytetNazwa: nazwaPriorytetu(pr, slowniki), zatrzymuje: !!pr.zatrzymuje, kolejnosc: pr.kolejnosc || 9,
       // „Stoi linia” tylko, dopóki awaria trwa — zamknięta z priorytetem „zatrzymanie” już linii nie zatrzymuje.
-      stoi: a.aktywny !== false && !!pr.zatrzymuje,
-      priorytetZgloszony: d.priorytet_zgloszony && d.priorytet_zgloszony !== d.priorytet ? priorytetInfo(stale, d.priorytet_zgloszony).nazwa : null,
+      stoi: a.aktywny !== false && !!pr.zatrzymuje, stoiNapis: napisStoi(slowniki),
+      priorytetZgloszony: d.priorytet_zgloszony && d.priorytet_zgloszony !== d.priorytet ? nazwaPriorytetu(priorytetInfo(stale, d.priorytet_zgloszony), slowniki) : null,
       typUsterki: nazwaZeStalej(stale, 'typy_usterek', d.typ_usterki),
       powodWstrzymania: a.status === 'wstrzymana' ? nazwaZeStalej(stale, 'powody_wstrzymania', d.powod_wstrzymania) : null,
       mechanik: d.mechanik || null, mechanikNazwa: nazwaPracownika(pracownicy, d.mechanik),
@@ -204,9 +222,11 @@
     { typ: 'awaria.przyjeta', tekst: 'Jadę', glowny: true },
     { typ: 'awaria.naprawa_rozpoczeta', tekst: 'Na miejscu — skanuj maszynę', glowny: true, skan: true },
     { typ: 'awaria.wznowiona', tekst: 'Wznów naprawę', glowny: true },
-    { typ: 'awaria.zakonczona_ur', tekst: 'Zakończ naprawę', glowny: true, zielony: true },
+    // Grafitowy jak każdy główny przycisk (STYL-GK §1) — zieleń zostaje dla stanu „zgodne / gotowe”, nie dla przycisku.
+    { typ: 'awaria.zakonczona_ur', tekst: 'Zakończ naprawę', glowny: true },
     { typ: 'awaria.wstrzymana', tekst: 'Wstrzymaj' },
-    { typ: 'awaria.sklasyfikowana', tekst: 'Typ i priorytet' },
+    // Sam priorytet (UI etap 2): typ usterki mechanik wybiera raz — w „Zakończ naprawę”, kiedy już wie, co się zepsuło.
+    { typ: 'awaria.sklasyfikowana', tekst: 'Priorytet' },
     { typ: 'awaria.przypisana', tekst: 'Przekaż koledze' },
     { typ: 'awaria.komentarz', tekst: 'Notatka' },
     { typ: 'awaria.anulowana', tekst: 'Fałszywy alarm', alarm: true },
@@ -214,11 +234,11 @@
   // Kroki, po których awaria jest MOJA (kontrakt wpisuje autora jako mechanika) — przy cudzej awarii najpierw pytanie.
   const KROKI_PRZEJMUJACE = ['awaria.przyjeta', 'awaria.naprawa_rozpoczeta', 'awaria.wznowiona', 'awaria.zakonczona_ur'];
 
-  /* Okno przed krokiem przejmującym: „Przejąć awarię od Jana Kowalskiego?” — z imieniem, bo mechanik musi wiedzieć,
-     komu zabiera robotę (i do kogo zadzwonić, zanim pojedzie). */
+  /* Okno przed krokiem przejmującym — z imieniem w treści, bo mechanik musi wiedzieć, komu zabiera robotę (i do kogo
+     zadzwonić, zanim pojedzie). Imienia nie odmieniamy, więc nie stoi po „od” („od Tomasz Wójcik” — audyt 2026-10-12). */
   function pytaniePrzejecia(pracownicy, prowadzi) {
-    const kto = nazwaPracownika(pracownicy, prowadzi) || 'kolegi';
-    return { tytul: `Przejąć awarię od ${kto}?`, tresc: `Awarię prowadzi ${kto}. Po tym kroku będzie Twoja.`, przycisk: 'Przejmij' };
+    const kto = nazwaPracownika(pracownicy, prowadzi) || 'kolega';
+    return { tytul: 'Przejąć awarię?', tresc: `Awarię prowadzi ${kto}. Po tym kroku będzie Twoja.`, przycisk: 'Przejmij' };
   }
   function akcjeAwarii(awaria, { kontrakt, pracownik }) {
     // Zamknięta / anulowana: koniec pracy UR. Notatkę kontrakt by przyjął, ale na hali nikt jej już nie przeczyta.
@@ -243,6 +263,21 @@
       return Object.assign({}, k, { glowny: g, przejmuje });
     });
   }
+
+  /* Karta awarii (UI etap 2, „mniej na karcie”): na wierzchu jeden duży przycisk następnego kroku (Jadę / Na miejscu —
+     skanuj / Zakończ naprawę… — główny z akcjeAwarii) i kroki zmieniające stan (Wstrzymaj, przejęcie cudzej awarii);
+     rzadkie rzeczy — przekazanie, notatka, priorytet, fałszywy alarm — pod „Więcej ▾”. Gdy na wierzchu nie byłoby nic
+     (np. czeka na lidera: zostaje priorytet i notatka), nie chowamy ich za „Więcej” — jedno dotknięcie mniej. */
+  const KROKI_WIECEJ = ['awaria.przypisana', 'awaria.komentarz', 'awaria.sklasyfikowana', 'awaria.anulowana'];
+  function ukladAkcji(akcje) {
+    const lista = akcje || [];
+    const wierzch = lista.filter(a => !KROKI_WIECEJ.includes(a.typ));
+    const wiecej = KROKI_WIECEJ.map(t => lista.find(a => a.typ === t)).filter(Boolean);
+    return wierzch.length ? { wierzch, wiecej } : { wierzch: wiecej, wiecej: [] };
+  }
+
+  /* Kierownik UR (albo admin) — Plan i KPI. Mechanik KPI nie ogląda (UI etap 2): liczby są dla tego, kto rozlicza dział. */
+  const kierownikUR = p => !!p && (p.role || []).some(r => r === 'kierownik_ur' || r === 'admin');
 
   /* Gotowe opisy naprawy — mechanik w rękawicach dotyka, a nie pisze (instrukcja §7). */
   const GOTOWE_OPISY = ['Wymiana części', 'Regulacja', 'Czyszczenie', 'Dokręcenie połączeń', 'Smarowanie',
@@ -286,17 +321,40 @@
     return d;
   }
 
-  /* Czy zeskanowany kod to ta maszyna. Kody HALA:M:… i kody zastane z pola qr słownika. */
+  /* Kod wpisany ręcznie w oknie skanera → tekst, jaki dałby skan naklejki. Mechanik przy brudnej naklejce wpisuje sam
+     kod („WT-01”, „ wt-01”), a Hala.odczytajKod rozumie tylko „HALA:M:WT-01” — wpisany kod był „nieznany” i start
+     przeglądu (qr obowiązkowe) był niemożliwy. Wielkość liter i spacje bez znaczenia; najpierw maszyny, potem stanowiska
+     i linie (błąd „to kod stanowiska”). Kod pełny, qr ze słownika i nieznany tekst wracają bez zmian. Bliźniak: Lider. */
+  const bezOdstepow = s => String(s || '').replace(/\s+/g, '').toUpperCase();
+  const PRZEDROSTKI = { maszyny: 'M', stanowiska: 'S', linie: 'L' };
+  function kodZeSkanu(tekst, slowniki) {
+    const t = String(tekst || '').trim();
+    const k = H().odczytajKod(t, slowniki);
+    if (k.rodzaj === 'pracownik' || k.wpis) return t;
+    const m = /^HALA:([MSL]):(.+)$/.exec(bezOdstepow(t));
+    const szukany = m ? m[2] : bezOdstepow(t);
+    const rodzaje = Object.keys(PRZEDROSTKI).filter(r => !m || PRZEDROSTKI[r] === m[1]);
+    for (const r of rodzaje) {
+      const kod = Object.keys((slowniki || {})[r] || {}).find(x => bezOdstepow(x) === szukany);
+      if (kod) return `HALA:${PRZEDROSTKI[r]}:${kod}`;
+    }
+    return t;
+  }
+
+  /* Czy zeskanowany (albo wpisany) kod to ta maszyna. Kody HALA:M:…, kody zastane z pola qr słownika i sam kod
+     maszyny wpisany ręcznie. qr = tekst do zdarzenia (dla wpisanego „wt-01” — „HALA:M:WT-01”, jak ze skanu). */
   function sprawdzMaszyne(tekst, slowniki, oczekiwana) {
-    const k = H().odczytajKod(tekst, slowniki);
+    const qr = kodZeSkanu(tekst, slowniki);
+    const k = H().odczytajKod(qr, slowniki);
     const ok = k.rodzaj === 'maszyny' && k.kod === oczekiwana;
     let blad = null;
     if (!ok) {
       if (k.rodzaj === 'maszyny') blad = `To ${nazwaMaszyny(slowniki, k.kod)} (${k.kod}), a potrzebna ${nazwaMaszyny(slowniki, oczekiwana)} (${oczekiwana}).`;
-      else if (k.rodzaj) blad = `To kod ${k.rodzaj === 'stanowiska' ? 'stanowiska' : k.rodzaj === 'linie' ? 'linii' : 'identyfikatora'}, nie maszyny. Zeskanuj kod na ${nazwaMaszyny(slowniki, oczekiwana)}.`;
-      else blad = `Nieznany kod „${k.kod}”. Zeskanuj kod na ${nazwaMaszyny(slowniki, oczekiwana)} (${oczekiwana}).`;
+      // „Zeskanuj kod maszyny: Pilarka 1” — nazwy nie odmienimy, więc nie po „na” (audyt 2026-10-12).
+      else if (k.rodzaj) blad = `To kod ${k.rodzaj === 'stanowiska' ? 'stanowiska' : k.rodzaj === 'linie' ? 'linii' : 'identyfikatora'}, nie maszyny. Zeskanuj kod maszyny: ${nazwaMaszyny(slowniki, oczekiwana)} (${oczekiwana}).`;
+      else blad = `Nieznany kod „${k.kod}”. Zeskanuj kod maszyny: ${nazwaMaszyny(slowniki, oczekiwana)} (${oczekiwana}).`;
     }
-    return { ok, kod: k.kod, blad };
+    return { ok, kod: k.kod, blad, qr };
   }
 
   /* Komu można przekazać awarię: mechanicy i kierownik UR, bez mnie. */
@@ -323,21 +381,26 @@
      nie zmienił — np. drugie zgłoszenie tej samej awarii z telefonu, który był offline) nie dzwoni: mechanik biegłby
      do czegoś, czego na liście nie ma (etap 1). Sam poprawiony czas telefonu (Hala.UWAGA_CZASU) konfliktem nie jest —
      awaria ze złym zegarem lidera dalej dzwoni. Bez Hala.jestKonflikt (stary hala.js) każda uwaga = konflikt. */
-  function powiadomienie(z, { ja, slowniki, stale }) {
+  function powiadomienie(z, { ja, slowniki, stale, awaria }) {
     if (!z || z.autor === ja) return null;
     if (z.uwaga && (!H() || !H().jestKonflikt || H().jestKonflikt(z.uwaga))) return null;
     const d = z.dane || {};
     if (z.typ === 'awaria.zgloszona') {
       const pr = priorytetInfo(stale, d.priorytet);
       return { tytul: pr.zatrzymuje ? `STOI: ${nazwaMaszyny(slowniki, d.maszyna)}` : `Awaria: ${nazwaMaszyny(slowniki, d.maszyna)}`,
-               tresc: `${nazwaLinii(slowniki, d.linia)} · ${pr.nazwa}${d.opis ? ' — ' + d.opis : ''}`,
+               tresc: `${wieleLinii(slowniki) ? nazwaLinii(slowniki, d.linia) + ' · ' : ''}${nazwaPriorytetu(pr, slowniki)}${d.opis ? ' — ' + d.opis : ''}`,
                pilna: !!pr.zatrzymuje, obiekt: z.obiekt };
     }
     if (z.typ === 'awaria.przypisana' && d.mechanik === ja) {
       return { tytul: 'Przekazano Ci awarię', tresc: '', pilna: false, obiekt: z.obiekt };
     }
     if (z.typ === 'awaria.potwierdzenie_odrzucone') {
-      return { tytul: 'Lider: naprawa nie pomogła', tresc: d.powod || '', pilna: true, obiekt: z.obiekt };
+      // Alarm (trzy serie tonów) tylko u mechanika, który prowadzi awarię — dzwonił u wszystkich i nie mówił, która
+      // maszyna (audyt 2026-10-12). awaria = obiekt z telefonu (ur.js); bez niego albo bez mechanika — u każdego.
+      const ad = (awaria && awaria.dane) || {};
+      if (ad.mechanik && ad.mechanik !== ja) return null;
+      return { tytul: `Lider: naprawa nie pomogła${ad.maszyna ? ' — ' + nazwaMaszyny(slowniki, ad.maszyna) : ''}`, tresc: d.powod || '',
+               pilna: true, obiekt: z.obiekt };
     }
     return null;
   }
@@ -376,7 +439,10 @@
         case 'awaria.naprawa_rozpoczeta': return d.qr ? 'Na miejscu (skan maszyny)' : 'Na miejscu (bez skanu)';
         case 'awaria.wstrzymana': return `Wstrzymana: ${nazwaZeStalej(stale, 'powody_wstrzymania', d.powod) || ''}${d.opis ? ' — ' + d.opis : ''}`;
         case 'awaria.wznowiona': return 'Wznowiona';
-        case 'awaria.sklasyfikowana': return `Typ: ${nazwaZeStalej(stale, 'typy_usterek', d.typ_usterki) || '—'}${d.priorytet ? ', priorytet: ' + priorytetInfo(stale, d.priorytet).nazwa : ''}`;
+        // Od UI etap 2 „Priorytet” wysyła sam priorytet — bez „Typ: —” na początku.
+        case 'awaria.sklasyfikowana': return d.typ_usterki
+          ? `Typ: ${nazwaZeStalej(stale, 'typy_usterek', d.typ_usterki) || d.typ_usterki}${d.priorytet ? ', priorytet: ' + priorytetInfo(stale, d.priorytet).nazwa : ''}`
+          : `Priorytet: ${d.priorytet ? priorytetInfo(stale, d.priorytet).nazwa : '—'}`;
         case 'awaria.przypisana': return `Przekazana: ${nazwaPracownika(pracownicy, d.mechanik)}`;
         case 'awaria.zakonczona_ur': return `Zakończona przez UR: ${d.opis_naprawy || ''}`;
         case 'awaria.potwierdzona': return 'Lider potwierdził — linia ruszyła';
@@ -597,7 +663,7 @@
     const i = INTERWALY.find(x => x.kod === (w && w.interwal));
     if (!i) return '—';
     const n = Number(w.co) || 0;
-    if (n === 1 && i.kod !== 'motogodziny' && i.kod !== 'cykle') return { dzien: 'Codziennie', tydzien: 'Co tydzień', miesiac: 'Co miesiąc', rok: 'Co rok' }[i.kod];
+    if (n === 1 && i.kod !== 'motogodziny' && i.kod !== 'cykle') return { dzien: 'Codziennie', tydzien: 'Co tydzień', miesiac: 'Co miesiąc', rok: 'Co roku' }[i.kod];
     return `Co ${n} ${odmiana(n, ...i.jedn)}`;
   }
 
@@ -645,9 +711,13 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.od || '')) b.push('Podaj datę pierwszego przeglądu.');
     const wartosc = { maszyna: f.maszyna, karta: f.karta, interwal: f.interwal, co, od: f.od };
     if (f.mechanik) wartosc.mechanik = f.mechanik;
-    if (['motogodziny', 'cykle'].includes(f.interwal) && f.start !== '' && f.start !== undefined && f.start !== null) {
+    // Odczyt na start jest obowiązkowy przy motogodzinach i cyklach: bez niego generator liczył od zera i maszyna
+    // z licznikiem 12 000 mth dostawała przegląd od razu po zapisaniu harmonogramu (audyt 2026-10-12).
+    if (['motogodziny', 'cykle'].includes(f.interwal)) {
       const s = liczba(f.start);
-      if (isNaN(s) || s < 0) b.push('Odczyt licznika na start to liczba ≥ 0.'); else wartosc.start = s;
+      if (isNaN(s)) b.push('Podaj odczyt licznika w dniu startu (z licznika na maszynie).');
+      else if (s < 0) b.push('Odczyt licznika na start to liczba ≥ 0.');
+      else wartosc.start = s;
     }
     return { bledy: b, klucz: `${f.maszyna}/${f.karta}`, wartosc };
   }
@@ -660,11 +730,24 @@
       .sort((a, b) => a.maszyna.localeCompare(b.maszyna, 'pl') || String(a.kartaNazwa).localeCompare(String(b.kartaNazwa), 'pl'));
   }
 
-  /* Przykładowe karty dla typów maszyn z danych testowych i ogólna karta dla każdej innej.
+  /* Przykładowe karty: wzór dla typów maszyn zakładu (pilarka, wiertarka, CNC, okleiniarka — D51) i danych testowych,
+     karta „<Typ> — przegląd miesięczny” dla każdego innego typu i ogólna karta dla maszyn bez typu.
      Kierownik UR wstawia je jednym dotknięciem i poprawia pod swoje maszyny. */
   const OK = (nazwa) => ({ nazwa, rodzaj: 'ok_nok' });
   const POMIAR = (nazwa, jednostka, min, max) => Object.assign({ nazwa, rodzaj: 'pomiar', jednostka }, min !== null ? { min } : {}, max !== null ? { max } : {});
   const WZORY_KART = {
+    // Zakład GK (stolarka, D51): przed tymi wzorami 10 maszyn trafiało do jednej karty „Przegląd ogólny” (audyt 2026-10-12).
+    pilarka: ['Pilarka — przegląd tygodniowy', [OK('Piła — zęby, pęknięcia, bicie'), OK('Osłona piły i klin rozszczepiający'),
+      OK('Paski napędowe — naciąg i stan'), OK('Prowadnice i stół — luzy, czystość'), OK('Smarowanie prowadnic'),
+      POMIAR('Czas hamowania piły', 's', null, 10), OK('Odciąg wiórów — drożność, szczelność'), OK('Test wyłącznika awaryjnego')]],
+    wiertarka: ['Wiertarka — przegląd miesięczny', [OK('Wrzeciona — luzy i hałas'), OK('Uchwyty i stan wierteł'), OK('Docisk pneumatyczny'),
+      POMIAR('Ciśnienie powietrza', 'bar', 6, 8), OK('Smarowanie prowadnic'), OK('Odciąg wiórów — drożność'), OK('Test wyłącznika awaryjnego')]],
+    cnc: ['CNC — przegląd miesięczny', [OK('Smarowanie prowadnic i śrub kulowych'), OK('Wrzeciono — hałas, temperatura'),
+      OK('Oprawki i stożki narzędzi — czystość'), OK('Pompa próżni i uszczelki stołu'), POMIAR('Ciśnienie powietrza', 'bar', 6, 8),
+      OK('Odciąg wiórów — drożność'), OK('Osłony i kurtyny bezpieczeństwa'), OK('Test wyłącznika awaryjnego')]],
+    okleiniarka: ['Okleiniarka — przegląd tygodniowy', [OK('Zbiornik kleju — czystość'), POMIAR('Temperatura kleju', '°C', 180, 210),
+      OK('Rolki dociskowe'), OK('Noże frezów i cykliny'), OK('Taśma podająca — naciąg'), OK('Odciąg wiórów — drożność'),
+      OK('Test wyłącznika awaryjnego')]],
     wtryskarka: ['Wtryskarka — przegląd miesięczny', [OK('Poziom oleju hydraulicznego'), POMIAR('Temperatura oleju', '°C', 30, 55),
       OK('Stan filtrów oleju'), OK('Smarowanie kolumn i zamka'), POMIAR('Ciśnienie układu', 'bar', 120, 160), OK('Test wyłączników awaryjnych'), OK('Osłony i drzwi bezpieczeństwa')]],
     robot: ['Robot — przegląd miesięczny', [OK('Przewody i złącza chwytaka'), POMIAR('Ciśnienie powietrza', 'bar', 5.5, 7), OK('Smarowanie przekładni'), OK('Test wyłącznika awaryjnego'), OK('Wygrodzenie i kurtyny')]],
@@ -674,32 +757,118 @@
     etykieciarka: ['Etykieciarka — przegląd tygodniowy', [OK('Czyszczenie głowicy'), OK('Naciąg taśmy'), OK('Czujnik etykiet'), OK('Test wyłącznika awaryjnego')]],
     owijarka: ['Owijarka — przegląd miesięczny', [OK('Naciąg pasów'), OK('Smarowanie łożysk stołu'), OK('Hamulec folii'), OK('Test wyłącznika awaryjnego'), OK('Wygrodzenie')]],
   };
+  const PUNKTY_OGOLNE = [OK('Stan ogólny i czystość'), OK('Wycieki'), OK('Test wyłącznika awaryjnego'), OK('Osłony')];
+
+  /* n-ty dzień roboczy (pn–pt; hala nie pracuje w weekend — P11) licząc od `dzien` 'RRRR-MM-DD': 0 = ten dzień albo
+     najbliższy poniedziałek. */
+  function dzienRoboczy(dzien, n) {
+    let d = dzien, zostalo = n;
+    for (;;) {
+      const [r, m, dd] = d.split('-').map(Number);
+      const tydz = new Date(Date.UTC(r, m - 1, dd)).getUTCDay();
+      if (tydz !== 0 && tydz !== 6) { if (!zostalo) return d; zostalo--; }
+      d = dodajDni(d, 1);
+    }
+  }
+
   function przykladowyPlan(slowniki, dzis) {
     const karty = {}, harmonogram = {};
     const zajete = Object.keys((slowniki || {}).karty_przegladow || {});
-    let ogolna = null;
-    for (const [kod, m] of Object.entries((slowniki || {}).maszyny || {})) {
+    const kartaTypu = {};
+    let ogolna = null, i = 0;
+    for (const m of maszyny(slowniki)) {
+      const kod = m.kod, typ = String(m.typ || '').trim();
       let kodKarty;
-      if (m.typ && WZORY_KART[m.typ]) {
-        kodKarty = `${m.typ}`;
+      if (typ && WZORY_KART[typ]) {
+        kodKarty = typ;
         if (!karty[kodKarty] && !zajete.includes(kodKarty)) {
-          const [nazwa, punkty] = WZORY_KART[m.typ];
-          karty[kodKarty] = kartaZFormularza({ nazwa, typ_maszyny: m.typ, punkty }).wartosc;
+          const [nazwa, punkty] = WZORY_KART[typ];
+          karty[kodKarty] = kartaZFormularza({ nazwa, typ_maszyny: typ, punkty }).wartosc;
         }
+      } else if (typ) {
+        // Typ bez wzoru: karta PO TYPIE (nie lista maszyn) — maszyna tego typu dodana później w Panelu od razu ją ma.
+        if (!kartaTypu[typ]) {
+          const nazwa = `${typ.charAt(0).toUpperCase()}${typ.slice(1)} — przegląd miesięczny`;
+          kartaTypu[typ] = kodZNazwy(typ, zajete.concat(Object.keys(karty)));
+          karty[kartaTypu[typ]] = kartaZFormularza({ nazwa, typ_maszyny: typ, punkty: PUNKTY_OGOLNE }).wartosc;
+        }
+        kodKarty = kartaTypu[typ];
       } else {
         if (!ogolna) {
           ogolna = kodZNazwy('Przegląd ogólny', zajete.concat(Object.keys(karty)));
-          karty[ogolna] = kartaZFormularza({ nazwa: 'Przegląd ogólny', maszyny: [kod], punkty: [OK('Stan ogólny i czystość'), OK('Wycieki'), OK('Test wyłącznika awaryjnego'), OK('Osłony')] }).wartosc;
+          karty[ogolna] = kartaZFormularza({ nazwa: 'Przegląd ogólny', maszyny: [kod], punkty: PUNKTY_OGOLNE }).wartosc;
           karty[ogolna].maszyny = [];     // maszyny dopisujemy niżej, każdą raz
         }
         kodKarty = ogolna;
         karty[ogolna].maszyny.push(kod);
       }
-      const tygodniowa = /tygodniowy/.test(((WZORY_KART[m.typ] || [])[0]) || '');
-      harmonogram[`${kod}/${kodKarty}`] = { maszyna: kod, karta: kodKarty, interwal: tygodniowa ? 'tydzien' : 'miesiac', co: 1, od: dzis };
+      const tygodniowa = /tygodniowy/.test(((WZORY_KART[typ] || [])[0]) || '');
+      // Rozłożone na kolejne dni robocze: wszystkie „od dziś” dawały 10 przeglądów jednego dnia (i co miesiąc znowu
+      // tego samego), a niezrobione od razu psuły % planu (audyt 2026-10-12).
+      const od = dzienRoboczy(dzis, i++ % (tygodniowa ? 5 : 20));
+      harmonogram[`${kod}/${kodKarty}`] = { maszyna: kod, karta: kodKarty, interwal: tygodniowa ? 'tydzien' : 'miesiac', co: 1, od };
     }
     return { karty, harmonogram };
   }
+
+  /* Maszyny bez żadnej pozycji harmonogramu — przeglądów nie dostaną nigdy (karta po typie sama niczego nie planuje),
+     a nigdzie tego nie było widać (audyt 2026-10-12). */
+  function maszynyBezHarmonogramu(slowniki) {
+    const w = new Set(Object.values((slowniki || {}).harmonogram_przegladow || {}).map(h => h && h.maszyna));
+    return maszyny(slowniki).filter(m => !w.has(m.kod));
+  }
+
+  /* Karty do wyboru przy maszynie: najpierw jej (po kodzie albo typie), potem pozostałe z dopiskiem. Maszyna, której typ
+     nie ma karty, dostawała w „Zaplanuj” pustą listę i nie dało się jej zaplanować (audyt 2026-10-12). */
+  function opcjeKart(slowniki, maszyna) {
+    const pasujace = new Set(kartyDlaMaszyny(slowniki, maszyna).map(k => k.kod));
+    return Object.entries((slowniki || {}).karty_przegladow || {})
+      .map(([kod, k]) => ({ kod, nazwa: (k && k.nazwa) || kod, pasuje: pasujace.has(kod) }))
+      .sort((a, b) => (Number(b.pasuje) - Number(a.pasuje)) || String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
+  }
+
+  /* Ręczne planowanie trafiło na istniejący klucz (maszyna/karta/dzień). Usuniętego z planu nie da się założyć drugi
+     raz (klucz naturalny) — „Taki przegląd już jest w planie” przy usuniętym było nieprawdą (audyt 2026-10-12). */
+  function kolizjaPlanowania(istniejacy) {
+    if (!istniejacy) return null;
+    return istniejacy.status === 'anulowany'
+      ? { tekst: 'Ten przegląd na ten dzień usunięto z planu — wybierz inny dzień.', otworz: false }
+      : { tekst: 'Taki przegląd już jest w planie.', otworz: true };
+  }
+
+  // ------------------------------------------------------------ KPI: filtry, okno planu, błędy huba
+
+  /* Filtr linii/maszyny z pamięci telefonu, sprawdzony ze słownikami. Linia albo maszyna, której już nie ma (D51:
+     maszyny zdefiniowane od nowa, jedna linia), dawała zera, a lista pokazywała „Wszystkie” (audyt 2026-10-12).
+     Przy jednej linii filtr linii nie istnieje. */
+  function filtryKpi(u, slowniki) {
+    const sl = slowniki || {};
+    let linia = (u && u.linia) || '', maszyna = (u && u.maszyna) || '';
+    if (linia && (!wieleLinii(sl) || !(sl.linie || {})[linia])) linia = '';
+    const m = (sl.maszyny || {})[maszyna];
+    if (maszyna && (!m || (linia && m.linia !== linia))) maszyna = '';
+    return { linia, maszyna };
+  }
+
+  /* Okno kafla „Plan przeglądów”: telefon trzyma przeglądy z ~30 dni, więc dla okresów z huba liczymy ostatnie 30 dni
+     okresu. Zakres w całości starszy — kafla nie ma (pokazywał „— (30 dni)”, 0/0 — audyt 2026-10-12). */
+  function oknoPlanuKpi(okres, teraz) {
+    if (!okres.zHuba) return { od: okres.od, do: okres.doPlanu, tylko30: false };
+    const od30 = okresKpi('30', teraz).od;
+    if (ms(okres.doPlanu) <= ms(od30)) return null;
+    return { od: od30, do: okres.doPlanu, tylko30: true };
+  }
+
+  /* Błąd zapytania do trasy UR (KPI, „Zaplanuj teraz”) — bez słów z logowania („Sprawdź identyfikator i PIN”) i bez
+     podwójnego „spróbuj” (audyt 2026-10-12). */
+  function bladZapytania(e) {
+    if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem.';
+    if (e.kod === 403) return 'To konto nie ma do tego dostępu.';
+    return e.message || `Błąd serwera (${e.kod}).`;
+  }
+
+  /* „2 czekają na wysłanie” — z odmianą (było „2 czeka”). */
+  const czekaNaWyslanie = n => `${n} ${odmiana(n, 'czeka', 'czekają', 'czeka')} na wysłanie`;
 
   // ------------------------------------------------------------ liczniki maszyn
 
@@ -757,10 +926,12 @@
   }
 
   global.URWidok = {
-    raz, odmiana, liczba, linie, maszyny, nazwaLinii, nazwaMaszyny, nazwaKarty, nazwaPracownika, godzina, data, kiedy, numer,
-    dzienZakladu, koniecDnia, dodajDni, mozna, dozwolonyZ, kodZNazwy, priorytetInfo, nazwaZeStalej, zatrzymuje,
+    wieleLinii, dzienRoboczy, maszynyBezHarmonogramu, opcjeKart, kolizjaPlanowania, filtryKpi, oknoPlanuKpi, bladZapytania, czekaNaWyslanie,
+    raz, odmiana, liczba, linie, maszyny, nazwaLinii, nazwaMaszyny, nazwaKarty, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
+    dzienZakladu, koniecDnia, dodajDni, mozna, dozwolonyZ, kodZNazwy, priorytetInfo, nazwaPriorytetu, napisStoi, nazwaZeStalej, zatrzymuje,
     wierszAwarii, listaAwarii, ostatnioZamkniete, akcjeAwarii, GOTOWE_OPISY, POWODY_ANULOWANIA, MAKS_POWODU, powodAnulowania, MAKS_ZDJEC,
-    opisNaprawy, bledyZakonczenia, daneZakonczenia, sprawdzMaszyne, mechanicy, komunikatKonfliktu, powiadomienie, historiaAwarii,
+    ukladAkcji, KROKI_WIECEJ, kierownikUR,
+    opisNaprawy, bledyZakonczenia, daneZakonczenia, kodZeSkanu, sprawdzMaszyne, mechanicy, komunikatKonfliktu, powiadomienie, historiaAwarii,
     kpi, OKRESY, okresKpi,
     statusPrzegladu, kartaDla, kartyDlaMaszyny, wierszPrzegladu, listaPrzegladow, wynikPomiaru, zakres, danePunktu, postepPrzegladu,
     wykonaniePlanu, bledyPlanowania, kluczPrzegladu,

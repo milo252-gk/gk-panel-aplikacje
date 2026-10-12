@@ -33,6 +33,10 @@
 
   // ---------------------------------------------------------------- czyste funkcje (testy: reduktor-testy.js)
 
+  /* D51: zakład z jedną (schowaną) linią „Hala” — linii nikt nie wybiera, więc ani zdanie o zespole, ani lista, ani okno
+     osoby o nich nie mówią. Linie wracają, gdy słownik ma dwie albo więcej (jak Panel: widok.js → wieleLinii). */
+  const wieleLinii = slowniki => Object.keys((slowniki && slowniki.linie) || {}).length > 1;
+
   /* Czy ktoś z tymi rolami prowadzi zespół (kontrakt stale.zespoly: kierownik, mistrz, kierownik UR/KJ, administratorzy
      programów GK). Rola admin tu się nie liczy — ma pełną Administrację w Panelu. */
   function rolaZespolu(role, stale) {
@@ -73,7 +77,7 @@
     const nazwy = (stale && stale.role) || {};
     const role = (zakres.role || []).map(r => nazwy[r] || r);
     if (!role.length) return 'Nie zarządzasz kontami — poproś administratora.';
-    const linie = (zakres.linie || []).map(l => ((((slowniki || {}).linie || {})[l]) || {}).nazwa || l);
+    const linie = wieleLinii(slowniki) ? (zakres.linie || []).map(l => ((((slowniki || {}).linie || {})[l]) || {}).nazwa || l) : [];
     return `Twój zespół: ${role.join(', ')}${linie.length ? ` — linie ${linie.join(', ')}` : ''}. Nowa osoba dostaje hasło `
       + `startowe ${HASLO_STARTOWE} i przy pierwszym logowaniu ustawia własne hasło i PIN. Usuwa administrator — Ty możesz wyłączyć konto.`;
   }
@@ -93,10 +97,10 @@
   /* Lista zespołu do okna: aktywni przed wyłączonymi, zablokowani na górze, alfabetycznie; role i linie nazwami. */
   function listaZespolu(lista, stale, slowniki) {
     const nazwy = (stale && stale.role) || {};
-    const linie = (slowniki && slowniki.linie) || {};
+    const linie = (slowniki && slowniki.linie) || {}, wiele = wieleLinii(slowniki);
     return (lista || []).map(p => Object.assign({}, p, {
       roleNazwy: (p.role || []).map(r => nazwy[r] || r),
-      linieNazwy: (p.linie || []).map(l => (linie[l] || {}).nazwa || l),
+      linieNazwy: wiele ? (p.linie || []).map(l => (linie[l] || {}).nazwa || l) : [],
       stan: stanHasla(p),
     })).sort((a, b) => (!!b.zablokowany - !!a.zablokowany) || ((b.aktywny !== false) - (a.aktywny !== false))
       || String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
@@ -140,8 +144,16 @@
     return o;
   }
 
-  const bezSieci = e => !e || e instanceof TypeError || !e.kod;
-  const tekstBledu = e => (bezSieci(e) ? 'Zmiany w zespole wymagają połączenia z hubem. Sprawdź sieć i spróbuj jeszcze raz.'
+  // Jak w konto.js: odpowiedź spoza huba (Cloudflare 530, bramka 502 — e.odHuba === false) to brak połączenia, a nie „HTTP 530”.
+  const bezSieci = e => !e || e instanceof TypeError || !e.kod || e.odHuba === false;
+  /* Teksty o osobie bez rodzaju gramatycznego: „Paweł Kaczmarek zostanie wylogowana” — imię i nazwisko bywa męskie
+     i żeńskie, więc mówimy o koncie albo bezosobowo — tak samo jak Panel (administracja.js). */
+  const TEKSTY = {
+    wylogujPytanie: nazwa => `Konto ${nazwa} zostanie wylogowane we wszystkich aplikacjach i na wszystkich urządzeniach. `
+      + 'Następne logowanie — hasłem.',
+    wylogowano: nazwa => `${nazwa} — wylogowano wszędzie.`,
+  };
+  const tekstBledu = e => (bezSieci(e) ? 'Zmiany w zespole wymagają połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.'
     : (e && e.message) || 'Nie udało się — spróbuj jeszcze raz.');
 
   /* Potwierdzenie w warstwie górnej (okno aplikacji pod spodem by go przykryło). Obietnica: true = tak. */
@@ -224,6 +236,7 @@
         .filter(([kod]) => !u.linie || u.linie.includes(kod))
         .sort(([, a], [, b]) => ((a || {}).kolejnosc || 999) - ((b || {}).kolejnosc || 999));
       const ma = (pole, w) => !!(osoba && (osoba[pole] || []).includes(w));
+      // Jedna linia: pole „Linie” schowane, ale zostaje w formularzu — zapis nie gubi linii, którą osoba już ma.
       const jednaRola = role.length === 1;
       f2.innerHTML = `<form method="dialog" autocomplete="off">
           <h2 id="hala-okno-osoby-zespolu-tytul">${esc(osoba ? osoba.nazwa : 'Nowa osoba')}</h2>
@@ -231,7 +244,7 @@
           ${jednaRola ? `<input type="hidden" name="role" value="${esc(role[0])}"><p class="hala-konto-drobne">Rola: ${esc(nazwyRol[role[0]] || role[0])}</p>`
             : `<fieldset><legend>Rola</legend><div class="hala-zespol-wybor">${role.map(r =>
               `<label class="hala-zespol-zaznacz"><input type="checkbox" name="role" value="${esc(r)}" ${ma('role', r) ? 'checked' : ''}> ${esc(nazwyRol[r] || r)}</label>`).join('')}</div></fieldset>`}
-          ${linie.length ? `<fieldset><legend>Linie</legend><div class="hala-zespol-wybor">${linie.map(([kod, l]) =>
+          ${linie.length ? `<fieldset${wieleLinii(hala.slowniki) ? '' : ' hidden'}><legend>Linie</legend><div class="hala-zespol-wybor">${linie.map(([kod, l]) =>
             `<label class="hala-zespol-zaznacz"><input type="checkbox" name="linie" value="${esc(kod)}" ${ma('linie', kod) ? 'checked' : ''}> ${esc((l && l.nazwa) || kod)}</label>`).join('')}</div></fieldset>` : ''}
           <label>Telefon (nieobowiązkowy)<input name="telefon" type="tel" maxlength="30" placeholder="np. 600 100 200" value="${esc((osoba && osoba.telefon) || '')}"></label>
           <label class="hala-zespol-zaznacz"><input type="checkbox" name="aktywny" ${!osoba || osoba.aktywny !== false ? 'checked' : ''}> Konto aktywne (odznacz, gdy osoba odchodzi)</label>
@@ -279,11 +292,10 @@
             await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: osoba.id });
             await poZmianie(`${osoba.nazwa}: PIN startowy ${PIN_STARTOWY} — przy logowaniu ustawi nowy.`);
           }
-          if (b.dataset.a === 'wyloguj' && await potwierdz('Wylogować wszędzie?', `${osoba.nazwa} zostanie wylogowana we wszystkich `
-              + 'aplikacjach i na wszystkich urządzeniach. Następne logowanie — hasłem.', 'Wyloguj wszędzie')) {
+          if (b.dataset.a === 'wyloguj' && await potwierdz('Wylogować wszędzie?', TEKSTY.wylogujPytanie(osoba.nazwa), 'Wyloguj wszędzie')) {
             await hala.admin('POST', '/api/v1/admin/wyloguj-wszedzie', { pracownik: osoba.id });
             f2.close();
-            powiedz(`${osoba.nazwa}: wylogowana wszędzie.`, 'ok');
+            powiedz(TEKSTY.wylogowano(osoba.nazwa), 'ok');
             rysuj();
           }
         } catch (e) { pokaz(tekstBledu(e)); }
@@ -298,7 +310,8 @@
     return d;
   }
 
-  const api = { rolaZespolu, zarzadzaKontami, uprawnieniaOsoby, opisZespolu, stanHasla, listaZespolu, osobaZFormularza, loginZNazwy, otworz };
+  const api = { wieleLinii, rolaZespolu, zarzadzaKontami, uprawnieniaOsoby, opisZespolu, stanHasla, listaZespolu, osobaZFormularza, loginZNazwy, otworz,
+                TEKSTY, tekstBledu };
   global.HalaZespol = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

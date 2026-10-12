@@ -38,6 +38,7 @@
                                            { zrodlo: filtry.zrodlo || null }));
       const max = wynik.wiersze.length ? wynik.wiersze[0].ilosc : 0;
       const stanowiska = Object.entries(hala.slowniki.stanowiska || {}).filter(([, s]) => !filtry.linia || s.linia === filtry.linia);
+      // Jedna linia i brak stanowisk (D51): filtry z jedną opcją „Wszystkie…” tylko zajmują ekran — chowamy je.
       const opcje = (lista, wybrana) => lista.map(([k, n]) => `<option value="${esc(k)}" ${wybrana === k ? 'selected' : ''}>${esc(n)}</option>`).join('');
       let granica = false;
       el.innerHTML = `
@@ -46,8 +47,8 @@
           <div class="wybor" role="group" aria-label="Okres">${OKRESY.map(([k, n]) => `<button type="button" data-okres="${k}" aria-pressed="${filtry.okres === k}">${n}</button>`).join('')}</div>
           <div class="wybor" role="group" aria-label="Źródło">${ZRODLA.map(([k, n]) => `<button type="button" data-zrodlo="${k}" aria-pressed="${filtry.zrodlo === k}">${n}</button>`).join('')}</div>
           <div class="filtry-listy">
-            <select name="linia" aria-label="Linia"><option value="">Wszystkie linie</option>${opcje(W.linie(hala.slowniki).map(l => [l.kod, l.nazwa]), filtry.linia)}</select>
-            <select name="stanowisko" aria-label="Stanowisko"><option value="">Wszystkie stanowiska</option>${opcje(stanowiska.map(([k, s]) => [k, s.nazwa]), filtry.stanowisko)}</select>
+            <select name="linia" aria-label="Linia" ${W.linie(hala.slowniki).length > 1 ? '' : 'hidden'}><option value="">Wszystkie linie</option>${opcje(W.linie(hala.slowniki).map(l => [l.kod, l.nazwa]), filtry.linia)}</select>
+            <select name="stanowisko" aria-label="Stanowisko" ${stanowiska.length ? '' : 'hidden'}><option value="">Wszystkie stanowiska</option>${opcje(stanowiska.map(([k, s]) => [k, s.nazwa]), filtry.stanowisko)}</select>
             <select name="wyrob" aria-label="Wyrób"><option value="">Wszystkie wyroby</option>${opcje(Object.entries(hala.slowniki.wyroby || {}).map(([k, w]) => [k, `${k} · ${w.nazwa}`]), filtry.wyrob)}</select>
           </div>
         </form>
@@ -72,7 +73,7 @@
         </div>
         ${granica ? '<p class="slaby legenda-pareto">Kreska: wady powyżej dają razem co najmniej 80 % wszystkich wad.</p>' : ''}`
         : '<p class="pusto">Brak wad w wybranym okresie i filtrach.</p>'}
-        <p class="slaby">Dane z ostatnich 30 dni zapisanych w tym telefonie.</p>
+        <p class="slaby">${esc(W.stopkaPareto(filtry.okres))}</p>
         <div id="eksport-csv"></div>`;
       // Kierownik KJ: próby i partie brakowe do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32).
       window.HalaEksport.rysuj(el.querySelector('#eksport-csv'), hala, { rodzaje: ['proby', 'partie'], komunikat: (t, r) => KJ.komunikat(t, r) });
