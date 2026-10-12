@@ -104,6 +104,7 @@
     f.dzial.innerHTML = P.opcje(((hala.kontrakt.stale || {}).dzialy || []).map(d => [d.kod, d.nazwa]));
     f.dzial.value = wartosci.dzial || 'produkcja';
     // „— każda —” = jedno zlecenie dla wszystkich liderów; „każda linia osobno” = hub robi po jednym na linię (D34).
+    P.pokazPolaLinii(f);
     f.linia.innerHTML = P.opcje([[W.LINIA_KAZDA, '— każda linia osobno —'], ...P.linieLista()], '— każda —');
     f.linia.value = wartosci.linia || '';
     f.maszyna.innerHTML = P.opcje(P.maszynyLinii(f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value), '— żadna —');

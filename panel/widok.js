@@ -980,8 +980,21 @@
 
   const RE_KOD = /^[A-Z0-9][A-Z0-9-]{0,19}$/;
 
-  /* Linia albo maszyna → { klucz, wartosc } dla slownik.zapisany. Kod to napis na etykiecie QR —
-     przy istniejącej pozycji się go nie zmienia (etykiety już wiszą). */
+  /* 2026-10-12 (właściciel): w Panelu wyznacza się tylko maszyny, nie linie. Lider, UR, awarie i obchody dalej
+     liczą na linii, więc maszyny stoją na jednej linii-hali, której w Panelu nie widać. Wybór linii wraca dopiero,
+     gdy słownik ma dwie albo więcej (starsze dane, zakład testowy). */
+  const LINIA_HALI = { kod: 'HALA', nazwa: 'Hala' };
+  const wieleLinii = slowniki => Object.keys((slowniki && slowniki.linie) || {}).length > 1;
+  // Linia nowej maszyny bez wybranej linii: pierwsza ze słownika (kolejność), a bez żadnej — hala.
+  function liniaDomyslna(slowniki) {
+    const l = Object.entries((slowniki && slowniki.linie) || {})
+      .sort(([, a], [, b]) => ((a || {}).kolejnosc || 999) - ((b || {}).kolejnosc || 999));
+    return l.length ? l[0][0] : LINIA_HALI.kod;
+  }
+
+  /* Linia albo maszyna → { klucz, wartosc, nowaLinia? } dla slownik.zapisany. Kod to napis na etykiecie QR —
+     przy istniejącej pozycji się go nie zmienia (etykiety już wiszą). nowaLinia — hala do zapisania przed pierwszą
+     maszyną (słownik linii pusty). */
   function pozycjaZFormularza(rodzaj, f, slowniki, istniejacyKod) {
     const bledy = [];
     const kod = istniejacyKod || String(f.kod || '').trim().toUpperCase();
@@ -993,23 +1006,27 @@
     if (!nazwa) bledy.push('Podaj nazwę.');
     // Kod QR zostaje, jaki był — mógł przyjść z naklejek zastanych w zakładzie (pole qr słownika, KONTRAKT §10).
     const qr = byl.qr || `HALA:${{ linie: 'L', stanowiska: 'S', maszyny: 'M' }[rodzaj]}:${kod}`;
-    let wartosc;
+    let wartosc, nowaLinia = null;
     if (rodzaj === 'linie') {
       const k = parseInt(f.kolejnosc, 10);
       wartosc = { nazwa, kolejnosc: isNaN(k) ? (byl.kolejnosc || Object.keys(sl).length + 1) : k, qr };
     } else {
       const linie = (slowniki && slowniki.linie) || {};
-      if (!f.linia || !linie[f.linia]) bledy.push(rodzaj === 'maszyny' ? 'Wybierz linię maszyny.' : 'Wybierz linię stanowiska.');
-      wartosc = { nazwa, linia: f.linia, qr };
+      // Maszyna bez wybranej linii (Panel jej nie pokazuje) zostaje na swojej, a nowa idzie na linię domyślną.
+      const linia = f.linia || (rodzaj === 'maszyny' ? (linie[byl.linia] ? byl.linia : liniaDomyslna(slowniki)) : '');
+      if (rodzaj === 'maszyny' && !f.linia && !linie[linia])
+        nowaLinia = { klucz: linia, wartosc: { nazwa: LINIA_HALI.nazwa, kolejnosc: 1, qr: `HALA:L:${linia}` } };
+      if (!linia || (!linie[linia] && !nowaLinia)) bledy.push(rodzaj === 'maszyny' ? 'Wybierz linię maszyny.' : 'Wybierz linię stanowiska.');
+      wartosc = { nazwa, linia, qr };
       if (rodzaj === 'maszyny') {
         const typ = String(f.typ || '').trim().toLowerCase();
         if (typ) wartosc.typ = typ;
         const st = ((slowniki && slowniki.stanowiska) || {})[f.stanowisko];
-        if (f.stanowisko && (!st || st.linia !== f.linia)) bledy.push('Stanowisko musi być na tej samej linii co maszyna.');
+        if (f.stanowisko && (!st || st.linia !== linia)) bledy.push('Stanowisko musi być na tej samej linii co maszyna.');
         else if (f.stanowisko) wartosc.stanowisko = f.stanowisko;
       }
     }
-    return { bledy, klucz: kod, wartosc };
+    return { bledy, klucz: kod, wartosc, nowaLinia };
   }
 
   /* Godziny zmian → zapisy słownika zmiany/<nr>. Hub i tak odrzuci zły zapis godziny, ale człowiek ma
@@ -1370,7 +1387,7 @@
   const PanelWidok = { obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;

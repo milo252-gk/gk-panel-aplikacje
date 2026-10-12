@@ -150,7 +150,7 @@
       <p id="admin-zespol" class="slaby opis-widoku" hidden></p>
       <div class="chipy" id="admin-chipy" role="group" aria-label="Część administracji">
         <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true">Pracownicy</button>
-        <button type="button" class="chip" data-czesc="linie" aria-pressed="false">Linie, stanowiska, maszyny</button>
+        <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
         <button type="button" class="chip" data-czesc="etykiety" aria-pressed="false">Etykiety QR</button>
         <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false">Ustawienia</button>
         <button type="button" class="chip" data-czesc="polaczenia" aria-pressed="false">Połączenia GK</button>
@@ -178,7 +178,7 @@
     <label>Co zrobić<input name="tytul" required maxlength="200" placeholder="np. Wymienić lampę nad WT-01"></label>
     <label>Dział<select name="dzial" required></select></label>
     <div class="dwie">
-      <label>Linia<select name="linia"><option value="">— każda —</option></select></label>
+      <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
       <label>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
     </div>
     <div class="dwie">
@@ -226,7 +226,7 @@
       <label>Kto (opcjonalnie)<select name="wykonawca"><option value="">— cały dział —</option></select></label>
     </div>
     <div class="dwie">
-      <label>Linia<select name="linia"><option value="">— każda —</option></select></label>
+      <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
       <label>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
     </div>
     <fieldset><legend>Kiedy</legend>
@@ -292,7 +292,7 @@
   <form method="dialog" id="formularz-awarii">
     <h2 id="t-okno-awarii">Zgłoś awarię</h2>
     <div class="dwie">
-      <label>Linia<select name="linia" required></select></label>
+      <label class="pole-linii">Linia<select name="linia" required></select></label>
       <label>Maszyna<select name="maszyna" required></select></label>
     </div>
     <label>Priorytet<select name="priorytet" required></select></label>
@@ -308,7 +308,7 @@
   <form method="dialog" id="formularz-szablonu" autocomplete="off">
     <h2 id="t-okno-szablonu">Nowy szablon</h2>
     <label>Nazwa<input name="nazwa" required maxlength="120" placeholder="np. Nocka na Pakowaniu"></label>
-    <fieldset><legend>Linie (nic nie zaznaczone = wszystkie)</legend><div id="szablon-linie" class="zaznaczenia"></div></fieldset>
+    <fieldset class="pole-linii"><legend>Linie (nic nie zaznaczone = wszystkie)</legend><div id="szablon-linie" class="zaznaczenia"></div></fieldset>
     <fieldset><legend>Zmiany (nic nie zaznaczone = wszystkie)</legend><div id="szablon-zmiany" class="zaznaczenia"></div></fieldset>
     <fieldset><legend>Pozycje — termin to godziny:minuty od startu zmiany</legend>
       <p id="szablon-podglad" class="slaby"></p>
@@ -326,7 +326,7 @@
     <label>Imię i nazwisko (to jest login)<input name="nazwa" required maxlength="120" placeholder="np. Krzysztof Hamrol"></label>
     <!-- Role w grupach (D32): hala oraz programy transportu — jedno konto we wszystkich aplikacjach GK (GK-KONTA.md). -->
     <div id="osoba-role" class="grupy-rol"></div>
-    <fieldset><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div>
+    <fieldset class="pole-linii"><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div>
       <!-- D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie; pokazywane, gdy zaznaczona rola mistrza. -->
       <p class="slaby konto-drobne" id="osoba-linie-mistrz" hidden>Mistrz widzi tylko zaznaczone linie; bez zaznaczenia — wszystkie.</p></fieldset>
     <!-- D43: hasło (raz na 12 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
@@ -375,14 +375,12 @@
   <form method="dialog" id="formularz-pozycji" autocomplete="off">
     <h2 id="t-okno-pozycji">Nowa pozycja</h2>
     <div class="dwie">
-      <label>Kod (na etykiecie QR)<input name="kod" maxlength="20" placeholder="np. L4 albo WT-03" autocapitalize="characters"></label>
+      <label>Kod (na etykiecie QR)<input name="kod" maxlength="20" placeholder="np. FH6-1" autocapitalize="characters"></label>
       <label>Nazwa<input name="nazwa" maxlength="120"></label>
     </div>
     <div class="dwie">
-      <label id="pozycja-linia">Linia<select name="linia"></select></label>
-      <label id="pozycja-typ">Typ maszyny (karta przeglądu)<input name="typ" maxlength="40" placeholder="np. wtryskarka"></label>
-      <label id="pozycja-stanowisko">Stanowisko<select name="stanowisko"></select></label>
-      <label id="pozycja-kolejnosc">Kolejność na liście<input name="kolejnosc" type="number" min="1"></label>
+      <label>Typ maszyny (karta przeglądu)<input name="typ" maxlength="40" placeholder="np. pilarka"></label>
+      <label id="pozycja-linia" hidden>Linia<select name="linia"></select></label>
     </div>
     <p class="blad" role="alert" hidden></p>
     <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz</button></div>

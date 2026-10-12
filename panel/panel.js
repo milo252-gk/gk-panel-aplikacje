@@ -616,13 +616,21 @@
     .sort(([, a], [, b]) => ((a || {}).kolejnosc || 999) - ((b || {}).kolejnosc || 999))
     .map(([k, v]) => [k, (v && v.nazwa) || k]);
   const maszynyLinii = linia => Object.entries(hala.slowniki.maszyny || {}).filter(([, m]) => !linia || (m || {}).linia === linia)
-    .map(([k, m]) => [k, `${(m && m.nazwa) || k} (${k})`]);
+    .map(([k, m]) => [k, `${(m && m.nazwa) || k} (${k})`])
+    .sort(([, a], [, b]) => a.localeCompare(b, 'pl', { numeric: true }));
+  /* 2026-10-12: w zakładzie z jedną linią (właściciel wyznacza tylko maszyny) pola linii w oknach są zbędne — chowamy
+     je (klasa pole-linii); wartość zostaje w ukrytym polu, więc zapis zmienionego zlecenia czy osoby jej nie gubi. */
+  const pokazPolaLinii = korzen => {
+    const wiele = W.wieleLinii(hala.slowniki);
+    for (const el of korzen.querySelectorAll('.pole-linii')) el.hidden = !wiele;
+    return wiele;
+  };
 
   function otworzOkno(okno) {
     const f = okno.querySelector('form');
     f.querySelector('.blad').hidden = true;
     okno.showModal();
-    f.querySelector('input, select, textarea').focus();
+    [...f.querySelectorAll('input, select, textarea')].find(e => !e.closest('[hidden]'))?.focus();
   }
   for (const okno of document.querySelectorAll('dialog.okno')) {
     okno.querySelector('[data-zamknij]').addEventListener('click', () => okno.close());
@@ -659,6 +667,7 @@
     fz.reset();
     fz.dzial.innerHTML = opcje(((hala.kontrakt.stale || {}).dzialy || []).map(d => [d.kod, d.nazwa]));
     if (w.dzial) fz.dzial.value = w.dzial;
+    pokazPolaLinii(fz);
     fz.linia.innerHTML = opcje(linieLista(), '— każda —');
     fz.linia.value = w.linia || '';
     fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —');
@@ -701,6 +710,7 @@
   Panel.opcje = opcje;
   Panel.linieLista = linieLista;
   Panel.maszynyLinii = maszynyLinii;
+  Panel.pokazPolaLinii = pokazPolaLinii;
   Panel.osobyDzialu = osobyDzialu;
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
   // Każde zamknięcie okna zdejmuje blokadę pól edycji — następne „Nowe zlecenie” zaczyna od zwykłego formularza.
@@ -751,8 +761,9 @@
   const fa = $('formularz-awarii');
   $('menu-awaria').addEventListener('click', () => {
     fa.reset();
+    const wiele = pokazPolaLinii(fa);
     fa.linia.innerHTML = opcje(linieLista());
-    fa.maszyna.innerHTML = opcje(maszynyLinii(fa.linia.value));
+    fa.maszyna.innerHTML = opcje(maszynyLinii(wiele ? fa.linia.value : ''));
     fa.priorytet.innerHTML = opcje(((hala.kontrakt.stale || {}).priorytety || []).map(p => [p.kod, p.nazwa]));
     otworzOkno($('okno-awarii'));
   });
@@ -761,7 +772,9 @@
     ev.preventDefault();
     try {
       // D47: zdjęcie i notatka nieobowiązkowe — bez nich zgłoszenie idzie tak samo (przestój liczy się od „Zgłoś”).
-      const dane = { linia: fa.linia.value, maszyna: fa.maszyna.value, priorytet: fa.priorytet.value };
+      // Pole linii schowane (jedna linia) — awaria idzie na linię maszyny.
+      const linia = W.wieleLinii(hala.slowniki) ? fa.linia.value : (((hala.slowniki.maszyny || {})[fa.maszyna.value] || {}).linia || fa.linia.value);
+      const dane = { linia, maszyna: fa.maszyna.value, priorytet: fa.priorytet.value };
       if (fa.opis.value.trim()) dane.opis = fa.opis.value.trim();
       if (fa.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fa.zdjecie.files[0])];
       await hala.zapisz('awaria.zgloszona', hala.nowyId(), dane);

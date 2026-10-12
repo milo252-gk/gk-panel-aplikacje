@@ -5,7 +5,7 @@
    Trzy części:
    - Pracownicy: dodaj, zmień dane, role, linie, nowy PIN, karta (zgubiona → usuń), wyłącz konto, odblokuj po złych PIN-ach.
      Hub: GET/POST /api/v1/admin/… przez hala.admin (rolę sprawdza hub). PIN-ów i kart nie widać — w bazie są tylko skróty.
-   - Linie i maszyny: słowniki przez zdarzenia slownik.zapisany / slownik.usuniety (jak każdy zapis w systemie).
+   - Maszyny (bez linii i stanowisk — 2026-10-12): słownik przez zdarzenia slownik.zapisany / slownik.usuniety.
    - Ustawienia: sieć zakładu i progi (hub sprawdza zakresy przy zapisie), kopie poza komputerem (etap 2: folder,
      przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST /api/v1/admin/kopie).
    - Nad wszystkim czerwona wstęga alarmów huba (GET /api/v1/admin/alarmy): kopia, adres na Pages, token GitHub, miejsce.
@@ -76,7 +76,7 @@
     else if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();
     const el = $('admin-tresc');
     if (czesc === 'pracownicy') rysujPracownikow(el);
-    else if (czesc === 'linie') rysujLinie(el);
+    else if (czesc === 'maszyny') rysujMaszyny(el);
     else if (czesc === 'etykiety') rysujEtykiety(el);
     else if (czesc === 'polaczenia') rysujPolaczenia(el);
     else if (czesc === 'dostep') rysujDostep(el);
@@ -143,6 +143,7 @@
         <div class="zaznaczenia">${g.role.map(r =>
           `<label class="zaznacz"><input type="checkbox" name="role" value="${esc(r.kod)}" ${(osoba ? osoba.role.includes(r.kod) : (u.role || []).length === 1) ? 'checked' : ''}> ${esc(r.nazwa)}</label>`).join('')}</div>
       </fieldset>`).join('');
+    P.pokazPolaLinii(fp);
     // D49: mistrz z liniami przypisuje tylko swoje (hub sprawdza to samo).
     const linie = Object.entries((hala.slowniki && hala.slowniki.linie) || {}).filter(([kod]) => !u.linie || u.linie.includes(kod));
     $('osoba-linie').innerHTML = linie.map(([kod, l]) =>
@@ -308,77 +309,63 @@
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  // ------------------------------------------------------------ linie i maszyny
+  // ------------------------------------------------------------ maszyny
 
-  function rysujLinie(el) {
+  /* 2026-10-12 (właściciel): w Panelu wyznacza się tylko maszyny — bez linii i stanowisk. Maszyny stoją na jednej
+     linii-hali (W.liniaDomyslna, zakładana z pierwszą maszyną), bo Lider, UR i obchody dalej liczą na linii.
+     Linia przy maszynie pokazuje się tylko przy starszych danych z kilkoma liniami (W.wieleLinii). */
+  function rysujMaszyny(el) {
     const sl = hala.slowniki || {};
-    const linie = Object.entries(sl.linie || {}).sort(([, a], [, b]) => ((a || {}).kolejnosc || 999) - ((b || {}).kolejnosc || 999));
-    const maszyny = Object.entries(sl.maszyny || {});
-    const stanowiska = Object.entries(sl.stanowiska || {});
+    const linie = sl.linie || {}, wiele = W.wieleLinii(sl);
+    const maszyny = Object.entries(sl.maszyny || {})
+      .sort(([ka, a], [kb, b]) => String((a || {}).nazwa || ka).localeCompare(String((b || {}).nazwa || kb), 'pl', { numeric: true }));
     el.innerHTML = `
       <div class="admin-pasek">
-        <button type="button" class="glowny" data-akcja="nowa-linia">+ Linia</button>
-        <button type="button" data-akcja="nowe-stanowisko" ${linie.length ? '' : 'disabled'}>+ Stanowisko</button>
-        <button type="button" data-akcja="nowa-maszyna" ${linie.length ? '' : 'disabled'}>+ Maszyna</button>
+        <button type="button" class="glowny" data-akcja="nowa-maszyna">+ Maszyna</button>
       </div>
-      ${linie.map(([kod, l]) => `
-        <section class="admin-linia">
-          <h3><span>${esc(l.nazwa)} <span class="slaby">${esc(kod)}</span></span>
-            <button type="button" class="maly" data-akcja="linia" data-kod="${esc(kod)}">Zmień</button></h3>
-          ${stanowiska.filter(([, st]) => st.linia === kod).map(([sk, st]) => `
-            <div class="admin-maszyna admin-stanowisko"><span>📍 ${esc(st.nazwa)} <span class="slaby">${esc(sk)}</span></span>
-              <span><button type="button" class="maly" data-akcja="stanowisko" data-kod="${esc(sk)}">Zmień</button>
-              <button type="button" class="maly" data-akcja="wycofaj-stanowisko" data-kod="${esc(sk)}">Wycofaj</button></span></div>`).join('')}
-          ${maszyny.filter(([, m]) => m.linia === kod).map(([mk, m]) => `
-            <div class="admin-maszyna"><span><b>${esc(m.nazwa)}</b> <span class="slaby">${esc(mk)}${m.typ ? ` · ${esc(m.typ)}` : ''}${m.stanowisko ? ` · ${esc(m.stanowisko)}` : ''}</span></span>
-              <span><button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
-              <button type="button" class="maly" data-akcja="wycofaj" data-kod="${esc(mk)}">Wycofaj</button></span></div>`).join('')
-            || '<p class="slaby">Bez maszyn</p>'}
-        </section>`).join('') || '<p class="pusto">Nie ma jeszcze linii</p>'}
-      <p class="slaby">Kod linii i maszyny to napis na etykiecie QR (HALA:L:…, HALA:M:…) — po wydrukowaniu etykiet go nie zmieniaj.</p>`;
+      <section class="admin-linia">
+        ${maszyny.map(([mk, m]) => `
+          <div class="admin-maszyna"><span><b>${esc(m.nazwa)}</b> <span class="slaby">${esc(mk)}${m.typ ? ` · ${esc(m.typ)}` : ''}${wiele ? ` · ${esc((linie[m.linia] || {}).nazwa || m.linia)}` : ''}</span></span>
+            <span><button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
+            <button type="button" class="maly" data-akcja="wycofaj" data-kod="${esc(mk)}">Wycofaj</button></span></div>`).join('')
+          || '<p class="pusto">Nie ma jeszcze maszyn</p>'}
+      </section>
+      <p class="slaby">Kod maszyny to napis na etykiecie QR (HALA:M:…) — po wydrukowaniu etykiet go nie zmieniaj.</p>`;
   }
 
   const fs = $('formularz-pozycji');
-  let pozycja = null;          // { rodzaj: 'linie'|'maszyny', kod?: istniejący }
+  let edytowanaMaszyna = null;   // kod istniejącej maszyny albo null (nowa)
 
-  function otworzPozycje(rodzaj, kod) {
-    pozycja = { rodzaj, kod };
+  function otworzMaszyne(kod) {
+    edytowanaMaszyna = kod || null;
     const sl = hala.slowniki || {};
-    const w = kod ? (sl[rodzaj] || {})[kod] || {} : {};
+    const w = kod ? (sl.maszyny || {})[kod] || {} : {};
     fs.reset();
-    const NAZWY = { linie: ['Linia', 'Nowa linia'], stanowiska: ['Stanowisko', 'Nowe stanowisko'], maszyny: ['Maszyna', 'Nowa maszyna'] };
-    $('t-okno-pozycji').textContent = kod ? `${NAZWY[rodzaj][0]} ${kod}` : NAZWY[rodzaj][1];
+    $('t-okno-pozycji').textContent = kod ? `Maszyna ${kod}` : 'Nowa maszyna';
     fs.kod.value = kod || ''; fs.kod.disabled = !!kod;
     fs.nazwa.value = w.nazwa || '';
-    $('pozycja-linia').hidden = rodzaj === 'linie';
-    $('pozycja-typ').hidden = $('pozycja-stanowisko').hidden = rodzaj !== 'maszyny';
-    $('pozycja-kolejnosc').hidden = rodzaj !== 'linie';
+    // Linia tylko przy kilku liniach w słowniku; puste pole = maszyna zostaje na swojej (nowa — na linii domyślnej).
+    $('pozycja-linia').hidden = !W.wieleLinii(sl);
     fs.linia.innerHTML = Object.entries(sl.linie || {}).map(([k, l]) => `<option value="${esc(k)}">${esc((l && l.nazwa) || k)}</option>`).join('');
-    if (w.linia) fs.linia.value = w.linia;
-    stanowiskaLinii(w.stanowisko);
+    fs.linia.value = w.linia || W.liniaDomyslna(sl);
     fs.typ.value = w.typ || '';
-    fs.kolejnosc.value = w.kolejnosc || '';
     fs.querySelector('.blad').hidden = true;
     $('okno-pozycji').showModal();
     (kod ? fs.nazwa : fs.kod).focus();
   }
 
-  // Maszyna stoi na stanowisku swojej linii — lista stanowisk idzie za wybraną linią.
-  function stanowiskaLinii(wybrane) {
-    const st = Object.entries((hala.slowniki && hala.slowniki.stanowiska) || {}).filter(([, s]) => s.linia === fs.linia.value);
-    fs.stanowisko.innerHTML = '<option value="">— bez stanowiska —</option>'
-      + st.map(([k, s]) => `<option value="${esc(k)}" ${k === wybrane ? 'selected' : ''}>${esc(s.nazwa)} (${esc(k)})</option>`).join('');
-  }
-  fs.linia.addEventListener('change', () => stanowiskaLinii(''));
-
   fs.addEventListener('submit', async ev => {
     ev.preventDefault();
-    const w = W.pozycjaZFormularza(pozycja.rodzaj, { kod: fs.kod.value, nazwa: fs.nazwa.value, linia: fs.linia.value, typ: fs.typ.value,
-                                                     kolejnosc: fs.kolejnosc.value, stanowisko: fs.stanowisko.value }, hala.slowniki, pozycja.kod);
+    const sl = hala.slowniki || {};
+    const byla = edytowanaMaszyna ? (sl.maszyny || {})[edytowanaMaszyna] || {} : {};
+    // Stanowisko (dawny ekran linii) zostaje przy maszynie, jakie było — Panel go już nie pokazuje.
+    const w = W.pozycjaZFormularza('maszyny', { kod: fs.kod.value, nazwa: fs.nazwa.value, typ: fs.typ.value,
+                                               linia: W.wieleLinii(sl) ? fs.linia.value : '', stanowisko: byla.stanowisko || '' }, sl, edytowanaMaszyna);
     const blad = fs.querySelector('.blad');
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     try {
-      await hala.zapisz('slownik.zapisany', `${pozycja.rodzaj}/${w.klucz}`, { slownik: pozycja.rodzaj, klucz: w.klucz, wartosc: w.wartosc });
+      if (w.nowaLinia) await hala.zapisz('slownik.zapisany', `linie/${w.nowaLinia.klucz}`, { slownik: 'linie', klucz: w.nowaLinia.klucz, wartosc: w.nowaLinia.wartosc });
+      await hala.zapisz('slownik.zapisany', `maszyny/${w.klucz}`, { slownik: 'maszyny', klucz: w.klucz, wartosc: w.wartosc });
       $('okno-pozycji').close();
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
@@ -798,7 +785,7 @@
         <form id="formularz-etykiet" class="admin-ustawienia" onsubmit="return false">
           <p class="slaby">Naklejki z kodami do obchodów i zgłoszeń ze skanu. Arkusz A4, 3 kolumny — drukuj w skali 100 %
             na papierze samoprzylepnym albo zwykłym i zalaminuj. Kod QR to napis HALA:… z Administracji.</p>
-          <fieldset><legend>Linie (nic nie zaznaczone = wszystkie)</legend><div class="zaznaczenia">
+          <fieldset ${W.wieleLinii(sl) ? '' : 'hidden'}><legend>Linie (nic nie zaznaczone = wszystkie)</legend><div class="zaznaczenia">
             ${Object.entries(sl.linie || {}).map(([k, l]) => `<label class="zaznacz"><input type="checkbox" name="linie" value="${esc(k)}"> ${esc((l && l.nazwa) || k)}</label>`).join('')}
           </div></fieldset>
           <fieldset><legend>Co drukować</legend><div class="zaznaczenia">
@@ -873,12 +860,7 @@
       }
       if (akcja === 'wpisz-moj-adres') await wpiszMojAdres();
       if (akcja === 'kopia-teraz') await kopiaTeraz();
-      if (akcja === 'nowa-linia') otworzPozycje('linie');
-      if (akcja === 'nowa-maszyna') otworzPozycje('maszyny');
-      if (akcja === 'nowe-stanowisko') otworzPozycje('stanowiska');
-      if (akcja === 'stanowisko') otworzPozycje('stanowiska', b.dataset.kod);
-      if (akcja === 'wycofaj-stanowisko' && confirm(`Wycofać stanowisko ${b.dataset.kod}? Zostanie w historii prób i obchodów.`))
-        await hala.zapisz('slownik.usuniety', `stanowiska/${b.dataset.kod}`, { slownik: 'stanowiska', klucz: b.dataset.kod });
+      if (akcja === 'nowa-maszyna') otworzMaszyne();
       if (akcja === 'drukuj-etykiety') await drukujEtykiety();
       const program = (b.closest('[data-program]') || {}).dataset?.program;
       const nazwaProgramu = program && ((polaczenia || []).find(p => p.program === program) || {}).nazwa;
@@ -905,8 +887,7 @@
         try { await navigator.clipboard.writeText(pole.value); P.komunikat('Skopiowano klucz', 'ok'); }
         catch (e) { pole.select(); P.komunikat('Zaznaczyłem klucz — skopiuj go (Ctrl+C).', 'uwaga'); }
       }
-      if (akcja === 'linia') otworzPozycje('linie', b.dataset.kod);
-      if (akcja === 'maszyna') otworzPozycje('maszyny', b.dataset.kod);
+      if (akcja === 'maszyna') otworzMaszyne(b.dataset.kod);
       if (akcja === 'wycofaj' && confirm(`Wycofać maszynę ${b.dataset.kod}? Zostanie w historii awarii i przeglądów.`))
         await hala.zapisz('slownik.usuniety', `maszyny/${b.dataset.kod}`, { slownik: 'maszyny', klucz: b.dataset.kod });
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }

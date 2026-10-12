@@ -73,6 +73,7 @@
     if (kopia) { zrodlo.nazwa = `${zrodlo.nazwa} (kopia)`; zrodlo.pozycje.forEach(p => { if (p.typ !== 'przekazanie') delete p.id; }); }
     $('t-okno-szablonu').textContent = edytowanyKod ? `Szablon: ${zrodlo.nazwa}` : 'Nowy szablon';
     f.nazwa.value = zrodlo.nazwa;
+    P.pokazPolaLinii(f);
     $('szablon-linie').innerHTML = Object.entries(sl.linie || {}).map(([k, l]) =>
       `<label class="zaznacz"><input type="checkbox" name="linie" value="${esc(k)}" ${zrodlo.linie.includes(k) ? 'checked' : ''}> ${esc((l && l.nazwa) || k)}</label>`).join('');
     $('szablon-zmiany').innerHTML = Object.entries(zmianySlownik()).map(([k, z]) =>
