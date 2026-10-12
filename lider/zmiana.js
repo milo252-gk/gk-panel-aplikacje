@@ -198,7 +198,7 @@
         <div class="postep-gora"><b class="liczba">${c.zrobione}/${c.wszystkie}</b> <span>${c.proc} %</span>
           ${zamknieta ? '<span class="znacznik neutral">Raport wysłany</span>' : c.opoznione ? `<span class="znacznik alarm">Po terminie: ${c.opoznione}</span>` : ''}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${c.wszystkie}" aria-valuenow="${c.zrobione}"><span style="width:${c.proc}%"></span></div>
-        <div class="slaby">${c.najblizsza ? `Następne ${esc(c.najblizsza.godz)} · ${esc(c.najblizsza.nazwa)}${c.najblizsza.zaMin >= 0 ? ` (za ${esc(Hala.formatCzasu(c.najblizsza.zaMin * 60000))})` : ''}`
+        <div class="slaby">${c.najblizsza ? `Następne ${esc(c.najblizsza.godz)} · ${esc(c.najblizsza.nazwa)}${c.najblizsza.zaMin >= 0 ? ` <span class="za-ile">(za ${esc(Hala.formatCzasu(c.najblizsza.zaMin * 60000))})</span>` : ''}`
                                          : c.opoznione ? 'Nadrób zaległe pozycje' : 'Wszystko zrobione'}</div>
       </article>
       <ul class="lista checklista">${c.wiersze.map(w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">

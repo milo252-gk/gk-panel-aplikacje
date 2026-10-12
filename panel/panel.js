@@ -287,8 +287,9 @@
       const stan = k.zamknieta ? 'Raport wysłany' : k.wirtualna ? 'Nie otwarta' : (k.lider || 'Otwarta');
       const opoz = k.opoznione.slice(0, 3).map(p => `<li>${esc(p.godz)} ${esc(p.nazwa)}</li>`).join('')
         + (k.opoznione.length > 3 ? `<li>+${k.opoznione.length - 3} więcej</li>` : '');
-      return `<article class="kafelek kolor-${esc(k.kolor)}">
-        <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
+      // UI etap 4: zatrzymana maszyna na „zielonym” (obchód na czas) kafelku myliła — kafelek dostaje czerwony obrys (.stoi).
+      return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}">
+        <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">⛔ Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
         <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${k.wszystkie}" aria-valuenow="${k.zrobione}"><span style="width:${proc}%"></span></div>
         <div class="liczby"><b>${k.zrobione}/${k.wszystkie}</b>${k.najblizsza ? ` <span>Następne ${esc(k.najblizsza.godz)} · ${esc(k.najblizsza.nazwa)}</span>` : k.wszystkie ? ' <span>Wszystko zrobione</span>' : ' <span>Brak planu</span>'}</div>
@@ -345,6 +346,8 @@
     if (w.wczesniej.partie) wcz.push(`partie brakowe: ${w.wczesniej.partie}`);
     $('wczesniej').hidden = !wcz.length;
     $('wczesniej').textContent = wcz.length ? `Nadal aktywne z wcześniejszych zmian — ${wcz.join(', ')}` : '';
+    // UI etap 4: pusta Jakość nie zabiera pół ekranu — staje cienkim paskiem, a Awarie dostają całą szerokość (panel.css).
+    $('na-zywo').classList.toggle('bez-jakosci', !w.lista.length && !wcz.length);
   }
 
   /* Lista raportów jest przerysowywana przy każdym zdarzeniu i co 20 s — bez tej
@@ -926,15 +929,19 @@
 
   /* Na monitorze listy przewijają się w swoich sekcjach, a monitor nie ma myszy. Dopisek „jeszcze N”
      mówi, że coś jest niżej, a na koncie ekranu listy same przewijają się stronami co 12 s. */
+  const LISTY_JESZCZE = [['lista-awarii', 'jeszcze-awarie', 'awarie'], ['lista-jakosci', 'jeszcze-jakosc', 'jakosc']];
   function pokazJeszcze() {
-    for (const [lista, znacznik] of [['lista-awarii', 'jeszcze-awarie'], ['lista-jakosci', 'jeszcze-jakosc']]) {
+    for (const [lista, znacznik, rodzaj] of LISTY_JESZCZE) {
       const el = $(lista), dol = el.scrollTop + el.clientHeight;
       let n = 0;
       for (const c of el.children) if (c.offsetTop + c.offsetHeight > dol + 4) n++;
       $(znacznik).hidden = !n;
-      $(znacznik).textContent = n ? `▼ jeszcze ${n}` : '';
+      $(znacznik).textContent = W.napisJeszcze(n, rodzaj);   // „▼ Przewiń — jeszcze 2 awarie”
     }
   }
+  // UI etap 4: dopisek da się kliknąć — przewija listę o stronę (na komputerze nie każdy szuka kółkiem w karcie).
+  for (const [lista, znacznik] of LISTY_JESZCZE)
+    $(znacznik).addEventListener('click', () => { const el = $(lista); el.scrollTo({ top: el.scrollTop + el.clientHeight - 40, behavior: 'smooth' }); });
   for (const lista of ['lista-awarii', 'lista-jakosci']) $(lista).addEventListener('scroll', pokazJeszcze, { passive: true });
 
   setInterval(() => {

@@ -67,7 +67,7 @@ section h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: cent
 section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform: none; letter-spacing: 0; }
 .lista { display: flex; flex-direction: column; gap: 8px; overflow: auto; min-height: 0; position: relative; }
 /* „▼ jeszcze N” pod listą, która się nie mieści — monitor nie ma myszy, żeby to zauważyć przewijaniem. */
-.jeszcze { margin: 6px 0 0; text-align: center; font-size: .85em; font-weight: 700; color: var(--tekst-slaby); }
+.jeszcze { margin: 6px 0 0; text-align: center; font-size: .85em; font-weight: 700; color: var(--tekst-slaby); cursor: pointer; }   /* klik = strona niżej */
 /* Nowe zatrzymanie / nowy Quality Alert miga przez minutę (panel.js → MIGANIE_MS). */
 .nowy { animation: mignij 1s ease-in-out infinite; }
 @keyframes mignij { 50% { box-shadow: 0 0 0 4px var(--czerwony); } }
@@ -80,6 +80,16 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 @media (min-width: 1100px) and (min-height: 600px) {
   .aplikacja { height: 100vh; min-height: 0; overflow: hidden; }
   .na-zywo, .raporty, .zlecenia-widok { overflow: hidden; min-height: 0; }
+}
+/* UI etap 4: pusta Jakość (panel.js → .bez-jakosci) — cienki pasek nad Awariami, a Awarie na całą szerokość i w dwóch
+   kolumnach kart. Wcześniej przy 1280×800 mieściło się ~2,5 awarii, a pół ekranu mówiło „Brak incydentów”. */
+@media (min-width: 901px) {
+  .na-zywo.bez-jakosci { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "jakosc" "awarie";
+    grid-template-rows: auto auto auto minmax(0, 1fr); }
+  .na-zywo.bez-jakosci .jakosc { flex-direction: row; align-items: center; gap: 12px; padding: 8px 16px; }
+  .na-zywo.bez-jakosci .jakosc h2 { margin: 0; }
+  .na-zywo.bez-jakosci .jakosc .pusto { margin: 0; font-size: 1em; }
+  .na-zywo.bez-jakosci #lista-awarii { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); align-content: start; }
 }
 @media (max-width: 900px) {
   .na-zywo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "awarie" "jakosc"; grid-template-rows: auto; }
@@ -103,6 +113,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
   padding: 8px 12px 10px; background: var(--karta);
 }
 .kafelek.kolor-czerwony { background: var(--czerwony-tlo); }
+.kafelek.stoi { border-color: var(--czerwony); box-shadow: inset 0 0 0 2px var(--czerwony); }   /* stoi maszyna — nawet gdy obchód na czas */
 .kafelek header { display: flex; align-items: center; gap: 8px; }
 .kafelek h3 { margin: 0; font-size: 1.1em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kafelek .stan-zmiany { font-size: .85em; color: var(--tekst-slaby); margin: 2px 0 6px; }

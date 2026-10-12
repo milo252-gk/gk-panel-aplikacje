@@ -423,6 +423,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
    na ekranie głównym działu (HalaZlecenia.rysujZalegle). Numer mówi, co zrobić najpierw — sam kolor tego nie mówi. */
 .hala-zlecenie.zalegle { border-left-color: var(--czerwony); background: var(--czerwony-tlo); }
 .hala-zlecenie-gora b { flex: 1 1 auto; }
+.hala-zlecenie-gora .slaby { flex: none; white-space: nowrap; }   /* numer „ZL-2026-0002” nie łamie się w pół */
 .hala-zlecenie-nr { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px;
                     border-radius: 999px; background: var(--czerwony); color: var(--na-barwie); font-weight: 800; font-size: 14px; align-self: center; }
 .hala-zlecenia h3.hala-zlecenia-zalegle { color: var(--czerwony); display: flex; align-items: center; gap: 8px; }

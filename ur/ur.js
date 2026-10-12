@@ -243,18 +243,17 @@
     if (a && a.state !== 'running') a.resume().catch(() => {});
     setTimeout(pokazDzwonek, 300);
   }
-  /* UI etap 3: duży pasek 🔇 nad treścią + mały znacznik w nagłówku, oba aż do dotknięcia. Pasek dało się przeoczyć,
-     a mechanik bez dźwięku nie usłyszy awarii. Sprawdzamy też po powrocie z tła (iPhone usypia dźwięk). */
+  /* UI etap 3: duży pasek 🔇 nad treścią (przyklejony pod nagłówkiem), aż do dotknięcia — mechanik bez dźwięku nie
+     usłyszy awarii. UI etap 4: tylko pasek; drugi znacznik w nagłówku dublował go i ucinał godziny zmiany na telefonie.
+     Sprawdzamy też po powrocie z tła (iPhone usypia dźwięk). */
   function pokazDzwonek() {
     const a = kontekstAudio();
-    const wylaczony = W.dzwiekWylaczony(hala.zalogowany(), a && a.state);
-    $('dzwonek').hidden = !wylaczony;
-    $('dzwiek-wylaczony').hidden = !wylaczony;
+    $('dzwonek').hidden = !W.dzwiekWylaczony(hala.zalogowany(), a && a.state);
     if (a && !a.onstatechange) a.onstatechange = pokazDzwonek;
   }
   document.addEventListener('pointerdown', odblokujDzwiek, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pokazDzwonek(); });
-  for (const id of ['dzwonek', 'dzwiek-wylaczony']) $(id).addEventListener('click', () => { odblokujDzwiek(); UR.brzeczyk.ok(); });
+  $('dzwonek').addEventListener('click', () => { odblokujDzwiek(); UR.brzeczyk.ok(); });
 
   UR.powiadomienia = {
     dostepne: () => 'Notification' in global,

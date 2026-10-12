@@ -100,9 +100,10 @@
 
   function kartaProby(p) {
     const alarm = p.proc !== null && p.proc >= KJ.prog();
-    // Próba na całej linii (D51, bez stanowiska i maszyny): miejsce = linia, więc nie powtarzamy jej nazwy.
+    // Linię dopisujemy tylko, gdy coś mówi: nie przy jednej linii w zakładzie ani przy próbie na całej linii (W.liniaPrzyProbie).
+    const linia = W.liniaPrzyProbie(p, hala.slowniki);
     return `<a class="karta proba" href="#wynik/${encodeURIComponent(p.id)}">
-      <div class="wiersz"><b>${esc(p.stanowisko)}</b> <span class="slaby">${p.stanowisko === p.liniaNazwa ? '' : esc(p.liniaNazwa) + ' · '}${esc(W.godzina(p.czas))}</span>
+      <div class="wiersz"><b>${esc(p.stanowisko)}</b> <span class="slaby">${linia ? esc(linia) + ' · ' : ''}${esc(W.godzina(p.czas))}</span>
         ${p.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
       <div class="wiersz"><span>Braki <b class="${alarm ? 'tekst-alarm' : ''}">${p.braki}/${p.sprawdzone}</b>${p.proc !== null ? ` (${String(p.proc).replace('.', ',')} %)` : ''}</span>
         ${p.zlecenie ? `<span class="slaby">zlec. ${esc(p.zlecenie)}</span>` : ''}</div>

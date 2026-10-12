@@ -451,22 +451,24 @@
     const otwarte = (lista || []).filter(z => OTWARTE.has(z.status)).length;
     const doZamkniecia = (lista || []).filter(z => DO_ZAMKNIECIA.has(z.status)).length;
     const spoznione = (lista || []).filter(z => poTerminie(z, teraz === undefined ? Date.now() : teraz)).length;
+    // UI etap 4: jeden kolor znaczy jedno — czerwona liczba = problem, zwykła (neutralne) = stan bez alarmu, szara = zero.
+    // Wcześniej żółte, zielone i czerwone liczby obok siebie nie mówiły, co jest pilne.
     const klasa = (n, zla) => (!n ? 'zero' : zla);
     return [
       { kod: 'stoi', etykieta: naMaszyny ? MASZYNA_STOI : 'Stoi linii', liczba: stoi, klasa: klasa(stoi, 'pilne') },
-      { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'uwaga') },
+      { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'pilne') },
       { kod: 'obchody', etykieta: 'Opóźnione obchody', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
-      { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'uwaga') },
+      { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'pilne') },
       // „do przyjęcia” — tak samo jak chip w Zleceniach (kierownik przyjmuje albo zwraca); dwie nazwy jednej listy myliły.
       // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO PRZYJĘCIA” łamało się w wąskim kafelku.
       { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do przyjęcia` : null,
-        liczba: otwarte + doZamkniecia, klasa: doZamkniecia ? 'dobrze' : klasa(otwarte, 'uwaga') },
+        liczba: otwarte + doZamkniecia, klasa: klasa(otwarte + doZamkniecia, 'neutralne') },
       { kod: 'po-terminie', etykieta: 'Zlecenia po terminie', liczba: spoznione, klasa: klasa(spoznione, 'pilne') },
     ].concat(bezRaportu === undefined ? [] : [
       // Etap 3: OTWARTE zmiany bez raportu końcowego (2 doby) — to sygnał dla kierownika; nieotwarte z szablonem
       // (np. po weekendzie) to szum, więc są tylko w „Raporty”, zwinięte. Klik prowadzi do „Raporty”.
       { kod: 'bez-raportu', etykieta: 'Zmiany bez raportu', liczba: (bezRaportu || []).filter(b => b.otwarta).length,
-        klasa: klasa((bezRaportu || []).filter(b => b.otwarta).length, 'uwaga') }]);
+        klasa: klasa((bezRaportu || []).filter(b => b.otwarta).length, 'pilne') }]);
   }
 
   /* Które kafelki pokazać (szlif UI 2026-10-12): rząd zer na monitorze to szum, w którym ginie jedyna ważna liczba —
@@ -1530,7 +1532,17 @@
   /* Część do pokazania: wybrana, jeśli wolno, inaczej pierwsza dostępna (kierownik bez Pracowników — od razu Checklisty). */
   const czescAdministracji = (chciana, dostepne) => ((dostepne || []).includes(chciana) ? chciana : ((dostepne || [])[0] || 'pracownicy'));
 
-  const PanelWidok = { procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
+  /* Dopisek pod listą, która się nie mieści (UI etap 4): samo „▼ jeszcze 1” nie mówiło, czego jeszcze i co zrobić.
+     rodzaj: 'awarie' | 'jakosc'; n = ile kart jest niżej. 0 → '' (dopisek znika). */
+  function napisJeszcze(n, rodzaj) {
+    if (!n) return '';
+    const formy = rodzaj === 'awarie' ? ['awaria', 'awarie', 'awarii'] : ['incydent', 'incydenty', 'incydentów'];
+    const d = n % 10, s = n % 100;
+    const forma = n === 1 ? formy[0] : (d >= 2 && d <= 4 && (s < 12 || s > 14)) ? formy[1] : formy[2];
+    return `▼ Przewiń — jeszcze ${n} ${forma}`;
+  }
+
+  const PanelWidok = { napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,

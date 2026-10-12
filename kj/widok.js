@@ -699,6 +699,10 @@
      nie zobaczyłby, że brudnopis ma zlecenie. */
   const wiecejProbyOtwarte = f => !!(f && (String(f.zlecenie || '').trim() || f.wyrob || f.zdjecie_zlecenia));
 
+  /* Nazwa linii przed godziną na karcie próby — albo '' (UI etap 4). Przy jednej linii w zakładzie („Hala”, D51)
+     powtarzanie jej przy każdej próbie nic nie mówi; przy próbie na całej linii miejsce już JEST linią. */
+  const liniaPrzyProbie = (p, slowniki) => (!p || jedynaLinia(slowniki) || p.stanowisko === p.liniaNazwa ? '' : p.liniaNazwa || '');
+
   global.KJWidok = {
     raz, odmiana, liczba, linie, nazwaLinii, nazwaStanowiska, nazwaWyrobu, nazwaWady, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
     koniecDnia, mozna, sumaWad, MAKS_ZDJEC, skanZInnejZmiany, bledyProby, daneProby, podpowiedzPartii, powodPartii, korektaProby,
@@ -708,6 +712,6 @@
     jedynaLinia, miejscaDoWyboru, miejsceZWyboru, domyslneMiejsce, napisSkanu, miejsceZeSkanu, nazwaMiejsca, wierszePlanu,
     liniaPoWyrobie, liniaKliknieta, naglowekOdczytow, bladIlosci, kolejnoscWOknie, procent, opisWad, wysylaNaZywo, komunikatBleduZapisu,
     brakiZWad, kluczPominietych, pominiete, pomin, bezPominietych, pokazZleceniaNaPlanie,
-    NAJNOWSZYCH_PROB, najnowsze, pokazKody, wiecejProbyOtwarte,
+    NAJNOWSZYCH_PROB, najnowsze, pokazKody, wiecejProbyOtwarte, liniaPrzyProbie,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

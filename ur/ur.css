@@ -183,14 +183,12 @@ body.kierownik-ur .tylko-kierownik { display: flex !important; }
 
 /* Prośba o dźwięk: przeglądarka gra dopiero po pierwszym dotknięciu strony. UI etap 3: pasek duży, z 🔇, przyklejony
    u góry — wcześniej cienki żółty napis łatwo było przeoczyć, a mechanik bez dźwięku nie usłyszy awarii. */
-.dzwonek { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 10px;
+.dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5;   /* pod przyklejonym nagłówkiem, nie za nim */ display: flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 56px; padding: 10px 14px; background: var(--zolty-tlo); color: var(--tekst); border-bottom: 3px solid var(--zolty);
   text-align: center; font-weight: 700; font-size: 1.05em; cursor: pointer; }
 .dzwonek .ikona { font-size: 1.6em; line-height: 1; }
-.naglowek .dzwiek-wylaczony { margin-left: auto; white-space: nowrap; background: var(--zolty-tlo); color: var(--tekst);
-  border: 2px solid var(--zolty); }
-.naglowek .dzwiek-wylaczony:not([hidden]) + .kto { margin-left: 8px; }
-@media (max-width: 420px) { .naglowek .dzwiek-wylaczony .dz-dotknij { display: none; } }
+/* UI etap 4: nazwa zmiany z godzinami nie może się uciąć („Zmiana II 14…”) — na 390 px mieści się w całości. */
+.naglowek .zmiana { flex: 0 0 auto; }
 
 /* ---------------------------------------------------------------- awarie */
 

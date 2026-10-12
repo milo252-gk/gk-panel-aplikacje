@@ -218,8 +218,9 @@
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">⏰ ${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
         ${z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
-          ${z.status === 'nowe' ? '<button type="button" data-akcja="przyjmij">Biorę</button>' : ''}
-          <button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>
+          ${/* UI etap 4: wyróżniony jest NASTĘPNY krok — przy nowym zleceniu „Biorę”, potem „Zrobione”. */
+            z.status === 'nowe' ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
+          <button type="button" ${z.status === 'nowe' ? '' : 'class="zielony" '}data-akcja="wykonane">Zrobione</button>
           <button type="button" data-akcja="nie-moge">Nie mogę</button>
         </div>`) : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
       </article>`;

@@ -88,6 +88,7 @@ dl.dane dd { margin: 0; white-space: pre-wrap; }
 /* ---------------------------------------------------------------- zmiana i checklista */
 
 .postep-zmiany { border-left: 8px solid var(--kolor); }
+.postep-zmiany .za-ile { white-space: nowrap; }   /* „(za 1 h 25 min)” przechodzi do nowej linii w całości, nie rwie się */
 .postep-gora { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .postep-gora .liczba { font-size: 1.8em; font-variant-numeric: tabular-nums; }
 .postep { height: 14px; border-radius: 7px; background: var(--tlo-neutralne); overflow: hidden; margin: 8px 0; }
