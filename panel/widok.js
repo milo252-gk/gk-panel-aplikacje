@@ -303,6 +303,7 @@
       const przepadlo = z.status === 'przepadlo';
       const zaplanowane = z.status === 'zaplanowane';
       const start = Date.parse(d.zaplanowane_na);
+      const postep = postepZlecenia(d);
       return {
         id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
         tytul: d.tytul || '', opis: d.opis || '',
@@ -310,7 +311,7 @@
         liniaNazwa: d.linia ? liniaWidoczna(slowniki, d.linia) || null : null,
         maszyna: (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
           .map(m => (maszyny[m] || {}).nazwa || m).join(', ') || null,
-        postep: postepZlecenia(d), czynnosc: d.czynnosc || null,
+        postep, czynnosc: d.czynnosc || null,
         pilne: d.priorytet === 'pilne',
         kto: nazwaPracownika(pracownicy, kto),
         wykonawca: nazwaPracownika(pracownicy, d.wykonawca),
@@ -324,7 +325,9 @@
           : przepadlo ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})` : null,
         przepadlo,
         odpowiedz: d.powod_odrzucenia ? `Nie może: ${d.powod_odrzucenia}` : null,
-        notatka: d.uwagi_wykonania || null,
+        // Test właściciela 2026-10-13: notatka dopisana krokiem (D56, „📝 Notatka” przed „Zrobione”) była tylko w historii —
+        // na karcie kierownik widział „Od działu:” bez słowa. Teraz kroki + notatka z „Zrobione”, zdjęcia też z kroków.
+        notatka: [...(postep ? postep.notatki : []), d.uwagi_wykonania].filter(Boolean).join(' · ') || null,
         uwagiZwrotu: d.uwagi_zwrotu || null,
         wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true,
         wymagajSkanu: d.wymagaj_skanu === true, zeskanowano: !!d.skan_maszyny,
@@ -334,7 +337,7 @@
         podsumowanie: String(d.wystapienie || '').startsWith('podsumowanie|'),
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
-        zdjecia: [].concat(d.zdjecia_wykonania || []),
+        zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
         moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && H().moznaAnulowacZlecenie(z, ja, pracownicy),
         // D47: zaplanowane — kiedy hub je zleci i jaki dostanie termin; zmienia i „Zleć teraz” tylko kierownik zakładu (admin).
@@ -448,7 +451,7 @@
   }
 
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
-  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: lista, teraz, bezRaportu, slowniki }) {
+  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: lista, teraz, bezRaportu, slowniki, bhp }) {
     // „Stoi linii” liczy LINIE (etap 3): dwie zatrzymane maszyny na jednej linii to jedna stojąca linia.
     // D51: zakład z jedną linią (slowniki podane, linia jedna) — liczą się MASZYNY, a kafelek mówi „Maszyna stoi”.
     const naMaszyny = slowniki !== undefined && !wieleLinii(slowniki);
@@ -466,6 +469,8 @@
       { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'pilne') },
       { kod: 'obchody', etykieta: 'Opóźnione obchody', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
       { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'pilne') },
+      // D59: otwarte zgłoszenia BHP (każdej zmiany, aż kierownik je zamknie z opisem działań) — klik prowadzi do listy.
+      { kod: 'bhp', etykieta: 'BHP — otwarte', liczba: bhp || 0, klasa: klasa(bhp || 0, 'pilne') },
       // „do przyjęcia” — tak samo jak chip w Zleceniach (kierownik przyjmuje albo zwraca); dwie nazwy jednej listy myliły.
       // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO PRZYJĘCIA” łamało się w wąskim kafelku.
       { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do przyjęcia` : null,
@@ -1687,6 +1692,35 @@
                zlecenie: d.zlecenie || null, stale: d.stale || null };
     }).sort((a, b) => (b.nowe - a.nowe) || (a.nowe ? String(a.kiedy).localeCompare(String(b.kiedy)) : String(b.kiedy).localeCompare(String(a.kiedy))));
   }
+  /* D59 (test właściciela 2026-10-13): zgłoszenia BHP z GK Lider (bhp.zgloszenie) — kierownik widział tylko liczbę
+     „BHP 1” w raporcie zmiany, bez treści. Wiersze listy: otwarte na górze (pilne rodzaje — incydent, sytuacja
+     potencjalnie wypadkowa, pole „pilne” w stałej rodzaje_bhp — przed odstępstwami; najstarsze pierwsze), zamknięte
+     od najnowszych. */
+  function bhpLista({ zgloszenia, slowniki, pracownicy, stale }) {
+    const rodzaje = new Map(((stale && stale.rodzaje_bhp) || []).map(r => [r.kod, r]));
+    const sl = slowniki || {};
+    const nazwa = (s, kod) => (kod ? (((sl[s] || {})[kod] || {}).nazwa || kod) : '');
+    return (zgloszenia || []).filter(Boolean).map(g => {
+      const d = g.dane || {};
+      const r = rodzaje.get(d.rodzaj) || {};
+      const linia = d.linia || g.linia || '';
+      return { id: g.id, numer: g.numer || '—', status: g.status, etykieta: g.etykieta || g.status, otwarte: g.status === 'otwarte',
+               rodzaj: d.rodzaj || '', rodzajNazwa: r.nazwa || d.rodzaj || 'Zgłoszenie BHP', pilne: !!r.pilne,
+               linia, liniaNazwa: nazwa('linie', linia), stanowisko: d.stanowisko || '', stanowiskoNazwa: nazwa('stanowiska', d.stanowisko),
+               opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), kto: nazwaPracownika(pracownicy, d.zglosil),
+               kiedy: d.czas_zgloszenia || '', kiedyOpis: `${dataKrotka(d.czas_zgloszenia)} ${godzina(d.czas_zgloszenia)}`,
+               dzialania: d.dzialania || '', zamknieteOpis: d.czas_zamkniecia ? `${dataKrotka(d.czas_zamkniecia)} ${godzina(d.czas_zamkniecia)}` : '' };
+    }).sort((a, b) => (b.otwarte - a.otwarte) || (a.otwarte ? (b.pilne - a.pilne) || String(a.kiedy).localeCompare(String(b.kiedy))
+      : String(b.kiedy).localeCompare(String(a.kiedy))));
+  }
+  /* Zgłoszenie BHP → pola okna „Nowe zlecenie”: naprawa dla liderów tej linii, ze zdjęciem i notatką (dowód poprawy). */
+  function zlecenieZBhp(w) {
+    const gdzie = [w.liniaNazwa, w.stanowiskoNazwa].filter(Boolean).join(' · ');
+    return { tytul: `BHP: ${w.rodzajNazwa}${w.stanowiskoNazwa ? ` — ${w.stanowiskoNazwa}` : ''}`.slice(0, 120),
+             opis: [w.opis, gdzie, `(ze zgłoszenia ${w.numer})`].filter(Boolean).join('\n'), dzial: 'produkcja', linia: w.linia || '',
+             wymagaj_zdjecia: true, wymagaj_notatki: true };
+  }
+
   /* Zgłoszenie → pola okna „Nowe zlecenie” (kierownik robi z niego zlecenie). Dział domyślnie ten, który zgłosił. */
   function zlecenieZeZgloszenia(g) {
     const d = (g && g.dane) || {};
@@ -1789,7 +1823,7 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { listaProb, postepZlecenia, zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia,
+  const PanelWidok = { listaProb, postepZlecenia, zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,

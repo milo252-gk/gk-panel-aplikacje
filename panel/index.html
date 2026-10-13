@@ -78,7 +78,7 @@
       <p id="jeszcze-awarie" class="jeszcze" hidden></p>
     </section>
     <section class="jakosc" aria-labelledby="t-jakosc">
-      <h2 id="t-jakosc">Jakość — ta zmiana <span id="licznik-jakosci" class="licznik"></span></h2>
+      <h2 id="t-jakosc">Jakość i BHP — ta zmiana <span id="licznik-jakosci" class="licznik"></span></h2>
       <div id="lista-jakosci" class="lista"></div>
       <p id="jeszcze-jakosc" class="jeszcze" hidden></p>
       <p id="wczesniej" class="wczesniej" hidden></p>
@@ -99,6 +99,8 @@
         <!-- D55: zgłoszenia nieprawidłowości od działów, zużyte narzędzia od mistrzów, zadania samego kierownika zakładu. -->
         <button type="button" class="chip" data-tryb="zgloszenia" aria-pressed="false">📝 Zgłoszenia</button>
         <button type="button" class="chip" data-tryb="narzedzia" aria-pressed="false">🧰 Narzędzia</button>
+        <!-- D59: zgłoszenia BHP od liderów (odstępstwo, incydent, sytuacja potencjalnie wypadkowa) — zamyka kierownik. -->
+        <button type="button" class="chip" data-tryb="bhp" aria-pressed="false">⛑ BHP</button>
         <button type="button" class="chip" data-tryb="moje" aria-pressed="false" hidden>✅ Moje zadania</button>
       </div>
       <div id="zlecenia-biezace" class="zlecenia-czesc">
@@ -128,6 +130,11 @@
       <div id="zlecenia-narzedzia" class="zlecenia-czesc" hidden>
         <p class="slaby opis-widoku">Mistrzowie odkładają zużyte narzędzia (frezy, piły…) ze zdjęciem. Odbierając, potwierdź zdjęciem.</p>
         <div id="lista-narzedzi" class="lista"></div>
+      </div>
+      <div id="zlecenia-bhp" class="zlecenia-czesc" hidden>
+        <p class="slaby opis-widoku">Zgłoszenia BHP od liderów i mistrzów. Zamknij, gdy wiesz, co zrobiono — wpisz działania;
+          „Zrób zlecenie” — poprawa dla liderów tej linii ze zdjęciem.</p>
+        <div id="lista-bhp" class="lista"></div>
       </div>
       <div id="zlecenia-moje" class="zlecenia-czesc" hidden><div id="moje-zadania"></div></div>
       <div id="zlecenia-stale" class="zlecenia-czesc" hidden>

@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.20.0';
+  const WERSJA_KLIENTA = '0.21.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -646,6 +646,27 @@
     return { rodzaj: null, kod: t, wpis: null, surowy: t };
   }
 
+  /* Kod wpisany ręcznie w oknie skanera → tekst, jaki dałby skan naklejki. Pod kodem QR na naklejce jest wydrukowany sam
+     kod („WT-01”, panel/web/etykiety.js), a odczytajKod rozumie tylko „HALA:M:WT-01” — przy nieczytelnej naklejce
+     wpisany kod był „nie kodem maszyny” (test właściciela 2026-10-13, zlecenia ze skanem). Wielkość liter i spacje bez
+     znaczenia; najpierw maszyny (od D51 na hali wiszą tylko ich naklejki), potem stanowiska i linie. Kod pełny, qr ze
+     słownika, identyfikator osoby i nieznany tekst wracają bez zmian (błąd pokaże sprawdzenie). Ta sama reguła co
+     kodZeSkanu w lider/web/widok.js i ur/web/widok.js. */
+  const bezOdstepow = s => String(s || '').replace(/\s+/g, '').toUpperCase();
+  const PRZEDROSTKI_KODU = { maszyny: 'M', stanowiska: 'S', linie: 'L' };
+  function kodZeSkanu(tekst, slowniki) {
+    const t = String(tekst || '').trim();
+    const k = odczytajKod(t, slowniki);
+    if (k.rodzaj === 'pracownik' || k.wpis) return t;
+    const m = /^HALA:([MSL]):(.+)$/.exec(bezOdstepow(t));
+    const szukany = m ? m[2] : bezOdstepow(t);
+    for (const r of Object.keys(PRZEDROSTKI_KODU).filter(x => !m || PRZEDROSTKI_KODU[x] === m[1])) {
+      const kod = Object.keys((slowniki || {})[r] || {}).find(x => bezOdstepow(x) === szukany);
+      if (kod) return `HALA:${PRZEDROSTKI_KODU[r]}:${kod}`;
+    }
+    return t;
+  }
+
   // ---------------------------------------------------------------- IndexedDB
 
   function otworzBaze(nazwa) {
@@ -1062,7 +1083,7 @@
     async function odswiezKolejke() {
       kolejkaCache = await dzialanie(db, 'kolejka', 'readonly', s => s.getAll());
       przeliczWidok();
-      const odrz = await dzialanie(db, 'odrzucone', 'readonly', s => s.count());
+      const odrz = (await mojeOdrzucone()).length;
       // moje = zapisy zalogowanej osoby — tylko te wysyłamy; cudze czekają na jej powrót (telefon bywa wspólny).
       emituj('kolejka', { oczekuje: kolejkaCache.length, moje: mojeWKolejce(), odrzucone: odrz });
     }
@@ -1122,7 +1143,13 @@
       return `${hub}/api/v1/pliki/${encodeURIComponent(id)}`;
     };
 
-    h.odrzucone = () => dzialanie(db, 'odrzucone', 'readonly', s => s.getAll());
+    /* Odrzucone przez hub — tylko zapisy zalogowanej osoby (test właściciela 2026-10-13: na wspólnym telefonie KJ
+       następna osoba widziała cudzy odrzucony zapis „Nie wysłane: 1”). Wpis bez autora (sprzed tej zmiany) widzi każdy. */
+    async function mojeOdrzucone() {
+      const ja = h.pracownik && h.pracownik.id;
+      return (await dzialanie(db, 'odrzucone', 'readonly', s => s.getAll())).filter(x => !x.autor || !ja || x.autor === ja);
+    }
+    h.odrzucone = () => mojeOdrzucone();
     h.usunOdrzucone = async id => { await dzialanie(db, 'odrzucone', 'readwrite', s => s.delete(id)); await odswiezKolejke(); };
     const mojeWKolejce = () => (h.pracownik ? kolejkaCache.filter(w => w.autor === h.pracownik.id).length : 0);
     h.stanKolejki = () => ({ oczekuje: kolejkaCache.length, moje: mojeWKolejce(), pozycje: kolejkaCache.map(w => w.zd) });
@@ -1176,7 +1203,7 @@
             for (const w of paczka) {
               const wynik = wyniki.get(w.zd.id);
               if (!wynik) continue;
-              if (wynik.status === 'odrzucone') t.objectStore('odrzucone').put({ id: w.zd.id, zd: w.zd, powod: wynik.powod, kiedy: iso(Date.now()) });
+              if (wynik.status === 'odrzucone') t.objectStore('odrzucone').put({ id: w.zd.id, zd: w.zd, autor: w.autor, powod: wynik.powod, kiedy: iso(Date.now()) });
               t.objectStore('kolejka').delete(w.nr);
               // Konflikt (stan się nie zmienił) aplikacje pokazują jako „ktoś zmienił to wcześniej”; sam poprawiony czas
               // telefonu (etap 1) to nie konflikt — osobny sygnał 'uwaga', żeby nie straszyć człowieka nieprawdą.
@@ -1653,7 +1680,7 @@
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
-    odczytajKod, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
+    odczytajKod, kodZeSkanu, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
   };
   global.Hala = Hala;

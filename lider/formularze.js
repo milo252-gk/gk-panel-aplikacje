@@ -466,9 +466,13 @@
     const nazwy = {};
     for (const p of ((k.zl && k.zl.dane) || {}).pozycje || []) nazwy[p.id] = p.nazwa;
     const n = ids => esc(ids.map(id => nazwy[id] || id).join(', '));
+    // Test właściciela 2026-10-13: „po terminie” mieszało zrobione z opóźnieniem (✔ późno) z niezrobionymi — lider nie
+    // wiedział, czego naprawdę brakuje. W zdarzeniu zostaje jedna lista opoznione (§6.4); tu dzielimy ją na dwie.
+    const wyk = ((k.zl && k.zl.dane) || {}).wykonane || {};
+    const brak = r.checklista.opoznione.filter(id => !wyk[id]), pozno = r.checklista.opoznione.filter(id => wyk[id]);
     return `<dl class="dane raport">
       <dt>Obsada</dt><dd>${r.obsada.obecna ?? '—'} z ${r.obsada.planowana ?? '—'}${r.obsada.zdarzenia ? ` · zdarzeń: ${r.obsada.zdarzenia}` : ''}</dd>
-      <dt>Checklista</dt><dd>${r.checklista.zrobione}/${r.checklista.wszystkie}${r.checklista.opoznione.length ? ` · <span class="tekst-alarm">po terminie: ${n(r.checklista.opoznione)}</span>` : ''}${r.checklista.pominiete.length ? ` · pominięte: ${n(r.checklista.pominiete)}` : ''}</dd>
+      <dt>Checklista</dt><dd>${r.checklista.zrobione}/${r.checklista.wszystkie}${brak.length ? ` · <span class="tekst-alarm">niezrobione: ${n(brak)}</span>` : ''}${pozno.length ? ` · zrobione po terminie: ${n(pozno)}` : ''}${r.checklista.pominiete.length ? ` · pominięte: ${n(r.checklista.pominiete)}` : ''}</dd>
       <dt>Awarie</dt><dd>${r.awarie.map(a => `${esc(a.maszyna)} ${esc(a.numer || '—')} · ${esc(hala.etykieta('awaria', a.status))} · ${esc(Hala.formatCzasu(a.przestoj_min * 60000))}`).join('<br>') || 'brak'}</dd>
       <dt>Próby</dt><dd>${r.proby.liczba ? `${r.proby.liczba} · sprawdzone ${r.proby.sprawdzone} · braki ${r.proby.braki}` : 'brak'}</dd>
       <dt>Alerty potwierdzone</dt><dd>${r.alerty_potwierdzone.length}</dd>

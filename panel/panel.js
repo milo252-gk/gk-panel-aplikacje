@@ -14,7 +14,8 @@
   const KLUCZ_POLACZENIA = 'hala.panel.ostatnioPolaczony';
   const START = Date.now(), START_LASKA_MS = 5000;
 
-  const hala = Hala.utworz({ aplikacja: 'panel', typy: ['awaria', 'zmiana_linii', 'partia', 'alert', 'zlecenie', 'proba', 'zgloszenie', 'narzedzia'], dni: 2 });
+  // D59: bhp_zgloszenie — zgłoszenia BHP liderów (lista ⛑ BHP, „Na żywo”, gong przy incydencie).
+  const hala = Hala.utworz({ aplikacja: 'panel', typy: ['awaria', 'zmiana_linii', 'partia', 'alert', 'zlecenie', 'proba', 'zgloszenie', 'narzedzia', 'bhp_zgloszenie'], dni: 2 });
   // Wspólne narzędzia dla ekranów w osobnych plikach (administracja.js) — rejestrują się w Panel.widoki.
   const Panel = window.Panel = { hala, W, $, esc, widoki: {}, narysuj: () => narysuj(), komunikatBledu: e => komunikatBledu(e) };
 
@@ -328,9 +329,17 @@
     return { zgloszona: 'alarm', przyjeta: 'uwaga', w_trakcie: 'info', wstrzymana: 'neutral', oczekuje_potwierdzenia: 'ok' }[status] || 'neutral';
   }
 
-  function rysujJakosc(w) {
-    $('licznik-jakosci').innerHTML = w.lista.length ? `<span class="znacznik alarm">${w.lista.length}</span>` : '';
-    $('lista-jakosci').innerHTML = w.lista.map(i => i.rodzaj === 'alert' ? `
+  /* D59: otwarte zgłoszenia BHP stoją na górze sekcji „Jakość i BHP” (każdej zmiany, aż kierownik je zamknie) —
+     dotknięcie otwiera listę ⛑ BHP w Zleceniach. */
+  function rysujJakosc(w, bhp) {
+    const ileBhp = (bhp || []).length;
+    $('licznik-jakosci').innerHTML = w.lista.length + ileBhp ? `<span class="znacznik alarm">${w.lista.length + ileBhp}</span>` : '';
+    $('lista-jakosci').innerHTML = (bhp || []).map(b => `
+      <button type="button" class="incydent bhp" data-bhp="${esc(b.id)}">
+        <div class="rodzaj"><span class="znacznik ${b.pilne ? 'alarm' : 'uwaga'}">BHP: ${esc(b.rodzajNazwa)}</span> <span class="slaby">${esc(b.numer)} · ${esc(b.kiedyOpis)}</span></div>
+        <div class="tytul">${[b.liniaNazwa, b.stanowiskoNazwa].filter(Boolean).map(x => `<b>${esc(x)}</b>`).join(' · ')}${b.kto ? ` <span class="slaby">${esc(b.kto)}</span>` : ''}</div>
+        ${b.opis ? `<div class="slaby tekst-opisu">${esc(b.opis)}</div>` : ''}
+      </button>`).join('') + (w.lista.map(i => i.rodzaj === 'alert' ? `
       <article class="incydent alert ${swieze('alert|' + i.id) ? 'nowy' : ''}">
         <div class="rodzaj"><span class="znacznik alarm">Alert jakości</span> <span class="slaby">${esc(i.numer)} · ${esc(i.godz)}</span></div>
         <div class="tytul"><b>${esc(i.tytul)}</b></div>
@@ -341,19 +350,21 @@
         <div class="tytul">${[i.liniaNazwa ? `<b>${esc(i.liniaNazwa)}</b>` : '', i.wyrob ? esc(i.wyrob) : '', i.ilosc !== null ? `${esc(i.ilosc)} szt.` : '']
           .filter(Boolean).join(' · ')}${i.zlecenie ? ` <span class="slaby">zlec. ${esc(i.zlecenie)}</span>` : ''}</div>
         ${i.powod ? `<div class="slaby tekst-opisu">${esc(i.powod)}</div>` : ''}
-      </article>`).join('') || '<p class="pusto ok">Brak incydentów na tej zmianie</p>';
+      </article>`).join('') || (ileBhp ? '' : '<p class="pusto ok">Brak incydentów na tej zmianie</p>'));
     const wcz = [];
     if (w.wczesniej.alerty) wcz.push(`alerty: ${w.wczesniej.alerty}`);
     if (w.wczesniej.partie) wcz.push(`partie brakowe: ${w.wczesniej.partie}`);
     $('wczesniej').hidden = !wcz.length;
     $('wczesniej').textContent = wcz.length ? `Nadal aktywne z wcześniejszych zmian — ${wcz.join(', ')}` : '';
     // UI etap 4: pusta Jakość nie zabiera pół ekranu — staje cienkim paskiem, a Awarie dostają całą szerokość (panel.css).
-    $('na-zywo').classList.toggle('bez-jakosci', !w.lista.length && !wcz.length);
+    $('na-zywo').classList.toggle('bez-jakosci', !w.lista.length && !wcz.length && !ileBhp);
   }
+  $('lista-jakosci').addEventListener('click', ev => { if (ev.target.closest('[data-bhp]')) Panel.pokazZlecenia(null, 'bhp'); });
 
   /* Lista raportów jest przerysowywana przy każdym zdarzeniu i co 20 s — bez tej
      pamięci rozwinięty raport zwijałby się kierownikowi w trakcie czytania.   */
   const otwarteRaporty = new Set();
+  $('lista-raportow').addEventListener('click', ev => { if (ev.target.closest('[data-bhp-raport]')) Panel.pokazZlecenia(null, 'bhp'); });
   $('lista-raportow').addEventListener('toggle', ev => {
     const k = ev.target.dataset && ev.target.dataset.klucz;
     if (k) { if (ev.target.open) otwarteRaporty.add(k); else otwarteRaporty.delete(k); }
@@ -397,6 +408,7 @@
           <dt>Checklista</dt><dd>${r.checklista.wszystkie !== null ? `${esc(r.checklista.zrobione)}/${esc(r.checklista.wszystkie)}, opóźnione: ${esc(r.checklista.opoznione)}, pominięte: ${esc(r.checklista.pominiete)}` : '—'}</dd>
           <dt>Awarie</dt><dd>${r.awarieLista.map(a => `${esc(a.numer)} ${esc(a.maszyna)} (${esc(Hala.formatCzasu(a.przestojMin * 60000))})`).join(', ') || 'brak'}</dd>
           <dt>Próby</dt><dd>${r.proby.liczba ? `${esc(r.proby.liczba)}, sprawdzone ${esc(r.proby.sprawdzone)}, braki ${esc(r.proby.braki)}${r.proby.proc !== null ? ` (${esc(W.procent(r.proby.proc))} %)` : ''}` : 'brak'}</dd>
+          ${r.bhp ? `<dt>BHP</dt><dd>${esc(r.bhp)} ${r.bhp === 1 ? 'zgłoszenie' : r.bhp < 5 ? 'zgłoszenia' : 'zgłoszeń'} <button type="button" class="maly" data-bhp-raport>⛑ Zobacz zgłoszenia BHP</button></dd>` : ''}
           ${r.uwagi ? `<dt>Uwagi lidera</dt><dd>${esc(r.uwagi)}</dd>` : ''}
           <dt>Zamknięta</dt><dd>${esc(W.dataKrotka(r.czas))} ${esc(W.godzina(r.czas))}</dd>
         </dl>
@@ -433,6 +445,8 @@
                                  teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30) });
       const jakosc = W.incydenty({ partie: hala.obiekty('partia'), alerty: hala.obiekty('alert'), slowniki: d.slowniki, zmiana: d.zmiana, teraz: d.teraz });
       sprawdzAlarmy(wiersze, jakosc.lista);
+      const bhpOtwarte = W.bhpLista({ zgloszenia: hala.obiekty('bhp_zgloszenie', g => g.status === 'otwarte'), slowniki: d.slowniki,
+                                      pracownicy: d.pracownicy, stale: d.stale });
       const zlecenia = hala.obiekty('zlecenie');
       const doZamkniecia = zlecenia.filter(z => z.status === 'wykonane' || z.status === 'odrzucone').length;
       $('plakietka-zlecen').hidden = !doZamkniecia;
@@ -440,9 +454,9 @@
       if (widokAktywny === 'na-zywo') {
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
-        rysujJakosc(jakosc);
+        rysujJakosc(jakosc, bhpOtwarte);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
-                                slowniki: d.slowniki }));
+                                slowniki: d.slowniki, bhp: bhpOtwarte.length }));
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {
         rysujZlecenia(d, zlecenia);
@@ -471,6 +485,7 @@
     if (k && k.dataset.kafel === 'zlecenia') Panel.pokazZlecenia(null, 'biezace');
     if (k && k.dataset.kafel === 'po-terminie') Panel.pokazZlecenia('otwarte', 'biezace');
     if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();
+    if (k && k.dataset.kafel === 'bhp') Panel.pokazZlecenia(null, 'bhp');
   });
 
   // ------------------------------------------------------------ zlecenia dla działów (kierownik)
@@ -488,7 +503,7 @@
      Adres czyścimy, żeby następne powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie
      przełączało widoku. Przed zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
   function obsluzAdres() {
-    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#checklisty'].includes(location.hash)) return;
+    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#checklisty', '#bhp'].includes(location.hash)) return;
     const adres = location.hash;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* stary adres zostanie — bez szkody */ }
     // #administracja = dotknięty alarm huba (etap 2: kopia, adres na Pages, token, miejsce) — tylko administrator ma ten widok.
@@ -499,6 +514,8 @@
       if (!$('menu-administracja').hidden) { Panel.widoki.administracja.przejdz('checklisty'); $('menu-administracja').click(); }
       return;
     }
+    // #bhp — dotknięte powiadomienie o zgłoszeniu BHP (D59): lista ⛑ BHP, otwarte na górze.
+    if (adres === '#bhp') { Panel.pokazZlecenia(null, 'bhp'); return; }
     Panel.pokazZlecenia('otwarte', 'biezace');
   }
   window.addEventListener('hashchange', obsluzAdres);
@@ -528,6 +545,9 @@
     return role.some(r => r === 'admin' || zapis.includes(r));
   };
   Panel.mozeZapisacStale = mozeZapisacStale;
+  // D59: lista BHP (zgloszenia.js) — kto może zamknąć zgłoszenie i dane do nazw (linie, stanowiska, osoby, stałe).
+  Panel.mozeWyslac = typ => mozeWyslac(typ);
+  Panel.dane = () => dane();
 
   /* D55: filtry listy zleceń. Okres dłuższy niż 2 dni (Zamknięte) — dociągamy zlecenia z serwera (GET /stan/zlecenie?od=),
      telefon/Panel trzyma w pamięci tylko dwie doby. */
@@ -577,7 +597,7 @@
     // D55: „Moje zadania” tylko kierownikowi zakładu (dział „kierownik”); liczby na chipach — co czeka.
     const kierownik = ((hala.pracownik && hala.pracownik.role) || []).includes('kierownik');
     const ile = ZG ? ZG.liczby() : {};
-    for (const [tryb, napis] of [['zgloszenia', '📝 Zgłoszenia'], ['narzedzia', '🧰 Narzędzia'], ['moje', '✅ Moje zadania']]) {
+    for (const [tryb, napis] of [['zgloszenia', '📝 Zgłoszenia'], ['narzedzia', '🧰 Narzędzia'], ['bhp', '⛑ BHP'], ['moje', '✅ Moje zadania']]) {
       const b = document.querySelector(`#tryb-zlecen [data-tryb="${tryb}"]`);
       const t = ile[tryb] ? `${napis} · ${ile[tryb]}` : napis;
       if (b.textContent !== t) b.textContent = t;
@@ -585,13 +605,14 @@
     }
     document.querySelector('#tryb-zlecen [data-tryb="moje"]').hidden = !kierownik;
     if (trybZlecen === 'moje' && !kierownik) trybZlecen = 'biezace';
-    for (const t of ['biezace', 'stale', 'zgloszenia', 'narzedzia', 'moje']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
+    for (const t of ['biezace', 'stale', 'zgloszenia', 'narzedzia', 'bhp', 'moje']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
     if (trybZlecen === 'stale') { if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d); return; }
     if (trybZlecen === 'zgloszenia') { if (ZG) ZG.rysujZgloszenia(d); return; }
     if (trybZlecen === 'narzedzia') { if (ZG) ZG.rysujNarzedzia(d); return; }
+    if (trybZlecen === 'bhp') { if (ZG) ZG.rysujBhp(d); return; }
     if (trybZlecen === 'moje') { if (ZG) ZG.rysujMoje(d); return; }
     rysujFiltry(d);
     const wiersze = W.filtrujZlecenia(W.zlecenia({ zlecenia: listaZOkresem(lista), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
@@ -622,7 +643,7 @@
             <span class="znacznik neutral">${esc(z.dzialNazwa)}</span>
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
-            ${z.wymagajZdjecia ? '<span title="Dział musi dodać zdjęcie">📷</span>' : ''}${z.wymagajNotatki ? '<span title="Dział musi napisać notatkę">📝</span>' : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
+            ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">📷${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">📝${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
@@ -1083,7 +1104,8 @@
   }
 
   // D55: awarie (każda, zatrzymanie — mocniej) i pilne zadania kierownika — dwa różne dźwięki ze wspólnego dzialania.js.
-  if (window.HalaDzwieki) window.HalaDzwieki.sledz(hala, { awarie: true, zlecenia: () => ({ dzial: 'kierownik' }), wlaczony: dzwiekWlaczony });
+  // D59: także incydent i sytuacja potencjalnie wypadkowa (BHP) — gong jak pilne zadanie.
+  if (window.HalaDzwieki) window.HalaDzwieki.sledz(hala, { awarie: true, bhp: true, zlecenia: () => ({ dzial: 'kierownik' }), wlaczony: dzwiekWlaczony });
 
   function sprawdzAlarmy(wiersze, incydenty) {
     const a = W.noweAlarmy(znaneAlarmy, wiersze, incydenty);

@@ -7,6 +7,7 @@
    zlecenia, z uwagą) albo „Odrzuć” (powód wraca do zgłaszającego).
    Narzędzia: mistrz odkłada zużyte narzędzia ze zdjęciem, kierownik odbiera — też ze zdjęciem (HalaDzialania).
    Moje zadania: wspólny ekran zleceń działów (zlecenia.js) dla działu „kierownik” — np. „Podsumuj zmianę”.
+   BHP (D59): zgłoszenia BHP liderów — treść, zdjęcia, „Zamknij” z opisem działań (bhp.zamkniete), „Zrób zlecenie”.
    Czyste funkcje: widok.js (W.zgloszeniaLista, W.zlecenieZeZgloszenia). */
 
 (() => {
@@ -123,6 +124,58 @@
     if (b.dataset.akcja === 'odbierz') DZ().odbierzNarzedzia(hala, id, { gotowe: t => P.komunikat(t, 'ok') });
   });
 
+  // ------------------------------------------------------------ BHP (D59)
+
+  function rysujBhp(d) {
+    const lista = W.bhpLista({ zgloszenia: hala.obiekty('bhp_zgloszenie'), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale });
+    const moze = P.mozeWyslac ? P.mozeWyslac('bhp.zamkniete') : jestKierownikiem();
+    const el = $('lista-bhp');
+    el.innerHTML = lista.map(b => `
+      <article class="zlecenie ${b.otwarte && b.pilne ? 'pilne' : ''}" data-id="${esc(b.id)}">
+        <div class="opis">
+          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia">⛑ ${esc(b.rodzajNazwa)}</button> <span class="slaby">${esc(b.numer)}</span></div>
+          <div class="szczegoly">
+            <span class="znacznik ${b.otwarte ? (b.pilne ? 'alarm' : 'uwaga') : 'ok'}">${esc(b.etykieta)}</span>
+            ${b.liniaNazwa ? `<span>${esc(b.liniaNazwa)}</span>` : ''}${b.stanowiskoNazwa ? `<span>· ${esc(b.stanowiskoNazwa)}</span>` : ''}${b.kto ? `<span>· ${esc(b.kto)}</span>` : ''}
+          </div>
+          ${b.opis ? `<div class="tekst-opisu">${esc(b.opis)}</div>` : ''}
+          ${b.dzialania ? `<div class="odpowiedz">Działania: ${esc(b.dzialania)}${b.zamknieteOpis ? ` <span class="slaby">(${esc(b.zamknieteOpis)})</span>` : ''}</div>` : ''}
+          ${miniatury(b.zdjecia, `BHP: ${b.rodzajNazwa}`)}
+        </div>
+        <div class="numer slaby">${esc(b.kiedyOpis)}</div>
+        <div class="akcje">${b.otwarte && moze ? `
+          <button type="button" class="maly glowny" data-akcja="zamknij">Zamknij</button>
+          ${P.mozeWyslac && P.mozeWyslac('zlecenie.utworzone') ? '<button type="button" class="maly" data-akcja="zlecenie">Zrób zlecenie</button>' : ''}` : ''}
+        </div>
+      </article>`).join('') || '<p class="pusto">Brak zgłoszeń BHP. Liderzy zgłaszają je w GK Lider (Zmiana → Zgłoszenie BHP albo „Niezgodne” w audycie).</p>';
+    wczytajObrazki(el);
+  }
+
+  $('lista-bhp').addEventListener('click', async ev => {
+    const foto = ev.target.closest('[data-zdjecie]');
+    if (foto) { P.pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
+    const b = ev.target.closest('[data-akcja]');
+    if (!b) return;
+    const id = b.closest('[data-id]').dataset.id;
+    try {
+      if (b.dataset.akcja === 'historia') {
+        const t = b.textContent.replace(/^⛑\s*/, '');
+        return DZ().historia(hala, 'bhp_zgloszenie', id, { tytul: `BHP: ${t}` });
+      }
+      const d = P.dane ? P.dane() : {};
+      const w = W.bhpLista({ zgloszenia: [hala.obiekt('bhp_zgloszenie', id)], slowniki: d.slowniki || hala.slowniki,
+                              pracownicy: d.pracownicy, stale: d.stale || (hala.kontrakt || {}).stale })[0];
+      if (!w) return;
+      if (b.dataset.akcja === 'zlecenie') P.noweZlecenie(W.zlecenieZBhp(w), null, async () => {});
+      if (b.dataset.akcja === 'zamknij') {
+        const dzialania = await P.zapytajTekst({ tytul: `Zamknąć ${w.numer}?`, etykieta: 'Co zrobiono (działania)', wymagany: true, przycisk: 'Zamknij' });
+        if (!dzialania) return;
+        await hala.zapisz('bhp.zamkniete', id, { dzialania });
+        P.komunikat('Zgłoszenie BHP zamknięte', 'ok');
+      }
+    } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
+  });
+
   // ------------------------------------------------------------ moje zadania (dział „kierownik”)
 
   function rysujMoje() {
@@ -134,8 +187,9 @@
     const zg = hala.obiekty('zgloszenie').filter(g => g.status === 'nowe').length;
     const nz = hala.obiekty('narzedzia').filter(n => n.status === 'do_odbioru').length;
     const mo = window.HalaZlecenia ? window.HalaZlecenia.doZrobienia(hala, { dzial: 'kierownik' }) : 0;
-    return { zgloszenia: zg, narzedzia: nz, moje: mo };
+    const bhp = hala.obiekty('bhp_zgloszenie').filter(g => g.status === 'otwarte').length;
+    return { zgloszenia: zg, narzedzia: nz, moje: mo, bhp };
   }
 
-  P.widoki.zgloszenia = { rysujZgloszenia, rysujNarzedzia, rysujMoje, liczby, jestKierownikiem };
+  P.widoki.zgloszenia = { rysujZgloszenia, rysujNarzedzia, rysujBhp, rysujMoje, liczby, jestKierownikiem };
 })();

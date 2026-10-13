@@ -158,6 +158,9 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 
 .incydent { border: 1px solid var(--ramka); border-left: 8px solid var(--zolty); border-radius: var(--promien); padding: 8px 12px; }
 .incydent.alert { border-left-color: var(--czerwony); }
+/* D59: zgłoszenie BHP na „Na żywo” — przycisk (prowadzi do listy ⛑ BHP), wygląda jak karta incydentu. */
+.incydent.bhp { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--karta);
+  border-left-color: var(--czerwony); cursor: pointer; min-height: 44px; }
 .incydent .tytul { margin-top: 4px; }
 .incydent .potwierdzenia { margin-top: 4px; font-size: .9em; color: var(--czerwony); font-weight: 600; }
 .incydent .potwierdzenia.komplet { color: var(--zielony); }

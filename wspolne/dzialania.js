@@ -64,15 +64,18 @@
 
   /* Słucha hali: NOWA awaria (zgłoszona, nie przeze mnie) → syrena; NOWE pilne zlecenie dla mnie albo mojego działu
      → gong. Przy starcie i po zalogowaniu nic nie gra (to, co już było, człowiek widzi na liście). opcje.zlecenia() —
-     jak w HalaZlecenia.sledz ({dzial, linia?, linie?}); null = bez gongu. opcje.wlaczony() — przełącznik aplikacji. */
+     jak w HalaZlecenia.sledz ({dzial, linia?, linie?}); null = bez gongu. opcje.wlaczony() — przełącznik aplikacji.
+     opcje.bhp (D59, Panel kierownika): NOWE zgłoszenie BHP rodzaju pilnego (incydent, sytuacja potencjalnie wypadkowa —
+     „pilne” w stałej rodzaje_bhp) → gong; aplikacja musi czytać typ „bhp_zgloszenie”. */
   function sledz(hala, opcje) {
     const o = opcje || {};
     const znane = new Set();
-    const dopisz = () => { for (const t of ['awaria', 'zlecenie']) for (const x of (hala.obiekty(t) || [])) znane.add(`${t}|${x.id}|${x.status}`); };
+    const TYPY = ['awaria', 'zlecenie', 'bhp_zgloszenie'];
+    const dopisz = () => { for (const t of TYPY) for (const x of (hala.obiekty(t) || [])) znane.add(`${t}|${x.id}|${x.status}`); };
     hala.na('sesja', () => { znane.clear(); dopisz(); });
     hala.na('zmiana', ({ typ, id, obiekt }) => {
       if (typ === '*') { dopisz(); return; }
-      if ((typ !== 'awaria' && typ !== 'zlecenie') || !obiekt) return;
+      if (!TYPY.includes(typ) || !obiekt) return;
       const klucz = `${typ}|${id}|${obiekt.status}`;
       if (znane.has(klucz)) return;
       znane.add(klucz);
@@ -88,11 +91,17 @@
         const ja = hala.pracownik && hala.pracownik.id;
         if (z && (d.wykonawca === ja || (d.dzial === z.dzial && (!d.wykonawca || d.wykonawca === ja)))) zagraj('pilne');
       }
+      if (typ === 'bhp_zgloszenie' && o.bhp && obiekt.status === 'otwarte' && d.zglosil !== (hala.pracownik && hala.pracownik.id)
+          && bhpPilne(hala.kontrakt, d.rodzaj)) zagraj('pilne');
     });
     dopisz();
   }
 
-  global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY };
+  /* Czy rodzaj zgłoszenia BHP jest pilny (stała rodzaje_bhp z kontraktu, pole „pilne”) — ta sama reguła co push huba. */
+  const bhpPilne = (kontrakt, rodzaj) => (((kontrakt && kontrakt.stale && kontrakt.stale.rodzaje_bhp) || [])
+    .some(r => r && r.kod === rodzaj && r.pilne));
+
+  global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY, bhpPilne };
 
   // ================================================================ okno (wspólne)
 
@@ -152,6 +161,9 @@
     'zlecenie.anulowane': 'Anulowane', 'zlecenie.przepadlo': 'Minął koniec zmiany',
     'zgloszenie.utworzone': 'Zgłoszone', 'zgloszenie.przyjete': 'Przyjęte przez kierownika', 'zgloszenie.odrzucone': 'Odrzucone',
     'narzedzia.odlozone': 'Odłożone do odbioru', 'narzedzia.odebrane': 'Odebrane',
+    // Test właściciela 2026-10-13: krok wykonania (D56) pokazywał się w historii jako surowe „postep”.
+    'zlecenie.postep': 'Krok wykonania',
+    'bhp.zgloszenie': 'Zgłoszone', 'bhp.zamkniete': 'Zamknięte przez kierownika',
   };
 
   /* Zdarzenia obiektu → wiersze historii (czysta funkcja): {kiedy, kto, co, teksty[], zdjecia[], spoznienie}.
@@ -163,7 +175,7 @@
       const d = z.dane || {};
       if (d.termin) termin = Date.parse(d.termin);
       const teksty = [];
-      for (const [pole, etykieta] of [['tytul', ''], ['opis', ''], ['uwagi', 'Notatka: '], ['powod', 'Powód: '], ['co', ''], ['miejsce', 'Miejsce: ']]) {
+      for (const [pole, etykieta] of [['tytul', ''], ['opis', ''], ['uwagi', 'Notatka: '], ['powod', 'Powód: '], ['co', ''], ['miejsce', 'Miejsce: '], ['dzialania', 'Działania: ']]) {
         if (typeof d[pole] === 'string' && d[pole].trim() && !(pole === 'tytul' && z.typ !== 'zgloszenie.utworzone')) teksty.push(etykieta + d[pole].trim());
       }
       if (d.skan) teksty.push(`Zeskanowano QR maszyny ${d.skan}`);
@@ -401,7 +413,8 @@
     if (!global.HalaSkaner) { if (o.komunikat) o.komunikat('Brak skanera. Odśwież aplikację.'); return; }
     const tekst = await global.HalaSkaner.skanuj({ tytul: 'Zeskanuj kod QR maszyny', podpowiedz: 'Naklejka z kodem na maszynie' });
     if (tekst === null || tekst === undefined) return;
-    const k = H().odczytajKod(tekst, hala.slowniki);
+    // Kod wpisany z naklejki („WT-01”) = skan HALA:M:WT-01 (Hala.kodZeSkanu).
+    const k = H().odczytajKod(H().kodZeSkanu ? H().kodZeSkanu(tekst, hala.slowniki) : tekst, hala.slowniki);
     if (k.rodzaj !== 'maszyny' || !k.wpis) { if (o.komunikat) o.komunikat('To nie jest kod maszyny z tego zakładu.'); return; }
     menuMaszyny(hala, k.kod, o);
   }

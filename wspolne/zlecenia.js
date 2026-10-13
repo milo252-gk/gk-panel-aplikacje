@@ -141,16 +141,18 @@
   const tekstBraku = lista => (lista.length
     ? `Brakuje: ${lista.length > 1 ? `${lista.slice(0, -1).join(', ')} i ${lista[lista.length - 1]}` : lista[0]}` : '');
 
-  /* Tekst ze skanera → kod maszyny albo powód odmowy (czysta funkcja). Naklejka HALA:M:<kod> albo zastany kod z pola
-     'qr' maszyny (Hala.odczytajKod); inna maszyna, stanowisko czy identyfikator — odmowa z nazwą tego, co zeskanowano. */
+  /* Tekst ze skanera → kod maszyny albo powód odmowy (czysta funkcja). Naklejka HALA:M:<kod>, zastany kod z pola
+     'qr' maszyny (Hala.odczytajKod) albo kod wpisany ręcznie z naklejki („wt-01”, Hala.kodZeSkanu); inna maszyna,
+     stanowisko czy identyfikator — odmowa z nazwą tego, co zeskanowano. */
   function skanMaszyny(tekst, maszyna, slowniki, odczytaj) {
-    const k = odczytaj(tekst, slowniki);
+    const H = global.Hala;
+    const k = odczytaj(H && H.kodZeSkanu ? H.kodZeSkanu(tekst, slowniki) : tekst, slowniki);
     const nazwa = kod => ((((slowniki || {}).maszyny || {})[kod] || {}).nazwa || kod);
     const lista = [].concat(maszyna || []).map(String);              // D56: jedna maszyna albo kilka
     const ktore = lista.map(nazwa).join(', ');
     if (k.rodzaj === 'maszyny' && lista.includes(k.kod)) return { kod: k.kod };
     if (k.rodzaj === 'maszyny') return { blad: `To kod innej maszyny (${nazwa(k.kod)}). Zeskanuj naklejkę na: ${ktore}.` };
-    return { blad: `To nie jest kod maszyny. Zeskanuj naklejkę QR na: ${ktore}.` };
+    return { blad: `To nie jest kod maszyny. Zeskanuj naklejkę QR albo wpisz kod z naklejki: ${ktore}.` };
   }
 
   /* D56: krok wykonania od razu (zdjęcie, notatka, skan) — bez „Zrobione”; kierownik widzi postęp na żywo. */
