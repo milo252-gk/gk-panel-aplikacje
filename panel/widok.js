@@ -308,7 +308,9 @@
         tytul: d.tytul || '', opis: d.opis || '',
         dzial: d.dzial, dzialNazwa: dzialy.get(d.dzial) || d.dzial || '—',
         liniaNazwa: d.linia ? liniaWidoczna(slowniki, d.linia) || null : null,
-        maszyna: d.maszyna ? ((maszyny[d.maszyna] || {}).nazwa || d.maszyna) : null,
+        maszyna: (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
+          .map(m => (maszyny[m] || {}).nazwa || m).join(', ') || null,
+        postep: postepZlecenia(d), czynnosc: d.czynnosc || null,
         pilne: d.priorytet === 'pilne',
         kto: nazwaPracownika(pracownicy, kto),
         wykonawca: nazwaPracownika(pracownicy, d.wykonawca),
@@ -1394,7 +1396,7 @@
     zPaskiem(linie); zPaskiem(maszyny);
 
     const { liczba: proby, sprawdzone, braki } = s.proby;
-    const katalog = (slowniki && slowniki.katalog_wad) || {};
+    const katalog = Object.assign({ inne: { nazwa: 'Brak / inna wada' } }, (slowniki && slowniki.katalog_wad) || {});   // D56
     const sumaWad = s.proby.wady.reduce((suma, x) => suma + x.ile, 0);
     const pareto = s.proby.wady.slice(0, 5)
       .map(({ kod, ile }) => ({ kod, nazwa: (katalog[kod] || {}).nazwa || kod, ile, proc: sumaWad ? Math.round(ile * 100 / sumaWad) : 0 }));
@@ -1745,7 +1747,49 @@
              termin: m >= 1 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : '' };
   }
 
-  const PanelWidok = { zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia,
+
+  // ================================================================ D56 (właściciel 2026-10-13)
+
+  /* Próby jakościowe dla kierownika zakładu i administratora (Raporty → 🔬 Próby jakościowe): od najnowszej, z miejscem
+     (maszyna ze skanu albo stanowisko), kto i skąd (Lider / KJ), sprawdzone, braki, % i wady. zrodlo: '' | 'lider' | 'kj'. */
+  function listaProb({ proby, slowniki, pracownicy, od, zrodlo }) {
+    const sl = slowniki || {};
+    const wady = Object.assign({ inne: { nazwa: 'Brak / inna wada' } }, sl.katalog_wad || {});
+    return (proby || []).filter(p => p && p.dane).map(p => {
+      const d = p.dane;
+      const czas = d.czas_rozpoczecia || p.utworzono || p.zmieniono;
+      const qr = String(d.qr || '');
+      const m = /^HALA:M:(.+)$/i.exec(qr);
+      const maszyna = m ? m[1] : null;
+      const miejsce = maszyna ? (((sl.maszyny || {})[maszyna] || {}).nazwa || maszyna)
+        : d.stanowisko ? (((sl.stanowiska || {})[d.stanowisko] || {}).nazwa || d.stanowisko) : nazwaLinii(sl, d.linia || p.linia);
+      const spr = Number(d.sprawdzone) || 0, br = Number(d.braki) || 0;
+      return { id: p.id, czas, czasMs: Date.parse(czas), kiedy: `${dataKrotka(czas)} ${godzina(czas)}`, miejsce, maszyna,
+               kto: nazwaPracownika(pracownicy, d.kontrolowal) || '—', zrodlo: d.zrodlo || '', zrodloNazwa: d.zrodlo === 'kj' ? 'KJ' : d.zrodlo === 'lider' ? 'Lider' : (d.zrodlo || ''),
+               sprawdzone: spr, braki: br, proc: spr ? Math.round(br * 1000 / spr) / 10 : null,
+               wady: (d.wady || []).filter(w => w && w.kod).map(w => `${(wady[w.kod] || {}).nazwa || w.kod} ${w.ilosc}`).join(', '),
+               zdjecia: [].concat(d.zdjecia || []), wnioski: d.wnioski || '', dzialania: d.dzialania || '' };
+    }).filter(w => !isNaN(w.czasMs) && (od === undefined || w.czasMs >= od) && (!zrodlo || w.zrodlo === zrodlo))
+      .sort((a, b) => b.czasMs - a.czasMs);
+  }
+
+  /* Postęp zlecenia na liście Panelu (D56): ile kroków, zeskanowane maszyny „1/2”, zdjęcia — kierownik widzi na żywo. */
+  function postepZlecenia(d) {
+    const p = [].concat((d && d.postep) || []).filter(e => e && typeof e === 'object');
+    if (!p.length) return null;
+    const maszyny = Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : (d.maszyna ? [d.maszyna] : []);
+    const skany = new Set(p.map(e => e.skan).filter(Boolean));
+    const zdjecia = p.reduce((n, e) => n + [].concat(e.zdjecia || []).length, 0);
+    const czesci = [`${p.length} ${p.length === 1 ? 'krok' : p.length < 5 ? 'kroki' : 'kroków'}`];
+    if (maszyny.length && skany.size) czesci.push(`▣ ${maszyny.filter(m => skany.has(m)).length}/${maszyny.length}`);
+    if (zdjecia) czesci.push(`📷 ${zdjecia}`);
+    if (p.some(e => e.uwagi)) czesci.push('📝');
+    const ost = p[p.length - 1];
+    return { opis: czesci.join(' · '), ostatni: godzina(ost.czas), zdjecia: p.flatMap(e => [].concat(e.zdjecia || [])),
+             notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
+  }
+
+  const PanelWidok = { listaProb, postepZlecenia, zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,

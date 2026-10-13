@@ -142,7 +142,9 @@
     async rysuj(el, parametr) {
       if (!KJ.mozna('proba.zarejestrowana')) { el.innerHTML = '<p class="pusto">Próby rejestruje kontroler albo kierownik KJ.</p>'; return; }
       // Braki zawsze z wad (UI etap 2) — także w brudnopisie sprzed zmiany, gdzie wpisywało się je ręcznie.
-      f = W.brakiZWad(Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS)) || {}));
+      // D56: miejsce ze skanu (linia, stanowisko, maszyna) tylko z tej samej sesji — po ponownym logowaniu skanuje się od nowa.
+      f = W.brakiZWad(Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS,
+        { miejsce: ['linia', 'stanowisko', 'maszyna', 'qr', 'czas_rozpoczecia'] })) || {}));
       miejsceDomyslne();
       el.innerHTML = `
         <h1>Próba</h1>
@@ -251,7 +253,7 @@
   function rysujWady(el) {
     const box = el.querySelector('#p-wady');
     if (!box) return;
-    const katalog = W.katalogWad(hala.slowniki);
+    const katalog = W.wadyDoProby(hala.slowniki);
     // Wada z brudnopisu, którą w międzyczasie wycofano z katalogu, zostaje widoczna — kontroler ją już policzył.
     for (const kod of Object.keys(f.wady)) if (!katalog.some(w => w.kod === kod) && f.wady[kod]) katalog.push({ kod, nazwa: kod + ' (wycofana)' });
     box.innerHTML = katalog.map(w => `
@@ -547,7 +549,7 @@
     const d = p.dane;
     const wady = {};
     for (const w of d.wady || []) wady[w.kod] = w.ilosc;
-    const katalog = W.katalogWad(hala.slowniki);
+    const katalog = W.wadyDoProby(hala.slowniki);
     for (const kod of Object.keys(wady)) if (!katalog.some(w => w.kod === kod)) katalog.push({ kod, nazwa: kod });
     // Te same liczby co przy zapisie próby (etap 3): „12,5” to błąd przy polu, a nie po cichu 12.
     const zFormularza = dane => W.korektaZFormularza(nazwa => dane.get(nazwa), katalog, p.linia);

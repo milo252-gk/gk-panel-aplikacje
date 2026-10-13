@@ -325,6 +325,9 @@
   UR.ekran = (nazwa, def) => { UR.ekrany[nazwa] = def; };
   // Zlecenia od kierownika (Panel → dział „ur”): wspólny ekran z wspolne/zlecenia.js.
   UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur', komunikat: t => UR.komunikat(t, 'ok') }) });
+  // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'ur' }), otworzZlecenia: () => UR.idz('zlecenia'),
+                                                                        komunikat: t => UR.komunikat(t, 'ok') });
   // Awarie UR gra samo (brzęczyk z paczką powiadomień) — wspólny moduł tylko gong pilnych zleceń (D55).
   global.HalaZlecenia.sledz(hala, () => ({ dzial: 'ur' }), (z, o) => UR.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)), { awarie: false });
   UR.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };

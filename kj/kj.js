@@ -183,6 +183,9 @@
   // Zlecenia od kierownika (Panel → dział „kj”) są na Planie (UI etap 2, proba.js) — bez osobnego ekranu. Adres „#zlecenia”
   // (push z huba, stare zakładki) nie zna ekranu, więc adres() otwiera Plan, gdzie zlecenia stoją na samej górze.
   global.HalaZlecenia.sledz(hala, () => ({ dzial: 'kj' }), (z, o) => KJ.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
+  // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'kj' }), otworzZlecenia: () => KJ.idz('plan'),
+                                                                        komunikat: t => KJ.komunikat(t, 'ok') });
   KJ.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };
 
   function adres() {

@@ -125,6 +125,10 @@
   const stanowiskaLinii = (slowniki, linia) => wpisySlownika(slowniki, 'stanowiska', linia);
   const wyrobyLinii = (slowniki, linia) => wpisySlownika(slowniki, 'wyroby', linia);
   const katalogWad = slowniki => wpisySlownika(slowniki, 'katalog_wad');
+  /* D56 (właściciel 2026-10-13: „nie da się zaznaczyć braków jako Lider/Mistrz”): braki liczą się z kafelków wad, a pusty
+     katalog wad (KJ go jeszcze nie wypełniło) nie dawał żadnego kafelka. Zawsze jest kafelek „Brak / inna wada”. */
+  const WADA_INNA = { kod: 'inne', nazwa: 'Brak / inna wada' };
+  const wadyDoProby = slowniki => { const k = katalogWad(slowniki); return k.some(w => w.kod === WADA_INNA.kod) ? k : k.concat([WADA_INNA]); };
 
   /* Punkty audytu BHP (L-D3, zmienione 2026-10-12 po D51): maszyny linii — od D51 w Panelu wyznacza się tylko maszyny,
      stanowisk nikt już nie zakłada, więc audyt „po stanowiskach” w zakładzie GK nie miał żadnego punktu i nie mógł
@@ -360,7 +364,7 @@
   }
 
   function proby(lista, linia, zrodlo, slowniki) {
-    const wady = (slowniki && slowniki.katalog_wad) || {};
+    const wady = Object.assign({ [WADA_INNA.kod]: WADA_INNA }, (slowniki && slowniki.katalog_wad) || {});
     return (lista || []).filter(p => p.linia === linia && (!zrodlo || (p.dane || {}).zrodlo === zrodlo))
       .map(p => {
         const d = p.dane || {};
@@ -404,7 +408,7 @@
       if (!calk(b)) bledy.push('Wpisz liczbę braków (0, gdy brak).');
       if (calk(s) && calk(z) && calk(b) && z + b !== s) bledy.push(`Zgodne + braki = ${z + b}, a sprawdzono ${s}. Popraw liczby.`);
     }
-    const katalog = (slowniki && slowniki.katalog_wad) || {};
+    const katalog = Object.assign({ [WADA_INNA.kod]: WADA_INNA }, (slowniki && slowniki.katalog_wad) || {});   // D56
     let suma = 0;
     for (const w of f.wady || []) {
       if (!katalog[w.kod]) bledy.push(`Wady „${w.kod}” nie ma w katalogu.`);
@@ -638,7 +642,7 @@
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
     godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
-    linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad,
+    linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,
     awarie, sprawdzAwarie, aktywnaAwariaMaszyny, pytanieODuplikat,

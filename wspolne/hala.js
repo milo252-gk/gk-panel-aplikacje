@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.18.0';
+  const WERSJA_KLIENTA = '0.19.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -148,7 +148,9 @@
      „Wymagaj zdjęcia”, więc „zlecenie.wykonane” bez zdjęcia nie przejdzie. Zwraca powód (po polsku, z instrukcją)
      albo null. Hub takie zdarzenie odrzuca, a h.zapisz nie wkłada go nawet do kolejki. Przejście niedozwolone
      (zlecenie anulowane) to dalej zwykły konflikt. „rowne” (skan QR maszyny, 2026-10-13): wartość musi się zgadzać
-     z tym polem obiektu (zeskanowana maszyna = maszyna zlecenia), gdy obiekt je ma. Bliźniak: hala.py → brak_wymagan. */
+     z tym polem obiektu (zeskanowana maszyna = maszyna zlecenia), gdy obiekt je ma. D56: „lub_postep” — spełnia też wpis
+     z listy postępu obiektu (krok po kroku); „wszystkie” — lista w obiekcie (kilka maszyn), każda musi być zeskanowana.
+     Bliźniak: hala.py → brak_wymagan. */
   function brakWymagan(kontrakt, stan, zd) {
     const spec = kontrakt.zdarzenia[zd.typ];
     if (!spec || !spec.wymagane_jesli || !stan) return null;
@@ -157,9 +159,18 @@
     const powody = [];
     for (const [pole, w] of Object.entries(spec.wymagane_jesli)) {
       if (d[w.gdy] !== true) continue;
-      if (puste(dane[pole])) powody.push(w.powod);
-      else if (w.rowne && d[w.rowne] && String(dane[pole]).trim() !== String(d[w.rowne]))
-        powody.push(`${w.powod} (zeskanowany kod „${dane[pole]}” to inna maszyna)`);
+      const wartosci = puste(dane[pole]) ? [] : [dane[pole]];
+      if (w.lub_postep) for (const e of d[w.lub_postep] || []) if (e && typeof e === 'object' && !puste(e[pole])) wartosci.push(e[pole]);
+      const lista = w.wszystkie ? d[w.wszystkie] : null;
+      const potrzebne = Array.isArray(lista) && lista.length ? lista.map(String) : (w.rowne && d[w.rowne] ? [String(d[w.rowne])] : []);
+      if (!wartosci.length) { powody.push(w.powod); continue; }
+      if (!potrzebne.length) continue;
+      const mam = new Set(wartosci.map(x => String(x).trim()));
+      const brak = potrzebne.filter(m => !mam.has(m));
+      if (brak.length && potrzebne.length === 1) {
+        const ost = puste(dane[pole]) ? wartosci[wartosci.length - 1] : dane[pole];
+        powody.push(`${w.powod} (zeskanowany kod „${ost}” to inna maszyna)`);
+      } else if (brak.length) powody.push(`${w.powod} (brakuje: ${brak.join(', ')})`);
     }
     return powody.join('; ') || null;
   }
@@ -184,7 +195,9 @@
       if (tworzy === true) return [stan, 'obiekt już istnieje — zdarzenie zapisane, stan bez zmian'];
       if (spec.z && !spec.z.includes(stan.status))
         return [stan, `niedozwolone przejście ze statusu '${stan.status}' — zdarzenie zapisane, stan bez zmian`];
-      const brak = brakWymagan(kontrakt, stan, zd);
+      // D56: zaliczenie czynnością (hub, z dowodem) — czynność JEST wykonaniem, wymagania nie wracają. Bliźniak: hala.py.
+      const automat = zd.aplikacja === 'hub' && !!((zd.dane || {}).dowod);
+      const brak = automat ? null : brakWymagan(kontrakt, stan, zd);
       if (brak) return [stan, brak];
     }
     const s = kopia(stan);
@@ -1533,17 +1546,40 @@
       return Promise.all(wpisy.map(([k, v]) => (v === undefined ? pamiec.usun(k) : pamiec.zapisz(k, v))));
     }
     const kluczB = k => `brudnopis:${h.pracownik ? h.pracownik.id : '-'}:${k}`;
+    /* D56 (właściciel 2026-10-13): maszyna albo stanowisko wybrane skanem QR nie przechodzą na następną sesję — po ponownym
+       zalogowaniu człowiek może stać przy innej maszynie, a skan to dowód obecności TERAZ. Brudnopis pamięta znak sesji
+       (skrót tokenu — nie sam token); przy odczycie z innej sesji pola miejsca znikają, reszta wpisanych danych zostaje. */
+    const znakSesji = () => {
+      const t = token || '';
+      let x = 5381;
+      for (let i = 0; i < t.length; i++) x = ((x * 33) ^ t.charCodeAt(i)) >>> 0;
+      return t ? x.toString(36) : '-';
+    };
+    const POLA_MIEJSCA = ['maszyna', 'stanowisko', 'qr', 'czas_rozpoczecia'];
+    const zeZnakiem = v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.assign({}, v, { _sesja: znakSesji() }) : v);
+    const bezObcegoMiejsca = (v, opcjeB) => {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+      const w = Object.assign({}, v);
+      if (w._sesja && w._sesja !== znakSesji()) for (const p of (opcjeB && opcjeB.miejsce) || POLA_MIEJSCA) delete w[p];
+      delete w._sesja;
+      return w;
+    };
     h.brudnopis = {
       /* Pisanie odkładamy o 300 ms (każdy znak nie musi iść do IndexedDB). Ważne chwile — skan (dowód obecności
          z godziną), zdjęcie — { odrazu: true }: zapis teraz, obietnica kończy się po zatwierdzeniu w telefonie.
          Bez tego przeładowanie albo padnięty telefon tuż po skanie gubiły zeskanowane stanowisko. */
       zapisz(k, v, opcjeB) {
-        brudnopisyCzekajace.set(kluczB(k), kopia(v)); clearTimeout(brudnopisTimer);
+        brudnopisyCzekajace.set(kluczB(k), zeZnakiem(kopia(v))); clearTimeout(brudnopisTimer);
         if (opcjeB && opcjeB.odrazu) return zrzucBrudnopisy();
         brudnopisTimer = setTimeout(zrzucBrudnopisy, 300);
         return Promise.resolve();
       },
-      async odczytaj(k) { const kk = kluczB(k); return brudnopisyCzekajace.has(kk) ? brudnopisyCzekajace.get(kk) : pamiec.czytaj(kk); },
+      /* opcjeB.miejsce — pola miejsca do wyczyszczenia, gdy brudnopis jest z innej sesji (domyślnie maszyna, stanowisko,
+         qr, czas_rozpoczecia; KJ dodaje linię — u kontrolera to też wybór ze skanu). */
+      async odczytaj(k, opcjeB) {
+        const kk = kluczB(k);
+        return bezObcegoMiejsca(brudnopisyCzekajace.has(kk) ? brudnopisyCzekajace.get(kk) : await pamiec.czytaj(kk), opcjeB);
+      },
       usun(k) { brudnopisyCzekajace.set(kluczB(k), undefined); return zrzucBrudnopisy(); },
     };
 

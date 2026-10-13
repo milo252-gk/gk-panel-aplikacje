@@ -58,7 +58,7 @@
     const d = f.dane;
     if (o.qr && !d.qr) d.qr = o.qr;
     const wyroby = W.wyrobyLinii(hala.slowniki, linia);
-    const wady = W.katalogWad(hala.slowniki);
+    const wady = W.wadyDoProby(hala.slowniki);         // + „Brak / inna wada” — braki da się zaznaczyć bez katalogu (D56)
     // Od D51 maszyny nie mają stanowisk — linia bez stanowisk: zamiast pustej listy sam skan maszyny (dowód obecności).
     const zeStanowiskami = W.stanowiskaLinii(hala.slowniki, linia).length > 0;
     // UI etap 2: zlecenie, wnioski i działania rzadko się wypełnia — zwinięte pod „Więcej”. Rozwinięte, gdy brudnopis
@@ -80,7 +80,7 @@
         <fieldset><legend>Wady <span class="slaby">(braki = suma)</span></legend>
           <div class="wady">${wady.map(w => `<div class="wada" data-kod="${esc(w.kod)}"><span>${esc(w.nazwa)}</span>
             <button type="button" data-d="-1" aria-label="Mniej">−</button><b class="ile">0</b><button type="button" data-d="1" aria-label="Więcej">+</button></div>`).join('')
-            || '<p class="slaby">Katalog wad jest pusty.</p>'}</div>
+            }</div>
         </fieldset>
         <div class="pole-zdjec"></div>
         <details class="wiecej" ${wiecejOtwarte ? 'open' : ''}><summary>Więcej</summary>

@@ -205,6 +205,15 @@
       <div id="bez-raportu" class="bez-raportu" hidden></div>
       <div id="lista-raportow" class="lista"></div>
     </section>
+    <!-- D56: próby jakościowe (Lider i KJ) widoczne dla kierownika zakładu i administratora. -->
+    <section aria-labelledby="t-proby" class="sekcja-prob">
+      <h2 id="t-proby">🔬 Próby jakościowe</h2>
+      <form class="filtry-zlecen" id="filtry-prob" autocomplete="off">
+        <label>Okres<select name="okres"><option value="1">dziś i wczoraj</option><option value="7">7 dni</option><option value="30">30 dni</option></select></label>
+        <label>Kto<select name="zrodlo"><option value="">Lider i KJ</option><option value="lider">Lider</option><option value="kj">KJ</option></select></label>
+      </form>
+      <div id="lista-prob" class="lista"></div>
+    </section>
   </div>
 </div>
 
@@ -244,8 +253,15 @@
         <label>Szczegóły<textarea name="opis" rows="3" maxlength="4000"></textarea></label>
         <div class="dwie">
           <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
-          <label>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
+          <label hidden>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
         </div>
+        <!-- D56: jedna albo kilka maszyn w jednym zleceniu (każdą trzeba zeskanować, gdy wymagany skan). -->
+        <fieldset id="zlecenie-maszyny"><legend>Maszyny (zaznacz jedną albo kilka)</legend><div class="zaznaczenia" data-maszyny></div></fieldset>
+        <label>Czynność, która zaliczy zlecenie sama<select name="czynnosc">
+          <option value="">— zwykłe zadanie (dział klika „Zrobione”) —</option>
+          <option value="proba">🔬 Próba jakościowa — zaliczy się po zapisaniu próby</option>
+          <option value="przeglad">🔧 Przegląd UR — zaliczy się po zakończeniu przeglądu</option>
+        </select></label>
         <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
              miniatura i nazwa pliku (panel.js → poleZdjecia). -->
         <div class="hala-zdjecie" id="zlecenie-zdjecie">
@@ -510,5 +526,6 @@
 <script src="stale.js"></script>
 <script src="zgloszenia.js"></script>
 <script src="urlopy.js"></script>
+<script src="proby.js"></script>
 </body>
 </html>

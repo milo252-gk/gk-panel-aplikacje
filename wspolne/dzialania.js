@@ -360,7 +360,8 @@
   /* Otwarte zlecenia działu dla tej maszyny (czysta funkcja): te, które dział może teraz zrobić. Używa
      HalaZlecenia.wiersze — te same filtry co ekran Zleceń (dział, linia, osoba, urlop). */
   function zadaniaMaszyny(wiersze, maszyna) {
-    return (wiersze || []).filter(w => w.doZrobienia && w.maszyna === maszyna);
+    // D56: zlecenie może mieć kilka maszyn — wystarczy, że ta jest wśród nich.
+    return (wiersze || []).filter(w => w.doZrobienia && ((w.maszyny && w.maszyny.length ? w.maszyny : [w.maszyna]).includes(maszyna)));
   }
 
   function menuMaszyny(hala, maszyna, opcje) {
@@ -405,7 +406,38 @@
     menuMaszyny(hala, k.kod, o);
   }
 
-  global.HalaDzialania = { historia, wierszeHistorii, zglos, odlozNarzedzia, odbierzNarzedzia, zglosAwarie, menuMaszyny,
+  /* D56 (właściciel 2026-10-13: „niech skanowanie QR będzie bardziej na wierzchu — teraz trzeba go szukać”): pływający
+     przycisk „▣ Skanuj” na każdym ekranie aplikacji działu (nad dolnym paskiem). Skan maszyny → menu: Wykonaj zadanie
+     (skan od razu zapisany w zleceniu jako krok, potem ekran Zleceń), Zgłoś awarię, Zgłoś nieprawidłowość.
+     opcje: { zlecenia: () => {dzial, linia?}, otworzZlecenia: () => …, komunikat: t => …, awaria?: maszyna => … }. */
+  function przyciskSkanu(hala, opcje) {
+    const o = opcje || {};
+    const doc = global.document;
+    if (!doc || !global.HalaSkaner) return null;
+    let b = doc.getElementById('hala-skan-fab');
+    if (!b) {
+      b = doc.createElement('button');
+      b.type = 'button'; b.id = 'hala-skan-fab'; b.className = 'hala-skan-fab';
+      b.setAttribute('aria-label', 'Skanuj kod QR maszyny');
+      b.innerHTML = '<span aria-hidden="true">▣</span> Skanuj';
+      doc.body.appendChild(b);
+    }
+    const pokaz = () => { b.hidden = !hala.zalogowany(); };
+    hala.na('sesja', pokaz);
+    pokaz();
+    b.onclick = () => {
+      if (!hala.zalogowany()) { pokaz(); return; }
+      skanujMaszyne(hala, { zlecenia: o.zlecenia, komunikat: o.komunikat, gotowe: o.komunikat, awaria: o.awaria,
+        wykonaj: async (zid, maszyna) => {
+          const t = global.HalaZlecenia ? await global.HalaZlecenia.zaliczSkan(hala, zid, maszyna) : '';
+          if (o.otworzZlecenia) o.otworzZlecenia();
+          if (o.komunikat && t) o.komunikat(t);
+        } });
+    };
+    return b;
+  }
+
+  global.HalaDzialania = { przyciskSkanu, historia, wierszeHistorii, zglos, odlozNarzedzia, odbierzNarzedzia, zglosAwarie, menuMaszyny,
                            zadaniaMaszyny, skanujMaszyne, dzialOsoby, OPISY_ZDARZEN };
   if (typeof module !== 'undefined' && module.exports) module.exports = { HalaDzwieki: global.HalaDzwieki, HalaDzialania: global.HalaDzialania };
 })(typeof window !== 'undefined' ? window : globalThis);

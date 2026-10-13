@@ -607,6 +607,9 @@
   Lider.dzialZlecen = () => W.dzialZlecen(hala.pracownik, Lider.stan.linia, hala.slowniki);
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Object.assign({ komunikat: t => Lider.komunikat(t, 'ok') }, Lider.dzialZlecen())) };
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
+  // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  if (window.HalaDzialania) HalaDzialania.przyciskSkanu(hala, { zlecenia: Lider.dzialZlecen, otworzZlecenia: () => Lider.pokazEkran('zlecenia'),
+                                                               komunikat: t => Lider.komunikat(t, 'info') });
   HalaZlecenia.sledz(hala, Lider.dzialZlecen, (z, o) => {
     // Zwrócone przez kierownika (klient 0.16.0) to nie nowe zlecenie — mówimy, że wróciło, i z jaką uwagą.
     const tytul = HalaZlecenia.opisPowiadomienia(z, o);

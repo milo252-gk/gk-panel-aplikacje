@@ -366,6 +366,7 @@
                                                 pracownicy: d.pracownicy, teraz: d.teraz });
 
   function rysujRaporty(d) {
+    if (Panel.widoki.proby) Panel.widoki.proby.rysuj(d);
     // Etap 3: zakończone zmiany bez raportu końcowego (2 doby) nad raportami — brak raportu też jest informacją.
     // Otwarte (lider zaczął i nie skończył) — na wierzchu; nieotwarte z szablonem (po weekendzie to szum) — zwinięte.
     const brak = bezRaportu(d), otw = brak.filter(b => b.otwarta), nieotw = brak.filter(b => !b.otwarta);
@@ -612,6 +613,8 @@
         <div class="opis">
           <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button> <span class="slaby">${esc(z.numer)}</span>${z.stale ? ` <span class="slaby" title="Z zapisanego albo stałego">🔁</span>` : ''}${z.naZmiane ? ` <span class="znacznik neutral">${esc(z.naZmiane)}</span>` : ''}</div>
           ${window.HalaZlecenia ? window.HalaZlecenia.krokiStatusu(z.status) : ''}
+          ${z.postep && z.otwarte ? `<div class="postep-zlecenia">▶ W toku: ${esc(z.postep.opis)} <span class="slaby">(ostatnio ${esc(z.postep.ostatni)})</span></div>` : ''}
+          ${z.czynnosc && z.otwarte ? `<div class="slaby">${z.czynnosc === 'proba' ? '🔬 zaliczy się samo po próbie jakościowej' : '🔧 zaliczy się samo po przeglądzie UR'}</div>` : ''}
           <div class="szczegoly">
             <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
@@ -775,6 +778,19 @@
     fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz zmiany' : 'Zleć';
   }
   /* D55: „Dla kogo” — osoby działu do zaznaczenia (każda dostaje własne zlecenie); „Na zmianę” — zmiany ze słownika. */
+  /* D56: maszyny zlecenia jako lista do zaznaczenia (kilka naraz); ukryte pole „maszyna” = pierwsza zaznaczona (skan, plan). */
+  function rysujMaszynyZlecenia(zaznaczone) {
+    const el = document.querySelector('#zlecenie-maszyny [data-maszyny]');
+    el.innerHTML = maszynyLinii(fz.linia.value).map(([k, n]) => `<label class="zaznacz"><input type="checkbox" name="maszyny" value="${esc(k)}" ${(zaznaczone || []).includes(k) ? 'checked' : ''}> ${esc(n)}</label>`).join('')
+      || '<span class="slaby">Brak maszyn — dodaj je w Administracja → Maszyny.</span>';
+    synchMaszyny();
+  }
+  function synchMaszyny() {
+    const pierwsza = (fz.querySelector('input[name="maszyny"]:checked') || {}).value || '';
+    if (![...fz.maszyna.options].some(o => o.value === pierwsza)) fz.maszyna.insertAdjacentHTML('beforeend', `<option value="${esc(pierwsza)}"></option>`);
+    fz.maszyna.value = pierwsza;
+    pokazSkan(fz);
+  }
   function rysujOsobyZlecenia(zaznaczone) {
     const el = document.querySelector('#zlecenie-osoby [data-osoby]');
     const osoby = osobyDzialu(fz.dzial.value);
@@ -815,6 +831,9 @@
     fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —');
     fz.wykonawca.value = w.wykonawca || '';
     rysujOsobyZlecenia(w.wykonawca ? [w.wykonawca] : []);
+    rysujMaszynyZlecenia(Array.isArray(w.maszyny) && w.maszyny.length ? w.maszyny : (w.maszyna ? [w.maszyna] : []));
+    fz.czynnosc.value = w.czynnosc || '';
+    $('zlecenie-maszyny').hidden = !!edycja;
     rysujZmianyZlecenia(edycja ? '' : (w.zmiana || ''));
     $('zlecenie-kto').hidden = !edycja;
     $('zlecenie-osoby').hidden = !!edycja;
@@ -865,7 +884,8 @@
   fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); rysujOsobyZlecenia([]); });
   fz.na_zmiane.addEventListener('change', opisZmianyZlecenia);
   $('okno-zlecenia').addEventListener('close', () => { poZapisieZlecenia = null; });
-  fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); pokazSkan(fz); });
+  fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); rysujMaszynyZlecenia([]); });
+  $('zlecenie-maszyny').addEventListener('change', synchMaszyny);
   fz.maszyna.addEventListener('change', () => pokazSkan(fz));
   fz.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
@@ -873,6 +893,13 @@
     const dane = { tytul: fz.tytul.value.trim(), dzial: fz.dzial.value, priorytet: fz.pilne.checked ? 'pilne' : 'normalny',
                    wymagaj_zdjecia: fz.wymagaj_zdjecia.checked, wymagaj_notatki: fz.wymagaj_notatki.checked };
     for (const pole of ['opis', 'linia', 'maszyna', 'wykonawca', 'stale']) if (fz[pole].value.trim()) dane[pole] = fz[pole].value.trim();
+    // D56: kilka maszyn — lista `maszyny`, `maszyna` = pierwsza; czynność, która zaliczy zlecenie sama.
+    const maszynyZ = [...fz.querySelectorAll('input[name="maszyny"]:checked')].map(x => x.value);
+    if (!fz.edycja.value) {
+      if (maszynyZ.length) dane.maszyna = maszynyZ[0]; else delete dane.maszyna;
+      if (maszynyZ.length > 1) dane.maszyny = maszynyZ;
+      if (fz.czynnosc.value) dane.czynnosc = fz.czynnosc.value;
+    }
     if (fz.wymagaj_skanu.checked && dane.maszyna) dane.wymagaj_skanu = true;
     const edycja = fz.edycja.value;
     try {

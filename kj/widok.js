@@ -26,7 +26,8 @@
   const nazwaLinii = (slowniki, kod) => (((slowniki || {}).linie || {})[kod] || {}).nazwa || kod || '—';
   const nazwaStanowiska = (slowniki, kod) => (((slowniki || {}).stanowiska || {})[kod] || {}).nazwa || kod || '—';
   const nazwaWyrobu = (slowniki, kod) => (((slowniki || {}).wyroby || {})[kod] || {}).nazwa || null;
-  const nazwaWady = (slowniki, kod) => (((slowniki || {}).katalog_wad || {})[kod] || {}).nazwa || kod;
+  const WADA_INNA = { kod: 'inne', nazwa: 'Brak / inna wada' };      // D56: braki także bez katalogu wad
+  const nazwaWady = (slowniki, kod) => (((slowniki || {}).katalog_wad || {})[kod] || {}).nazwa || (kod === WADA_INNA.kod ? WADA_INNA.nazwa : kod);
 
   function nazwaPracownika(pracownicy, id) {
     if (!id) return null;
@@ -410,7 +411,7 @@
       .sort(([ka, a], [kb, b]) => (b - a) || ka.localeCompare(kb, 'pl'))
       .map(([kod, ilosc]) => {
         narast += ilosc;
-        return { kod, nazwa: nazwaWady(slowniki, kod), wycofana: !katalog[kod], ilosc,
+        return { kod, nazwa: nazwaWady(slowniki, kod), wycofana: !katalog[kod] && kod !== WADA_INNA.kod, ilosc,
                  proc: Math.round(ilosc * 1000 / suma) / 10, skumulowany: Math.round(narast * 1000 / suma) / 10 };
       });
     return { wiersze, suma, liczbaProb, sprawdzone, braki,
@@ -655,6 +656,8 @@
 
   const katalogWad = slowniki => posortowane((slowniki || {}).katalog_wad).map(w => ({ kod: w.kod, nazwa: w.nazwa || w.kod,
     kategoria: w.kategoria || null, kolejnosc: w.kolejnosc === undefined ? null : w.kolejnosc }));
+  /* Kafelki wad w próbie: katalog + zawsze „Brak / inna wada” (pusty katalog nie blokuje braków). Edytor katalogu — bez niej. */
+  const wadyDoProby = slowniki => { const k = katalogWad(slowniki); return k.some(w => w.kod === WADA_INNA.kod) ? k : k.concat([Object.assign({ kategoria: null, kolejnosc: null }, WADA_INNA)]); };
 
   // ------------------------------------------------------------ UI etap 2 (2026-10-12, wybór właściciela)
 
@@ -708,7 +711,7 @@
     koniecDnia, mozna, sumaWad, MAKS_ZDJEC, skanZInnejZmiany, bledyProby, daneProby, podpowiedzPartii, powodPartii, korektaProby,
     liczbaZPola, korektaZFormularza, dzisZakladu, probyLiderowPonadProgiem, komunikatReklamacji,
     planZmiany, stanPaskaPlanu, probyZmiany, pareto, okres, stopkaPareto, linieAlertu, postepAlertu, bledyAlertu, daneAlertu, listaAlertow,
-    liniaWyrobu, bledyReklamacji, daneReklamacji, odczytyReklamacji, listaReklamacji, listaPartii, partieZmiany, kodZNazwy, katalogWad,
+    liniaWyrobu, bledyReklamacji, daneReklamacji, odczytyReklamacji, listaReklamacji, listaPartii, partieZmiany, kodZNazwy, katalogWad, wadyDoProby, WADA_INNA,
     jedynaLinia, miejscaDoWyboru, miejsceZWyboru, domyslneMiejsce, napisSkanu, miejsceZeSkanu, nazwaMiejsca, wierszePlanu,
     liniaPoWyrobie, liniaKliknieta, naglowekOdczytow, bladIlosci, kolejnoscWOknie, procent, opisWad, wysylaNaZywo, komunikatBleduZapisu,
     brakiZWad, kluczPominietych, pominiete, pomin, bezPominietych, pokazZleceniaNaPlanie,
