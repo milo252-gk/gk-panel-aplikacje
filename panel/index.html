@@ -290,7 +290,10 @@
     <!-- D55: „Checklista zadań” — te same ustawienia, a każda pozycja to osobne zapisane zlecenie z własnymi wymaganiami. -->
     <fieldset id="stale-pozycje" hidden><legend>Pozycje — każda to osobne zlecenie</legend>
       <div class="pozycje-checklisty" data-pozycje></div>
-      <button type="button" data-dodaj-pozycje>+ Pozycja</button>
+      <div class="dodaj-pozycje">
+        <button type="button" data-dodaj-pozycje>+ Pozycja</button>
+        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
+      </div>
     </fieldset>
     <fieldset><legend>Kiedy</legend>
       <div class="dwie">
@@ -388,7 +391,10 @@
     <fieldset><legend>Pozycje — termin to godziny:minuty od startu zmiany</legend>
       <p id="szablon-podglad" class="slaby"></p>
       <div id="szablon-pozycje" class="pozycje-szablonu"></div>
-      <button type="button" id="szablon-dodaj">+ Dodaj pozycję</button>
+      <div class="dodaj-pozycje">
+        <button type="button" id="szablon-dodaj">+ Dodaj pozycję</button>
+        <select id="szablon-z-zapisanych" aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
+      </div>
     </fieldset>
     <p class="blad" role="alert" hidden></p>
     <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz szablon</button></div>

@@ -81,7 +81,7 @@
   /* Pokaż tylko pola pasujące do wyborów i podgląd „Następne: …” — kierownik od razu widzi, kiedy hub zleci. */
   // ------------------------------------------------------------ D55: checklista zadań (pozycje = osobne zapisane zlecenia)
   let checklista = null;                     // null — zwykłe okno; { istniejace: [kody] } — okno checklisty
-  const wierszPozycji = (p, maszyny) => `<div class="pozycja-checklisty">
+  const wierszPozycji = (p, maszyny) => `<div class="pozycja-checklisty" data-opis="${esc(p.opis || '')}">
       <input data-p="tytul" maxlength="150" placeholder="Co zrobić" value="${esc(p.tytul || '')}" aria-label="Pozycja">
       <select data-p="maszyna" aria-label="Maszyna">${P.opcje(maszyny, '— bez maszyny —')}</select>
       <input data-p="minuty" type="number" min="1" max="10080" inputmode="numeric" placeholder="min od startu" value="${esc(p.minuty || '')}" aria-label="Termin: minut od startu zmiany">
@@ -98,7 +98,7 @@
   }
   const pozycjeZOkna = () => [...f.querySelectorAll('.pozycja-checklisty')].map(r => {
     const v = n => r.querySelector(`[data-p="${n}"]`);
-    return { tytul: v('tytul').value, maszyna: v('maszyna').value, minuty: v('minuty').value,
+    return { tytul: v('tytul').value, maszyna: v('maszyna').value, minuty: v('minuty').value, opis: r.dataset.opis || '',
              zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked && !!v('maszyna').value };
   });
   function trybChecklisty(wl) {
@@ -109,6 +109,22 @@
   f.querySelector('[data-dodaj-pozycje]').addEventListener('click', () => {
     const p = pozycjeZOkna(); p.push({}); rysujPozycje(p);
     const ost = f.querySelector('.pozycja-checklisty:last-child [data-p="tytul"]'); if (ost) ost.focus();
+  });
+  // Pozycja z zapisanego zlecenia — tytuł, maszyna, wymagania, termin i opis przepisane, bez pisania drugi raz.
+  const zZapisanych = f.querySelector('[data-z-zapisanych]');
+  function rysujZapisane() {
+    const lista = W.zadaniaDoChecklisty(hala.slowniki, checklista ? checklista.istniejace : []);
+    zZapisanych.innerHTML = `<option value="">${lista.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak (zapisz zlecenie „💾 Zapisz”)'}</option>`
+      + lista.map(z => `<option value="${esc(z.kod)}">${esc(z.opisWyboru)}</option>`).join('');
+    zZapisanych.disabled = !lista.length;
+  }
+  zZapisanych.addEventListener('change', () => {
+    const z = W.zadaniaDoChecklisty(hala.slowniki).find(x => x.kod === zZapisanych.value);
+    zZapisanych.value = '';
+    if (!z) return;
+    const p = pozycjeZOkna().filter(x => String(x.tytul || '').trim());
+    p.push(z);
+    rysujPozycje(p);
   });
   f.querySelector('[data-pozycje]').addEventListener('click', ev => {
     if (!ev.target.closest('[data-usun-pozycje]')) return;
@@ -124,8 +140,9 @@
       nazwa ? `Checklista: ${nazwa}` : 'Nowa checklista zadań');
     checklista = { istniejace: wpisy.map(([k]) => k), nazwa: nazwa || null };
     trybChecklisty(true);
+    rysujZapisane();
     rysujPozycje(wpisy.length ? wpisy.map(([, s]) => ({ tytul: String(s.tytul || '').replace(`${nazwa}: `, ''), maszyna: s.maszyna || '',
-      minuty: ((s.termin || {}).rodzaj === 'minuty' && s.termin.minuty) || '', zdjecie: s.wymagaj_zdjecia === true,
+      minuty: ((s.termin || {}).rodzaj === 'minuty' && s.termin.minuty) || '', zdjecie: s.wymagaj_zdjecia === true, opis: s.opis || '',
       notatka: s.wymagaj_notatki === true, skan: s.wymagaj_skanu === true })) : [{ notatka: true }, { notatka: true }]);
   }
 

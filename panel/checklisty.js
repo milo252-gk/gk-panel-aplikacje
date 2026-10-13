@@ -79,12 +79,26 @@
     $('szablon-zmiany').innerHTML = Object.entries(zmianySlownik()).map(([k, z]) =>
       `<label class="zaznacz"><input type="checkbox" name="zmiany" value="${esc(k)}" ${zrodlo.zmiany.includes(k) ? 'checked' : ''}> ${esc(z.nazwa || k)} <span class="slaby">${esc(z.od || '')}</span></label>`).join('');
     $('szablon-pozycje').innerHTML = zrodlo.pozycje.map(wierszPozycji).join('');
+    // Właściciel 2026-10-13: pozycje także z zapisanych zleceń (pojedynczych i stałych) — bez pisania drugi raz.
+    const zapisane = W.zadaniaDoChecklisty(sl);
+    $('szablon-z-zapisanych').innerHTML = `<option value="">${zapisane.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak'}</option>`
+      + zapisane.map(z => `<option value="${esc(z.kod)}">${esc(z.opisWyboru)}</option>`).join('');
+    $('szablon-z-zapisanych').disabled = !zapisane.length;
     f.querySelector('.blad').hidden = true;
     odswiezGodziny();
     $('okno-szablonu').showModal();
     f.nazwa.focus();
   }
 
+  $('szablon-z-zapisanych').addEventListener('change', ev => {
+    const z = W.zadaniaDoChecklisty(hala.slowniki).find(x => x.kod === ev.target.value);
+    ev.target.value = '';
+    if (!z) return;
+    $('szablon-pozycje').insertAdjacentHTML('beforeend', wierszPozycji(W.pozycjaSzablonuZZapisanego(z)));
+    const w = $('szablon-pozycje').lastElementChild.querySelector('.termin');
+    if (!w.value) w.focus();
+    odswiezGodziny();
+  });
   f.addEventListener('input', odswiezGodziny);
   f.addEventListener('change', odswiezGodziny);
   f.addEventListener('click', ev => {

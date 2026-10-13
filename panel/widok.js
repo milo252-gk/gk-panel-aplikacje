@@ -1718,7 +1718,34 @@
     return { bledy, wpisy };
   }
 
-  const PanelWidok = { nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia,
+
+  /* Pozycje checklisty z zapisanych zleceń (właściciel 2026-10-13: „żebym nie musiał pisać tego samego wiele razy”):
+     zapisane pojedyncze i stałe z „💾 Zapisane i stałe” — bez pozycji innych checklist (to już są części checklist).
+     pomin = kody, których nie pokazywać (np. pozycje edytowanej checklisty). Wiersze do listy wyboru, po tytule. */
+  function zadaniaDoChecklisty(slowniki, pomin) {
+    const bez = new Set(pomin || []);
+    const maszyny = (slowniki && slowniki.maszyny) || {};
+    return Object.entries((slowniki && slowniki.zlecenia_stale) || {})
+      .filter(([kod, s]) => s && s.tytul && !s.checklista && !bez.has(kod))
+      .map(([kod, s]) => {
+        const t = s.termin || {};
+        const reczny = ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny';
+        return { kod, tytul: s.tytul, opis: s.opis || '', maszyna: s.maszyna || '', zdjecie: s.wymagaj_zdjecia === true,
+                 notatka: s.wymagaj_notatki === true, skan: s.wymagaj_skanu === true && !!s.maszyna,
+                 minuty: t.rodzaj === 'minuty' && t.minuty ? t.minuty : '',
+                 opisWyboru: `${s.tytul}${s.maszyna ? ` · ${(maszyny[s.maszyna] || {}).nazwa || s.maszyna}` : ''} (${reczny ? 'pojedyncze' : 'stałe'})` };
+      })
+      .sort((a, b) => a.tytul.localeCompare(b.tytul, 'pl'));
+  }
+  /* Zapisane zlecenie → pozycja szablonu checklisty lidera: nazwa z tytułu; z wymaganym skanem maszyny — obchód z punktem
+     QR tej maszyny, inaczej zadanie; termin „g:mm” z minut od startu zmiany (puste — do uzupełnienia). */
+  function pozycjaSzablonuZZapisanego(z) {
+    const m = parseInt(z && z.minuty, 10);
+    return { nazwa: (z && z.tytul) || '', typ: z && z.skan ? 'obchod' : 'zadanie', cel: z && z.skan ? z.maszyna : '',
+             termin: m >= 1 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : '' };
+  }
+
+  const PanelWidok = { zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
