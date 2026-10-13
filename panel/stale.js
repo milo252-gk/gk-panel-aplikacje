@@ -20,9 +20,10 @@
     $('lista-stalych').innerHTML = lista.map(s => `
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
-          <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">📷</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">📝</span>' : ''}</div>
+          ${s.checklista ? `<div class="slaby">☑ Checklista „${esc(s.checklista)}” · pozycja ${esc(s.pozycja || '')}</div>` : ''}
+          <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">📷</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">📝</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">▣</span>' : ''}</div>
           <div class="szczegoly">
-            <span class="znacznik ${s.aktywny ? 'ok' : ''}">${s.aktywny ? 'Aktywne' : 'Wstrzymane'}</span>
+            <span class="znacznik ${s.aktywny ? 'ok' : ''}">${!s.aktywny ? 'Wstrzymane' : s.reczny ? 'Pojedyncze' : 'Stałe'}</span>
             ${s.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
             <span class="znacznik neutral">${esc(s.dzialNazwa)}</span>
             ${s.liniaNazwa ? `<span>${esc(s.liniaNazwa)}</span>` : ''}${s.maszyna ? `<span>· ${esc(s.maszyna)}</span>` : ''}
@@ -39,7 +40,7 @@
             <button type="button" class="maly" data-akcja="wstrzymaj">${s.aktywny ? 'Wstrzymaj' : 'Wznów'}</button>
             <button type="button" class="maly" data-akcja="usun">Usuń</button>` : ''}
         </div>
-      </article>`).join('') || `<p class="pusto">Nie ma jeszcze zleceń stałych.${pisze ? ' Dodaj pierwsze: „+ Nowe zlecenie stałe”.' : ''}</p>`;
+      </article>`).join('') || `<p class="pusto">Nie ma jeszcze zapisanych zleceń.${pisze ? ' Dodaj pierwsze: „+ Nowe zapisane” albo „💾 Zapisz” przy zleceniu.' : ''}</p>`;
     const brak = pisze ? W.brakujaceZestawu(d.slowniki, hala.pracownik.id) : [];
     $('zestaw-stalych').hidden = !brak.length;
     $('zestaw-stalych').textContent = `+ Zadania mistrza i lidera (${brak.length})`;
@@ -62,6 +63,7 @@
 
   const f = $('formularz-stalego');
   let edytowanyKod = null;
+  let poZapisie = null;                      // D55: zgłoszenie → zlecenie stałe (Panel.widoki.zgloszenia)
 
   const zmianySlownik = () => {
     const z = (hala.slowniki && hala.slowniki.zmiany) || {};
@@ -71,16 +73,68 @@
   const pola = () => ({
     tytul: f.tytul.value, opis: f.opis.value, dzial: f.dzial.value, linia: f.linia.value, maszyna: f.maszyna.value,
     wykonawca: f.wykonawca.value, pilne: f.pilne.checked, wymagaj_zdjecia: f.wymagaj_zdjecia.checked, wymagaj_notatki: f.wymagaj_notatki.checked,
+    wymagaj_skanu: f.wymagaj_skanu.checked, co_min: f.co_min.value,
     rodzaj: f.rodzaj.value, dni: wybrane('dni'), dzien_miesiaca: f.dzien_miesiaca.value, zmiany: wybrane('zmiany'),
     termin_rodzaj: f.termin_rodzaj.value, godzina: f.godzina.value, minuty: f.minuty.value, aktywny: f.aktywny.checked,
   });
 
   /* Pokaż tylko pola pasujące do wyborów i podgląd „Następne: …” — kierownik od razu widzi, kiedy hub zleci. */
+  // ------------------------------------------------------------ D55: checklista zadań (pozycje = osobne zapisane zlecenia)
+  let checklista = null;                     // null — zwykłe okno; { istniejace: [kody] } — okno checklisty
+  const wierszPozycji = (p, maszyny) => `<div class="pozycja-checklisty">
+      <input data-p="tytul" maxlength="150" placeholder="Co zrobić" value="${esc(p.tytul || '')}" aria-label="Pozycja">
+      <select data-p="maszyna" aria-label="Maszyna">${P.opcje(maszyny, '— bez maszyny —')}</select>
+      <input data-p="minuty" type="number" min="1" max="10080" inputmode="numeric" placeholder="min od startu" value="${esc(p.minuty || '')}" aria-label="Termin: minut od startu zmiany">
+      <label title="Wymagaj zdjęcia"><input type="checkbox" data-p="zdjecie" ${p.zdjecie ? 'checked' : ''}> 📷</label>
+      <label title="Wymagaj notatki"><input type="checkbox" data-p="notatka" ${p.notatka ? 'checked' : ''}> 📝</label>
+      <label title="Wymagaj skanu QR maszyny"><input type="checkbox" data-p="skan" ${p.skan ? 'checked' : ''}> ▣</label>
+      <button type="button" class="maly" data-usun-pozycje aria-label="Usuń pozycję">✕</button>
+    </div>`;
+  function rysujPozycje(pozycje) {
+    const el = f.querySelector('[data-pozycje]');
+    const maszyny = P.maszynyLinii('');
+    el.innerHTML = pozycje.map(p => wierszPozycji(p, maszyny)).join('');
+    [...el.querySelectorAll('[data-p="maszyna"]')].forEach((s, i) => { s.value = pozycje[i].maszyna || ''; });
+  }
+  const pozycjeZOkna = () => [...f.querySelectorAll('.pozycja-checklisty')].map(r => {
+    const v = n => r.querySelector(`[data-p="${n}"]`);
+    return { tytul: v('tytul').value, maszyna: v('maszyna').value, minuty: v('minuty').value,
+             zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked && !!v('maszyna').value };
+  });
+  function trybChecklisty(wl) {
+    for (const id of ['stale-termin', 'stale-wymagania', 'stale-maszyna']) $(id).hidden = wl;
+    $('stale-pozycje').hidden = !wl;
+    f.tytul.placeholder = wl ? 'Nazwa checklisty, np. Obchód BHP' : 'np. Sprzątanie stanowisk po zmianie';
+  }
+  f.querySelector('[data-dodaj-pozycje]').addEventListener('click', () => {
+    const p = pozycjeZOkna(); p.push({}); rysujPozycje(p);
+    const ost = f.querySelector('.pozycja-checklisty:last-child [data-p="tytul"]'); if (ost) ost.focus();
+  });
+  f.querySelector('[data-pozycje]').addEventListener('click', ev => {
+    if (!ev.target.closest('[data-usun-pozycje]')) return;
+    ev.target.closest('.pozycja-checklisty').remove();
+  });
+  /* Okno checklisty: nowa albo istniejąca (wszystkie zapisane z tą samą nazwą checklisty, po numerze pozycji). */
+  function otworzChecklisty(nazwa) {
+    const st = (hala.slowniki || {}).zlecenia_stale || {};
+    const wpisy = nazwa ? Object.entries(st).filter(([, s]) => s && s.checklista === nazwa).sort(([, a], [, b]) => (a.pozycja || 0) - (b.pozycja || 0)) : [];
+    const pierwszy = wpisy.length ? wpisy[0][1] : null;
+    otworz(pierwszy ? Object.assign(W.stalyDoFormularza(pierwszy), { tytul: nazwa, maszyna: '' })
+      : { dzial: 'produkcja', rodzaj: 'dni_tygodnia', dni: [1, 2, 3, 4, 5], zmiany: [], aktywny: true }, null,
+      nazwa ? `Checklista: ${nazwa}` : 'Nowa checklista zadań');
+    checklista = { istniejace: wpisy.map(([k]) => k), nazwa: nazwa || null };
+    trybChecklisty(true);
+    rysujPozycje(wpisy.length ? wpisy.map(([, s]) => ({ tytul: String(s.tytul || '').replace(`${nazwa}: `, ''), maszyna: s.maszyna || '',
+      minuty: ((s.termin || {}).rodzaj === 'minuty' && s.termin.minuty) || '', zdjecie: s.wymagaj_zdjecia === true,
+      notatka: s.wymagaj_notatki === true, skan: s.wymagaj_skanu === true })) : [{ notatka: true }, { notatka: true }]);
+  }
+
   function odswiez() {
     const r = f.rodzaj.value, t = f.termin_rodzaj.value;
     $('stale-dni').hidden = r !== 'dni_tygodnia';
     $('stale-dzien').hidden = r !== 'miesiecznie';
-    $('stale-zmiany').hidden = $('stale-zmiany-opis').hidden = r === 'reczny';
+    $('stale-zmiany').hidden = $('stale-zmiany-opis').hidden = $('stale-co').hidden = r === 'reczny';
+    P.pokazSkan(f);
     $('stale-godzina').hidden = t !== 'godzina';
     $('stale-minuty').hidden = t !== 'minuty';
     const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik && hala.pracownik.id);
@@ -95,12 +149,15 @@
     $('stale-podglad').textContent = podglad;
   }
 
-  function otworz(wartosci, kod, tytulOkna) {
+  function otworz(wartosci, kod, tytulOkna, poZapisieFn) {
     const sl = hala.slowniki || {};
+    checklista = null;
+    trybChecklisty(false);
     edytowanyKod = kod || null;
+    poZapisie = poZapisieFn || null;
     f.reset();
     f.querySelector('.blad').hidden = true;
-    $('t-okno-stalego').textContent = tytulOkna || (edytowanyKod ? `Zlecenie stałe: ${wartosci.tytul}` : 'Nowe zlecenie stałe');
+    $('t-okno-stalego').textContent = tytulOkna || (edytowanyKod ? `Zapisane zlecenie: ${wartosci.tytul}` : 'Nowe zapisane zlecenie');
     f.dzial.innerHTML = P.opcje(((hala.kontrakt.stale || {}).dzialy || []).map(d => [d.kod, d.nazwa]));
     f.dzial.value = wartosci.dzial || 'produkcja';
     // „— każda —” = jedno zlecenie dla wszystkich liderów; „każda linia osobno” = hub robi po jednym na linię (D34).
@@ -116,8 +173,10 @@
     f.pilne.checked = !!wartosci.pilne;
     f.wymagaj_zdjecia.checked = !!wartosci.wymagaj_zdjecia;
     f.wymagaj_notatki.checked = !!wartosci.wymagaj_notatki;
+    f.wymagaj_skanu.checked = !!wartosci.wymagaj_skanu;
     f.aktywny.checked = wartosci.aktywny !== false;
-    f.rodzaj.value = wartosci.rodzaj || 'codziennie';
+    f.rodzaj.value = wartosci.rodzaj || 'reczny';
+    f.co_min.value = String(wartosci.co_min || '');
     f.dzien_miesiaca.value = wartosci.dzien_miesiaca || 1;
     f.termin_rodzaj.value = wartosci.termin_rodzaj || 'koniec_zmiany';
     f.godzina.value = wartosci.godzina || '';
@@ -139,11 +198,26 @@
   });
   f.addEventListener('submit', async ev => {
     ev.preventDefault();
-    const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
     const blad = f.querySelector('.blad');
+    if (checklista) {
+      const c = W.checklistaZFormularza(Object.assign(pola(), { nazwa: f.tytul.value, pozycje: pozycjeZOkna(), istniejace: checklista.istniejace }),
+                                        hala.slowniki, hala.pracownik.id);
+      if (c.bledy.length) { blad.textContent = c.bledy.join(' '); blad.hidden = false; return; }
+      try {
+        for (const w of c.wpisy) await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
+        // Usunięte pozycje (było więcej niż jest) — znikają z zapisanych.
+        for (const kod of checklista.istniejace.slice(c.wpisy.length)) await hala.zapisz('slownik.usuniety', `zlecenia_stale/${kod}`, { slownik: 'zlecenia_stale', klucz: kod });
+        $('okno-stalego').close();
+        P.komunikat(`Checklista zapisana — ${c.wpisy.length} ${c.wpisy.length === 1 ? 'pozycja' : 'pozycje'}`, 'ok');
+        P.pokazZlecenia(null, 'stale');
+      } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+      return;
+    }
+    const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     try {
       await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
+      if (poZapisie) { const fn = poZapisie; poZapisie = null; await fn(w.kod); }
       $('okno-stalego').close();
       P.komunikat(w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Zapisano — zlecasz je przyciskiem „Zleć teraz”'
         : 'Zapisano — serwer sam zleci je według harmonogramu', 'ok');
@@ -151,7 +225,7 @@
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  $('nowe-stale').addEventListener('click', () => otworz({ dzial: 'produkcja', rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5], zmiany: [],
+  $('nowe-stale').addEventListener('click', () => otworz({ dzial: 'produkcja', rodzaj: 'reczny', dni: [1, 2, 3, 4, 5], zmiany: [],
                                                            termin_rodzaj: 'koniec_zmiany', wymagaj_zdjecia: true, wymagaj_notatki: true, aktywny: true }));
 
   $('lista-stalych').addEventListener('click', async ev => {
@@ -161,8 +235,8 @@
     const s = ((hala.slowniki || {}).zlecenia_stale || {})[kod];
     if (!s) return;
     try {
-      if (b.dataset.akcja === 'zmien') otworz(W.stalyDoFormularza(s), kod);
-      if (b.dataset.akcja === 'kopiuj') otworz(Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` }), null, 'Nowe zlecenie stałe (kopia)');
+      if (b.dataset.akcja === 'zmien') { if (s.checklista) otworzChecklisty(s.checklista); else otworz(W.stalyDoFormularza(s), kod); }
+      if (b.dataset.akcja === 'kopiuj') otworz(Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` }), null, 'Nowe zapisane (kopia)');
       if (b.dataset.akcja === 'zlec') {
         P.noweZlecenie(W.zlecenieZeStalego(kod, s, W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz())));
       }
@@ -173,7 +247,7 @@
         P.komunikat(wartosc.aktywny ? 'Wznowione' : 'Wstrzymane — serwer nie będzie go zlecał', 'ok');
       }
       if (b.dataset.akcja === 'usun') {
-        if (!(await P.potwierdz('Usunąć zlecenie stałe?', `„${s.tytul}”. Zlecenia zrobione z niego zostają nietknięte.`, 'Usuń'))) return;
+        if (!(await P.potwierdz('Usunąć zapisane zlecenie?', `„${s.tytul}”. Zlecenia zrobione z niego zostają nietknięte.`, 'Usuń'))) return;
         await hala.zapisz('slownik.usuniety', `zlecenia_stale/${kod}`, { slownik: 'zlecenia_stale', klucz: kod });
         P.komunikat('Usunięto', 'ok');
       }
@@ -183,8 +257,11 @@
   /* „Zapisz jako stałe” przy zwykłym zleceniu (jak „Zapisz jako szablon” w GK Trasy). */
   function zZlecenia(z) {
     if (!z) return;
-    otworz(W.stalyZZlecenia(z), null, 'Zapisz jako zlecenie stałe');
+    otworz(W.stalyZZlecenia(z), null, 'Zapisz zlecenie');
   }
 
-  P.widoki.stale = { rysuj, zZlecenia };
+  $('nowa-checklista-zlecen').addEventListener('click', () => otworzChecklisty(null));
+  $('checklista-zlecen-z-administracji').addEventListener('click', () => otworzChecklisty(null));
+
+  P.widoki.stale = { rysuj, zZlecenia, otworzChecklisty, otworzZ: (wartosci, tytul, fn) => otworz(wartosci, null, tytul, fn) };
 })();

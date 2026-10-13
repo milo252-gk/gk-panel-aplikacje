@@ -93,7 +93,7 @@
       // (wspólny ekran z ../wspolne/zlecenia.js), bo to, co miało być zrobione wcześniej, ma pierwszeństwo.
       if (W.pokazZleceniaNaPlanie(window.HalaZlecenia.doZrobienia(hala, { dzial: 'kj' }))) {
         el.prepend(miejsceZlecen);
-        window.HalaZlecenia.rysuj(miejsceZlecen, hala, { dzial: 'kj' });
+        window.HalaZlecenia.rysuj(miejsceZlecen, hala, { dzial: 'kj', komunikat: t => KJ.komunikat(t, 'ok') });
       }
     },
   });

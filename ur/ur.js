@@ -16,7 +16,7 @@
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // 30 dni: KPI z telefonu (instrukcja §5) i „zrealizowane ostatnio” w przeglądach.
-  const hala = global.Hala.utworz({ aplikacja: 'ur', typy: ['awaria', 'przeglad', 'licznik_maszyny', 'zlecenie'], dni: 30 });
+  const hala = global.Hala.utworz({ aplikacja: 'ur', typy: ['awaria', 'przeglad', 'licznik_maszyny', 'zlecenie', 'zgloszenie'], dni: 30 });
 
   const UR = global.UR = { hala, W, $, esc, ekrany: {}, biezacy: null };
 
@@ -230,6 +230,8 @@
   }
   UR.brzeczyk = {
     awaria(pilna) {
+      // D55: jeden dźwięk awarii we wszystkich aplikacjach (wspólny dzialania.js); bez niego — dawny brzęczyk.
+      if (global.HalaDzwieki) { global.HalaDzwieki.zagraj('awaria', pilna); return; }
       // Zatrzymanie linii: trzy serie wysokich tonów; reszta — dwa tony. Słychać w hałasie hali.
       const serie = pilna ? 3 : 1;
       for (let s = 0; s < serie; s++) { ton(1320, s * 700, 180, 0.35); ton(990, s * 700 + 220, 180, 0.35); ton(1320, s * 700 + 440, 220, 0.35); }
@@ -322,8 +324,9 @@
 
   UR.ekran = (nazwa, def) => { UR.ekrany[nazwa] = def; };
   // Zlecenia od kierownika (Panel → dział „ur”): wspólny ekran z wspolne/zlecenia.js.
-  UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur' }) });
-  global.HalaZlecenia.sledz(hala, () => ({ dzial: 'ur' }), (z, o) => UR.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
+  UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur', komunikat: t => UR.komunikat(t, 'ok') }) });
+  // Awarie UR gra samo (brzęczyk z paczką powiadomień) — wspólny moduł tylko gong pilnych zleceń (D55).
+  global.HalaZlecenia.sledz(hala, () => ({ dzial: 'ur' }), (z, o) => UR.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)), { awarie: false });
   UR.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };
 
   // #awaria/<id> bez tej awarii w telefonie (np. dotknięty push przed synchronizacją) → lista (URWidok.ekranZAdresu).

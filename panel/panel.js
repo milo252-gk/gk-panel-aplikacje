@@ -14,7 +14,7 @@
   const KLUCZ_POLACZENIA = 'hala.panel.ostatnioPolaczony';
   const START = Date.now(), START_LASKA_MS = 5000;
 
-  const hala = Hala.utworz({ aplikacja: 'panel', typy: ['awaria', 'zmiana_linii', 'partia', 'alert', 'zlecenie', 'proba'], dni: 2 });
+  const hala = Hala.utworz({ aplikacja: 'panel', typy: ['awaria', 'zmiana_linii', 'partia', 'alert', 'zlecenie', 'proba', 'zgloszenie', 'narzedzia'], dni: 2 });
   // Wspólne narzędzia dla ekranów w osobnych plikach (administracja.js) — rejestrują się w Panel.widoki.
   const Panel = window.Panel = { hala, W, $, esc, widoki: {}, narysuj: () => narysuj(), komunikatBledu: e => komunikatBledu(e) };
 
@@ -236,8 +236,9 @@
   Panel.dostepAdministracji = () => {
     const role = (hala.pracownik && hala.pracownik.role) || [];
     const zapisSzablonow = (((hala.kontrakt || {}).slowniki || {}).szablony_checklist || {}).zapis || [];
+    const zapisUrlopow = (((hala.kontrakt || {}).slowniki || {}).urlopy || {}).zapis || [];
     return { admin: role.includes('admin'), zespol: HalaZespol.zarzadzaKontami(role, (hala.kontrakt || {}).stale),
-             szablony: role.some(r => zapisSzablonow.includes(r)) };
+             szablony: role.some(r => zapisSzablonow.includes(r)), urlopy: role.some(r => zapisUrlopow.includes(r)) };
   };
 
   const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja'];
@@ -518,7 +519,7 @@
   }
 
   const PUSTE_ZLECENIA = { otwarte: 'Żadne zlecenie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na przyjęcie',
-                           zamkniete: 'Brak zamkniętych zleceń z ostatnich dwóch dni' };
+                           zamkniete: 'Brak zamkniętych zleceń w wybranym okresie' };
 
   const mozeZapisacStale = () => {
     const role = (hala.pracownik && hala.pracownik.role) || [];
@@ -527,16 +528,73 @@
   };
   Panel.mozeZapisacStale = mozeZapisacStale;
 
+  /* D55: filtry listy zleceń. Okres dłuższy niż 2 dni (Zamknięte) — dociągamy zlecenia z serwera (GET /stan/zlecenie?od=),
+     telefon/Panel trzyma w pamięci tylko dwie doby. */
+  const filtry = { dzial: '', osoba: '', okres: 2, spoznione: false };
+  let starsze = { od: null, lista: [], wczytuje: false };
+  async function wczytajStarsze(dni) {
+    const od = new Date(hala.teraz() - dni * 86400000).toISOString();
+    if (starsze.wczytuje || (starsze.od && starsze.od <= od)) return;
+    starsze.wczytuje = true;
+    try {
+      const w = await hala.zapytaj('GET', `/api/v1/stan/zlecenie?aktywne=0&od=${encodeURIComponent(od)}&limit=5000`);
+      starsze = { od, lista: w.obiekty || [], wczytuje: false };
+    } catch (e) { starsze.wczytuje = false; komunikat('Starszych zleceń nie wczytano — ' + komunikatBledu(e), 'uwaga'); }
+    narysuj();
+  }
+  Panel.zleceniaOkresu = async dni => { await wczytajStarsze(dni); return starsze.lista; };
+  function listaZOkresem(lista) {
+    if (filtrZlecen !== 'zamkniete' || filtry.okres <= 2 || !starsze.od) return lista;
+    const od = hala.teraz() - filtry.okres * 86400000;
+    const jest = new Set(lista.map(z => z.id));
+    return lista.concat(starsze.lista.filter(z => !jest.has(z.id) && Date.parse(z.zmieniono || (z.dane || {}).czas_zlecenia) >= od));
+  }
+  function rysujFiltry(d) {
+    const f = $('filtry-zlecen');
+    const dz = (d.stale && d.stale.dzialy) || [];
+    const nowe = '<option value="">wszystkie</option>' + dz.map(x => `<option value="${esc(x.kod)}">${esc(x.nazwa)}</option>`).join('');
+    if (f.dzial.dataset.html !== nowe) { f.dzial.innerHTML = nowe; f.dzial.dataset.html = nowe; f.dzial.value = filtry.dzial; }
+    const rolaDzialu = filtry.dzial ? ((dz.find(x => x.kod === filtry.dzial) || {}).role || []) : null;
+    const osoby = (d.pracownicy || []).filter(p => p.aktywny !== false && (!rolaDzialu || (p.role || []).some(r => rolaDzialu.includes(r))))
+      .filter(p => (p.role || []).some(r => dz.some(x => (x.role || []).includes(r))));
+    const noweO = '<option value="">wszyscy</option>' + osoby.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('');
+    if (f.osoba.dataset.html !== noweO) { f.osoba.innerHTML = noweO; f.osoba.dataset.html = noweO; f.osoba.value = filtry.osoba; if (f.osoba.value !== filtry.osoba) filtry.osoba = ''; }
+    $('filtr-okres').hidden = filtrZlecen !== 'zamkniete';
+  }
+  $('filtry-zlecen').addEventListener('change', ev => {
+    const f = $('filtry-zlecen');
+    Object.assign(filtry, { dzial: f.dzial.value, osoba: f.osoba.value, okres: +f.okres.value || 2, spoznione: f.spoznione.checked });
+    if (ev.target === f.okres && filtry.okres > 2) wczytajStarsze(filtry.okres);
+    narysuj();
+  });
+  $('filtry-zlecen').addEventListener('submit', ev => ev.preventDefault());
+
   function rysujZlecenia(d, lista) {
     for (const b of document.querySelectorAll('#tryb-zlecen [data-tryb]')) b.setAttribute('aria-pressed', String(b.dataset.tryb === trybZlecen));
     for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) b.setAttribute('aria-pressed', String(b.dataset.filtr === filtrZlecen));
-    $('zlecenia-biezace').hidden = trybZlecen !== 'biezace';
-    $('zlecenia-stale').hidden = trybZlecen !== 'stale';
+    const ZG = Panel.widoki.zgloszenia;
+    // D55: „Moje zadania” tylko kierownikowi zakładu (dział „kierownik”); liczby na chipach — co czeka.
+    const kierownik = ((hala.pracownik && hala.pracownik.role) || []).includes('kierownik');
+    const ile = ZG ? ZG.liczby() : {};
+    for (const [tryb, napis] of [['zgloszenia', '📝 Zgłoszenia'], ['narzedzia', '🧰 Narzędzia'], ['moje', '✅ Moje zadania']]) {
+      const b = document.querySelector(`#tryb-zlecen [data-tryb="${tryb}"]`);
+      const t = ile[tryb] ? `${napis} · ${ile[tryb]}` : napis;
+      if (b.textContent !== t) b.textContent = t;
+      b.classList.toggle('spoznione', !!ile[tryb] && tryb !== 'moje');
+    }
+    document.querySelector('#tryb-zlecen [data-tryb="moje"]').hidden = !kierownik;
+    if (trybZlecen === 'moje' && !kierownik) trybZlecen = 'biezace';
+    for (const t of ['biezace', 'stale', 'zgloszenia', 'narzedzia', 'moje']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
+    $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
     if (trybZlecen === 'stale') { if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d); return; }
-    const wiersze = W.zlecenia({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: filtrZlecen,
-                                 ja: hala.pracownik });
+    if (trybZlecen === 'zgloszenia') { if (ZG) ZG.rysujZgloszenia(d); return; }
+    if (trybZlecen === 'narzedzia') { if (ZG) ZG.rysujNarzedzia(d); return; }
+    if (trybZlecen === 'moje') { if (ZG) ZG.rysujMoje(d); return; }
+    rysujFiltry(d);
+    const wiersze = W.filtrujZlecenia(W.zlecenia({ zlecenia: listaZOkresem(lista), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
+                                                   teraz: d.teraz, filtr: filtrZlecen, ja: hala.pracownik }), filtry);
     // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego.
     // Po terminie i przepadłe (D35) — chip na czerwono: to jest do dopilnowania, a nie tylko do przeczytania.
     for (const c of W.chipyZlecen(lista, d.teraz)) {
@@ -552,7 +610,8 @@
     $('lista-zlecen').innerHTML = wiersze.map(z => `
       <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-id="${esc(z.id)}">
         <div class="opis">
-          <div class="tytul"><b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)}</span>${z.stale ? ` <span class="slaby" title="Ze zlecenia stałego">🔁</span>` : ''}</div>
+          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button> <span class="slaby">${esc(z.numer)}</span>${z.stale ? ` <span class="slaby" title="Z zapisanego albo stałego">🔁</span>` : ''}${z.naZmiane ? ` <span class="znacznik neutral">${esc(z.naZmiane)}</span>` : ''}</div>
+          ${window.HalaZlecenia ? window.HalaZlecenia.krokiStatusu(z.status) : ''}
           <div class="szczegoly">
             <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
@@ -560,7 +619,7 @@
             <span class="znacznik neutral">${esc(z.dzialNazwa)}</span>
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
-            ${z.wymagajZdjecia ? '<span title="Dział musi dodać zdjęcie">📷</span>' : ''}${z.wymagajNotatki ? '<span title="Dział musi napisać notatkę">📝</span>' : ''}
+            ${z.wymagajZdjecia ? '<span title="Dział musi dodać zdjęcie">📷</span>' : ''}${z.wymagajNotatki ? '<span title="Dział musi napisać notatkę">📝</span>' : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
@@ -576,7 +635,7 @@
           ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
             <button type="button" class="maly" data-akcja="zwroc">Zwróć</button>` : ''}
           ${kier && z.moznaAnulowac ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
-          ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz jako zlecenie stałe">🔁 Jako stałe</button>' : ''}
+          ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)">💾 Zapisz</button>' : ''}
         </div>
       </article>`).join('') || `<p class="pusto">${PUSTE_ZLECENIA[filtrZlecen] || 'Brak zleceń'}</p>`;
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
@@ -585,6 +644,7 @@
   }
 
   /* Zdjęcie od działu w dużym rozmiarze — kierownik ocenia wykonanie, a miniatura 64 px nic nie mówi. */
+  Panel.pokazZdjecie = (id, podpis) => pokazZdjecie(id, podpis);
   async function pokazZdjecie(id, podpis) {
     $('zdjecie-duze').src = await hala.adresPliku(id);
     $('zdjecie-opis').textContent = podpis || '';
@@ -623,6 +683,7 @@
     if (!b) return;
     const id = b.closest('[data-id]').dataset.id;
     try {
+      if (b.dataset.akcja === 'historia') { if (window.HalaDzialania) window.HalaDzialania.historia(hala, 'zlecenie', id); return; }
       if (b.dataset.akcja === 'zamknij') {
         await hala.zapisz('zlecenie.zamkniete', id, {});
         komunikat(b.textContent.trim() === 'Przyjmij' ? 'Przyjęte — zlecenie zamknięte' : 'Zamknięte', 'ok');
@@ -662,6 +723,14 @@
     .sort(([, a], [, b]) => a.localeCompare(b, 'pl', { numeric: true }));
   /* 2026-10-12: w zakładzie z jedną linią (właściciel wyznacza tylko maszyny) pola linii w oknach są zbędne — chowamy
      je (klasa pole-linii); wartość zostaje w ukrytym polu, więc zapis zmienionego zlecenia czy osoby jej nie gubi. */
+  /* Skan QR maszyny (2026-10-13) da się wymagać tylko z wybraną maszyną — bez niej pole jest wyłączone i odznaczone. */
+  const pokazSkan = f => {
+    const jest = !!f.maszyna.value;
+    f.wymagaj_skanu.disabled = !jest;
+    if (!jest) f.wymagaj_skanu.checked = false;
+    f.querySelector('[data-bez-maszyny]').hidden = jest;
+  };
+  Panel.pokazSkan = pokazSkan;
   const pokazPolaLinii = korzen => {
     const wiele = W.wieleLinii(hala.slowniki);
     for (const el of korzen.querySelectorAll('.pole-linii')) el.hidden = !wiele;
@@ -705,7 +774,35 @@
       : w.blad ? w.blad : `Dział zobaczy je ${w.opis} i wtedy dostanie powiadomienie.`;
     fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz zmiany' : 'Zleć';
   }
-  Panel.noweZlecenie = (wstepne, edycja) => {
+  /* D55: „Dla kogo” — osoby działu do zaznaczenia (każda dostaje własne zlecenie); „Na zmianę” — zmiany ze słownika. */
+  function rysujOsobyZlecenia(zaznaczone) {
+    const el = document.querySelector('#zlecenie-osoby [data-osoby]');
+    const osoby = osobyDzialu(fz.dzial.value);
+    el.innerHTML = osoby.map(([id, n]) => `<label class="zaznacz"><input type="checkbox" name="osoby" value="${esc(id)}" ${(zaznaczone || []).includes(id) ? 'checked' : ''}> ${esc(n)}${
+      Hala.naUrlopie && Hala.naUrlopie(hala.slowniki, id, W.dzienZakladu(hala.teraz())) ? ' <span class="slaby">(urlop)</span>' : ''}</label>`).join('')
+      || '<span class="slaby">Nikt w tym dziale nie ma konta.</span>';
+  }
+  function rysujZmianyZlecenia(wybrana) {
+    const zm = hala.slowniki.zmiany || {};
+    fz.na_zmiane.innerHTML = '<option value="">teraz (bez zmiany)</option>' + Object.keys(zm).map(nr => {
+      const z = W.naZmiane(nr, hala.slowniki, hala.teraz());
+      // Późniejszą zmianę planuje tylko kierownik zakładu (D47) — kierownicy UR i KJ widzą tylko trwającą.
+      return z && (z.biezaca || mozeWyslac('zlecenie.zaplanowane')) ? `<option value="${esc(nr)}">${esc(z.opis)}</option>` : '';
+    }).join('');
+    fz.na_zmiane.value = wybrana || '';
+    opisZmianyZlecenia();
+  }
+  function opisZmianyZlecenia() {
+    const z = fz.na_zmiane.value ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
+    const p = $('zlecenie-zmiana-opis');
+    p.hidden = !z;
+    if (z) p.textContent = z.biezaca ? `Zlecenie od razu, termin — koniec zmiany (${W.godzina(z.koniec)}), chyba że wpiszesz inny.`
+      : `Dział zobaczy je o ${W.godzina(z.start)} (start zmiany) i dostanie powiadomienie; termin — koniec zmiany, chyba że wpiszesz inny.`;
+  }
+  let poZapisieZlecenia = null, wstepneZgloszenie = null;
+  Panel.noweZlecenie = (wstepne, edycja, poZapisie) => {
+    poZapisieZlecenia = poZapisie || null;
+    wstepneZgloszenie = (!edycja && wstepne && wstepne.zgloszenie) || null;
     const w = edycja ? Object.assign({}, edycja.dane, { pilne: (edycja.dane || {}).priorytet === 'pilne' }) : (wstepne || {});
     fz.reset();
     fz.dzial.innerHTML = opcje(((hala.kontrakt.stale || {}).dzialy || []).map(d => [d.kod, d.nazwa]));
@@ -717,14 +814,22 @@
     fz.maszyna.value = w.maszyna || '';
     fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —');
     fz.wykonawca.value = w.wykonawca || '';
+    rysujOsobyZlecenia(w.wykonawca ? [w.wykonawca] : []);
+    rysujZmianyZlecenia(edycja ? '' : (w.zmiana || ''));
+    $('zlecenie-kto').hidden = !edycja;
+    $('zlecenie-osoby').hidden = !!edycja;
+    $('zlecenie-zmiana').hidden = !!edycja;
     fz.tytul.value = w.tytul || '';
     fz.opis.value = w.opis || '';
     fz.pilne.checked = !!w.pilne;
-    if (wstepne) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; }
+    if (wstepne) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; fz.wymagaj_skanu.checked = !!w.wymagaj_skanu; }
     fz.termin.value = w.termin ? W.poleCzasu(w.termin) : '';
     fz.stale.value = edycja ? '' : (w.stale || '');
     fz.edycja.value = edycja ? edycja.id : '';
-    if (edycja) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; }
+    if (edycja) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; fz.wymagaj_skanu.checked = !!w.wymagaj_skanu; }
+    pokazSkan(fz);
+    // „Zapisz też na później” — tylko przy całkiem nowym zleceniu (nie z zapisanego, nie przy zmianie planu) i z prawem zapisu.
+    $('zlecenie-zapisz-tez').hidden = !!edycja || !!w.stale || !mozeZapisacStale();
     // „Więcej opcji” rozwinięte, gdy coś w środku jest już wypełnione (W.wiecejOpcjiZlecenia) — inaczej zwinięte.
     $('zlecenie-wiecej').open = W.wiecejOpcjiZlecenia(wstepne, !!edycja);
     const start = edycja ? Date.parse(w.zaplanowane_na) : NaN;
@@ -742,7 +847,7 @@
     for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = !!edycja;
     $('zlecenie-zdjecie').hidden = !!edycja;
     $('zlecenie-ze-stalego').hidden = !w.stale || !!edycja;
-    $('zlecenie-ze-stalego').textContent = w.stale ? '🔁 Ze zlecenia stałego — termin dla bieżącej zmiany, możesz go zmienić.' : '';
+    $('zlecenie-ze-stalego').textContent = w.stale ? '🔁 Z zapisanego zlecenia — termin dla bieżącej zmiany, możesz go zmienić. Zlecisz je tak ile razy trzeba.' : '';
     $('t-okno-zlecenia').textContent = edycja ? 'Zmień zaplanowane zlecenie' : w.stale ? 'Zleć teraz' : 'Nowe zlecenie';
     pokazPlan();
     otworzOkno($('okno-zlecenia'));
@@ -757,14 +862,18 @@
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
   // Każde zamknięcie okna zdejmuje blokadę pól edycji — następne „Nowe zlecenie” zaczyna od zwykłego formularza.
   $('okno-zlecenia').addEventListener('close', () => { for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = false; });
-  fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); });
-  fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); });
+  fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); rysujOsobyZlecenia([]); });
+  fz.na_zmiane.addEventListener('change', opisZmianyZlecenia);
+  $('okno-zlecenia').addEventListener('close', () => { poZapisieZlecenia = null; });
+  fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); pokazSkan(fz); });
+  fz.maszyna.addEventListener('change', () => pokazSkan(fz));
   fz.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
     const blad = t => { const b = fz.querySelector('.blad'); b.textContent = t; b.hidden = false; };
     const dane = { tytul: fz.tytul.value.trim(), dzial: fz.dzial.value, priorytet: fz.pilne.checked ? 'pilne' : 'normalny',
                    wymagaj_zdjecia: fz.wymagaj_zdjecia.checked, wymagaj_notatki: fz.wymagaj_notatki.checked };
     for (const pole of ['opis', 'linia', 'maszyna', 'wykonawca', 'stale']) if (fz[pole].value.trim()) dane[pole] = fz[pole].value.trim();
+    if (fz.wymagaj_skanu.checked && dane.maszyna) dane.wymagaj_skanu = true;
     const edycja = fz.edycja.value;
     try {
       if (edycja) {
@@ -776,17 +885,47 @@
         if (po.blad) { blad(po.blad); return; }
         await hala.zapisz('zlecenie.plan_zmieniony', edycja, { tytul: dane.tytul, opis: dane.opis || '', priorytet: dane.priorytet,
           wykonawca: dane.wykonawca || '', zaplanowane_na: plan.na, termin_po_min: po.min, termin: null,
-          wymagaj_zdjecia: dane.wymagaj_zdjecia, wymagaj_notatki: dane.wymagaj_notatki });
+          wymagaj_zdjecia: dane.wymagaj_zdjecia, wymagaj_notatki: dane.wymagaj_notatki, wymagaj_skanu: fz.wymagaj_skanu.checked });
         $('okno-zlecenia').close();
         komunikat(`Zmienione — zleci się ${plan.opis}`, 'ok');
         return;
       }
-      // UI etap 2: nowe zlecenie idzie do działu od razu — planowania na później to okno już nie robi (Zlecenia stałe).
+      // UI etap 2: nowe zlecenie idzie do działu od razu. D55: „Na zmianę” — trwająca zmiana: od razu z terminem do jej
+      // końca; późniejsza: zaplanowane na jej start (dział zobaczy je wtedy). Kilka osób — każda dostaje osobne zlecenie.
       if (fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
       if (fz.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fz.zdjecie.files[0])];
-      await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
+      delete dane.wykonawca;
+      const osoby = [...fz.querySelectorAll('input[name="osoby"]:checked')].map(x => x.value);
+      const zm = fz.na_zmiane.value ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
+      if (zm) dane.zmiana = fz.na_zmiane.value;
+      if (wstepneZgloszenie) dane.zgloszenie = wstepneZgloszenie;
+      if (zm && !zm.biezaca && !mozeWyslac('zlecenie.zaplanowane')) { blad('Na późniejszą zmianę zleca tylko kierownik — wybierz „teraz”.'); return; }
+      const ids = [];
+      for (const osoba of (osoby.length ? osoby : [null])) {
+        const d1 = Object.assign({}, dane, osoba ? { wykonawca: osoba } : {});
+        const id = hala.nowyId();
+        if (zm && !zm.biezaca) {
+          d1.zaplanowane_na = new Date(zm.start).toISOString();
+          if (!d1.termin) d1.termin_po_min = Math.max(1, Math.round((zm.koniec - zm.start) / 60000));
+          await hala.zapisz('zlecenie.zaplanowane', id, d1);
+        } else {
+          if (zm && !d1.termin) d1.termin = new Date(zm.koniec).toISOString();
+          await hala.zapisz('zlecenie.utworzone', id, d1);
+        }
+        ids.push(id);
+      }
+      if (poZapisieZlecenia) { const fn = poZapisieZlecenia; poZapisieZlecenia = null; await fn(ids[0]); }
+      // „Zapisz też na później” (2026-10-13): zapisane POJEDYNCZE — kierownik zleca je znowu „Zleć teraz”, ile razy chce.
+      let zapisane = false;
+      if (!$('zlecenie-zapisz-tez').hidden && fz.zapisz_tez.checked) {
+        const s = W.stalyZFormularza(Object.assign(W.stalyZZlecenia({ dane }), { aktywny: true }), hala.slowniki, null, hala.pracownik.id);
+        if (!s.bledy.length) {
+          await hala.zapisz('slownik.zapisany', `zlecenia_stale/${s.kod}`, { slownik: 'zlecenia_stale', klucz: s.kod, wartosc: s.wartosc });
+          zapisane = true;
+        }
+      }
       $('okno-zlecenia').close();
-      komunikat('Zlecone', 'ok');
+      komunikat(`${ids.length > 1 ? `Zlecone ${ids.length} osobom` : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : 'Zlecone'}${zapisane ? ' i zapisane w „Zapisane i stałe”' : ''}`, 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
     } catch (e) { blad(komunikatBledu(e)); }
   }));
@@ -866,8 +1005,8 @@
 
   function dzwiekWlaczony() {
     const zapis = pamiec.czytaj(KLUCZ_DZWIEKU);
-    // Domyślnie włączony tylko na monitorze (konto ekranu) — tablet kierownika na naradzie ma milczeć.
-    return zapis === null ? document.body.classList.contains('tryb-ekran') : zapis === '1';
+    // D55 (właściciel 2026-10-13: „wszyscy mają słyszeć pilne zadania i awarie”) — domyślnie włączony; wyłącza 🔕.
+    return zapis === null ? true : zapis === '1';
   }
 
   function odblokujDzwiek() {
@@ -886,7 +1025,7 @@
     const czeka = wl && (!dzwiekKontekst || dzwiekKontekst.state !== 'running');
     b.textContent = wl ? (czeka ? '🔔 Kliknij' : '🔔') : '🔕';
     const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
-    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy ${co} i alercie jakości włączony`) : 'Dźwięk wyłączony';
+    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zadaniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
     b.setAttribute('aria-pressed', String(wl));
     b.classList.toggle('czeka', czeka);
   }
@@ -916,12 +1055,16 @@
     });
   }
 
+  // D55: awarie (każda, zatrzymanie — mocniej) i pilne zadania kierownika — dwa różne dźwięki ze wspólnego dzialania.js.
+  if (window.HalaDzwieki) window.HalaDzwieki.sledz(hala, { awarie: true, zlecenia: () => ({ dzial: 'kierownik' }), wlaczony: dzwiekWlaczony });
+
   function sprawdzAlarmy(wiersze, incydenty) {
     const a = W.noweAlarmy(znaneAlarmy, wiersze, incydenty);
     znaneAlarmy = a.znane;
     if (!a.nowe.length) return;
     for (const n of a.nowe) swiezeDo.set((n.rodzaj === 'alert' ? 'alert|' : 'awaria|') + n.id, Date.now() + MIGANIE_MS);
-    zagraj(a.nowe.some(n => n.rodzaj === 'zatrzymanie') ? 'zatrzymanie' : 'alert');
+    // Zatrzymanie gra wspólny moduł (syrena awarii); tu zostaje tylko sygnał alertu jakości.
+    if (a.nowe.some(n => n.rodzaj === 'alert') && !(window.HalaDzwieki && a.nowe.some(n => n.rodzaj === 'zatrzymanie'))) zagraj('alert');
     setTimeout(narysuj, MIGANIE_MS + 100);            // zdjąć miganie, gdy nic innego nie przerysuje
   }
 

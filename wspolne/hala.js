@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.16.0';
+  const WERSJA_KLIENTA = '0.18.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -147,13 +147,20 @@
   /* Reguła „wymagane_jesli” (D31): pole zdarzenia jest wymagane, gdy OBIEKT ma znacznik — kierownik zaznaczył
      „Wymagaj zdjęcia”, więc „zlecenie.wykonane” bez zdjęcia nie przejdzie. Zwraca powód (po polsku, z instrukcją)
      albo null. Hub takie zdarzenie odrzuca, a h.zapisz nie wkłada go nawet do kolejki. Przejście niedozwolone
-     (zlecenie anulowane) to dalej zwykły konflikt. Bliźniak: hala.py → brak_wymagan. */
+     (zlecenie anulowane) to dalej zwykły konflikt. „rowne” (skan QR maszyny, 2026-10-13): wartość musi się zgadzać
+     z tym polem obiektu (zeskanowana maszyna = maszyna zlecenia), gdy obiekt je ma. Bliźniak: hala.py → brak_wymagan. */
   function brakWymagan(kontrakt, stan, zd) {
     const spec = kontrakt.zdarzenia[zd.typ];
     if (!spec || !spec.wymagane_jesli || !stan) return null;
     if (spec.z && !spec.z.includes(stan.status)) return null;
     const d = stan.dane || {}, dane = zd.dane || {};
-    const powody = Object.entries(spec.wymagane_jesli).filter(([pole, w]) => d[w.gdy] === true && puste(dane[pole])).map(([, w]) => w.powod);
+    const powody = [];
+    for (const [pole, w] of Object.entries(spec.wymagane_jesli)) {
+      if (d[w.gdy] !== true) continue;
+      if (puste(dane[pole])) powody.push(w.powod);
+      else if (w.rowne && d[w.rowne] && String(dane[pole]).trim() !== String(d[w.rowne]))
+        powody.push(`${w.powod} (zeskanowany kod „${dane[pole]}” to inna maszyna)`);
+    }
     return powody.join('; ') || null;
   }
 
@@ -494,6 +501,23 @@
     return !zZakladu(osoba && osoba.role) || zZakladu(pracownik && pracownik.role);
   }
 
+  /* D55: awarię anuluje tylko UR (mechanik, kierownik UR), administrator albo osoba, która ją zgłosiła (pomyłka).
+     Status (zgłoszona/przyjęta) sprawdza ekran. Bliźniak: blad_anulowania_awarii w hala.py. */
+  const ROLE_ANULUJACE_AWARIE = ['mechanik', 'kierownik_ur', 'admin'];
+  function moznaAnulowacAwarie(awaria, pracownik) {
+    if (!pracownik) return false;
+    if ((pracownik.role || []).some(r => ROLE_ANULUJACE_AWARIE.includes(r))) return true;
+    return ((awaria && awaria.dane) || {}).zglosil === pracownik.id;
+  }
+
+  /* D55: czy osoba ma urlop w dniu zakładu 'RRRR-MM-DD' (słownik urlopy: {osoba, od, do} — do włącznie).
+     Bliźniak: na_urlopie w hala.py. */
+  function naUrlopie(slowniki, osoba, data) {
+    if (!osoba) return false;
+    return Object.values((slowniki && slowniki.urlopy) || {}).some(u => u && u.osoba === osoba
+      && String(u.od || '') <= data && data <= String(u.do || ''));
+  }
+
   /* Licznik, który tyka na ekranie (przestój, czekanie na lidera): do godziny z sekundami („4 min 07 s”, „40 s”),
      bo „0 min” przez pierwszą minutę wygląda na zawieszony. Jednostki słowami (ocena UI 2026-10-12): „0:40” czytano
      jak godziny i minuty. Od godziny — jak formatCzasu. */
@@ -560,23 +584,34 @@
     const wybrane = (h.zmiany || []).filter(z => typeof z === 'string');
     const zm = wybrane.length ? lista.filter(z => wybrane.includes(z[0])) : lista.slice(0, 1);
     const t = (szablon && szablon.termin) || {};
+    // Kilka razy w ciągu zmiany (2026-10-13): co_min minut od startu do końca zmiany; kolejne mają klucz „…|+<minuty>”.
+    const co = Number.isInteger(h.co_min) && h.co_min > 0 ? h.co_min : 0;
     const zNaiwnego = n => { const d = new Date(n); return zLokalnego(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()); };
-    return zm.map(([nr, [g1, m1], [g2, m2]]) => {
-      const startN = Date.UTC(r, mi - 1, dz, g1, m1);
+    const wynik = [];
+    for (const [nr, [g1, m1], [g2, m2]] of zm) {
+      const start0N = Date.UTC(r, mi - 1, dz, g1, m1);
       let koniecN = Date.UTC(r, mi - 1, dz, g2, m2);
-      if (koniecN <= startN) koniecN += 86400000;
-      const start = zNaiwnego(startN);
-      let termin;
-      if (t.rodzaj === 'godzina') {
-        const gm = hhmm(t.godzina);
-        if (!gm) throw new Error(`zła godzina terminu '${t.godzina}'`);
-        let tN = Date.UTC(r, mi - 1, dz, gm[0], gm[1]);
-        if (tN <= startN) tN += 86400000;
-        termin = zNaiwnego(tN);
-      } else if (t.rodzaj === 'minuty') termin = start + (parseInt(t.minuty, 10) || 0) * 60000;
-      else termin = zNaiwnego(koniecN);
-      return { klucz: `${kod}|${data}|${wybrane.length ? nr : '-'}`, zmiana: `${data}/${nr}`, start: iso(start), termin: iso(termin) };
-    });
+      if (koniecN <= start0N) koniecN += 86400000;
+      let przes = 0;
+      for (;;) {
+        const startN = start0N + przes * 60000;
+        const start = zNaiwnego(startN);
+        let termin;
+        if (t.rodzaj === 'godzina') {
+          const gm = hhmm(t.godzina);
+          if (!gm) throw new Error(`zła godzina terminu '${t.godzina}'`);
+          let tN = Date.UTC(r, mi - 1, dz, gm[0], gm[1]);
+          while (tN <= startN) tN += 86400000;
+          termin = zNaiwnego(tN);
+        } else if (t.rodzaj === 'minuty') termin = start + (parseInt(t.minuty, 10) || 0) * 60000;
+        else termin = zNaiwnego(koniecN);
+        wynik.push({ klucz: `${kod}|${data}|${wybrane.length ? nr : '-'}${przes ? `|+${przes}` : ''}`, zmiana: `${data}/${nr}`,
+                     start: iso(start), termin: iso(termin) });
+        przes += co;
+        if (!co || start0N + przes * 60000 >= koniecN) break;
+      }
+    }
+    return wynik;
   }
 
   /* Tekst ze skanera (kamera albo czytnik-klawiatura) -> co to jest.
@@ -1573,7 +1608,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, wskaznikiOkresu,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

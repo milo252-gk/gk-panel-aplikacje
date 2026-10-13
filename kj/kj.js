@@ -15,7 +15,7 @@
   const esc = s => String(s === null || s === undefined ? '' : s)
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  const hala = global.Hala.utworz({ aplikacja: 'kj', typy: ['proba', 'partia', 'alert', 'reklamacja', 'zlecenie'], dni: 30 });
+  const hala = global.Hala.utworz({ aplikacja: 'kj', typy: ['proba', 'partia', 'alert', 'reklamacja', 'zlecenie', 'awaria', 'zgloszenie'], dni: 30 });
 
   const KJ = global.KJ = { hala, W, $, esc, ekrany: {}, biezacy: null };
 

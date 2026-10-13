@@ -49,7 +49,59 @@
     }
   }
 
+  // ------------------------------------------------------------ D55: statystyki na osobę
+  const filtrOsob = { dzial: '', osoba: '' };
+  const zlecOkresu = new Map();             // od (ISO) → {lista, kiedy}
+  const wTokuOsob = new Set();
+  async function pobierzZlecenia(odIso) {
+    if (wTokuOsob.has(odIso)) return;
+    wTokuOsob.add(odIso);
+    try {
+      const w = await hala.zapytaj('GET', `/api/v1/stan/zlecenie?od=${encodeURIComponent(odIso)}&limit=5000`);
+      zlecOkresu.set(odIso, { lista: w.obiekty || [], kiedy: Date.now() });
+      setTimeout(() => zlecOkresu.delete(odIso), 5 * 60000);
+    } catch (e) { zlecOkresu.set(odIso, { lista: null, blad: P.komunikatBledu(e), kiedy: Date.now() }); setTimeout(() => zlecOkresu.delete(odIso), 60000); }
+    finally { wTokuOsob.delete(odIso); P.narysuj(); }
+  }
+  function rysujOsoby(d, okno) {
+    const f = $('filtry-osob'), el = $('tabela-osob');
+    const dz = (d.stale && d.stale.dzialy) || [];
+    const opcjeD = '<option value="">wszystkie</option>' + dz.map(x => `<option value="${esc(x.kod)}">${esc(x.nazwa)}</option>`).join('');
+    if (f.dzial.dataset.html !== opcjeD) { f.dzial.innerHTML = opcjeD; f.dzial.dataset.html = opcjeD; f.dzial.value = filtrOsob.dzial; }
+    const role = filtrOsob.dzial ? ((dz.find(x => x.kod === filtrOsob.dzial) || {}).role || []) : dz.flatMap(x => x.role || []);
+    const osoby = (d.pracownicy || []).filter(p => (p.role || []).some(r => role.includes(r)));
+    const opcjeO = '<option value="">wszyscy</option>' + osoby.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('');
+    if (f.osoba.dataset.html !== opcjeO) { f.osoba.innerHTML = opcjeO; f.osoba.dataset.html = opcjeO; f.osoba.value = filtrOsob.osoba; if (f.osoba.value !== filtrOsob.osoba) filtrOsob.osoba = ''; }
+    if (!okno) { el.innerHTML = ''; return; }
+    let lista = hala.obiekty('zlecenie');
+    if (okno.od < d.teraz - 2 * 86400000) {             // starsze niż to, co Panel trzyma w pamięci — z serwera
+      const odIso = new Date(okno.od).toISOString();
+      const z = zlecOkresu.get(odIso);
+      if (!z) { el.innerHTML = '<p class="pusto">Liczę na serwerze…</p>'; pobierzZlecenia(odIso); return; }
+      if (!z.lista) { el.innerHTML = `<p class="pusto">${esc(z.blad || 'Brak danych z serwera.')}</p>`; return; }
+      const jest = new Set(lista.map(x => x.id));
+      lista = lista.concat(z.lista.filter(x => !jest.has(x.id)));
+    }
+    const wiersze = W.statystykiOsob({ zlecenia: lista, pracownicy: d.pracownicy, slowniki: d.slowniki, stale: d.stale,
+                                       od: okno.od, do: okno.do, dzial: filtrOsob.dzial, osoba: filtrOsob.osoba });
+    el.innerHTML = wiersze.length ? `<div class="tabela-przewijana"><table class="tabela-osob">
+      <thead><tr><th>Osoba</th><th>Dział</th><th>Zleceń</th><th>Zrobione</th><th>W terminie</th><th>Spóźnione</th><th>Przepadło</th><th>Nie mogę</th><th>W toku</th><th>Urlop</th></tr></thead>
+      <tbody>${wiersze.map(w => `<tr><td>${esc(w.nazwa)}</td><td>${esc(w.dzialy)}</td><td>${w.razem}</td><td>${w.zrobione}</td>
+        <td class="${w.proc === null ? '' : w.proc >= 80 ? 'dobrze' : 'zle'}">${w.proc === null ? '—' : `${W.procent(w.proc)} %`}</td>
+        <td class="${w.spoznione ? 'zle' : ''}">${w.spoznione}</td><td class="${w.przepadle ? 'zle' : ''}">${w.przepadle}</td>
+        <td>${w.nieMoze}</td><td>${w.otwarte}</td><td>${w.urlopDni ? `${w.urlopDni} d.` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="pusto">Brak zleceń z osobą w tym okresie.</p>';
+  }
+  $('filtry-osob').addEventListener('change', () => {
+    const f = $('filtry-osob');
+    Object.assign(filtrOsob, { dzial: f.dzial.value, osoba: f.osoba.value });
+    P.narysuj();
+  });
+  $('filtry-osob').addEventListener('submit', ev => ev.preventDefault());
+
   function rysuj(d) {
+    const oknoOsob = okres === 'zakres' ? (bladZakresu ? null : oknoZakresu()) : W.oknoWskaznikow(okres, d.teraz, d.zmiana);
+    rysujOsoby(d, oknoOsob);
     for (const b of document.querySelectorAll('#wskazniki .chip')) b.setAttribute('aria-pressed', String(b.dataset.okres === okres));
     const pole = $('wskazniki-zakres');
     pole.hidden = okres !== 'zakres';

@@ -18,7 +18,7 @@
   const START = Date.now(), LASKA_MS = 5000;
 
   const hala = Hala.utworz({ aplikacja: 'lider',
-    typy: ['zmiana_linii', 'awaria', 'proba', 'alert', 'reklamacja', 'bhp_zgloszenie', 'zlecenie'], dni: 3 });
+    typy: ['zmiana_linii', 'awaria', 'proba', 'alert', 'reklamacja', 'bhp_zgloszenie', 'zlecenie', 'zgloszenie', 'narzedzia'], dni: 3 });
 
   // localStorage tylko przez te funkcje: w Safari prywatnym sam dostęp rzuca wyjątkiem (KONTRAKT §9: prefiks hala.lider.).
   const pamiec = {
@@ -605,7 +605,7 @@
      mistrz (przełożony liderów, D34) — dział „mistrz”, jego linie (bez zaznaczonych — wszystkie): to dwa stanowiska
      z osobnymi zadaniami. */
   Lider.dzialZlecen = () => W.dzialZlecen(hala.pracownik, Lider.stan.linia, hala.slowniki);
-  Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.dzialZlecen()) };
+  Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Object.assign({ komunikat: t => Lider.komunikat(t, 'ok') }, Lider.dzialZlecen())) };
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   HalaZlecenia.sledz(hala, Lider.dzialZlecen, (z, o) => {
     // Zwrócone przez kierownika (klient 0.16.0) to nie nowe zlecenie — mówimy, że wróciło, i z jaką uwagą.

@@ -116,6 +116,7 @@
     $('checklisty').hidden = czesc !== 'checklisty';
     if (czesc === 'checklisty') { if (P.widoki.checklisty) P.widoki.checklisty.rysuj(); }
     else if (czesc === 'pracownicy') rysujPracownikow(el);
+    else if (czesc === 'urlopy') { if (P.widoki.urlopy) P.widoki.urlopy.rysuj(el); }
     else if (czesc === 'maszyny') rysujMaszyny(el);
     else if (czesc === 'serwis') rysujSerwis(el);
     else rysujUstawienia(el);
@@ -509,7 +510,7 @@
       // Etap 3: numer zmiany, który znika, a jest w szablonach checklist albo zleceniach stałych — tam przestanie pasować.
       const uzycia = W.uzyciaZmian(hala.slowniki, wynik.zmiany.map(z => z.nr));
       if (uzycia.length && !(await P.potwierdz('Zmienić numery zmian?', `${uzycia.join(' ')} Po zapisie popraw je w Checklistach `
-        + 'i w Zleceniach stałych — inaczej przestaną działać.', 'Zapisz mimo to'))) return;
+        + 'i w Zleceniach → Zapisane i stałe — inaczej przestaną działać.', 'Zapisz mimo to'))) return;
       try {
         const obecne = (hala.slowniki && hala.slowniki.zmiany) || {};
         const zapisy = wynik.zmiany.filter(z => JSON.stringify(obecne[z.nr]) !== JSON.stringify(z.wartosc))

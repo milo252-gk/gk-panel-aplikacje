@@ -1,7 +1,8 @@
 /* Zlecenia od kierownika — wspólny ekran działów (Lider = produkcja, UR, KJ). Decyzja właściciela 2026-09-28:
    kierownik w Panelu zleca zadania działom, a dział je przyjmuje, wykonuje albo zgłasza, że nie może.
    D31 (2026-10-01): kierownik może wymagać zdjęcia i notatki — jak dowód dostawy w GK Trasy, bez nich „Wyślij”
-   jest nieaktywny (a hub i tak by odrzucił). Termin po ludzku: „do 14:00 (za 25 min)”, „po terminie o 1 h 20 min”.
+   jest nieaktywny (a hub i tak by odrzucił). 2026-10-13: także skan kodu QR maszyny zlecenia (naklejka HALA:M:… z Panelu)
+   — dowód, że ktoś przy niej był; skaner ze wspólnego skaner.js, kod innej maszyny nie przechodzi. Termin po ludzku: „do 14:00 (za 25 min)”, „po terminie o 1 h 20 min”.
 
    Jeden plik dla trzech aplikacji, bo ekran ma wyglądać i działać wszędzie tak samo (jak skaner.js).
    Dane i zapis wyłącznie przez hala.js (hala.obiekty('zlecenie'), hala.zapisz, hala.dodajPlik). Aplikacja musi
@@ -32,6 +33,24 @@
     return DO_ZROBIENIA.has(z.status) && !isNaN(wazne) && typeof teraz === 'number' && wazne <= teraz;
   }
 
+  /* D55 (właściciel 2026-10-13): „Możesz wykonać zlecenie nawet po określonym czasie, ale szef zobaczy, że się spóźniło” —
+     zadanie zmianowe po końcu swojej zmiany (przepadło) dział widzi jeszcze przez dobę jako zaległe; „Zrobione” idzie
+     do kierownika ze spóźnieniem (hub przyjmuje zlecenie.wykonane z „przepadlo”). Potem znika jak dotąd (D35). */
+  const DOBA_MS = 86400000;
+  function poCzasieDoZrobienia(z, teraz) {
+    if (!przepadlo(z, teraz)) return false;
+    const d = z.dane || {};
+    const od = Date.parse(d.wazne_do || d.czas_przepadniecia);
+    return !isNaN(od) && typeof teraz === 'number' && teraz - od < DOBA_MS;
+  }
+
+  /* D55: zlecenie dla konkretnej osoby widzi ona i kierownicy (widziWszystkie); reszta działu — tylko gdy ta osoba
+     ma dziś urlop (jej zadania przechodzą wtedy na cały dział). Bez `ja` (testy, Panel) — widać wszystko. */
+  function widoczneDla(d, o) {
+    if (!d.wykonawca || !o.ja || d.wykonawca === o.ja || o.widziWszystkie) return true;
+    return !!(o.dzien && o.H && o.H.naUrlopie && o.H.naUrlopie(o.slowniki, d.wykonawca, o.dzien));
+  }
+
   /* Zlecenie bez linii widzą wszyscy w dziale; z linią — gdy pasuje do `linia` (lider) i do listy `linie` (mistrz). */
   const naLinii = (d, o) => !d.linia || ((!o.linia || d.linia === o.linia) && (!o.linie || !o.linie.length || o.linie.includes(d.linia)));
 
@@ -47,13 +66,15 @@
      linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich.
      D47: zlecenie ZAPLANOWANE przez kierownika zakładu na później (status „zaplanowane”) dział widzi dopiero, gdy hub je
      zleci (zlecenie.aktywowane → „nowe”) — wcześniej nie ma go ani na liście, ani na plakietce, ani w zaległych. */
-  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw }) {
+  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms)) return null; const l = H.lokalny(ms);
       return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
     return (lista || [])
-      .filter(z => z && z.status !== 'zaplanowane' && (z.aktywny || (z.id === zostaw && z.status === 'przepadlo')) && (!przepadlo(z, teraz) || z.id === zostaw))
-      .filter(z => (z.dane || {}).dzial === dzial && naLinii(z.dane || {}, { linia, linie }))
+      .filter(z => z && z.status !== 'zaplanowane' && (z.aktywny || z.status === 'przepadlo')
+        && (!przepadlo(z, teraz) || z.id === zostaw || poCzasieDoZrobienia(z, teraz)))
+      .filter(z => (z.dane || {}).dzial === dzial && naLinii(z.dane || {}, { linia, linie })
+        && widoczneDla(z.dane || {}, { ja, widziWszystkie, slowniki, dzien, H }))
       .filter(z => !moje || (z.dane || {}).wykonawca === moje || (z.dane || {}).przyjal === moje)
       .map(z => {
         const d = z.dane || {};
@@ -64,17 +85,20 @@
         const poTerminie = !isNaN(termin) && doZrobienia && termin < teraz;
         const zPoprzedniejZmiany = doZrobienia && isNaN(termin) && typeof poczatekZmiany === 'number' && !isNaN(poczatekZmiany)
           && !isNaN(czasMs) && czasMs < poczatekZmiany;
+        const poCzasie = doZrobienia && przepadlo(z, teraz);           // D55: po końcu zmiany — jeszcze można zrobić
         return {
           id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
           tytul: d.tytul || '', opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyna: d.maszyna || null, linia: d.linia || null,
           dlaKogo: nazwa(d.wykonawca), zlecil: nazwa(d.zlecil), kiedy: godz(d.czas_zlecenia), termin: godz(d.termin),
           terminMs: isNaN(termin) ? null : termin, terminOpis: opis ? opis.tekst : null,
-          poTerminie, zalegle: poTerminie || zPoprzedniejZmiany,
+          poTerminie, zalegle: poTerminie || zPoprzedniejZmiany || poCzasie, poCzasie,
           // Klucz kolejki zaległych: termin, a bez terminu chwila zlecenia (najdłużej czeka = pierwsze).
-          zalegleOd: poTerminie ? termin : zPoprzedniejZmiany ? czasMs : null,
-          zalegleOpis: poTerminie ? (opis ? opis.tekst : 'po terminie') : zPoprzedniejZmiany ? `z poprzedniej zmiany (zlecone ${godz(d.czas_zlecenia)})` : null,
+          zalegleOd: poTerminie ? termin : zPoprzedniejZmiany ? czasMs : poCzasie ? (Date.parse(d.wazne_do) || czasMs) : null,
+          zalegleOpis: poCzasie ? 'zmiana się skończyła — zrób i tak, kierownik zobaczy spóźnienie'
+            : poTerminie ? (opis ? opis.tekst : 'po terminie') : zPoprzedniejZmiany ? `z poprzedniej zmiany (zlecone ${godz(d.czas_zlecenia)})` : null,
           doZrobienia, wyslane: WYSLANE.has(z.status),
           wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true, stale: !!d.stale,
+          wymagajSkanu: d.wymagaj_skanu === true && !!d.maszyna,
           uwagiZwrotu: d.uwagi_zwrotu || null, czas: d.czas_zlecenia || '',
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
         };
@@ -86,16 +110,29 @@
   }
 
   /* Czego brakuje, żeby wysłać formularz (czysta funkcja, testy w reduktor-testy.js). rodzaj 'wykonane':
-     zdjęcie i notatka tylko, gdy kierownik ich wymaga; 'odrzucone': powód zawsze — kierownik musi wiedzieć, co dalej. */
+     zdjęcie, notatka i skan QR maszyny tylko, gdy kierownik ich wymaga; 'odrzucone': powód zawsze — kierownik musi
+     wiedzieć, co dalej. */
   function brakuje(wymagania, f) {
     const w = wymagania || {}, tekst = String((f && f.tekst) || '').trim(), pliki = (f && f.pliki) || [];
     if (f && f.rodzaj === 'odrzucone') return tekst ? [] : ['powodu'];
     const lista = [];
     if (w.wymagajZdjecia && !pliki.length) lista.push('zdjęcia');
     if (w.wymagajNotatki && !tekst) lista.push('notatki');
+    if (w.wymagajSkanu && !(f && f.skan)) lista.push('skanu QR maszyny');
     return lista;
   }
-  const tekstBraku = lista => (lista.length ? `Brakuje: ${lista.join(' i ')}` : '');
+  const tekstBraku = lista => (lista.length
+    ? `Brakuje: ${lista.length > 1 ? `${lista.slice(0, -1).join(', ')} i ${lista[lista.length - 1]}` : lista[0]}` : '');
+
+  /* Tekst ze skanera → kod maszyny albo powód odmowy (czysta funkcja). Naklejka HALA:M:<kod> albo zastany kod z pola
+     'qr' maszyny (Hala.odczytajKod); inna maszyna, stanowisko czy identyfikator — odmowa z nazwą tego, co zeskanowano. */
+  function skanMaszyny(tekst, maszyna, slowniki, odczytaj) {
+    const k = odczytaj(tekst, slowniki);
+    const nazwa = kod => ((((slowniki || {}).maszyny || {})[kod] || {}).nazwa || kod);
+    if (k.rodzaj === 'maszyny' && k.kod === maszyna) return { kod: maszyna };
+    if (k.rodzaj === 'maszyny') return { blad: `To kod innej maszyny (${nazwa(k.kod)}). Zeskanuj naklejkę na: ${nazwa(maszyna)}.` };
+    return { blad: `To nie jest kod maszyny. Zeskanuj naklejkę QR na: ${nazwa(maszyna)}.` };
+  }
 
   /* Początek bieżącej zmiany (ms); między zmianami — początek doby zakładu, żeby zlecenie z wczoraj bez terminu
      też było zaległe. */
@@ -108,8 +145,21 @@
     return H.zLokalnego(l.rok, l.miesiac, l.dzien, 0, 0);
   }
 
+  // D55: kierownicy widzą zlecenia osobiste całego działu (np. kierownik UR — zadania swoich mechaników).
+  const ROLE_WIDZA_WSZYSTKO = ['kierownik', 'kierownik_ur', 'kierownik_kj', 'admin'];
+  function dzisiaj(H, teraz) {
+    if (!H || !H.lokalny) return null;
+    const l = H.lokalny(teraz), d = n => String(n).padStart(2, '0');
+    return `${l.rok}-${d(l.miesiac)}-${d(l.dzien)}`;
+  }
   const kontekst = (hala, opcje) => Object.assign({ H: global.Hala, teraz: hala.teraz(), pracownicy: hala.pracownicy,
-                                                    poczatekZmiany: poczatekZmiany(hala, global.Hala) }, opcje);
+                                                    poczatekZmiany: poczatekZmiany(hala, global.Hala),
+                                                    ja: hala.pracownik && hala.pracownik.id, slowniki: hala.slowniki,
+                                                    dzien: dzisiaj(global.Hala, hala.teraz()),
+                                                    widziWszystkie: ((hala.pracownik && hala.pracownik.role) || []).some(r => ROLE_WIDZA_WSZYSTKO.includes(r)) }, opcje);
+
+  /* Wiersze ekranu dla aplikacji (menu po skanie QR maszyny — HalaDzialania.menuMaszyny). */
+  const wierszeDla = (hala, opcje) => wiersze(hala.obiekty('zlecenie'), kontekst(hala, Object.assign({}, opcje, { moje: null })));
 
   function doZrobienia(hala, opcje) {
     return wiersze(hala.obiekty('zlecenie'), kontekst(hala, opcje)).filter(w => w.doZrobienia).length;
@@ -133,7 +183,7 @@
     el.innerHTML = `<button type="button" class="hala-zalegle" aria-label="Zaległe zlecenia: ${lista.length}. Otwórz zlecenia">
       <span class="hala-zalegle-naglowek">⚠ ${lista.length > 1 ? 'Zaległe zlecenia' : 'Zaległe zlecenie'} — zrób najpierw</span>
       <span class="hala-zalegle-pozycja"><span class="hala-zlecenie-nr" aria-hidden="true">1</span><b>${esc(z.tytul)}</b></span>
-      <span class="hala-zalegle-opis">${esc(z.zalegleOpis)}${z.wymagajZdjecia ? ' · 📷' : ''}${z.wymagajNotatki ? ' · 📝' : ''}</span>
+      <span class="hala-zalegle-opis">${esc(z.zalegleOpis)}${z.wymagajZdjecia ? ' · 📷' : ''}${z.wymagajNotatki ? ' · 📝' : ''}${z.wymagajSkanu ? ' · QR' : ''}</span>
       ${lista.length > 1 ? `<span class="hala-zalegle-wiecej">+${lista.length - 1} więcej ›</span>` : '<span class="hala-zalegle-wiecej">Otwórz ›</span>'}
     </button>`;
     el.firstElementChild.onclick = () => { if (otworz) otworz(z); };
@@ -145,7 +195,7 @@
   // podłączenia: lider zmienia linię, a na wspólnym tablecie po liderze loguje się mistrz (inny dział) — ze starymi
   // opcjami „Zrobione” zamykało formularz od razu i przerysowywało listę poprzedniej linii albo działu.
   const stany = new WeakMap();
-  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined }); return stany.get(el); };
+  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined, info: null }); return stany.get(el); };
 
   /* Zdarzenie z treści TEGO ekranu zleceń. UR i KJ rysują wszystkie ekrany w jednym elemencie (#ekran), więc nasi
      słuchacze zostają na nim także pod Awariami czy Przeglądami — tam chip „Moje” (data-filtr) przestawiał filtr zleceń
@@ -154,6 +204,19 @@
     const k = ev.target && ev.target.closest ? ev.target.closest('.hala-zlecenia') : null;
     return !!k && (!el.contains || el.contains(k));
   };
+
+  /* D55: „Zaznacz wyraźniej statusy wykonywania zadań” — pasek kroków Zlecone → Przyjęte → Zrobione → Odebrane
+     (odebrane = kierownik przyjął wykonanie). „Nie mogę” i „po czasie” na czerwono. */
+  const KROKI = ['Zlecone', 'Przyjęte', 'Zrobione', 'Odebrane'];
+  function krokiStatusu(status) {
+    const nr = { nowe: 0, przepadlo: 0, przyjete: 1, wykonane: 2, odrzucone: 2, zamkniete: 3 }[status];
+    if (nr === undefined) return '';
+    return `<ol class="hala-kroki" aria-label="Postęp zlecenia">${KROKI.map((n, i) => {
+      const odmowa = i === 2 && status === 'odrzucone';
+      return `<li class="${i < nr ? 'zrobiony' : i === nr ? 'teraz' : ''}${odmowa || (i === 0 && status === 'przepadlo') ? ' odmowa' : ''}">${odmowa ? 'Nie mogę' : n}</li>`;
+    }).join('')}</ol>`;
+  }
+  const KLASA_STATUSU = { nowe: 'info', przyjete: 'uwaga', wykonane: 'ok', odrzucone: 'alarm', przepadlo: 'alarm', zamkniete: 'ok' };
 
   const miniatury = ids => ids.map(id => `<img class="hala-zlecenie-foto" data-plik="${esc(id)}" alt="Zdjęcie" loading="lazy">`).join('');
 
@@ -166,6 +229,9 @@
     const brak = brakuje(f.wymagania, f);
     const pole = (wymagane, nazwa) => `${nazwa} <span class="slaby">(${wymagane ? 'wymagane' : 'można pominąć'})</span>`;
     return `<div class="hala-zlecenie-formularz">
+      ${zrobione && f.wymagania.wymagajSkanu ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(true, 'Skan QR maszyny')}</span>
+        ${f.skan ? `<p class="hala-zlecenie-skan">✓ Zeskanowano: ${esc(f.wymagania.maszynaNazwa)} <button type="button" data-akcja="skanuj">Jeszcze raz</button></p>`
+          : `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="skanuj">▣ Zeskanuj QR: ${esc(f.wymagania.maszynaNazwa)}</button>`}</div>` : ''}
       ${zrobione ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(f.wymagania.wymagajZdjecia, 'Zdjęcie')}</span>
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}">
             <button type="button" data-akcja="usun-zdjecie" data-nr="${i}" aria-label="Usuń zdjęcie ${i + 1}">✕</button></span>`).join('')}
@@ -202,13 +268,15 @@
     if (s.formularz && !lista.some(z => z.id === s.formularz.id && z.doZrobienia)) { zwolnij(s.formularz); s.formularz = null; }
     const maszyny = (hala.slowniki && hala.slowniki.maszyny) || {};
     const wiersz = (z, nr) => `
-      <article class="hala-zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''} ${z.zalegle ? 'zalegle' : ''} ${z.wyslane ? 'wyslane' : ''}" data-id="${esc(z.id)}">
-        <div class="hala-zlecenie-gora">${nr ? `<span class="hala-zlecenie-nr" aria-label="Kolejność ${nr}">${nr}</span>` : ''}<b>${esc(z.tytul)}</b><span class="slaby">${z.stale ? '🔁 ' : ''}${esc(z.numer)}</span></div>
+      <article class="hala-zlecenie status-${esc(z.status)} ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''} ${z.zalegle ? 'zalegle' : ''} ${z.wyslane ? 'wyslane' : ''}" data-id="${esc(z.id)}">
+        <div class="hala-zlecenie-gora">${nr ? `<span class="hala-zlecenie-nr" aria-label="Kolejność ${nr}">${nr}</span>` : ''}<button type="button" class="hala-zlecenie-tytul" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button><span class="slaby">${z.stale ? '🔁 ' : ''}${esc(z.numer)}</span></div>
+        ${krokiStatusu(z.status)}
         <div class="hala-zlecenie-szczegoly">
-          <span class="znacznik ${z.doZrobienia ? 'info' : z.status === 'wykonane' ? 'ok' : 'uwaga'}">${esc(z.etykieta)}</span>
+          <span class="znacznik ${KLASA_STATUSU[z.status] || 'uwaga'}">${esc(z.poCzasie ? 'Po czasie' : z.etykieta)}</span>
           ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
           ${z.doZrobienia && z.wymagajZdjecia ? '<span class="znacznik" title="Bez zdjęcia nie wyślesz">📷 zdjęcie</span>' : ''}
           ${z.doZrobienia && z.wymagajNotatki ? '<span class="znacznik" title="Bez notatki nie wyślesz">📝 notatka</span>' : ''}
+          ${z.doZrobienia && z.wymagajSkanu ? '<span class="znacznik" title="Bez skanu kodu QR maszyny nie wyślesz">▣ skan QR</span>' : ''}
           ${z.maszyna ? `<span>${esc((maszyny[z.maszyna] || {}).nazwa || z.maszyna)} (${esc(z.maszyna)})</span>` : ''}
           ${z.dlaKogo ? `<span>dla: ${esc(z.dlaKogo)}</span>` : ''}
         </div>
@@ -219,8 +287,8 @@
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
         ${z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${/* UI etap 4: wyróżniony jest NASTĘPNY krok — przy nowym zleceniu „Biorę”, potem „Zrobione”. */
-            z.status === 'nowe' ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
-          <button type="button" ${z.status === 'nowe' ? '' : 'class="zielony" '}data-akcja="wykonane">Zrobione</button>
+            z.status === 'nowe' && !z.poCzasie ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
+          <button type="button" ${z.status === 'nowe' && !z.poCzasie ? '' : 'class="zielony" '}data-akcja="wykonane">Zrobione</button>
           <button type="button" data-akcja="nie-moge">Nie mogę</button>
         </div>`) : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
       </article>`;
@@ -229,8 +297,18 @@
     const pusto = s.moje ? 'Nie masz przypisanych zleceń' : 'Nie ma zleceń do zrobienia';
     // Kursor w polu tekstowym — przerysowanie nie może go zabrać (tekst i tak jest w stanie).
     const wPolu = document.activeElement && el.contains(document.activeElement) && document.activeElement.matches('[data-pole]');
+    const role = (hala.pracownik && hala.pracownik.role) || [];
+    const DZ = global.HalaDzialania;
+    // D55: skan QR maszyny (menu: wykonaj zadanie / zgłoś awarię / nieprawidłowość), zgłoszenie do kierownika, narzędzia (mistrz).
+    const narzedziaGory = DZ && !opcje.bezDzialan ? `<div class="hala-zlecenia-dzialania">
+        ${global.HalaSkaner ? '<button type="button" data-gora="skanuj">▣ Skanuj maszynę</button>' : ''}
+        <button type="button" data-gora="zglos">📝 Zgłoś nieprawidłowość</button>
+        ${role.includes('mistrz') ? '<button type="button" data-gora="narzedzia">🧰 Odłóż narzędzia</button>' : ''}
+      </div>${s.info ? `<p class="hala-zlecenia-info" role="status">${esc(s.info)}</p>` : ''}` : '';
+    const moje = mojeZgloszenia(hala, ja, opcje.opcjeZgloszen);
     el.innerHTML = `<div class="hala-zlecenia">
-      <div class="hala-zlecenia-naglowek"><h2>Zlecenia od kierownika</h2>
+      ${narzedziaGory}
+      <div class="hala-zlecenia-naglowek"><h2>${esc(opcje.naglowek || 'Zlecenia od kierownika')}</h2>
         <div class="hala-zlecenia-filtr" role="group" aria-label="Które zlecenia">
           <button type="button" data-filtr="wszystkie" aria-pressed="${!s.moje}">Wszystkie</button>
           <button type="button" data-filtr="moje" aria-pressed="${s.moje}">Moje</button></div></div>
@@ -238,6 +316,9 @@
         ${zal.map((z, i) => wiersz(z, i + 1)).join('')}${doZ.length ? '<h3>Pozostałe do zrobienia</h3>' : ''}` : ''}
       ${doZ.map(z => wiersz(z)).join('') || (zal.length ? '' : `<p class="hala-zlecenia-pusto">${pusto}</p>`)}
       ${wys.length ? `<h3>Czeka na kierownika</h3>${wys.map(z => wiersz(z)).join('')}` : ''}
+      ${moje.length ? `<h3>Moje zgłoszenia i narzędzia</h3>${moje.map(g => `<div class="hala-zgloszenie ${esc(g.klasa)}" data-typ="${esc(g.typ)}" data-id="${esc(g.id)}">
+          <button type="button" class="hala-zlecenie-tytul" data-historia>${esc(g.tytul)}</button>
+          <span class="znacznik ${esc(g.klasa)}">${esc(g.status)}</span>${g.odpowiedz ? `<p class="hala-zlecenie-opis">${esc(g.odpowiedz)}</p>` : ''}</div>`).join('')}` : ''}
     </div>`;
     for (const img of el.querySelectorAll('img[data-plik]')) hala.adresPliku(img.dataset.plik).then(u => { img.src = u; }).catch(() => {});
     if (wPolu) { const p = el.querySelector('[data-pole]'); if (p) { p.focus(); p.setSelectionRange(p.value.length, p.value.length); } }
@@ -263,20 +344,41 @@
     const b = ev.target.closest('button');
     if (!b) return;
     if (b.dataset.filtr) { s.moje = b.dataset.filtr === 'moje'; return rysuj(el, hala, s.opcje || opcje); }
+    const DZ = global.HalaDzialania;
+    const o = s.opcje || opcje;
+    const info = t => { s.info = t; rysuj(el, hala, o); if (o.komunikat) o.komunikat(t); };
+    if (b.dataset.gora && DZ) {
+      if (b.dataset.gora === 'zglos') DZ.zglos(hala, { gotowe: info });
+      if (b.dataset.gora === 'narzedzia') DZ.odlozNarzedzia(hala, { gotowe: info });
+      if (b.dataset.gora === 'skanuj') {
+        DZ.skanujMaszyne(hala, { zlecenia: () => o, gotowe: info, komunikat: info, awaria: o.zglosAwarie,
+                                 wykonaj: (zid, maszyna) => otworzFormularz(el, hala, o, zid, 'wykonane', maszyna) });
+      }
+      return;
+    }
+    if (b.dataset && 'historia' in b.dataset && DZ) {
+      const g = b.closest('[data-typ]');
+      return DZ.historia(hala, g.dataset.typ, g.dataset.id);
+    }
     const art = b.closest('[data-id]');
     if (!art || !b.dataset.akcja) return;
     const id = art.dataset.id;
     try {
+      if (b.dataset.akcja === 'historia' && DZ) return DZ.historia(hala, 'zlecenie', id);
       if (b.dataset.akcja === 'przyjmij') await hala.zapisz('zlecenie.przyjete', id, {});
       if (b.dataset.akcja === 'wykonane' || b.dataset.akcja === 'nie-moge') {
-        const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, s.opcje || opcje, { moje: null, zostaw: id })))[0] || {};
-        zwolnij(s.formularz);
-        s.formularz = { id, rodzaj: b.dataset.akcja === 'wykonane' ? 'wykonane' : 'odrzucone', tekst: '', pliki: [], blad: null,
-                        wymagania: { wymagajZdjecia: !!z.wymagajZdjecia, wymagajNotatki: !!z.wymagajNotatki } };
-        rysuj(el, hala, s.opcje || opcje);
-        // Z wymaganym zdjęciem zaczyna się od aparatu, a nie od klawiatury zasłaniającej pół ekranu.
-        if (!s.formularz.wymagania.wymagajZdjecia) { const p = el.querySelector('[data-pole]'); if (p) p.focus(); }
-        return;
+        return otworzFormularz(el, hala, o, id, b.dataset.akcja === 'wykonane' ? 'wykonane' : 'odrzucone', null);
+      }
+      if (b.dataset.akcja === 'skanuj' && s.formularz) {
+        const f = s.formularz;
+        if (!global.HalaSkaner || !global.Hala) { f.blad = 'Brak skanera. Odśwież aplikację.'; return rysuj(el, hala, s.opcje || opcje); }
+        const tekst = await global.HalaSkaner.skanuj({ tytul: `Zeskanuj QR maszyny: ${f.wymagania.maszynaNazwa}`,
+                                                       podpowiedz: 'Naklejka z kodem na maszynie' });
+        if (s.formularz !== f || tekst === null || tekst === undefined) return;     // anulowano albo formularz już zamknięty
+        const w = skanMaszyny(tekst, f.wymagania.maszyna, hala.slowniki, global.Hala.odczytajKod);
+        f.skan = w.kod || null;
+        f.blad = w.blad || null;
+        return rysuj(el, hala, s.opcje || opcje);
       }
       if (b.dataset.akcja === 'usun-zdjecie' && s.formularz) {
         const [p] = s.formularz.pliki.splice(+b.dataset.nr, 1);
@@ -301,6 +403,7 @@
           const zdjecia = [];
           for (const p of f.pliki) zdjecia.push(await hala.dodajPlik(p.plik));
           if (zdjecia.length) dane.zdjecia = zdjecia;
+          if (f.skan) dane.skan = f.skan;
           await hala.zapisz('zlecenie.wykonane', id, dane);
         }
         zwolnij(f);
@@ -313,11 +416,53 @@
     }
   }
 
+  /* Formularz „Zrobione” / „Nie mogę” w karcie zlecenia. skan — kod maszyny już zeskanowany (menu po skanie QR,
+     D55): wymóg skanu jest wtedy spełniony od razu, o ile to maszyna zlecenia. */
+  function otworzFormularz(el, hala, opcje, id, rodzaj, skan) {
+    const s = stan(el);
+    const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, opcje, { moje: null, zostaw: id })))[0] || {};
+    zwolnij(s.formularz);
+    s.formularz = { id, rodzaj, tekst: '', pliki: [], blad: null, skan: skan && skan === z.maszyna ? skan : null,
+                    wymagania: { wymagajZdjecia: !!z.wymagajZdjecia, wymagajNotatki: !!z.wymagajNotatki,
+                                 wymagajSkanu: !!z.wymagajSkanu, maszyna: z.maszyna,
+                                 maszynaNazwa: ((((hala.slowniki || {}).maszyny || {})[z.maszyna] || {}).nazwa || z.maszyna || '') } };
+    rysuj(el, hala, opcje);
+    const art = el.querySelector(`[data-id="${CSS && CSS.escape ? CSS.escape(id) : id}"]`);
+    if (art && art.scrollIntoView) art.scrollIntoView({ block: 'center' });
+    // Z wymaganym zdjęciem albo skanem zaczyna się od aparatu, a nie od klawiatury zasłaniającej pół ekranu.
+    if (!s.formularz.wymagania.wymagajZdjecia && !(s.formularz.wymagania.wymagajSkanu && !s.formularz.skan)) { const p = el.querySelector('[data-pole]'); if (p) p.focus(); }
+  }
+
+  /* D55: moje zgłoszenia nieprawidłowości i odłożone narzędzia z ostatnich 7 dni — z odpowiedzią kierownika. */
+  function mojeZgloszenia(hala, ja, opcjeZgloszen) {
+    if (!ja) return [];
+    const teraz = hala.teraz(), od = teraz - 7 * DOBA_MS;
+    const obiekty = typ => { try { return hala.obiekty(typ) || []; } catch (e) { return []; } };
+    const wynik = [];
+    for (const g of obiekty('zgloszenie')) {
+      const d = g.dane || {};
+      if (d.zglosil !== ja || Date.parse(d.czas_zgloszenia) < od) continue;
+      wynik.push({ typ: 'zgloszenie', id: g.id, tytul: d.tytul || '', czas: d.czas_zgloszenia, status: g.etykieta || g.status,
+                   klasa: g.status === 'przyjete' ? 'ok' : g.status === 'odrzucone' ? 'alarm' : 'info',
+                   odpowiedz: g.status === 'odrzucone' ? `Kierownik: ${d.powod_odrzucenia || ''}` : d.uwagi_przyjecia ? `Kierownik: ${d.uwagi_przyjecia}` : '' });
+    }
+    for (const n of obiekty('narzedzia')) {
+      const d = n.dane || {};
+      if (d.odlozyl !== ja || Date.parse(d.czas_odlozenia) < od) continue;
+      wynik.push({ typ: 'narzedzia', id: n.id, tytul: `🧰 ${d.co || ''}`, czas: d.czas_odlozenia, status: n.etykieta || n.status,
+                   klasa: n.status === 'odebrane' ? 'ok' : 'info', odpowiedz: '' });
+    }
+    return wynik.sort((a, b) => String(b.czas).localeCompare(String(a.czas))).slice(0, 8);
+  }
+
   /* Nowe zlecenie dla mnie (mój dział, moja linia) — raz na zlecenie, nie po starcie ani po zalogowaniu
      (to, co już było, człowiek zobaczy na liście). opcje() — funkcja, bo linia lidera może się zmienić.
      Zlecenie ZWRÓCONE przez kierownika (zlecenie.zwrocone → znowu „nowe”, nowy czas_zwrotu) też woła fn — drugi argument
      { zwrot: true, uwagi }; wcześniej znane id milczało i dział nie wiedział, że robota wróciła (hub nie wysyła za nie pusha). */
-  function sledz(hala, opcje, fn) {
+  function sledz(hala, opcje, fn, dzwieki) {
+    // D55: dwa dźwięki (awaria i pilne zadanie) w każdej aplikacji działu. UR gra awarie sam (pasek dźwięku, paczki
+    // powiadomień) — przekazuje { awarie: false }.
+    if (global.HalaDzwieki) global.HalaDzwieki.sledz(hala, Object.assign({ awarie: true, zlecenia: opcje }, dzwieki));
     const znane = new Map();                           // id → czas_zwrotu, który już widzieliśmy (null — bez zwrotu)
     const zwrot = z => ((z && z.dane) || {}).czas_zwrotu || null;
     // Zaplanowanego (D47) nie zapamiętujemy jako znanego: gdy hub je zleci, dział ma dostać „Nowe zlecenie” jak przy każdym nowym.
@@ -332,7 +477,7 @@
       znane.set(id, cz);
       const o = opcje(), d = obiekt.dane || {};
       if (obiekt.status === 'nowe' && !obiekt._oczekuje && !przepadlo(obiekt, hala.teraz()) && d.dzial === o.dzial
-          && naLinii(d, o)) fn(obiekt, znany ? { zwrot: true, uwagi: d.uwagi_zwrotu || '' } : { zwrot: false });
+          && naLinii(d, o) && widoczneDla(d, kontekst(hala, {}))) fn(obiekt, znany ? { zwrot: true, uwagi: d.uwagi_zwrotu || '' } : { zwrot: false });
     });
     zapamietaj();
   }
@@ -345,7 +490,8 @@
     return `Zlecenie wróciło od kierownika: ${tytul}` + (o.uwagi ? ` — ${o.uwagi}` : '');
   }
 
-  const HalaZlecenia = { wiersze, przepadlo, brakuje, tekstBraku, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia };
+  const HalaZlecenia = { wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
+                         brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

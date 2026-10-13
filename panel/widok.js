@@ -325,6 +325,11 @@
         notatka: d.uwagi_wykonania || null,
         uwagiZwrotu: d.uwagi_zwrotu || null,
         wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true,
+        wymagajSkanu: d.wymagaj_skanu === true, zeskanowano: !!d.skan_maszyny,
+        // D55: filtry (dział, osoba) i „tylko spóźnione”; zmiana, na którą zlecono.
+        osoby: [d.wykonawca, d.przyjal, d.wykonal, d.odrzucil].filter(Boolean), spoznione: po || spoznioneWykonanie || przepadlo,
+        naZmiane: d.zmiana ? (zmianySl(slowniki)[d.zmiana] || {}).nazwa || `Zmiana ${d.zmiana}` : null,
+        podsumowanie: String(d.wystapienie || '').startsWith('podsumowanie|'),
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [].concat(d.zdjecia_wykonania || []),
@@ -369,7 +374,7 @@
     const d = w || {};
     const inneNizDomyslne = k => d[k] !== undefined && d[k] !== true;
     return !!(d.stale || String(d.opis || '').trim() || d.linia || d.maszyna || d.pilne
-              || inneNizDomyslne('wymagaj_zdjecia') || inneNizDomyslne('wymagaj_notatki'));
+              || inneNizDomyslne('wymagaj_zdjecia') || inneNizDomyslne('wymagaj_notatki') || d.wymagaj_skanu === true);
   }
 
   // ------------------------------------------------------------ zlecenia zaplanowane (D47)
@@ -508,7 +513,7 @@
      „codziennie, każda zmiana, do końca zmiany”, „1. dnia miesiąca, do końca zmiany”. */
   function harmonogramPoLudzku(s, slowniki) {
     const h = (s && s.harmonogram) || {}, t = (s && s.termin) || {};
-    if (h.rodzaj === 'reczny') return 'ręcznie („Zleć teraz”)';
+    if (h.rodzaj === 'reczny') return 'zlecasz sam („Zleć teraz”)';
     const kiedy = h.rodzaj === 'codziennie' ? 'codziennie' : h.rodzaj === 'dni_tygodnia' ? dniPoLudzku(h.dni)
       : h.rodzaj === 'miesiecznie' ? `${h.dzien_miesiaca}. dnia miesiąca` : '—';
     const wszystkie = Object.keys(zmianySl(slowniki));
@@ -516,7 +521,8 @@
     const zmiany = !zm.length ? null : wszystkie.every(z => zm.includes(z)) ? 'każda zmiana'
       : `${zm.length === 1 ? 'zmiana' : 'zmiany'} ${wszystkie.filter(z => zm.includes(z)).join(', ')}`;
     const termin = t.rodzaj === 'godzina' ? `do ${t.godzina}` : t.rodzaj === 'minuty' ? `w ciągu ${H().formatCzasu((+t.minuty || 0) * MIN)}` : 'do końca zmiany';
-    return [kiedy, zmiany, termin].filter(Boolean).join(', ');
+    const powtorz = h.co_min > 0 ? `co ${H().formatCzasu(h.co_min * MIN)} w ciągu zmiany` : null;
+    return [kiedy, zmiany, powtorz, termin].filter(Boolean).join(', ');
   }
 
   /* „dziś”, „jutro” albo „pn 05.10” — dzień zakładu względem teraz. */
@@ -629,7 +635,7 @@
     if (zleca) return null;
     const tytuly = lista.slice(0, 3).map(s => `„${s.tytul}”`).join(', ') + (lista.length > 3 ? ` i ${lista.length - 3} więcej` : '');
     return `${osoba.nazwa} zleca zlecenia stałe (${lista.length}): ${tytuly}. Po zapisie przestaną się zlecać — kierownik musi `
-      + 'otworzyć każde w Zlecenia → Zlecenia stałe i kliknąć „Zmień” (zostanie autorem).';
+      + 'otworzyć każde w Zlecenia → Zapisane i stałe i kliknąć „Zmień” (zostanie autorem).';
   }
 
   /* Lista „Zlecenia stałe”: aktywne na górze, potem po tytule. */
@@ -646,13 +652,15 @@
         maszyna: s.maszyna ? ((maszyny[s.maszyna] || {}).nazwa || s.maszyna) : null,
         osoba: nazwaPracownika(pracownicy, s.wykonawca),
         harmonogram: harmonogramPoLudzku(s, slowniki),
-        wymagajZdjecia: s.wymagaj_zdjecia === true, wymagajNotatki: s.wymagaj_notatki === true,
+        wymagajZdjecia: s.wymagaj_zdjecia === true, wymagajNotatki: s.wymagaj_notatki === true, wymagajSkanu: s.wymagaj_skanu === true,
         pilne: s.priorytet === 'pilne', aktywny: s.aktywny !== false, reczny: ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny',
         nastepne: nast ? nast.opis : null,
         autor: nazwaPracownika(pracownicy, s.autor),
         nieZleca: s.aktywny !== false ? autorNieZleca(s, pracownicy, roleZlecajacych || null) : null,
+        checklista: s.checklista || null, pozycja: s.pozycja || null,
       };
-    }).sort((a, b) => (b.aktywny - a.aktywny) || a.tytul.localeCompare(b.tytul, 'pl'));
+    }).sort((a, b) => (b.aktywny - a.aktywny) || String(a.checklista || a.tytul).localeCompare(String(b.checklista || b.tytul), 'pl')
+      || ((a.pozycja || 0) - (b.pozycja || 0)) || a.tytul.localeCompare(b.tytul, 'pl'));
   }
 
   /* Formularz okna „Zlecenie stałe” → { bledy, kod, wartosc } dla slownik.zapisany zlecenia_stale/<kod>.
@@ -668,6 +676,12 @@
     const harmonogram = { rodzaj };
     if (rodzaj !== 'reczny') {
       harmonogram.zmiany = [].concat(f.zmiany || []).filter(z => zmianySl(slowniki)[z]);
+      // Kilka razy w ciągu zmiany (2026-10-13): co ile minut od startu zmiany, do jej końca. Puste = raz.
+      const co = parseInt(f.co_min, 10);
+      if (co) {
+        if (!(co >= 15 && co <= 720)) bledy.push('Powtarzanie w ciągu zmiany: co 15 minut do 12 godzin.');
+        harmonogram.co_min = co;
+      }
       if (rodzaj === 'dni_tygodnia') {
         harmonogram.dni = [...new Set([].concat(f.dni || []).map(Number))].filter(x => x >= 1 && x <= 7).sort((a, b) => a - b);
         if (!harmonogram.dni.length) bledy.push('Zaznacz co najmniej jeden dzień tygodnia.');
@@ -693,6 +707,8 @@
     const wartosc = { tytul, dzial: f.dzial, priorytet: f.pilne ? 'pilne' : 'normalny',
                       wymagaj_zdjecia: !!f.wymagaj_zdjecia, wymagaj_notatki: !!f.wymagaj_notatki,
                       harmonogram, termin, aktywny: f.aktywny !== false, autor };
+    // Skan QR ma sens tylko z maszyną (naklejka HALA:M:… na niej) — bez maszyny pole po cichu odpada.
+    if (f.wymagaj_skanu && String(f.maszyna || '').trim()) wartosc.wymagaj_skanu = true;
     for (const pole of ['opis', 'linia', 'maszyna', 'wykonawca']) { const v = String(f[pole] || '').trim(); if (v) wartosc[pole] = v; }
     const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => k !== istniejacyKod);
     const kod = istniejacyKod || kodZNazwy(tytul || 'zlecenie', zajete);
@@ -704,19 +720,23 @@
     const h = (s && s.harmonogram) || {}, t = (s && s.termin) || {};
     return { tytul: s.tytul || '', opis: s.opis || '', dzial: s.dzial || 'produkcja', linia: s.linia || '', maszyna: s.maszyna || '',
              wykonawca: s.wykonawca || '', pilne: s.priorytet === 'pilne',
-             wymagaj_zdjecia: s.wymagaj_zdjecia !== false, wymagaj_notatki: s.wymagaj_notatki !== false,
+             wymagaj_zdjecia: s.wymagaj_zdjecia !== false, wymagaj_notatki: s.wymagaj_notatki !== false, wymagaj_skanu: s.wymagaj_skanu === true,
              rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], dzien_miesiaca: h.dzien_miesiaca || 1, zmiany: h.zmiany || [],
+             co_min: h.co_min || '',
              termin_rodzaj: t.rodzaj || 'koniec_zmiany', godzina: t.godzina || '', minuty: t.minuty || 60, aktywny: s.aktywny !== false };
   }
 
-  /* „Zapisz jako zlecenie stałe” przy zwykłym zleceniu (jak „Zapisz jako szablon” w GK Trasy): te same pola,
-     codziennie raz na zmianę I, a termin — godzina z terminu zlecenia (gdy był), inaczej koniec zmiany. */
+  /* „💾 Zapisz” przy zwykłym zleceniu (jak „Zapisz jako szablon” w GK Trasy): te same pola, domyślnie POJEDYNCZE
+     (właściciel 2026-10-13: zapis nie tylko stałych) — zleca się je potem „Zleć teraz” ile razy trzeba, także kilka
+     razy na jednej zmianie; harmonogram kierownik może wybrać w tym samym oknie. Termin — godzina z terminu zlecenia
+     (gdy był), inaczej koniec zmiany. */
   function stalyZZlecenia(z) {
     const d = (z && z.dane) || {};
     const t = Date.parse(d.termin);
     return stalyDoFormularza({ tytul: d.tytul, opis: d.opis, dzial: d.dzial, linia: d.linia, maszyna: d.maszyna, wykonawca: d.wykonawca,
                                priorytet: d.priorytet, wymagaj_zdjecia: d.wymagaj_zdjecia !== false, wymagaj_notatki: d.wymagaj_notatki !== false,
-                               harmonogram: { rodzaj: 'codziennie', zmiany: [] },
+                               wymagaj_skanu: d.wymagaj_skanu === true,
+                               harmonogram: { rodzaj: 'reczny' },
                                termin: isNaN(t) ? { rodzaj: 'koniec_zmiany' } : { rodzaj: 'godzina', godzina: godzina(t) } });
   }
 
@@ -743,7 +763,7 @@
     // „Każda linia osobno” robi hub; ręczne „Zleć teraz” to jedno zlecenie — dla wszystkich liderów (P8).
     return { tytul: s.tytul || '', opis: s.opis || '', dzial: s.dzial, linia: s.linia === LINIA_KAZDA ? '' : s.linia || '', maszyna: s.maszyna || '',
              wykonawca: s.wykonawca || '', pilne: s.priorytet === 'pilne', wymagaj_zdjecia: s.wymagaj_zdjecia === true,
-             wymagaj_notatki: s.wymagaj_notatki === true, stale: kod, termin: terminMs };
+             wymagaj_notatki: s.wymagaj_notatki === true, wymagaj_skanu: s.wymagaj_skanu === true && !!s.maszyna, stale: kod, termin: terminMs };
   }
 
   /* Czas zakładu dla pola datetime-local („2026-10-01T14:00”). */
@@ -1521,9 +1541,10 @@
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
      admin — wszystko; zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; szablony (kontrakt: zapis
      szablony_checklist) — Checklisty. */
-  function czesciAdministracji({ admin, zespol, szablony } = {}) {
+  function czesciAdministracji({ admin, zespol, szablony, urlopy } = {}) {
     const c = [];
     if (admin || zespol) c.push('pracownicy');
+    if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
     if (admin) c.push('maszyny', 'ustawienia');
     if (admin || szablony) c.push('checklisty');
     if (admin) c.push('serwis');
@@ -1542,7 +1563,163 @@
     return `▼ Przewiń — jeszcze ${n} ${forma}`;
   }
 
-  const PanelWidok = { napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
+
+  // ================================================================ D55 (właściciel 2026-10-13)
+
+  /* Filtry list zleceń („Dodaj filtry do wykonanych zleceń”): dział, osoba (zlecona, przyjęła, zrobiła albo odmówiła)
+     i „tylko spóźnione” (po terminie, wykonane po terminie, przepadłe). Puste pole = bez filtra. */
+  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione } = {}) {
+    return (wiersze || []).filter(z => (!dzial || z.dzial === dzial) && (!osoba || (z.osoby || []).includes(osoba))
+      && (!spoznione || z.spoznione));
+  }
+
+  /* Zlecenie NA ZMIANĘ (nr ze słownika zmian): start tej zmiany — dziś, a gdy już się skończyła, jutro; trwająca zmiana =
+     teraz (biezaca). { start, koniec, biezaca, opis } w ms; null — nie ma takiej zmiany. */
+  function naZmiane(nr, slowniki, teraz) {
+    const z = zmianySl(slowniki)[nr];
+    if (!z) return null;
+    const hm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? [+m[1], +m[2]] : null; };
+    const od = hm(z.od), do_ = hm(z.do);
+    if (!od || !do_) return null;
+    const l = H().lokalny(teraz);
+    for (const dzien of [-1, 0, 1]) {
+      const start = H().zLokalnego(l.rok, l.miesiac, l.dzien + dzien, od[0], od[1]);
+      let koniec = H().zLokalnego(l.rok, l.miesiac, l.dzien + dzien, do_[0], do_[1]);
+      if (koniec <= start) koniec = H().zLokalnego(l.rok, l.miesiac, l.dzien + dzien + 1, do_[0], do_[1]);
+      if (koniec <= teraz) continue;
+      const biezaca = start <= teraz;
+      return { start, koniec, biezaca, nazwa: z.nazwa || `Zmiana ${nr}`,
+               opis: biezaca ? `${z.nazwa || nr} — trwa, do ${godzina(koniec)}` : `${z.nazwa || nr} — ${dzienPoLudzku(start, teraz)} ${godzina(start)}–${godzina(koniec)}` };
+    }
+    return null;
+  }
+
+  /* Dni urlopu osoby w okresie [od, do) (ms) — do statystyk („żeby nie psuć mu statystyk”). */
+  function dzienZakladu(ms) {
+    const l = H().lokalny(ms), d = n => String(n).padStart(2, '0');
+    return `${l.rok}-${d(l.miesiac)}-${d(l.dzien)}`;
+  }
+
+  /* Statystyki na osobę w okresie: zlecenia, w których osoba była wykonawcą albo je przyjęła/zrobiła. Zlecenia z terminem
+     w dniu urlopu tej osoby się nie liczą. dzial/osoba — filtr. Wiersze: {id, nazwa, dzialy, razem, zrobione, wTerminie,
+     spoznione, przepadle, nieMoze, otwarte, proc (w terminie / zrobione z terminem), urlopDni}. */
+  function statystykiOsob({ zlecenia: lista, pracownicy, slowniki, stale, od, do: doMs, dzial, osoba }) {
+    const nazwyDzialow = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
+    const mapa = new Map();
+    const wpis = id => {
+      if (!mapa.has(id)) {
+        const p = (pracownicy || []).find(x => x.id === id);
+        mapa.set(id, { id, nazwa: p ? p.nazwa : id, dzialy: new Set(), razem: 0, zrobione: 0, wTerminie: 0, spoznione: 0, przepadle: 0,
+                       nieMoze: 0, otwarte: 0, zTerminem: 0, urlopDni: 0 });
+      }
+      return mapa.get(id);
+    };
+    for (const z of lista || []) {
+      const d = z.dane || {};
+      if (!z || z.status === 'zaplanowane' || z.status === 'anulowane') continue;
+      if (dzial && d.dzial !== dzial) continue;
+      const kiedy = Date.parse(d.czas_zlecenia || z.utworzono);
+      if (isNaN(kiedy) || kiedy < od || kiedy >= doMs) continue;
+      const kto = d.wykonal || d.odrzucil || d.przyjal || d.wykonawca;
+      if (!kto || (osoba && kto !== osoba)) continue;
+      const termin = Date.parse(d.termin);
+      if (!isNaN(termin) && H().naUrlopie && H().naUrlopie(slowniki, kto, dzienZakladu(termin))) continue;
+      const w = wpis(kto);
+      w.razem++;
+      if (d.dzial) w.dzialy.add(nazwyDzialow.get(d.dzial) || d.dzial);
+      const wykonano = Date.parse(d.czas_wykonania);
+      if (z.status === 'wykonane' || z.status === 'zamkniete' && !isNaN(wykonano)) {
+        w.zrobione++;
+        if (!isNaN(termin)) { w.zTerminem++; if (wykonano <= termin) w.wTerminie++; else w.spoznione++; }
+      } else if (z.status === 'przepadlo') w.przepadle++;
+      else if (z.status === 'odrzucone' || (z.status === 'zamkniete' && d.powod_odrzucenia)) w.nieMoze++;
+      else w.otwarte++;
+    }
+    // Dni urlopu w okresie (tylko informacja przy osobie).
+    for (const u of Object.values((slowniki && slowniki.urlopy) || {})) {
+      if (!u || !u.osoba || (osoba && u.osoba !== osoba)) continue;
+      const a = Math.max(od, Date.parse(`${u.od}T12:00:00Z`)), b = Math.min(doMs, Date.parse(`${u.do}T12:00:00Z`) + 86400000);
+      if (!(b > a)) continue;
+      if (mapa.has(u.osoba)) mapa.get(u.osoba).urlopDni += Math.max(1, Math.round((b - a) / 86400000));
+    }
+    return [...mapa.values()].map(w => Object.assign(w, { dzialy: [...w.dzialy].join(', '),
+      proc: w.zTerminem ? Math.round(1000 * w.wTerminie / w.zTerminem) / 10 : null }))
+      .sort((a, b) => b.razem - a.razem || a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+
+  /* Urlopy: lista (najbliższe/trwające na górze, minione na dole) i formularz → {bledy, kod, wartosc}. */
+  function urlopyLista(slowniki, pracownicy, teraz) {
+    const dzis = dzienZakladu(teraz);
+    return Object.entries((slowniki && slowniki.urlopy) || {}).filter(([, u]) => u && u.osoba).map(([kod, u]) => {
+      const p = (pracownicy || []).find(x => x.id === u.osoba);
+      const stan = u.do < dzis ? 'minal' : u.od <= dzis ? 'trwa' : 'przyszly';
+      return { kod, osoba: u.osoba, nazwa: p ? p.nazwa : u.osoba, od: u.od, do: u.do, uwagi: u.uwagi || '', stan,
+               opis: stan === 'trwa' ? 'Trwa' : stan === 'minal' ? 'Minął' : 'Zaplanowany' };
+    }).sort((a, b) => ((a.stan === 'minal') - (b.stan === 'minal')) || a.od.localeCompare(b.od) || a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+  function urlopZFormularza(f, slowniki) {
+    const bledy = [];
+    const data = t => /^\d{4}-\d{2}-\d{2}$/.test(String(t || ''));
+    if (!f.osoba) bledy.push('Wybierz osobę.');
+    if (!data(f.od) || !data(f.do)) bledy.push('Podaj daty od i do.');
+    else if (f.do < f.od) bledy.push('Data „do” jest przed „od”.');
+    const wartosc = { osoba: f.osoba, od: f.od, do: f.do };
+    if (String(f.uwagi || '').trim()) wartosc.uwagi = String(f.uwagi).trim().slice(0, 500);
+    const zajete = new Set(Object.keys((slowniki && slowniki.urlopy) || {}));
+    let kod = `${f.osoba}-${f.od}`, n = 2;
+    while (zajete.has(kod)) kod = `${f.osoba}-${f.od}-${n++}`;
+    return { bledy, kod, wartosc };
+  }
+
+  /* Zgłoszenia nieprawidłowości dla kierownika zakładu: czekające na górze (najstarsze pierwsze), potem rozpatrzone. */
+  function zgloszeniaLista({ zgloszenia, slowniki, pracownicy, stale }) {
+    const dzialy = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
+    const maszyny = (slowniki && slowniki.maszyny) || {};
+    return (zgloszenia || []).filter(Boolean).map(g => {
+      const d = g.dane || {};
+      return { id: g.id, numer: g.numer || '—', status: g.status, etykieta: g.etykieta || g.status, nowe: g.status === 'nowe',
+               tytul: d.tytul || '', opis: d.opis || '', dzial: d.dzial || '', dzialNazwa: dzialy.get(d.dzial) || '',
+               maszyna: d.maszyna || '', maszynaNazwa: d.maszyna ? ((maszyny[d.maszyna] || {}).nazwa || d.maszyna) : '',
+               kto: nazwaPracownika(pracownicy, d.zglosil), kiedy: d.czas_zgloszenia, kiedyOpis: `${dataKrotka(d.czas_zgloszenia)} ${godzina(d.czas_zgloszenia)}`,
+               zdjecia: [].concat(d.zdjecia || []), odpowiedz: d.powod_odrzucenia ? `Odrzucone: ${d.powod_odrzucenia}` : d.uwagi_przyjecia || '',
+               zlecenie: d.zlecenie || null, stale: d.stale || null };
+    }).sort((a, b) => (b.nowe - a.nowe) || (a.nowe ? String(a.kiedy).localeCompare(String(b.kiedy)) : String(b.kiedy).localeCompare(String(a.kiedy))));
+  }
+  /* Zgłoszenie → pola okna „Nowe zlecenie” (kierownik robi z niego zlecenie). Dział domyślnie ten, który zgłosił. */
+  function zlecenieZeZgloszenia(g) {
+    const d = (g && g.dane) || {};
+    return { tytul: d.tytul || '', opis: [d.opis, `(ze zgłoszenia ${g.numer || ''})`].filter(Boolean).join('\n'), dzial: d.dzial && d.dzial !== 'kierownik' ? d.dzial : 'ur',
+             linia: d.linia || '', maszyna: d.maszyna || '', wymagaj_zdjecia: true, wymagaj_notatki: true };
+  }
+
+  /* Checklista zadań (D55, „edycja jak zapisane”): nazwa + wspólne ustawienia jak przy zapisanych (dział, osoba, linia,
+     harmonogram, zmiany) + pozycje — każda to osobne zapisane zlecenie z własnymi wymaganiami i terminem (minuty od startu
+     zmiany). → { bledy, wpisy: [{kod, wartosc}] } do slownik.zapisany zlecenia_stale. */
+  function checklistaZFormularza(f, slowniki, autor) {
+    const bledy = [];
+    const nazwa = String(f.nazwa || '').trim().replace(/\s+/g, ' ');
+    if (!nazwa) bledy.push('Nazwij checklistę.');
+    const pozycje = (f.pozycje || []).filter(p => String(p.tytul || '').trim());
+    if (!pozycje.length) bledy.push('Dodaj co najmniej jedną pozycję.');
+    const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => !(f.istniejace || []).includes(k));
+    const wpisy = [];
+    pozycje.forEach((p, i) => {
+      const min = parseInt(p.minuty, 10);
+      const w = stalyZFormularza(Object.assign({}, f, {
+        tytul: `${nazwa}: ${String(p.tytul).trim()}`, opis: p.opis || f.opis || '', maszyna: p.maszyna || '',
+        wymagaj_zdjecia: !!p.zdjecie, wymagaj_notatki: !!p.notatka, wymagaj_skanu: !!p.skan,
+        termin_rodzaj: min >= 1 ? 'minuty' : 'koniec_zmiany', minuty: min >= 1 ? min : '',
+      }), slowniki, (f.istniejace || [])[i] || null, autor);
+      for (const b of w.bledy) if (!bledy.includes(b)) bledy.push(`Pozycja ${i + 1}: ${b}`);
+      let kod = w.kod;
+      if (!(f.istniejace || [])[i]) { kod = kodZNazwy(`${nazwa} ${i + 1}`, zajete); zajete.push(kod); }
+      wpisy.push({ kod, wartosc: Object.assign(w.wartosc, { checklista: nazwa, pozycja: i + 1 }) });
+    });
+    return { bledy, wpisy };
+  }
+
+  const PanelWidok = { nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia,
+                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,

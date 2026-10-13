@@ -445,3 +445,30 @@ dialog.okno .lista-odrzuconych .blad { margin: 2px 0 6px; }
 .lista-bez-raportu .kiedy { min-width: 9em; color: var(--tekst-slaby); }
 .blad-pola { display: block; color: var(--czerwony); font-size: .9em; margin-top: 2px; }
 .ostrzezenie-stalego { color: var(--czerwony); font-weight: 600; }
+
+/* D55 (2026-10-13): tytuł zlecenia/zgłoszenia = przycisk historii; filtry list; statystyki osób; urlopy. */
+button.tytul-historii { all: unset; cursor: pointer; font-weight: 700; color: var(--tekst); text-decoration: underline dotted; text-underline-offset: 3px; overflow-wrap: anywhere; }
+button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-offset: 2px; border-radius: 4px; }
+.zlecenie .hala-kroki { max-width: 520px; }
+.filtry-zlecen { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; margin: 8px 0 12px; }
+.filtry-zlecen label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.filtry-zlecen label.zaznacz { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 400; color: var(--tekst); min-height: 52px; }
+.filtry-zlecen select { min-width: 150px; }
+.wskazniki-osoby { margin-top: 18px; }
+.tabela-przewijana { overflow-x: auto; }
+.tabela-osob { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.tabela-osob th, .tabela-osob td { padding: 7px 10px; border-bottom: 1px solid var(--ramka); text-align: right; white-space: nowrap; }
+.tabela-osob th:nth-child(-n+2), .tabela-osob td:nth-child(-n+2) { text-align: left; }
+.tabela-osob th { font-size: 13px; color: var(--tekst-slaby); }
+.tabela-osob td.dobrze { color: var(--zielony); font-weight: 700; }
+.tabela-osob td.zle { color: var(--czerwony); font-weight: 700; }
+.urlop-formularz { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; margin-bottom: 14px; }
+.urlop-formularz label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.urlop-formularz .blad { flex-basis: 100%; }
+#zlecenie-osoby .zaznaczenia { max-height: 180px; overflow: auto; }
+
+/* D55: pozycje checklisty zadań w oknie zapisanego zlecenia. */
+.pozycje-checklisty { display: grid; gap: 8px; }
+.pozycja-checklisty { display: grid; grid-template-columns: minmax(140px, 2fr) minmax(110px, 1.3fr) 100px repeat(3, auto) auto; gap: 6px; align-items: center; }
+dialog.okno .pozycja-checklisty label { display: flex; align-items: center; gap: 2px; font-size: 15px; }
+@media (max-width: 640px) { .pozycja-checklisty { grid-template-columns: 1fr 1fr; } .pozycja-checklisty [data-p="tytul"] { grid-column: 1 / -1; } }

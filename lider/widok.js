@@ -298,7 +298,8 @@
           czasZgloszenia: d.czas_zgloszenia, godzZgloszenia: godzina(d.czas_zgloszenia),
           przestojMs: H().przestojMs(a, o.teraz),
           doPotwierdzenia: a.status === 'oczekuje_potwierdzenia',
-          mozeAnulowac: a.status === 'zgloszona' || a.status === 'przyjeta',
+          // D55: anuluje tylko zgłaszający (pomyłka) albo administrator — reszta przez UR (hub odrzuca innych).
+          mozeAnulowac: (a.status === 'zgloszona' || a.status === 'przyjeta') && ((!!o.ja && d.zglosil === o.ja) || !!o.admin),
           czeka: !!a._oczekuje,
           odrzucenia: (d.odrzucenia || []).length,
         };
