@@ -304,6 +304,7 @@
           <p class="hala-konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
         </fieldset>
         ${d.pin ? '<div data-pin></div>' : ''}
+        ${d.pin ? `<button type="button" class="hala-konto-aplikacje" data-aplikacje>${d.komputer ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon — kody QR'}</button>` : ''}
         <div data-dodatki></div>
         <fieldset><legend>Dane w tym urządzeniu</legend>
           <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} od innych osób)` : ''}</p>
@@ -344,11 +345,79 @@
       for (const x of d.querySelectorAll('[data-wyglad]')) x.setAttribute('aria-pressed', String(x === b));
     });
     d.querySelector('[data-zamknij]').addEventListener('click', () => d.close());
+    const ba = d.querySelector('[data-aplikacje]');
+    if (ba) ba.addEventListener('click', () => { d.close(); aplikacjeNaTelefon(hala, o); });
     const bo = d.querySelector('[data-odrzucone]');
     if (bo) bo.addEventListener('click', () => { d.close(); o.odrzucone(); });
     d.querySelector('[data-wyloguj]').addEventListener('click', () => { d.close(); if (o.wyloguj) o.wyloguj(); });
     if (!d.open) d.showModal();
     return d;
+  }
+
+  /* ---------------------------------------------------------------- 📱 Aplikacje na telefon (D57, 2026-10-13)
+
+     Właściciel: „kierownik ma mieć każdy QR do zalogowania do każdej z aplikacji; pracownicy — do swoich i do aplikacji
+     na użytek każdego (GK Szkolenia, GK Czytnik)”. Lista z huba (GET /api/v1/aplikacje — według ról osoby), kod QR
+     rysowany tu z koderem ZXing (skaner-zxing.js obok, jak etykiety maszyn w Panelu). Telefon skanuje aparatem i otwiera
+     adres — logowanie tym samym kontem GK. GK Czytnik i GK Foto są tylko na komputerze (bez kodu). */
+  function wczytajZXing() {
+    if (global.ZXing) return Promise.resolve(global.ZXing);
+    return new Promise((ok, zle) => {
+      const s = document.createElement('script');
+      s.src = '../wspolne/skaner-zxing.js';
+      s.onload = () => (global.ZXing ? ok(global.ZXing) : zle(new Error('Brak kodera QR.')));
+      s.onerror = () => zle(new Error('Nie udało się wczytać kodera QR. Sprawdź połączenie i spróbuj jeszcze raz.'));
+      document.head.appendChild(s);
+    });
+  }
+  /* Kod QR jako SVG (poziom korekcji M, margines 4 moduły) — ten sam sposób co PanelEtykiety.svgQR. */
+  function svgQR(tekst, ZX) {
+    const kod = ZX.QRCodeEncoder.encode(String(tekst), ZX.QRCodeDecoderErrorCorrectionLevel.fromString('M'), null);
+    const m = kod.getMatrix(), n = m.getWidth(), MARG = 4, bok = n + 2 * MARG;
+    let sciezka = '';
+    for (let y = 0; y < m.getHeight(); y++) for (let x = 0; x < n; x++) if (m.get(x, y) === 1) sciezka += `M${x + MARG} ${y + MARG}h1v1h-1z`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${bok} ${bok}" shape-rendering="crispEdges" role="img" aria-label="${esc(tekst)}">`
+      + `<rect width="${bok}" height="${bok}" fill="#fff"/><path d="${sciezka}" fill="#000"/></svg>`;
+  }
+  /* Wiersze okna (czysta funkcja — testy: reduktor-testy.js): z kodem (adres albo adres w firmowym wifi) albo bez. */
+  function wierszeAplikacji(lista) {
+    return (lista || []).map(a => ({ nazwa: a.nazwa, adres: a.adres || a.siec || null, tylkoSiec: !a.adres && !!a.siec,
+                                     komputer: !!a.komputer, opis: a.opis || '' }));
+  }
+  async function aplikacjeNaTelefon(hala, opcje) {
+    let d = document.getElementById('hala-okno-aplikacji');
+    if (!d) {
+      d = document.createElement('dialog');
+      d.id = 'hala-okno-aplikacji';
+      d.className = 'hala-okno hala-moje-konto hala-aplikacje-telefon';
+      d.setAttribute('aria-labelledby', 'hala-okno-aplikacji-tytul');
+      document.body.appendChild(d);
+    }
+    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">📱 Aplikacje na telefon</h2>
+      <p class="hala-okno-opis">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego. Aplikacje hali, GK Trasy
+        i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
+      <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>
+      <div class="hala-okno-przyciski"><button type="button" class="glowny" data-zamknij>Zamknij</button></div></form>`;
+    d.querySelector('[data-zamknij]').addEventListener('click', () => d.close());
+    d.showModal();
+    const el = d.querySelector('[data-lista]');
+    try {
+      const w = wierszeAplikacji((await hala.aplikacje()).aplikacje);
+      el.innerHTML = w.map(a => `<figure class="hala-aplikacja">
+          ${a.adres ? `<div class="hala-aplikacja-qr" data-qr="${esc(a.adres)}"></div>` : `<div class="hala-aplikacja-qr brak">${a.komputer ? '💻' : '—'}</div>`}
+          <figcaption><b>${esc(a.nazwa)}</b>
+            ${a.adres ? `<a href="${esc(a.adres)}" target="_blank" rel="noopener">${esc(a.adres)}</a>` : ''}
+            ${a.tylkoSiec ? '<span class="hala-konto-drobne">Tylko w firmowym wifi.</span>' : ''}
+            ${a.opis ? `<span class="hala-konto-drobne">${esc(a.opis)}</span>` : ''}</figcaption></figure>`).join('')
+        || '<p class="hala-okno-opis">To konto nie ma aplikacji na telefon.</p>';
+      const pola = [...el.querySelectorAll('[data-qr]')];
+      if (pola.length) {
+        const ZX = await wczytajZXing();
+        for (const p of pola) p.innerHTML = svgQR(p.dataset.qr, ZX);
+      }
+    } catch (e) {
+      el.innerHTML = `<p class="hala-okno-blad">${esc(e && e.kod === 0 ? 'Lista aplikacji wymaga połączenia z serwerem.' : (e && e.message) || 'Nie udało się wczytać listy.')}</p>`;
+    }
   }
 
   /* ---------------------------------------------------------------- Powiadomienia w „Moje konto” (STYL-GK §3, runda 2)
@@ -406,7 +475,7 @@
     await rysuj();
   }
 
-  global.HalaKonto = { zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
+  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
                        biuro, bezSieci, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

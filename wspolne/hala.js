@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.19.0';
+  const WERSJA_KLIENTA = '0.20.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -901,6 +901,16 @@
         return Promise.reject(new Error(`hala.zapytaj: tylko trasy rozszerzenia tej aplikacji (${wlasna}…)`));
       return api(metoda, sciezka, cialo);
     };
+    /* Obiekty z huba za okres dłuższy niż pamięć aplikacji (D55/D56: Panel — zamknięte zlecenia do 90 dni, statystyki osób,
+       próby jakościowe): GET /api/v1/stan/<typ>?od=&aktywne=&limit=. Tylko odczyt, tylko z siecią. */
+    h.pobierzStan = (typ, parametry) => {
+      if (typeof typ !== 'string' || !/^[a-z_]+$/.test(typ)) return Promise.reject(new Error('hala.pobierzStan: zły typ obiektu'));
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(parametry || {})) if (['od', 'aktywne', 'linia', 'limit'].includes(k) && v !== undefined && v !== null) q.set(k, String(v));
+      return api('GET', `/api/v1/stan/${typ}${q.toString() ? `?${q}` : ''}`);
+    };
+    /* D57: aplikacje osoby z adresami do kodów QR (Moje konto → 📱 Aplikacje na telefon). */
+    h.aplikacje = () => api('GET', '/api/v1/aplikacje');
     /* Trasy administracji huba (/api/v1/admin/…: pracownicy, odblokowanie konta) — ekran administracji w Panelu.
        Uprawnienie sprawdza hub (tylko rola admin); tu pilnujemy tylko, żeby metoda nie była furtką do innych tras. */
     h.admin = (metoda, sciezka, cialo) => {

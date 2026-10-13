@@ -538,7 +538,7 @@
     if (starsze.wczytuje || (starsze.od && starsze.od <= od)) return;
     starsze.wczytuje = true;
     try {
-      const w = await hala.zapytaj('GET', `/api/v1/stan/zlecenie?aktywne=0&od=${encodeURIComponent(od)}&limit=5000`);
+      const w = await hala.pobierzStan('zlecenie', { aktywne: 0, od, limit: 5000 });
       starsze = { od, lista: w.obiekty || [], wczytuje: false };
     } catch (e) { starsze.wczytuje = false; komunikat('Starszych zleceń nie wczytano — ' + komunikatBledu(e), 'uwaga'); }
     narysuj();

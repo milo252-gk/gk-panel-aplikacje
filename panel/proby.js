@@ -16,7 +16,7 @@
     if (wToku.has(odIso)) return;
     wToku.add(odIso);
     try {
-      const w = await hala.zapytaj('GET', `/api/v1/stan/proba?od=${encodeURIComponent(odIso)}&limit=5000`);
+      const w = await hala.pobierzStan('proba', { od: odIso, limit: 5000 });
       zSerwera.set(odIso, { lista: w.obiekty || [] });
       setTimeout(() => zSerwera.delete(odIso), 5 * 60000);
     } catch (e) {

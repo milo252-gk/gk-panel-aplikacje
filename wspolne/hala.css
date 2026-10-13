@@ -600,6 +600,16 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-menu-maszyny { display: grid; gap: 8px; }
 .hala-menu-maszyny button { min-height: 52px; font-size: 16px; text-align: left; padding: 8px 14px; }
 .hala-menu-maszyny [data-zadania] { display: grid; gap: 6px; padding-left: 10px; }
+/* D57: „📱 Aplikacje na telefon” w Moje konto — kod QR każdej aplikacji osoby. */
+.hala-konto-aplikacje { width: 100%; min-height: var(--dotyk); font-weight: 700; }
+.hala-aplikacje-lista { display: grid; gap: 12px; }
+.hala-aplikacja { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: center; margin: 0; padding: 10px;
+  border: 1px solid var(--ramka); border-radius: var(--promien); background: var(--karta); }
+.hala-aplikacja-qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; overflow: hidden; }
+.hala-aplikacja-qr svg { width: 100%; height: 100%; display: block; }
+.hala-aplikacja-qr.brak { display: flex; align-items: center; justify-content: center; font-size: 36px; background: var(--tlo-neutralne); }
+.hala-aplikacja figcaption { display: grid; gap: 4px; min-width: 0; }
+.hala-aplikacja figcaption a { overflow-wrap: anywhere; font-size: 13px; }
 /* D56: „▣ Skanuj” na wierzchu każdego ekranu (Lider, UR, KJ) — nad dolnym paskiem na telefonie, w rogu na komputerze. */
 .hala-skan-fab { position: fixed; right: 16px; bottom: calc(var(--dol-wys) + 14px + env(safe-area-inset-bottom, 0px)); z-index: 45;
   display: inline-flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 22px; border: 0; border-radius: 999px;
