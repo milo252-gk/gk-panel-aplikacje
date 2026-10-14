@@ -179,7 +179,8 @@
     const spec = kontrakt && kontrakt.zdarzenia && kontrakt.zdarzenia['zmiana.raport'];
     if (!spec || !role.some(r => r === 'admin' || (spec.role || []).includes(r))) return [];
     return (zmianyLinii || [])
-      .filter(z => z && z.status === 'otwarta' && z.linia === linia && (((z.dane || {}).pozycje) || []).length)
+      // D67: zmiana otwarta przez lidera (zmiana.rozpoczeta — przy pierwszym odhaczeniu checklisty) albo ze starą migawką.
+      .filter(z => z && z.status === 'otwarta' && z.linia === linia && ((z.dane || {}).czas_rozpoczecia || (((z.dane || {}).pozycje) || []).length))
       .map(zl => ({ zl, zmiana: zmianaPoId((zl.dane || {}).zmiana, zmiany) }))
       .filter(x => x.zmiana && ms(x.zmiana.do) <= teraz && teraz - ms(x.zmiana.do) <= RAPORT_ZALEGLY_MS)
       .sort((a, b) => ms(b.zmiana.od) - ms(a.zmiana.od));
@@ -202,7 +203,7 @@
     return `proba:${linia}:${zmianaId || '-'}:${pozycja || 'dodatkowa'}`;
   }
 
-  /* Czy zmiana na linii ma pozycję o tym id — odhaczamy tylko pozycje TEJ zmiany (migawka z jej otwarcia). */
+  /* Czy checklista zmiany ma pozycję o tym id — odhaczamy tylko pozycje TEJ zmiany (D67: checklisty-zlecenia tej zmiany). */
   function pozycjaZmiany(zmianaLinii, id) {
     return !!id && (((zmianaLinii && zmianaLinii.dane) || {}).pozycje || []).some(p => p && p.id === id);
   }
@@ -429,9 +430,12 @@
     const { linia, zmiana, teraz } = o;
     const zl = o.zmianaLinii || { dane: {} };
     const d = zl.dane || {};
-    const k = H().kolorChecklisty(zl, teraz, 0);
-    const wyk = d.wykonane || {}, pom = d.pominiete || {};
-    const opoznione = (d.pozycje || []).filter(p =>
+    // D67: checklista z checklist-zleceń tej zmiany (o.checklista); bez niej — jak dawniej z migawki w zmianie na linii.
+    const lista = o.checklista && ((o.checklista.dane || {}).pozycje || []).length ? o.checklista : zl;
+    const dl = lista.dane || {};
+    const k = H().kolorChecklisty(lista, teraz, 0);
+    const wyk = dl.wykonane || {}, pom = dl.pominiete || {};
+    const opoznione = (dl.pozycje || []).filter(p =>
       (wyk[p.id] && wyk[p.id].czas && ms(wyk[p.id].czas) > ms(p.termin)) ||
       (!wyk[p.id] && !pom[p.id] && ms(p.termin) < teraz)).map(p => p.id);
 

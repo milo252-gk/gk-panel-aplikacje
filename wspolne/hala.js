@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.24.0';
+  const WERSJA_KLIENTA = '0.25.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -296,6 +296,78 @@
     }
     wynik.kolor = wynik.opoznione.length ? 'czerwony' : wynik.bliskie.length ? 'zolty' : 'zielony';
     return wynik;
+  }
+
+  /* ---------------------------------------------------------------- D67: checklista = zlecenie z pozycjami
+
+     Właściciel 2026-10-14: „W zleceniach ma być jeden rodzaj checklist — dla lidera nie musi być osobnej”. Checklista
+     to zlecenie stałe z pozycjami; hub robi z niej na każdą zmianę JEDNO zlecenie z pozycjami (godziny tej zmiany).
+     Ekrany, które liczyły checklistę lidera ze zmiany na linii (kolor kafelka w Panelu, pasek i lista w Liderze, raport
+     zmiany), dostają ten sam kształt co dawniej — { dane: { pozycje, wykonane, pominiete } } — złożony ze zleceń. */
+  const TYP_CZYNNOSCI = { obsada: 'obsada', obchod: 'obchod', proba: 'proba', bhp: 'bhp', przekazanie: 'przekazanie', przeglad: 'zadanie' };
+
+  /* Zlecenie należy do zmiany: zadanie zmianowe kończy się z nią (wazne_do = koniec zmiany); ręczne albo raz dziennie —
+     zlecone w trakcie tej zmiany. */
+  function zlecenieZmiany(d, zmiana) {
+    const start = Date.parse(zmiana.od), koniec = Date.parse(zmiana.do);
+    const wd = Date.parse(d.wazne_do), czas = Date.parse(d.czas_zlecenia);
+    return !isNaN(wd) ? Math.abs(wd - koniec) < 60000 : (!isNaN(czas) && czas >= start && czas < koniec);
+  }
+
+  /* Checklisty działu na linii i zmianie złożone w jedną listę pozycji. Id pozycji = „<id zlecenia>|<id pozycji>”
+     (kilka checklist naraz nie miesza odhaczeń); mapa → { zlecenie, pozycja } do zapisu. typ jak w dawnej checkliście
+     lidera (obsada, obchod, proba, bhp, przekazanie, zadanie) — ekrany Lidera rysują ikony i formularze po nim. */
+  function checklistaZmiany(zlecenia, linia, zmiana, dzial) {
+    const dz = dzial || 'produkcja';
+    const wynik = { dane: { pozycje: [], wykonane: {}, pominiete: {} }, zlecenia: [], mapa: {} };
+    if (!zmiana) return wynik;
+    for (const z of zlecenia || []) {
+      const d = (z && z.dane) || {};
+      if (!Array.isArray(d.pozycje) || !d.pozycje.length || d.dzial !== dz) continue;
+      if (z.status === 'anulowane' || z.status === 'zaplanowane') continue;
+      if (d.linia && linia && d.linia !== linia) continue;
+      if (!zlecenieZmiany(d, zmiana)) continue;
+      wynik.zlecenia.push(z);
+      for (const p of d.pozycje) {
+        if (!p || !p.id) continue;
+        const id = `${z.id}|${p.id}`;
+        wynik.mapa[id] = { zlecenie: z.id, pozycja: p.id };
+        wynik.dane.pozycje.push({ id, nazwa: p.nazwa || '', typ: TYP_CZYNNOSCI[p.czynnosc] || 'zadanie', czynnosc: p.czynnosc || null,
+                                  termin: p.termin || d.termin || d.wazne_do || zmiana.do,
+                                  wymaga_qr: !!(p.wymagaj_skanu || p.czynnosc === 'obchod'), cel: p.maszyna || null,
+                                  maszyna: p.maszyna || null, wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
+                                  wymagaj_skanu: !!p.wymagaj_skanu, zlecenie: z.id, pozycja: p.id });
+        if ((d.wykonane || {})[p.id]) wynik.dane.wykonane[id] = d.wykonane[p.id];
+        if ((d.pominiete || {})[p.id]) wynik.dane.pominiete[id] = d.pominiete[p.id];
+      }
+    }
+    wynik.dane.pozycje.sort((a, b) => (Date.parse(a.termin) || 0) - (Date.parse(b.termin) || 0));
+    return wynik;
+  }
+
+  /* Pozycje zlecenia stałego → pozycje zlecenia z godzinami od startu (bliźniak hala.py → pozycje_wystapienia; Panel
+     „Zleć teraz” przy checkliście ręcznej). Minuty na zegarze zakładu, nigdy po granicy (koniec zmiany / termin). */
+  function pozycjeWystapienia(pozycje, startIso, granicaIso) {
+    const start = Date.parse(startIso), granica = Date.parse(granicaIso);
+    return (pozycje || []).filter(p => p && p.id).map(p => {
+      const q = { id: p.id, nazwa: String(p.nazwa || '').trim() };
+      for (const k of ['czynnosc', 'maszyna']) if (p[k]) q[k] = p[k];
+      for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu']) if (p[k] === true) q[k] = true;
+      if (!isNaN(start) && Number.isInteger(p.minuty)) {
+        const l = lokalny(start);
+        let t = zLokalnego(l.rok, l.miesiac, l.dzien, l.godz, l.min + p.minuty);
+        if (!isNaN(granica) && t > granica) t = granica;
+        q.termin = iso(t);
+      }
+      return q;
+    });
+  }
+
+  /* Postęp checklisty w zleceniu (karta zlecenia, Panel, Zadania): ile pozycji wykonanych albo pominiętych. */
+  function postepPozycji(d) {
+    const pozycje = ((d && d.pozycje) || []).filter(p => p && p.id);
+    const gotowe = pozycje.filter(p => ((d.wykonane || {})[p.id]) || ((d.pominiete || {})[p.id])).length;
+    return { gotowe, wszystkie: pozycje.length, pelne: !!pozycje.length && gotowe === pozycje.length };
   }
 
   /* Czasy awarii (ms). Przestój: od zgłoszenia do potwierdzenia lidera, 24/7 bez
@@ -1716,7 +1788,7 @@
 
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
-    szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
+    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
   };

@@ -457,18 +457,19 @@
   function zbudujRaport(k, uwagi) {
     return W.raport({
       linia: k.linia, zmiana: k.zmiana, teraz: hala.teraz(), lider: hala.pracownik && hala.pracownik.id,
-      zmianaLinii: k.zl, awarie: hala.obiekty('awaria'), proby: hala.obiekty('proba'),
+      zmianaLinii: k.zl, checklista: k.lista, awarie: hala.obiekty('awaria'), proby: hala.obiekty('proba'),
       alerty: hala.obiekty('alert'), bhp: hala.obiekty('bhp_zgloszenie'), uwagi });
   }
 
   /* Podgląd dla lidera: nazwy pozycji zamiast id (w zdarzeniu zostają id — tak chce §6.4). */
   function opisRaportu(r, k) {
     const nazwy = {};
-    for (const p of ((k.zl && k.zl.dane) || {}).pozycje || []) nazwy[p.id] = p.nazwa;
+    const lista = k.lista && ((k.lista.dane || {}).pozycje || []).length ? k.lista : k.zl;
+    for (const p of ((lista && lista.dane) || {}).pozycje || []) nazwy[p.id] = p.nazwa;
     const n = ids => esc(ids.map(id => nazwy[id] || id).join(', '));
     // Test właściciela 2026-10-13: „po terminie” mieszało zrobione z opóźnieniem (✔ późno) z niezrobionymi — lider nie
     // wiedział, czego naprawdę brakuje. W zdarzeniu zostaje jedna lista opoznione (§6.4); tu dzielimy ją na dwie.
-    const wyk = ((k.zl && k.zl.dane) || {}).wykonane || {};
+    const wyk = ((lista && lista.dane) || {}).wykonane || {};
     const brak = r.checklista.opoznione.filter(id => !wyk[id]), pozno = r.checklista.opoznione.filter(id => wyk[id]);
     return `<dl class="dane raport">
       <dt>Obsada</dt><dd>${r.obsada.obecna ?? '—'} z ${r.obsada.planowana ?? '—'}${r.obsada.zdarzenia ? ` · zdarzeń: ${r.obsada.zdarzenia}` : ''}</dd>

@@ -102,6 +102,8 @@
           // D56: kilka maszyn jednego zlecenia, postęp krok po kroku (zlecenie.postep) i czynność, która zalicza sama.
           maszyny: maszynyZlecenia(d), wymagajSkanu: d.wymagaj_skanu === true && maszynyZlecenia(d).length > 0,
           postep: [].concat(d.postep || []), juz: juzZrobione(d), czynnosc: d.czynnosc || null,
+          // D67: checklista — pozycje do odhaczenia (każda z godziną i wymaganiami) zamiast jednego „Zrobione”.
+          pozycje: pozycjeWiersza(d, teraz, H), postepPozycji: H && H.postepPozycji ? H.postepPozycji(d) : null,
           uwagiZwrotu: d.uwagi_zwrotu || null, czas: d.czas_zlecenia || '',
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
         };
@@ -110,6 +112,21 @@
         || (a.zalegle && b.zalegle ? a.zalegleOd - b.zalegleOd : 0) || (b.pilne - a.pilne)
         || ((a.terminMs === null) - (b.terminMs === null)) || ((a.terminMs || 0) - (b.terminMs || 0))
         || String(a.czas).localeCompare(String(b.czas)));
+  }
+
+  /* D67: pozycje checklisty do karty — stan (wykonana / pominięta / po terminie / czeka), godzina, wymagania, wpis
+     (kto, kiedy, notatka). Czysta funkcja (testy: reduktor-testy.js). */
+  function pozycjeWiersza(d, teraz, H) {
+    const godz = t => { const ms = Date.parse(t); if (isNaN(ms) || !H || !H.lokalny) return '';
+      const l = H.lokalny(ms); return `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
+    return [].concat((d && d.pozycje) || []).filter(p => p && p.id).map(p => {
+      const wyk = (d.wykonane || {})[p.id], pom = (d.pominiete || {})[p.id];
+      const t = Date.parse(p.termin);
+      const stan = wyk ? 'wykonana' : pom ? 'pominieta' : (!isNaN(t) && t < teraz ? 'po-terminie' : 'czeka');
+      return { id: p.id, nazwa: p.nazwa || '', godz: godz(p.termin), terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
+               maszyna: p.maszyna || null, wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true,
+               wymagajSkanu: (p.wymagaj_skanu === true && !!p.maszyna) || p.czynnosc === 'obchod', stan, wpis: wyk || pom || null };
+    });
   }
 
   /* D56: maszyny zlecenia — lista `maszyny` (kilka maszyn), inaczej jedna `maszyna`. */
@@ -220,7 +237,7 @@
   // podłączenia: lider zmienia linię, a na wspólnym tablecie po liderze loguje się mistrz (inny dział) — ze starymi
   // opcjami „Zrobione” zamykało formularz od razu i przerysowywało listę poprzedniej linii albo działu.
   const stany = new WeakMap();
-  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined, info: null, notatka: null }); return stany.get(el); };
+  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined, info: null, notatka: null, poz: null }); return stany.get(el); };
 
   /* Zdarzenie z treści TEGO ekranu zleceń. UR i KJ rysują wszystkie ekrany w jednym elemencie (#ekran), więc nasi
      słuchacze zostają na nim także pod Awariami czy Przeglądami — tam chip „Moje” (data-filtr) przestawiał filtr zleceń
@@ -309,10 +326,13 @@
         ${z.opis ? `<p class="hala-zlecenie-opis">${esc(z.opis)}</p>` : ''}
         ${z.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjecia)}</div>` : ''}
         ${z.uwagiZwrotu && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Kierownik: ${esc(z.uwagiZwrotu)}</p>` : ''}
-        ${z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
+        ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">⏰ ${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
-        ${z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-postep-akcje">
+        ${z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
+          ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
+          <button type="button" data-akcja="nie-moge">Nie mogę</button></div>`)
+        : z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-postep-akcje">
           ${global.HalaSkaner && z.maszyny.length ? `<button type="button" data-akcja="postep-skan">▣ Skanuj${z.maszyny.length > 1 ? ' maszyny' : ' maszynę'}</button>` : ''}
           <label class="hala-przycisk-pliku">📷 Dodaj zdjęcie<input type="file" accept="image/*" capture="environment" multiple data-postep-zdjecie hidden></label>
           <button type="button" data-akcja="postep-notatka">📝 Notatka</button>
@@ -333,8 +353,8 @@
     const zal = lista.filter(z => z.zalegle), doZ = lista.filter(z => z.doZrobienia && !z.zalegle), wys = lista.filter(z => z.wyslane);
     const pusto = s.moje ? 'Nie masz przypisanych zleceń' : 'Nie ma zleceń do zrobienia';
     // Kursor w polu tekstowym — przerysowanie nie może go zabrać (tekst i tak jest w stanie).
-    const wPolu = document.activeElement && el.contains(document.activeElement) && document.activeElement.matches('[data-pole], [data-postep-pole]');
-    const poleZFocusem = wPolu ? (document.activeElement.matches('[data-pole]') ? '[data-pole]' : '[data-postep-pole]') : null;
+    const wPolu = document.activeElement && el.contains(document.activeElement) && document.activeElement.matches('[data-pole], [data-postep-pole], [data-pozycja-pole]');
+    const poleZFocusem = wPolu ? ['[data-pole]', '[data-postep-pole]', '[data-pozycja-pole]'].find(x => document.activeElement.matches(x)) : null;
     const role = (hala.pracownik && hala.pracownik.role) || [];
     const DZ = global.HalaDzialania;
     // D55: skan QR maszyny (menu: wykonaj zadanie / zgłoś awarię / nieprawidłowość), zgłoszenie do kierownika, narzędzia (mistrz).
@@ -366,6 +386,7 @@
       el.addEventListener('input', ev => {
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-pole]') && s.formularz) { s.formularz.tekst = ev.target.value; odswiezBlokade(el, s.formularz); }
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-postep-pole]') && s.notatka) s.notatka.tekst = ev.target.value;
+        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-pole]') && s.poz) { s.poz.tekst = ev.target.value; s.poz.blad = null; odswiezPozycje(el, s.poz); }
       });
       el.addEventListener('change', async ev => {
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-postep-zdjecie]')) {
@@ -382,6 +403,14 @@
             st.info = `Dodano ${ids.length === 1 ? 'zdjęcie' : `${ids.length} zdjęcia`} — kierownik już je widzi`;
           } catch (e) { st.info = (e && e.message) || 'Nie udało się dodać zdjęcia.'; }
           rysuj(el, hala, o);
+          return;
+        }
+        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-zdjecie]') && s.poz) {
+          for (const plik of Array.from(ev.target.files || []).slice(0, MAKS_ZDJEC - s.poz.pliki.length))
+            s.poz.pliki.push({ plik, url: URL.createObjectURL(plik) });
+          ev.target.value = '';
+          s.poz.blad = null;
+          rysuj(el, hala, stan(el).opcje);
           return;
         }
         if (!zNaszejTresci(ev, el) || !ev.target.matches('[data-zdjecie]') || !s.formularz) return;
@@ -420,6 +449,7 @@
     const id = art.dataset.id;
     try {
       if (b.dataset.akcja === 'historia' && DZ) return DZ.historia(hala, 'zlecenie', id);
+      if (b.dataset.akcja.startsWith('pozycja')) return akcjaPozycji(b, el, hala, o, id);
       if (b.dataset.akcja === 'przyjmij') await hala.zapisz('zlecenie.przyjete', id, {});
       if (b.dataset.akcja === 'wykonane') {
         // D56: wszystko już zrobione krok po kroku — „Zrobione” wysyła od razu, bez formularza robionego „na raz”.
@@ -549,6 +579,176 @@
       ${ostatnie.length ? `<p class="hala-zlecenie-postep slaby">Zrobione dotąd: ${ostatnie.join(' · ')}${z.postep.length > 3 ? ` (+${z.postep.length - 3})` : ''}</p>` : ''}`;
   }
 
+  /* ---------------------------------------------------------------- D67: checklista w karcie zlecenia
+
+     Pozycje jedna pod drugą: ✓ zrobione, – pominięte, ○ do zrobienia (czerwone po godzinie). Dotknięcie otwiera pozycję
+     w karcie: wymagania tej pozycji (📷 zdjęcie, 📝 notatka, ▣ skan QR maszyny), „✓ Odhacz”, „Pomiń” (z powodem
+     w notatce), przy zrobionej — „Cofnij”. Czynność (obsada, próba, audyt BHP, przekazanie) — aplikacja, która ma jej
+     formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Lider); próba i przegląd
+     odhaczają się też same (hub). Ostatnia pozycja wysyła „Zrobione” sama (odhaczPozycje → zakonczJesliGotowe). */
+  const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', 'po-terminie': '○', czeka: '○' };
+  const OPIS_CZYNNOSCI = { obsada: '👥 Raport obsady', obchod: '▣ Obchód — skan QR', proba: '🔬 Próba jakościowa',
+                           bhp: '⛑ Audyt BHP', przekazanie: '📋 Przekazanie zmiany', przeglad: '🔧 Przegląd UR' };
+
+  function checklista(z, maszyny, s, opcje) {
+    const nazwaM = m => (maszyny[m] || {}).nazwa || m;
+    const p = z.postepPozycji || { gotowe: 0, wszystkie: z.pozycje.length };
+    const otwarta = s.poz && s.poz.id === z.id ? s.poz : null;
+    return `<div class="hala-checklista" aria-label="Checklista">
+      <div class="hala-checklista-naglowek">☑ Checklista <b>${p.gotowe}/${p.wszystkie}</b></div>
+      ${z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia ? '' : 'disabled'}>
+          <span class="hala-pozycja-znak" aria-hidden="true">${ZNAK_POZYCJI[q.stan]}</span>
+          ${q.godz ? `<span class="hala-pozycja-godz">${esc(q.godz)}</span>` : ''}
+          <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.maszyna ? ` <span class="slaby">· ${esc(nazwaM(q.maszyna))}</span>` : ''}</span>
+          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? esc((OPIS_CZYNNOSCI[q.czynnosc] || '').split(' ')[0]) : ''}${q.wymagajZdjecia ? '📷' : ''}${q.wymagajNotatki ? '📝' : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? '▣' : ''}</span>
+        </button>${otwarta && otwarta.pozycja === q.id ? formularzPozycji(z, q, otwarta, opcje, nazwaM) : ''}`).join('')}
+    </div>`;
+  }
+
+  function wymaganiaPozycji(q, z, slowniki) {
+    // Obchód bez wskazanej maszyny: dowolna maszyna z linii zlecenia (bez linii — dowolna w zakładzie).
+    const wszystkie = Object.entries((slowniki && slowniki.maszyny) || {}).filter(([, m]) => !z.linia || !m || !m.linia || m.linia === z.linia).map(([k]) => k);
+    return { wymagajZdjecia: q.wymagajZdjecia, wymagajNotatki: q.wymagajNotatki, wymagajSkanu: q.wymagajSkanu,
+             maszyny: q.maszyna ? [q.maszyna] : [], doSkanu: q.maszyna ? [q.maszyna] : wszystkie };
+  }
+
+  function formularzPozycji(z, q, f, opcje, nazwaM) {
+    const kto = q.wpis && q.wpis.autor ? (((global.Hala && f.pracownicy) || []).find(x => x.id === q.wpis.autor) || {}).nazwa || q.wpis.autor : '';
+    if (q.stan === 'wykonana') {
+      return `<div class="hala-pozycja-panel"><p class="ok-tekst">Zrobione ${esc(godzinaLok(q.wpis.czas))}${kto ? ` · ${esc(kto)}` : ''}</p>
+        ${q.wpis.uwagi ? `<p>${esc(q.wpis.uwagi)}</p>` : ''}${q.wpis.skan ? `<p class="slaby">▣ ${esc(nazwaM(q.wpis.skan))}</p>` : ''}
+        ${[].concat(q.wpis.zdjecia || []).length ? `<div class="hala-zlecenie-zdjecia">${miniatury([].concat(q.wpis.zdjecia))}</div>` : ''}
+        <div class="hala-zlecenie-akcje"><button type="button" data-akcja="pozycja-zamknij">Zamknij</button>
+          <button type="button" data-akcja="pozycja-cofnij">Cofnij odhaczenie</button></div></div>`;
+    }
+    const w = f.wymagania;
+    const brak = brakuje(w, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan });
+    const pole = (wymagane, nazwa) => `${nazwa} <span class="slaby">(${wymagane ? 'wymagane' : 'można pominąć'})</span>`;
+    const cz = q.czynnosc && opcje && opcje.czynnosc && (opcje.czynnosc.nazwy || {})[q.czynnosc];
+    const samo = !cz && (q.czynnosc === 'proba' || q.czynnosc === 'przeglad')
+      ? `<p class="hala-zlecenie-czynnosc">${q.czynnosc === 'proba' ? '🔬 Odhaczy się samo, gdy zapiszesz próbę' : '🔧 Odhaczy się samo po przeglądzie UR'}${q.maszyna ? ` na: ${esc(nazwaM(q.maszyna))}` : ''}</p>` : '';
+    return `<div class="hala-pozycja-panel">
+      ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
+      ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">▶ ${esc(cz)}</button>` : samo}
+      ${w.wymagajSkanu ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(!f.skan, q.czynnosc === 'obchod' && !q.maszyna ? 'Skan QR maszyny na linii' : 'Skan QR maszyny')}</span>
+        ${f.skan ? `<p class="hala-zlecenie-skan"><span class="hala-krok-wymogu ok">✓ ${esc(nazwaM(f.skan))}</span></p>`
+                 : `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">▣ Zeskanuj QR${q.maszyna ? `: ${esc(nazwaM(q.maszyna))}` : ''}</button>`}</div>` : ''}
+      <div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !f.pliki.length, 'Zdjęcie')}</span>
+        <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}"></span>`).join('')}
+          ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length ? 'brak' : ''}">📷 ${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
+            <input type="file" accept="image/*" capture="environment" multiple data-pozycja-zdjecie hidden></label>` : ''}</div></div>
+      <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajNotatki, 'Notatka')} <span class="slaby">— przy „Pomiń” to powód</span></span>
+        <textarea data-pozycja-pole rows="2" maxlength="1000" placeholder="Co zrobione, co zauważone">${esc(f.tekst)}</textarea></label>
+      <p class="hala-zlecenie-brakuje" data-pozycja-brakuje ${brak.length ? '' : 'hidden'}>${esc(tekstBraku(brak))}</p>
+      <p class="hala-zlecenie-blad" ${f.blad ? '' : 'hidden'}>${esc(f.blad || '')}</p>
+      <div class="hala-zlecenie-akcje">
+        <button type="button" data-akcja="pozycja-zamknij">Anuluj</button>
+        ${q.stan === 'pominieta' ? '' : '<button type="button" data-akcja="pozycja-pomin">Pomiń</button>'}
+        <button type="button" class="zielony" data-akcja="pozycja-odhacz" ${brak.length || f.wysyla ? 'disabled' : ''}>✓ Odhacz</button>
+      </div></div>`;
+  }
+
+  function odswiezPozycje(el, f) {
+    const brak = brakuje(f.wymagania, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan });
+    const b = el.querySelector('.hala-pozycja-panel [data-akcja="pozycja-odhacz"]');
+    const p = el.querySelector('.hala-pozycja-panel [data-pozycja-brakuje]');
+    if (b) b.disabled = !!brak.length || !!f.wysyla;
+    if (p) { p.textContent = tekstBraku(brak); p.hidden = !brak.length; }
+  }
+
+  /* Wszystkie pozycje wykonane albo pominięte → „Zrobione” idzie samo (bez drugiego dotknięcia). Gdy ostatnią pozycję
+     odhaczy czynność w hubie (próba, przegląd), checklistę zamyka hub (zamknij_checklisty). */
+  async function zakonczJesliGotowe(hala, id) {
+    const z = hala.obiekt('zlecenie', id);
+    const H = global.Hala;
+    if (!z || !H || !H.postepPozycji || !(DO_ZROBIENIA.has(z.status) || z.status === 'przepadlo')) return false;
+    if (!H.postepPozycji(z.dane || {}).pelne) return false;
+    await hala.zapisz('zlecenie.wykonane', id, {});
+    return true;
+  }
+
+  /* Karta zlecenia z otwartą pozycją — GK Lider otwiera tak pozycję z wymaganym zdjęciem albo notatką z ekranu Zmiana. */
+  function otworzPozycje(el, hala, opcje, id, pozycja) {
+    const s = stan(el);
+    const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, opcje, { moje: null, zostaw: id })))[0];
+    const q = z && z.pozycje.find(x => x.id === pozycja);
+    zwolnij(s.poz);
+    s.poz = q ? { id, pozycja, tekst: '', pliki: [], skan: null, blad: null, wysyla: false, pracownicy: hala.pracownicy,
+                  wymagania: wymaganiaPozycji(q, z, hala.slowniki) } : null;
+    rysuj(el, hala, opcje);
+    const art = el.querySelector(`[data-id="${CSS && CSS.escape ? CSS.escape(id) : id}"]`);
+    if (art && art.scrollIntoView) art.scrollIntoView({ block: 'center' });
+  }
+
+  /* Odhaczenie pozycji z aplikacji (GK Lider po formularzu obsady, próby, BHP, przekazania). */
+  async function odhaczPozycje(hala, id, pozycja, dane) {
+    const zd = await hala.zapisz('zlecenie.pozycja_wykonana', id, Object.assign({ pozycja }, dane || {}));
+    const koniec = await zakonczJesliGotowe(hala, id);
+    return { zd, koniec };
+  }
+
+  async function akcjaPozycji(b, el, hala, o, id) {
+    const s = stan(el);
+    const a = b.dataset.akcja;
+    const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, o, { moje: null, zostaw: id })))[0];
+    if (!z) return;
+    const pid = a === 'pozycja' ? b.dataset.pozycja : s.poz && s.poz.id === id ? s.poz.pozycja : null;
+    const q = z.pozycje.find(x => x.id === pid);
+    if (a === 'pozycja') {
+      if (s.poz && s.poz.id === id && s.poz.pozycja === pid) { zwolnij(s.poz); s.poz = null; return rysuj(el, hala, o); }
+      zwolnij(s.poz);
+      s.poz = q ? { id, pozycja: pid, tekst: '', pliki: [], skan: null, blad: null, wysyla: false, pracownicy: hala.pracownicy,
+                    wymagania: wymaganiaPozycji(q, z, hala.slowniki) } : null;
+      return rysuj(el, hala, o);
+    }
+    if (!q || !s.poz) return;
+    const f = s.poz;
+    if (a === 'pozycja-zamknij') { zwolnij(f); s.poz = null; return rysuj(el, hala, o); }
+    if (a === 'pozycja-cofnij') {
+      await hala.zapisz('zlecenie.pozycja_cofnieta', id, { pozycja: q.id });
+      s.poz = null; s.info = `Cofnięto: ${q.nazwa}`;
+      return rysuj(el, hala, o);
+    }
+    if (a === 'pozycja-czynnosc' && o.czynnosc && o.czynnosc.wykonaj) {
+      zwolnij(f); s.poz = null; rysuj(el, hala, o);
+      return o.czynnosc.wykonaj(z, q);
+    }
+    if (a === 'pozycja-skan') {
+      if (!global.HalaSkaner || !global.Hala) { f.blad = 'Brak skanera. Odśwież aplikację.'; return rysuj(el, hala, o); }
+      const tekst = await global.HalaSkaner.skanuj({ tytul: `Zeskanuj QR: ${q.nazwa}`, podpowiedz: 'Naklejka z kodem na maszynie' });
+      if (s.poz !== f || tekst === null || tekst === undefined) return;
+      const w = skanMaszyny(tekst, f.wymagania.doSkanu, hala.slowniki, global.Hala.odczytajKod);
+      f.skan = w.kod || f.skan; f.blad = w.blad || null;
+      return rysuj(el, hala, o);
+    }
+    if (a === 'pozycja-pomin') {
+      const powod = f.tekst.trim();
+      if (!powod) { f.blad = 'Napisz w notatce, dlaczego pomijasz — kierownik to zobaczy.'; return rysuj(el, hala, o); }
+      await hala.zapisz('zlecenie.pozycja_pominieta', id, { pozycja: q.id, powod });
+      zwolnij(f); s.poz = null;
+      s.info = (await zakonczJesliGotowe(hala, id)) ? 'Checklista skończona — wysłana do kierownika' : `Pominięto: ${q.nazwa}`;
+      return rysuj(el, hala, o);
+    }
+    if (a === 'pozycja-odhacz') {
+      const brak = brakuje(f.wymagania, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan });
+      if (brak.length) { f.blad = tekstBraku(brak); return rysuj(el, hala, o); }
+      if (f.wysyla) return;
+      f.wysyla = true; b.disabled = true;
+      try {
+        const dane = {};
+        if (f.tekst.trim()) dane.uwagi = f.tekst.trim();
+        const zdjecia = [];
+        for (const p of f.pliki) zdjecia.push(await hala.dodajPlik(p.plik));
+        if (zdjecia.length) dane.zdjecia = zdjecia;
+        if (f.skan) dane.skan = f.skan;
+        const w = await odhaczPozycje(hala, id, q.id, dane);
+        zwolnij(f); s.poz = null;
+        s.info = w.koniec ? 'Checklista skończona — wysłana do kierownika' : `Odhaczone: ${q.nazwa}`;
+      } catch (e) { f.wysyla = false; f.blad = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'; }
+      return rysuj(el, hala, o);
+    }
+  }
+
   /* D56: skan maszyny z przycisku „▣ Skanuj” (menu → Wykonaj zadanie) zapisany od razu jako krok zlecenia. */
   async function zaliczSkan(hala, id, maszyna) {
     const z = hala.obiekt('zlecenie', id);
@@ -615,7 +815,8 @@
   }
 
   const HalaZlecenia = { maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
-                         brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia };
+                         brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
+                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

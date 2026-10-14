@@ -20,10 +20,10 @@
     $('lista-stalych').innerHTML = lista.map(s => `
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
-          ${s.checklista ? `<div class="slaby">☑ Checklista „${esc(s.checklista)}” · pozycja ${esc(s.pozycja || '')}</div>` : ''}
+          ${s.checklista ? `<div class="slaby">☑ Checklista · ${esc(s.pozycji)} ${s.pozycji === 1 ? 'pozycja' : s.pozycji < 5 ? 'pozycje' : 'pozycji'}</div>` : ''}
           <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">📷</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">📝</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">▣</span>' : ''}</div>
           <div class="szczegoly">
-            <span class="znacznik ${s.aktywny ? 'ok' : ''}">${!s.aktywny ? 'Wstrzymane' : s.reczny ? 'Pojedyncze' : 'Stałe'}</span>
+            <span class="znacznik ${s.aktywny ? 'ok' : ''}">${!s.aktywny ? 'Wstrzymane' : s.reczny ? (s.checklista ? 'Ręczna' : 'Pojedyncze') : (s.checklista ? 'Stała' : 'Stałe')}</span>
             ${s.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
             <span class="znacznik neutral">${esc(s.dzialNazwa)}</span>
             ${s.liniaNazwa ? `<span>${esc(s.liniaNazwa)}</span>` : ''}${s.maszyna ? `<span>· ${esc(s.maszyna)}</span>` : ''}
@@ -79,73 +79,6 @@
   });
 
   /* Pokaż tylko pola pasujące do wyborów i podgląd „Następne: …” — kierownik od razu widzi, kiedy hub zleci. */
-  // ------------------------------------------------------------ D55: checklista zadań (pozycje = osobne zapisane zlecenia)
-  let checklista = null;                     // null — zwykłe okno; { istniejace: [kody] } — okno checklisty
-  const wierszPozycji = (p, maszyny) => `<div class="pozycja-checklisty" data-opis="${esc(p.opis || '')}">
-      <input data-p="tytul" maxlength="150" placeholder="Co zrobić" value="${esc(p.tytul || '')}" aria-label="Pozycja">
-      <select data-p="maszyna" aria-label="Maszyna">${P.opcje(maszyny, '— bez maszyny —')}</select>
-      <input data-p="minuty" type="number" min="1" max="10080" inputmode="numeric" placeholder="min od startu" value="${esc(p.minuty || '')}" aria-label="Termin: minut od startu zmiany">
-      <label title="Wymagaj zdjęcia"><input type="checkbox" data-p="zdjecie" ${p.zdjecie ? 'checked' : ''}> 📷</label>
-      <label title="Wymagaj notatki"><input type="checkbox" data-p="notatka" ${p.notatka ? 'checked' : ''}> 📝</label>
-      <label title="Wymagaj skanu QR maszyny"><input type="checkbox" data-p="skan" ${p.skan ? 'checked' : ''}> ▣</label>
-      <button type="button" class="maly" data-usun-pozycje aria-label="Usuń pozycję">✕</button>
-    </div>`;
-  function rysujPozycje(pozycje) {
-    const el = f.querySelector('[data-pozycje]');
-    const maszyny = P.maszynyLinii('');
-    el.innerHTML = pozycje.map(p => wierszPozycji(p, maszyny)).join('');
-    [...el.querySelectorAll('[data-p="maszyna"]')].forEach((s, i) => { s.value = pozycje[i].maszyna || ''; });
-  }
-  const pozycjeZOkna = () => [...f.querySelectorAll('.pozycja-checklisty')].map(r => {
-    const v = n => r.querySelector(`[data-p="${n}"]`);
-    return { tytul: v('tytul').value, maszyna: v('maszyna').value, minuty: v('minuty').value, opis: r.dataset.opis || '',
-             zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked && !!v('maszyna').value };
-  });
-  function trybChecklisty(wl) {
-    for (const id of ['stale-termin', 'stale-wymagania', 'stale-maszyna']) $(id).hidden = wl;
-    $('stale-pozycje').hidden = !wl;
-    f.tytul.placeholder = wl ? 'Nazwa checklisty, np. Obchód BHP' : 'np. Sprzątanie stanowisk po zmianie';
-  }
-  f.querySelector('[data-dodaj-pozycje]').addEventListener('click', () => {
-    const p = pozycjeZOkna(); p.push({}); rysujPozycje(p);
-    const ost = f.querySelector('.pozycja-checklisty:last-child [data-p="tytul"]'); if (ost) ost.focus();
-  });
-  // Pozycja z zapisanego zlecenia — tytuł, maszyna, wymagania, termin i opis przepisane, bez pisania drugi raz.
-  const zZapisanych = f.querySelector('[data-z-zapisanych]');
-  function rysujZapisane() {
-    const lista = W.zadaniaDoChecklisty(hala.slowniki, checklista ? checklista.istniejace : []);
-    zZapisanych.innerHTML = `<option value="">${lista.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak (zapisz zlecenie „💾 Zapisz”)'}</option>`
-      + lista.map(z => `<option value="${esc(z.kod)}">${esc(z.opisWyboru)}</option>`).join('');
-    zZapisanych.disabled = !lista.length;
-  }
-  zZapisanych.addEventListener('change', () => {
-    const z = W.zadaniaDoChecklisty(hala.slowniki).find(x => x.kod === zZapisanych.value);
-    zZapisanych.value = '';
-    if (!z) return;
-    const p = pozycjeZOkna().filter(x => String(x.tytul || '').trim());
-    p.push(z);
-    rysujPozycje(p);
-  });
-  f.querySelector('[data-pozycje]').addEventListener('click', ev => {
-    if (!ev.target.closest('[data-usun-pozycje]')) return;
-    ev.target.closest('.pozycja-checklisty').remove();
-  });
-  /* Okno checklisty: nowa albo istniejąca (wszystkie zapisane z tą samą nazwą checklisty, po numerze pozycji). */
-  function otworzChecklisty(nazwa) {
-    const st = (hala.slowniki || {}).zlecenia_stale || {};
-    const wpisy = nazwa ? Object.entries(st).filter(([, s]) => s && s.checklista === nazwa).sort(([, a], [, b]) => (a.pozycja || 0) - (b.pozycja || 0)) : [];
-    const pierwszy = wpisy.length ? wpisy[0][1] : null;
-    otworz(pierwszy ? Object.assign(W.stalyDoFormularza(pierwszy), { tytul: nazwa, maszyna: '' })
-      : { dzial: 'produkcja', rodzaj: 'dni_tygodnia', dni: [1, 2, 3, 4, 5], zmiany: [], aktywny: true }, null,
-      nazwa ? `Checklista: ${nazwa}` : 'Nowa checklista zadań');
-    checklista = { istniejace: wpisy.map(([k]) => k), nazwa: nazwa || null };
-    trybChecklisty(true);
-    rysujZapisane();
-    rysujPozycje(wpisy.length ? wpisy.map(([, s]) => ({ tytul: String(s.tytul || '').replace(`${nazwa}: `, ''), maszyna: s.maszyna || '',
-      minuty: ((s.termin || {}).rodzaj === 'minuty' && s.termin.minuty) || '', zdjecie: s.wymagaj_zdjecia === true, opis: s.opis || '',
-      notatka: s.wymagaj_notatki === true, skan: s.wymagaj_skanu === true })) : [{ notatka: true }, { notatka: true }]);
-  }
-
   function odswiez() {
     const r = f.rodzaj.value, t = f.termin_rodzaj.value;
     $('stale-dni').hidden = r !== 'dni_tygodnia';
@@ -168,8 +101,6 @@
 
   function otworz(wartosci, kod, tytulOkna, poZapisieFn) {
     const sl = hala.slowniki || {};
-    checklista = null;
-    trybChecklisty(false);
     edytowanyKod = kod || null;
     poZapisie = poZapisieFn || null;
     f.reset();
@@ -216,20 +147,6 @@
   f.addEventListener('submit', async ev => {
     ev.preventDefault();
     const blad = f.querySelector('.blad');
-    if (checklista) {
-      const c = W.checklistaZFormularza(Object.assign(pola(), { nazwa: f.tytul.value, pozycje: pozycjeZOkna(), istniejace: checklista.istniejace }),
-                                        hala.slowniki, hala.pracownik.id);
-      if (c.bledy.length) { blad.textContent = c.bledy.join(' '); blad.hidden = false; return; }
-      try {
-        for (const w of c.wpisy) await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
-        // Usunięte pozycje (było więcej niż jest) — znikają z zapisanych.
-        for (const kod of checklista.istniejace.slice(c.wpisy.length)) await hala.zapisz('slownik.usuniety', `zlecenia_stale/${kod}`, { slownik: 'zlecenia_stale', klucz: kod });
-        $('okno-stalego').close();
-        P.komunikat(`Checklista zapisana — ${c.wpisy.length} ${c.wpisy.length === 1 ? 'pozycja' : 'pozycje'}`, 'ok');
-        P.pokazZlecenia(null, 'stale');
-      } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
-      return;
-    }
     const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     try {
@@ -252,9 +169,19 @@
     const s = ((hala.slowniki || {}).zlecenia_stale || {})[kod];
     if (!s) return;
     try {
-      if (b.dataset.akcja === 'zmien') { if (s.checklista) otworzChecklisty(s.checklista); else otworz(W.stalyDoFormularza(s), kod); }
-      if (b.dataset.akcja === 'kopiuj') otworz(Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` }), null, 'Nowe zapisane (kopia)');
-      if (b.dataset.akcja === 'zlec') {
+      // D67: checklista (zapisane z pozycjami) ma własne, proste okno (checklisty.js).
+      const lista = Array.isArray(s.pozycje) && s.pozycje.length > 0;
+      if (b.dataset.akcja === 'zmien') { if (lista) P.widoki.checklisty.otworz(kod); else otworz(W.stalyDoFormularza(s), kod); }
+      if (b.dataset.akcja === 'kopiuj') {
+        if (lista) P.widoki.checklisty.otworz(kod, true);
+        else otworz(Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` }), null, 'Nowe zapisane (kopia)');
+      }
+      if (b.dataset.akcja === 'zlec' && lista) {
+        // Zlecenie z pozycjami od razu — okno „Nowe zlecenie” nie ma pozycji.
+        const dane = W.checklistaTeraz(kod, s, hala.zmianaTeraz(), hala.teraz(), W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz()));
+        await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
+        P.komunikat(`Zlecone: ${s.tytul} — dział dostał checklistę`, 'ok');
+      } else if (b.dataset.akcja === 'zlec') {
         P.noweZlecenie(W.zlecenieZeStalego(kod, s, W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz())));
       }
       if (b.dataset.akcja === 'wstrzymaj') {
@@ -277,7 +204,7 @@
     otworz(W.stalyZZlecenia(z), null, 'Zapisz zlecenie');
   }
 
-  $('nowa-checklista-zlecen').addEventListener('click', () => otworzChecklisty(null));
+  $('nowa-checklista-zlecen').addEventListener('click', () => P.widoki.checklisty.otworz(null));
 
-  P.widoki.stale = { rysuj, zZlecenia, otworzChecklisty, otworzZ: (wartosci, tytul, fn) => otworz(wartosci, null, tytul, fn) };
+  P.widoki.stale = { rysuj, zZlecenia, otworzZ: (wartosci, tytul, fn) => otworz(wartosci, null, tytul, fn) };
 })();

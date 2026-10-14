@@ -640,6 +640,27 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-krok-wymogu { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700;
   background: var(--tlo-neutralne); color: var(--tekst-slaby); }
 .hala-krok-wymogu.ok { background: var(--zielony-tlo); color: var(--zielony); }
+/* D67: checklista w karcie zlecenia — pozycje do odhaczenia (✓ zrobione, – pominięte, ○ do zrobienia, po godzinie na
+   czerwono); dotknięcie otwiera pozycję z jej wymaganiami. Wiersz pod palec: var(--dotyk). */
+.hala-checklista { display: grid; gap: 4px; margin: 8px 0; }
+.hala-checklista-naglowek { font-size: 14px; color: var(--tekst-slaby); }
+.hala-checklista-naglowek b { color: var(--tekst); }
+.hala-pozycja { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--dotyk); padding: 6px 10px;
+  border: 1px solid var(--ramka); border-radius: 10px; background: var(--karta); color: var(--tekst); font: inherit; text-align: left; cursor: pointer; }
+.hala-pozycja[aria-expanded="true"] { border-color: var(--ramka-mocna); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.hala-pozycja-znak { flex: none; width: 22px; text-align: center; font-weight: 700; font-size: 18px; }
+.hala-pozycja-godz { flex: none; font-variant-numeric: tabular-nums; color: var(--tekst-slaby); font-size: 14px; }
+.hala-pozycja-nazwa { flex: 1; min-width: 0; }
+.hala-pozycja-wymogi { flex: none; letter-spacing: 2px; }
+.hala-pozycja.stan-wykonana { background: var(--zielony-tlo); }
+.hala-pozycja.stan-wykonana .hala-pozycja-znak { color: var(--zielony); }
+.hala-pozycja.stan-wykonana .hala-pozycja-nazwa { color: var(--tekst-slaby); }
+.hala-pozycja.stan-pominieta .hala-pozycja-nazwa { color: var(--tekst-slaby); text-decoration: line-through; }
+.hala-pozycja.stan-po-terminie { border-color: var(--czerwony); }
+.hala-pozycja.stan-po-terminie .hala-pozycja-znak, .hala-pozycja.stan-po-terminie .hala-pozycja-godz { color: var(--czerwony); }
+.hala-pozycja-panel { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--ramka-mocna); border-top: 0;
+  border-radius: 0 0 10px 10px; margin-top: -4px; background: var(--tlo-podniesione); }
+.hala-pozycja-panel .szeroki { width: 100%; }
 .hala-zlecenie-czynnosc { margin: 8px 0 0; font-weight: 700; color: var(--niebieski); }
 .hala-zlecenie-postep { margin: 6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .hala-zlecenie-postep-akcje { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

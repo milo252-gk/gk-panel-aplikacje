@@ -1,160 +1,189 @@
-/* Panel Kierownika — szablony checklisty lidera (2026-09-28). Kto: role z kontraktu
-   (slowniki.szablony_checklist.zapis — kierownik i admin). D60 (właściciel 2026-10-14: „checklisty nie powinny być
-   schowane w ustawieniach, tylko w zleceniach”): lista leży w Zlecenia → 💾 Zapisane, razem z pozostałymi wzorami.
+/* Panel Kierownika — okno „Checklista” (D67, właściciel 2026-10-14: „W zleceniach ma być jeden rodzaj checklist — dla
+   lidera nie musi być osobnej. Uprość budowanie samych checklist, wydają się przekomplikowane”).
 
-   Szablon = nazwa + zakres (linie, zmiany; puste = wszystkie) + pozycje z terminem „godziny:minuty od startu
-   zmiany”. Aplikacja Lidera bierze najwęższy pasujący szablon (Hala.szablonDla) i przy otwarciu zmiany robi
-   z niego migawkę z godzinami — zmiana szablonu nie przestawia więc zmiany, która już trwa.
-   Zapis: slownik.zapisany / slownik.usuniety. Logika formularza: widok.js (szablonZFormularza — testowana). */
+   Checklista = zapisane zlecenie z pozycjami (słownik zlecenia_stale). Hub robi z niej na każdą wybraną zmianę JEDNO
+   zlecenie z pozycjami do odhaczenia (godziny tej zmiany) — dział odhacza je w Zleceniach, lider także na ekranie Zmiana.
+   Okno ma tylko to, co potrzebne: nazwa, kto (dział, linia, osoba), kiedy (codziennie / w wybrane dni / ręcznie, zmiany)
+   i pozycje: godzina od startu zmiany i co zrobić. Czynność (obsada, obchód, próba, BHP, przekazanie, przegląd), maszyna
+   i wymagania (📷 📝 ▣) są pod „⋯” przy pozycji — większość pozycji ich nie potrzebuje.
+   Zapis: slownik.zapisany zlecenia_stale/<kod>. Logika formularza: widok.js → checklistaZFormularza (testowana). */
 
 (() => {
   'use strict';
   const P = window.Panel;
   const { hala, W, $, esc } = P;
 
-  function rysuj() {
-    const sl = hala.slowniki || {};
-    const lista = W.szablonyLista(sl);
-    $('lista-szablonow').innerHTML = lista.map(s => `
-      <article class="szablon" data-kod="${esc(s.kod)}">
-        <div class="opis"><b>${esc(s.nazwa)}</b>
-          <div class="szczegoly"><span class="znacznik rodzaj-zadania">Checklista lidera</span></div>
-          <div class="slaby">${esc(s.zakres)} · pozycji: ${s.pozycji}</div></div>
-        <div class="akcje">
-          <button type="button" class="maly" data-akcja="zmien">Zmień</button>
-          <button type="button" class="maly" data-akcja="kopiuj">Kopiuj</button>
-          <button type="button" class="maly" data-akcja="usun">Usuń</button>
-        </div>
-      </article>`).join('') || '<p class="pusto">Nie ma jeszcze checklisty lidera — bez niej lider nie ma planu zmiany („+ Checklista lidera”).</p>';
-  }
-
-  // ------------------------------------------------------------ okno edycji
-
-  const f = $('formularz-szablonu');
+  const f = $('formularz-checklisty');
   let edytowanyKod = null;
 
   const zmianySlownik = () => {
     const z = (hala.slowniki && hala.slowniki.zmiany) || {};
     return Object.keys(z).length ? z : { I: { nazwa: 'Zmiana I', od: '06:00' }, II: { nazwa: 'Zmiana II', od: '14:00' }, III: { nazwa: 'Zmiana III', od: '22:00' } };
   };
+  const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
 
   function wierszPozycji(p) {
-    const typy = W.TYPY_POZYCJI.map(([k, n]) => `<option value="${k}" ${p.typ === k ? 'selected' : ''}>${esc(n)}</option>`).join('');
-    return `<div class="pozycja-szablonu" data-id="${esc(p.id || '')}">
-      <input class="termin" value="${esc(p.termin || '')}" placeholder="0:30" aria-label="Termin od startu zmiany (godziny:minuty)" inputmode="numeric">
-      <span class="godzina slaby"></span>
-      <input class="nazwa" value="${esc(p.nazwa || '')}" placeholder="Co zrobić" aria-label="Nazwa pozycji">
-      <select class="typ" aria-label="Rodzaj">${typy}</select>
-      <input class="cel" value="${esc(p.cel || '')}" placeholder="kod maszyny" aria-label="Punkt QR — kod maszyny do zeskanowania (opcjonalnie)" ${p.typ === 'obchod' ? '' : 'hidden'}>
-      <span class="przyciski-wiersza">
+    const maszyny = P.maszynyLinii(f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value);
+    return `<div class="pozycja-checklisty" data-id="${esc(p.id || '')}">
+      <div class="pozycja-glowna">
+        <input class="godzina" value="${esc(p.godzina || '')}" placeholder="0:30" inputmode="numeric" aria-label="Godzina od startu zmiany (g:mm)">
+        <span class="godz slaby" aria-hidden="true"></span>
+        <input class="nazwa" value="${esc(p.nazwa || '')}" maxlength="200" placeholder="Co zrobić" aria-label="Co zrobić">
+        <span class="ikony" aria-hidden="true"></span>
+        <button type="button" class="maly" data-szczegoly aria-expanded="false" title="Czynność, maszyna, zdjęcie, notatka, skan">⋯</button>
         <button type="button" class="maly" data-ruch="-1" aria-label="W górę">↑</button>
         <button type="button" class="maly" data-ruch="1" aria-label="W dół">↓</button>
         <button type="button" class="maly" data-usun aria-label="Usuń pozycję">✕</button>
-      </span>
+      </div>
+      <div class="pozycja-szczegoly" hidden>${/* zawsze zwinięte — w wierszu widać ikony (👥 ▣ 📷 📝) */ ''}
+        <label>Czynność<select class="czynnosc">${W.CZYNNOSCI_POZYCJI.map(([k, n]) => `<option value="${esc(k)}" ${p.czynnosc === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+        <label>Maszyna<select class="maszyna">${P.opcje(maszyny, '— bez maszyny —')}</select></label>
+        <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> 📷 zdjęcie</label>
+        <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> 📝 notatka</label>
+        <label class="zaznacz" title="Odhaczy tylko po zeskanowaniu naklejki QR wybranej maszyny"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ▣ skan QR</label>
+      </div>
     </div>`;
   }
 
-  /* Podgląd godzin dla pierwszej zaznaczonej zmiany (albo I) — człowiek myśli „o 6:30”, a nie „+0:30”. */
-  function odswiezGodziny() {
-    const zm = zmianySlownik();
-    const wybrana = [...f.querySelectorAll('input[name="zmiany"]:checked')].map(x => x.value)[0] || Object.keys(zm)[0];
-    const od = (zm[wybrana] || {}).od;
-    $('szablon-podglad').textContent = `Godziny w podglądzie: ${(zm[wybrana] || {}).nazwa || wybrana} (start ${od || '—'})`;
-    for (const w of f.querySelectorAll('.pozycja-szablonu')) {
-      w.querySelector('.godzina').textContent = W.godzinaPozycji(od, W.minutyZTekstu(w.querySelector('.termin').value));
-      w.querySelector('.cel').hidden = w.querySelector('.typ').value !== 'obchod';
-    }
+  const pozycjeZOkna = () => [...f.querySelectorAll('.pozycja-checklisty')].map(w => {
+    const v = c => w.querySelector('.' + c);
+    return { id: w.dataset.id || null, godzina: v('godzina').value, nazwa: v('nazwa').value, czynnosc: v('czynnosc').value,
+             maszyna: v('maszyna').value, zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked };
+  });
+
+  function rysujPozycje(pozycje) {
+    $('checklista-pozycje').innerHTML = pozycje.map(wierszPozycji).join('');
+    const wiersze = [...f.querySelectorAll('.pozycja-checklisty')];
+    wiersze.forEach((w, i) => { w.querySelector('.maszyna').value = pozycje[i].maszyna || ''; });
+    odswiez();
   }
 
+  const pola = () => ({ nazwa: f.nazwa.value, dzial: f.dzial.value, linia: f.linia.value, wykonawca: f.wykonawca.value,
+                        rodzaj: f.rodzaj.value, dni: wybrane('dni'), zmiany: wybrane('zmiany'), aktywny: f.aktywny.checked,
+                        pozycje: pozycjeZOkna() });
+
+  /* Godziny pozycji dla pierwszej zaznaczonej zmiany (człowiek myśli „o 6:30”, a nie „+0:30”), ikony szczegółów,
+     dni tygodnia tylko przy „W wybrane dni” i podgląd „Następna: …”. */
+  function odswiez() {
+    const zm = zmianySlownik();
+    const nr = wybrane('zmiany')[0] || Object.keys(zm)[0];
+    const od = (zm[nr] || {}).od;
+    for (const w of f.querySelectorAll('.pozycja-checklisty')) {
+      const min = W.minutyZTekstu(w.querySelector('.godzina').value);
+      w.querySelector('.godz').textContent = w.querySelector('.godzina').value.trim() ? `= ${W.godzinaPozycji(od, min)}` : '';
+      const cz = w.querySelector('.czynnosc').value;
+      w.querySelector('.ikony').textContent = [cz ? (W.CZYNNOSCI_POZYCJI.find(([k]) => k === cz) || ['', ''])[1].split(' ')[0] : '',
+        w.querySelector('.zdjecie').checked ? '📷' : '', w.querySelector('.notatka').checked ? '📝' : '', w.querySelector('.skan').checked ? '▣' : ''].join('');
+    }
+    const r = f.rodzaj.value;
+    $('checklista-dni').hidden = r !== 'dni_tygodnia';
+    $('checklista-zmiany').hidden = $('checklista-zmiany-opis').hidden = r === 'reczny';
+    const w = W.checklistaZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik && hala.pracownik.id);
+    let podglad = '';
+    if (!w.bledy.length) {
+      podglad = W.harmonogramPoLudzku(w.wartosc, hala.slowniki);
+      if (r !== 'reczny' && w.wartosc.aktywny) {
+        const n = W.nastepneWystapienie(w.kod, w.wartosc, hala.teraz(), hala.slowniki);
+        podglad += n ? ` · następna: ${n.opis}` : ' · brak wystąpień w najbliższych dwóch miesiącach';
+      }
+      const ile = w.wartosc.pozycje.length;
+      podglad += ` · ${ile} ${ile === 1 ? 'pozycja' : ile < 5 ? 'pozycje' : 'pozycji'}`;
+    }
+    $('checklista-podglad').textContent = podglad;
+  }
+
+  function linieDzialu(dzial) {
+    // Lider i mistrz pracują na liniach — domyślnie „każda linia osobno” (każda linia dostaje swoją checklistę).
+    const naLiniach = dzial === 'produkcja' || dzial === 'mistrz';
+    f.linia.innerHTML = P.opcje([...(naLiniach ? [[W.LINIA_KAZDA, '— każda linia osobno —']] : []), ...P.linieLista()],
+                                naLiniach ? '— wszystkie razem —' : '— bez linii —');
+  }
+
+  /* kod = istniejąca checklista; kopia — nowa z jej treścią. */
   function otworz(kod, kopia) {
-    const sl = hala.slowniki || {};
-    const zrodlo = kod ? W.szablonDoFormularza((sl.szablony_checklist || {})[kod] || {}) : { nazwa: '', linie: [], zmiany: [], pozycje: [
-      { nazwa: 'Raport obsady', typ: 'obsada', termin: '0:30' }, { nazwa: 'Obchód linii — start', typ: 'obchod', termin: '1:00' },
-      { nazwa: 'Przekazanie zmiany', typ: 'przekazanie', termin: '7:45' }] };
+    const s = kod ? ((hala.slowniki || {}).zlecenia_stale || {})[kod] : null;
+    const zm = Object.keys(zmianySlownik());
+    const w = s ? W.checklistaDoFormularza(s)
+      : { nazwa: '', dzial: 'produkcja', linia: W.LINIA_KAZDA, wykonawca: '', rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5], zmiany: zm, aktywny: true,
+          pozycje: [{ godzina: '0:30', nazwa: '' }, { godzina: '', nazwa: '' }] };
     edytowanyKod = kopia ? null : kod;
-    if (kopia) { zrodlo.nazwa = `${zrodlo.nazwa} (kopia)`; zrodlo.pozycje.forEach(p => { if (p.typ !== 'przekazanie') delete p.id; }); }
-    $('t-okno-szablonu').textContent = edytowanyKod ? `Szablon: ${zrodlo.nazwa}` : 'Nowy szablon';
-    f.nazwa.value = zrodlo.nazwa;
-    P.pokazPolaLinii(f);
-    $('szablon-linie').innerHTML = Object.entries(sl.linie || {}).map(([k, l]) =>
-      `<label class="zaznacz"><input type="checkbox" name="linie" value="${esc(k)}" ${zrodlo.linie.includes(k) ? 'checked' : ''}> ${esc((l && l.nazwa) || k)}</label>`).join('');
-    $('szablon-zmiany').innerHTML = Object.entries(zmianySlownik()).map(([k, z]) =>
-      `<label class="zaznacz"><input type="checkbox" name="zmiany" value="${esc(k)}" ${zrodlo.zmiany.includes(k) ? 'checked' : ''}> ${esc(z.nazwa || k)} <span class="slaby">${esc(z.od || '')}</span></label>`).join('');
-    $('szablon-pozycje').innerHTML = zrodlo.pozycje.map(wierszPozycji).join('');
-    // Właściciel 2026-10-13: pozycje także z zapisanych zleceń (pojedynczych i stałych) — bez pisania drugi raz.
-    const zapisane = W.zadaniaDoChecklisty(sl);
-    $('szablon-z-zapisanych').innerHTML = `<option value="">${zapisane.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak'}</option>`
-      + zapisane.map(z => `<option value="${esc(z.kod)}">${esc(z.opisWyboru)}</option>`).join('');
-    $('szablon-z-zapisanych').disabled = !zapisane.length;
+    if (kopia) { w.nazwa = `${w.nazwa} (kopia)`; w.pozycje.forEach(p => { delete p.id; }); }
+    $('t-okno-checklisty').textContent = edytowanyKod ? `Checklista: ${w.nazwa}` : kopia ? 'Nowa checklista (kopia)' : 'Nowa checklista';
     f.querySelector('.blad').hidden = true;
-    odswiezGodziny();
-    $('okno-szablonu').showModal();
+    f.nazwa.value = w.nazwa;
+    f.dzial.innerHTML = P.opcje(((hala.kontrakt.stale || {}).dzialy || []).filter(d => d.kod !== 'kierownik').map(d => [d.kod, d.nazwa]));
+    f.dzial.value = w.dzial;
+    linieDzialu(w.dzial);
+    P.pokazPolaLinii(f);
+    f.linia.value = w.linia || '';
+    f.wykonawca.innerHTML = P.opcje(P.osobyDzialu(f.dzial.value), '— cały dział —');
+    f.wykonawca.value = w.wykonawca || '';
+    f.rodzaj.value = ['codziennie', 'dni_tygodnia', 'reczny'].includes(w.rodzaj) ? w.rodzaj : 'codziennie';
+    $('checklista-dni').innerHTML = W.DNI_NAZWY.map((n, i) =>
+      `<label class="zaznacz"><input type="checkbox" name="dni" value="${i + 1}" ${(w.dni || []).includes(i + 1) ? 'checked' : ''}> ${esc(n)}</label>`).join('');
+    $('checklista-zmiany').innerHTML = Object.entries(zmianySlownik()).map(([k, z]) =>
+      `<label class="zaznacz"><input type="checkbox" name="zmiany" value="${esc(k)}" ${(w.zmiany || []).includes(k) ? 'checked' : ''}> ${esc(z.nazwa || k)} <span class="slaby">${esc(z.od || '')}</span></label>`).join('');
+    f.aktywny.checked = w.aktywny !== false;
+    rysujPozycje(w.pozycje.length ? w.pozycje : [{}]);
+    // Właściciel 2026-10-13: pozycje także z zapisanych zleceń — bez pisania drugi raz.
+    const zapisane = W.zadaniaDoChecklisty(hala.slowniki);
+    const z = f.querySelector('[data-z-zapisanych]');
+    z.innerHTML = `<option value="">${zapisane.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak'}</option>`
+      + zapisane.map(x => `<option value="${esc(x.kod)}">${esc(x.opisWyboru)}</option>`).join('');
+    z.disabled = !zapisane.length;
+    $('okno-checklisty').showModal();
     f.nazwa.focus();
   }
 
-  $('szablon-z-zapisanych').addEventListener('change', ev => {
-    const z = W.zadaniaDoChecklisty(hala.slowniki).find(x => x.kod === ev.target.value);
-    ev.target.value = '';
-    if (!z) return;
-    $('szablon-pozycje').insertAdjacentHTML('beforeend', wierszPozycji(W.pozycjaSzablonuZZapisanego(z)));
-    const w = $('szablon-pozycje').lastElementChild.querySelector('.termin');
-    if (!w.value) w.focus();
-    odswiezGodziny();
+  f.addEventListener('input', odswiez);
+  f.addEventListener('change', ev => {
+    if (ev.target === f.dzial) {
+      linieDzialu(f.dzial.value);
+      f.wykonawca.innerHTML = P.opcje(P.osobyDzialu(f.dzial.value), '— cały dział —');
+    }
+    if (ev.target === f.linia) rysujPozycje(pozycjeZOkna());          // maszyny do wyboru — z wybranej linii
+    if (ev.target.matches('[data-z-zapisanych]')) {
+      const z = W.zadaniaDoChecklisty(hala.slowniki).find(x => x.kod === ev.target.value);
+      ev.target.value = '';
+      if (z) rysujPozycje([...pozycjeZOkna().filter(p => String(p.nazwa || '').trim()), W.pozycjaZZapisanego(z)]);
+    }
+    odswiez();
   });
-  f.addEventListener('input', odswiezGodziny);
-  f.addEventListener('change', odswiezGodziny);
   f.addEventListener('click', ev => {
     const b = ev.target.closest('button');
     if (!b) return;
-    const w = b.closest('.pozycja-szablonu');
+    const w = b.closest('.pozycja-checklisty');
     if (b.dataset.ruch && w) {
       const cel = +b.dataset.ruch < 0 ? w.previousElementSibling : w.nextElementSibling;
       if (cel) (+b.dataset.ruch < 0 ? cel.before(w) : cel.after(w));
     } else if (b.hasAttribute('data-usun') && w) {
       w.remove();
-    } else if (b.id === 'szablon-dodaj') {
-      $('szablon-pozycje').insertAdjacentHTML('beforeend', wierszPozycji({ typ: 'zadanie' }));
-      $('szablon-pozycje').lastElementChild.querySelector('.termin').focus();
+    } else if (b.hasAttribute('data-szczegoly') && w) {
+      const s = w.querySelector('.pozycja-szczegoly');
+      s.hidden = !s.hidden;
+      b.setAttribute('aria-expanded', String(!s.hidden));
+    } else if (b.hasAttribute('data-dodaj-pozycje')) {
+      $('checklista-pozycje').insertAdjacentHTML('beforeend', wierszPozycji({}));
+      $('checklista-pozycje').lastElementChild.querySelector('.godzina').focus();
     } else if (b.hasAttribute('data-zamknij')) {
-      $('okno-szablonu').close();
+      $('okno-checklisty').close();
     }
-    odswiezGodziny();
+    odswiez();
   });
 
   f.addEventListener('submit', async ev => {
     ev.preventDefault();
-    const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
-    const pozycje = [...f.querySelectorAll('.pozycja-szablonu')].map(w => ({
-      id: w.dataset.id || null, termin: w.querySelector('.termin').value, nazwa: w.querySelector('.nazwa').value,
-      typ: w.querySelector('.typ').value, cel: w.querySelector('.cel').value }));
-    const wynik = W.szablonZFormularza({ nazwa: f.nazwa.value, linie: wybrane('linie'), zmiany: wybrane('zmiany'), pozycje },
-                                       hala.slowniki, edytowanyKod);
     const blad = f.querySelector('.blad');
-    if (wynik.bledy.length) { blad.textContent = wynik.bledy.join(' '); blad.hidden = false; return; }
-    // Etap 3: w noc przejścia na czas letni zmiana przez 02:00 trwa godzinę krócej — to wyjątek raz w roku, więc pytamy.
-    if ((wynik.ostrzezenia || []).length && !(await P.potwierdz('Termin blisko końca zmiany', wynik.ostrzezenia.join(' '), 'Zapisz mimo to'))) return;
+    const w = W.checklistaZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
+    if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     try {
-      await hala.zapisz('slownik.zapisany', `szablony_checklist/${wynik.kod}`,
-                        { slownik: 'szablony_checklist', klucz: wynik.kod, wartosc: wynik.wartosc });
-      $('okno-szablonu').close();
+      await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
+      $('okno-checklisty').close();
+      P.komunikat(w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Checklista zapisana — zlecasz ją „Zleć teraz”'
+        : 'Checklista zapisana — serwer sam zleci ją na wybrane zmiany', 'ok');
+      P.pokazZlecenia(null, 'stale');
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  $('nowy-szablon').addEventListener('click', () => otworz(null));
-  $('lista-szablonow').addEventListener('click', async ev => {
-    const b = ev.target.closest('[data-akcja]');
-    if (!b) return;
-    const kod = b.closest('[data-kod]').dataset.kod;
-    if (b.dataset.akcja === 'zmien') otworz(kod);
-    if (b.dataset.akcja === 'kopiuj') otworz(kod, true);
-    if (b.dataset.akcja === 'usun') {
-      const s = (hala.slowniki.szablony_checklist || {})[kod] || {};
-      // Okno aplikacji (D30) zamiast systemowego okienka przeglądarki — jak pozostałe pytania Panelu.
-      if (!(await P.potwierdz('Usunąć szablon?', `„${s.nazwa || kod}”. Zmiany, które już trwają, zostają przy swojej checkliście.`, 'Usuń'))) return;
-      try { await hala.zapisz('slownik.usuniety', `szablony_checklist/${kod}`, { slownik: 'szablony_checklist', klucz: kod }); }
-      catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
-    }
-  });
-
-  P.widoki.checklisty = { rysuj };
+  P.widoki.checklisty = { otworz, rysuj: () => {} };
 })();

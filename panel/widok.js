@@ -62,19 +62,19 @@
      zrobił się czerwony po terminie pierwszej pozycji. To samo, gdy lider odhacza
      bez otwarcia zmiany (checklista.* zakłada obiekt „auto”, ale bez pozycji):
      wtedy zostawiamy jego odhaczenia i dokładamy pozycje z szablonu.            */
-  function obchody({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale }) {
+  function obchody({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia }) {
     if (!zmiana) return [];
     const zatrzymuje = kodyZatrzymujace(stale);
     const wiele = wieleLinii(slowniki);
     return liniePosortowane(slowniki).map(({ kod, nazwa }) => {
       const klucz = `${kod}/${zmiana.id}`;
       const zl = zmianaLinii(klucz);
-      let doKoloru = zl;
-      const wirtualna = !zl || !((zl.dane || {}).pozycje || []).length;
-      if (wirtualna) {
-        const pozycje = H().pozycjeZSzablonu(H().szablonDla(slowniki, kod, zmiana.nr), zmiana);
-        doKoloru = { dane: Object.assign({}, (zl && zl.dane) || {}, { pozycje }) };
-      }
+      // D67: checklista lidera to zlecenie z pozycjami (hub robi je na start zmiany) — kolor liczony z niego. Zmiana
+      // sprzed D67 (migawka pozycji w zmianie na linii) — jak dawniej.
+      const lista = H().checklistaZmiany(zlecenia || [], kod, zmiana, 'produkcja');
+      const zeZlecen = lista.dane.pozycje.length > 0;
+      const doKoloru = zeZlecen ? lista : zl;
+      const wirtualna = !(zl && ((zl.dane || {}).czas_rozpoczecia || ((zl.dane || {}).pozycje || []).length));
       const k = H().kolorChecklisty(doKoloru, teraz, prog);
       const naLinii = (awarie || []).filter(a => a.aktywny && a.linia === kod);
       return {
@@ -85,7 +85,7 @@
         otwarta: !!(zl && zl.status === 'otwarta' && !wirtualna),
         zamknieta: !!(zl && zl.status === 'zamknieta'),
         wirtualna,
-        lider: nazwaPracownika(pracownicy, zl && zl.dane && zl.dane.lider),
+        lider: nazwaPracownika(pracownicy, (zl && zl.dane && zl.dane.lider) || lista.zlecenia.map(z => (z.dane || {}).przyjal).find(Boolean)),
         najblizsza: k.najblizsza ? { nazwa: k.najblizsza.nazwa, godz: godzina(k.najblizsza.termin),
                                      zaMin: Math.max(0, Math.round((Date.parse(k.najblizsza.termin) - teraz) / MIN)) } : null,
         opoznione: k.opoznione.map(p => ({ nazwa: p.nazwa, godz: godzina(p.termin) })),
@@ -204,7 +204,7 @@
      kierownik widział tylko raporty, które przyszły — brak raportu nie zostawiał śladu. Najnowsze na górze;
      najpierw te, które lider otworzył (zaczął i nie skończył), potem nieotwarte. `otwarta` = lider wysłał
      zmiana.rozpoczeta (migawka pozycji) — samo odhaczenie bez otwarcia (obiekt „auto” bez pozycji) to nieotwarta. */
-  function zmianyBezRaportu({ zmianaLinii, slowniki, pracownicy, teraz, godzin }) {
+  function zmianyBezRaportu({ zmianaLinii, slowniki, pracownicy, teraz, godzin, zlecenia }) {
     const zmiany = (slowniki && slowniki.zmiany && Object.keys(slowniki.zmiany).length) ? slowniki.zmiany : null;
     const okresy = [];
     let t = teraz - (godzin || 48) * 3600000;
@@ -219,10 +219,12 @@
       for (const l of liniePosortowane(slowniki)) {
         const zl = zmianaLinii(`${l.kod}/${z.id}`);
         if (zl && zl.dane && zl.dane.raport) continue;
-        const szablon = H().szablonDla(slowniki, l.kod, z.nr);
-        if (!zl && !(szablon && (szablon.pozycje || []).length)) continue;
+        // D67: linia miała tę zmianę checklistę (zlecenie z pozycjami) albo lider ją otworzył.
+        const lista = H().checklistaZmiany(zlecenia || [], l.kod, z, 'produkcja');
+        if (!zl && !lista.dane.pozycje.length) continue;
+        const otwarta = !!(zl && ((zl.dane || {}).czas_rozpoczecia || ((zl.dane || {}).pozycje || []).length));
         wynik.push({ klucz: `${l.kod}/${z.id}`, linia: l.kod, liniaNazwa: liniaWidoczna(slowniki, l.kod), zmiana: z.id, zmianaOpis: opisZmiany(z.id, slowniki),
-                     koniec: z.do, otwarta: !!(zl && ((zl.dane || {}).pozycje || []).length), lider: zl ? nazwaPracownika(pracownicy, (zl.dane || {}).lider) : null });
+                     koniec: z.do, otwarta, lider: zl ? nazwaPracownika(pracownicy, (zl.dane || {}).lider) : null });
       }
     }
     return wynik.sort((a, b) => (b.otwarta - a.otwarta) || Date.parse(b.koniec) - Date.parse(a.koniec) || a.liniaNazwa.localeCompare(b.liniaNazwa, 'pl'));
@@ -336,7 +338,10 @@
         naZmiane: d.zmiana ? (zmianySl(slowniki)[d.zmiana] || {}).nazwa || `Zmiana ${d.zmiana}` : null,
         podsumowanie: String(d.wystapienie || '').startsWith('podsumowanie|'),
         // D60: rodzaj zadania — znacznik na wierszu i filtr „Rodzaj” (jedna lista zamiast osobnych zakładek).
-        rodzaj: rodzajZlecenia(d, szablony), checklista: d.stale ? ((szablony[d.stale] || {}).checklista || null) : null,
+        rodzaj: rodzajZlecenia(d, szablony), checklista: Array.isArray(d.pozycje) && d.pozycje.length ? H().postepPozycji(d) : null,
+        pozycje: Array.isArray(d.pozycje) ? d.pozycje.map(p => ({ nazwa: p.nazwa || '', godz: p.termin ? godzina(p.termin) : '',
+          stan: (d.wykonane || {})[p.id] ? 'wykonana' : (d.pominiete || {})[p.id] ? 'pominieta' : 'czeka',
+          powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '' })) : [],
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
@@ -668,10 +673,10 @@
         nastepne: nast ? nast.opis : null,
         autor: nazwaPracownika(pracownicy, s.autor),
         nieZleca: s.aktywny !== false ? autorNieZleca(s, pracownicy, roleZlecajacych || null) : null,
-        checklista: s.checklista || null, pozycja: s.pozycja || null,
+        // D67: checklista = zapisane z pozycjami (jedno zlecenie z pozycjami do odhaczenia).
+        checklista: Array.isArray(s.pozycje) && s.pozycje.length > 0, pozycji: Array.isArray(s.pozycje) ? s.pozycje.length : 0,
       };
-    }).sort((a, b) => (b.aktywny - a.aktywny) || String(a.checklista || a.tytul).localeCompare(String(b.checklista || b.tytul), 'pl')
-      || ((a.pozycja || 0) - (b.pozycja || 0)) || a.tytul.localeCompare(b.tytul, 'pl'));
+    }).sort((a, b) => (b.aktywny - a.aktywny) || (b.checklista - a.checklista) || a.tytul.localeCompare(b.tytul, 'pl'));
   }
 
   /* Formularz okna „Zlecenie stałe” → { bledy, kod, wartosc } dla slownik.zapisany zlecenia_stale/<kod>.
@@ -770,6 +775,20 @@
   }
 
   /* Pola okna „Nowe zlecenie” wypełnione zleceniem stałym („Zleć teraz”). */
+  /* D67: „Zleć teraz” przy checkliście — gotowe dane zlecenie.utworzone (bez okna „Nowe zlecenie”: pozycji tam nie ma).
+     Godziny pozycji od startu bieżącej zmiany (poza zmianą — od teraz), nie dalej niż termin. */
+  function checklistaTeraz(kod, s, zmiana, teraz, terminMs) {
+    const start = zmiana ? zmiana.od : new Date(teraz).toISOString();
+    const granica = !isNaN(terminMs) && terminMs ? new Date(terminMs).toISOString() : (zmiana ? zmiana.do : null);
+    const dane = { tytul: s.tytul || '', dzial: s.dzial, priorytet: s.priorytet === 'pilne' ? 'pilne' : 'normalny', stale: kod,
+                   pozycje: H().pozycjeWystapienia(s.pozycje || [], start, granica) };
+    if (granica) dane.termin = granica;
+    if (s.linia && s.linia !== LINIA_KAZDA) dane.linia = s.linia;
+    if (s.wykonawca) dane.wykonawca = s.wykonawca;
+    if (s.opis) dane.opis = s.opis;
+    return dane;
+  }
+
   function zlecenieZeStalego(kod, s, terminMs) {
     // „Każda linia osobno” robi hub; ręczne „Zleć teraz” to jedno zlecenie — dla wszystkich liderów (P8).
     return { tytul: s.tytul || '', opis: s.opis || '', dzial: s.dzial, linia: s.linia === LINIA_KAZDA ? '' : s.linia || '', maszyna: s.maszyna || '',
@@ -1240,13 +1259,7 @@
     return { klasa: 'ok', tekst: 'Zapisane.' };
   }
 
-  // ------------------------------------------------------------ szablony checklist lidera (2026-09-28)
-
-  /* Typy pozycji — tak je obsługuje Aplikacja Lidera (lider/web/zmiana.js). */
-  const TYPY_POZYCJI = [
-    ['obsada', 'Raport obsady'], ['obchod', 'Obchód linii (skan QR)'], ['bhp', 'Audyt BHP'],
-    ['proba', 'Próba jakościowa'], ['zadanie', 'Zadanie'], ['przekazanie', 'Przekazanie zmiany'],
-  ];
+  // ------------------------------------------------------------ godziny pozycji checklisty (od 2026-09-28; D67 — okno „Checklista”)
 
   /* „0:30” / „7:45” / „90” → minuty od startu zmiany (null = zły zapis). */
   function minutyZTekstu(t) {
@@ -1256,7 +1269,7 @@
     m = /^\d{1,4}$/.exec(s);
     return m ? +s : null;
   }
-  const tekstZMinut = min => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+  const tekstZMinut =min => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
 
   /* Godzina pozycji dla zmiany „HH:MM” (podgląd w edytorze): start zmiany + minuty. */
   function godzinaPozycji(odZmiany, min) {
@@ -1266,80 +1279,12 @@
     return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
   }
 
-  /* Dla kogo szablon: „Wszystkie linie · wszystkie zmiany”, „Linia 1 · Zmiana III”. */
-  function zakresSzablonu(s, slowniki) {
-    const linie = (s.linie || []).map(l => nazwaLinii(slowniki, l));
-    const zmiany = (s.zmiany || []).map(z => (((slowniki || {}).zmiany || {})[z] || {}).nazwa || `Zmiana ${z}`);
-    // D51: przy jednej linii Panel nie pokazuje linii nigdzie — „Wszystkie linie” mówiłoby o czymś, czego kierownik nie widzi.
-    if (!wieleLinii(slowniki)) return zmiany.length ? zmiany.join(', ') : 'Wszystkie zmiany';
-    return `${linie.length ? linie.join(', ') : 'Wszystkie linie'} · ${zmiany.length ? zmiany.join(', ') : 'wszystkie zmiany'}`;
-  }
-
-  function szablonyLista(slowniki) {
-    return Object.entries((slowniki && slowniki.szablony_checklist) || {})
-      .map(([kod, s]) => ({ kod, nazwa: s.nazwa || kod, zakres: zakresSzablonu(s, slowniki), pozycji: (s.pozycje || []).length,
-                            ocena: ((s.linie || []).length ? 2 : 0) + ((s.zmiany || []).length ? 1 : 0) }))
-      .sort((a, b) => a.ocena - b.ocena || a.nazwa.localeCompare(b.nazwa, 'pl'));
-  }
-
   const kodZNazwy = (n, zajete) => {
     let k = loginZNazwy(n).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'pozycja';
     const baza = k; let i = 2;
     while (zajete.includes(k)) k = `${baza}-${i++}`;
     return k;
   };
-
-  /* Formularz edytora → { bledy, kod, wartosc } dla slownik.zapisany szablony_checklist/<kod>.
-     f = { nazwa, linie[], zmiany[], pozycje: [{ id?, nazwa, typ, termin ('0:30'), cel? }] }.
-     Id istniejących pozycji zostają (liderzy mają odhaczenia pod tym id), nowe biorą się z nazwy.
-     Przekazanie zmiany ma zawsze id „przekazanie” — po nim Aplikacja Lidera je rozpoznaje. */
-  function szablonZFormularza(f, slowniki, istniejacyKod) {
-    const bledy = [];
-    const nazwa = String(f.nazwa || '').trim();
-    if (!nazwa) bledy.push('Podaj nazwę szablonu.');
-    const linie = [].concat(f.linie || []).filter(Boolean).sort();
-    const zmiany = [].concat(f.zmiany || []).filter(Boolean).sort();
-    const inne = Object.entries((slowniki && slowniki.szablony_checklist) || {}).filter(([k]) => k !== istniejacyKod);
-    const takiSam = inne.find(([, s]) => JSON.stringify([...(s.linie || [])].sort()) === JSON.stringify(linie)
-                                         && JSON.stringify([...(s.zmiany || [])].sort()) === JSON.stringify(zmiany));
-    if (takiSam) bledy.push(`Ten sam zakres (${zakresSzablonu({ linie, zmiany }, slowniki)}) ma już szablon „${takiSam[1].nazwa || takiSam[0]}” — zmień linie albo zmiany.`);
-    const pozycje = [], zajete = [];
-    let przekazan = 0;
-    (f.pozycje || []).forEach((p, i) => {
-      const n = String(p.nazwa || '').trim();
-      if (!n) { bledy.push(`Pozycja ${i + 1}: podaj nazwę.`); return; }
-      const min = minutyZTekstu(p.termin);
-      if (min === null || min > 24 * 60) { bledy.push(`${n}: termin jako godziny:minuty od startu zmiany, np. 0:30 albo 7:45.`); return; }
-      const typ = TYPY_POZYCJI.some(([k]) => k === p.typ) ? p.typ : 'zadanie';
-      let id = typ === 'przekazanie' ? 'przekazanie' : (p.id && p.id !== 'przekazanie' ? p.id : kodZNazwy(n, zajete.concat(['przekazanie'])));
-      if (typ === 'przekazanie' && ++przekazan > 1) { bledy.push('Przekazanie zmiany może być tylko jedno.'); return; }
-      if (zajete.includes(id)) id = kodZNazwy(n, zajete);
-      zajete.push(id);
-      const poz = { id, nazwa: n, typ: typ === 'przekazanie' ? 'zadanie' : typ, termin_min: min };
-      if (typ === 'obchod') poz.wymaga_qr = true;
-      const cel = String(p.cel || '').trim().toUpperCase();
-      if (cel && typ === 'obchod') poz.cel = cel;
-      pozycje.push(poz);
-    });
-    if (!pozycje.length && !bledy.length) bledy.push('Dodaj co najmniej jedną pozycję.');
-    pozycje.sort((a, b) => a.termin_min - b.termin_min);
-    // Etap 3: termin po końcu najkrótszej zmiany z zakresu wypadałby na następnej zmianie (u innego lidera) — błąd.
-    // W noc przejścia na czas letni zmiana obejmująca 02:00 trwa godzinę krócej — wtedy tylko ostrzegamy.
-    const ostrzezenia = [];
-    const dl = dlugosciZmian(slowniki, zmiany);
-    if (dl.length && pozycje.length) {
-      const najkrotsza = dl.reduce((a, b) => (b.min < a.min ? b : a));
-      const ostatnia = pozycje[pozycje.length - 1];
-      if (ostatnia.termin_min > najkrotsza.min)
-        bledy.push(`${ostatnia.nazwa}: termin ${tekstZMinut(ostatnia.termin_min)} wypada po końcu zmiany ${najkrotsza.nr} (trwa ${tekstZMinut(najkrotsza.min)}). Skróć termin albo zawęź zmiany.`);
-      else for (const z of dl.filter(x => x.przez2)) {
-        const za = pozycje.filter(p => p.termin_min > z.min - 60);
-        if (za.length) ostrzezenia.push(`W noc zmiany czasu na letni zmiana ${z.nr} trwa godzinę krócej (${tekstZMinut(z.min - 60)}) — ${za.map(p => `„${p.nazwa}”`).join(', ')} wypadnie wtedy po jej końcu.`);
-      }
-    }
-    const kod = istniejacyKod || kodZNazwy(nazwa, inne.map(([k]) => k));
-    return { bledy, ostrzezenia, kod, wartosc: { nazwa, linie, zmiany, pozycje } };
-  }
 
   /* Długość zmian zakresu w zwykłej dobie (minuty) i czy zmiana obejmuje 02:00 (noc zmiany czasu). Puste = wszystkie. */
   function dlugosciZmian(slowniki, numery) {
@@ -1352,13 +1297,6 @@
       const przez2 = ((120 - od) % 1440 + 1440) % 1440 < dlugosc;
       return { nr, min: dlugosc, przez2 };
     }).filter(Boolean);
-  }
-
-  /* Szablon ze słownika → wiersze edytora (termin jako „0:30”, przekazanie jako osobny typ). */
-  function szablonDoFormularza(s) {
-    return { nazwa: s.nazwa || '', linie: s.linie || [], zmiany: s.zmiany || [],
-             pozycje: (s.pozycje || []).map(p => ({ id: p.id, nazwa: p.nazwa, typ: p.id === 'przekazanie' ? 'przekazanie' : (p.typ || 'zadanie'),
-                                                    termin: tekstZMinut(p.termin_min || 0), cel: p.cel || '' })) };
   }
 
   // ------------------------------------------------------------ wskaźniki (2026-09-28, decyzja właściciela)
@@ -1588,7 +1526,7 @@
 
   /* D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):
      jedna lista Zleceń. Rodzaje (kod, napis na znaczniku) — także filtr „Rodzaj”. */
-  const RODZAJE_ZADAN = [['zlecenie', 'Zlecenie'], ['zapisane', 'Zapisane 🔁'], ['checklista', 'Checklista zadań'],
+  const RODZAJE_ZADAN = [['zlecenie', 'Zlecenie'], ['zapisane', 'Zapisane 🔁'], ['checklista', 'Checklista'],
     ['kierownik', 'Dla kierownika'], ['podsumowanie', 'Podsumowanie zmiany'], ['zgloszenie', 'Zgłoszenie'],
     ['narzedzia', 'Narzędzia'], ['bhp', 'BHP']];
   const nazwaRodzaju = kod => (RODZAJE_ZADAN.find(([k]) => k === kod) || [kod, kod])[1];
@@ -1598,6 +1536,7 @@
     const x = d || {};
     if (x.dzial === 'kierownik') return 'kierownik';
     if (String(x.wystapienie || '').startsWith('podsumowanie|')) return 'podsumowanie';
+    if (Array.isArray(x.pozycje) && x.pozycje.length) return 'checklista';           // D67: zlecenie z pozycjami
     if (x.stale && ((szablony || {})[x.stale] || {}).checklista) return 'checklista';
     if (x.stale) return 'zapisane';
     return 'zlecenie';
@@ -1760,30 +1699,69 @@
              linia: d.linia || '', maszyna: d.maszyna || '', wymagaj_zdjecia: true, wymagaj_notatki: true };
   }
 
-  /* Checklista zadań (D55, „edycja jak zapisane”): nazwa + wspólne ustawienia jak przy zapisanych (dział, osoba, linia,
-     harmonogram, zmiany) + pozycje — każda to osobne zapisane zlecenie z własnymi wymaganiami i terminem (minuty od startu
-     zmiany). → { bledy, wpisy: [{kod, wartosc}] } do slownik.zapisany zlecenia_stale. */
-  function checklistaZFormularza(f, slowniki, autor) {
-    const bledy = [];
+  /* ---------------------------------------------------------------- D67: okno „Checklista”
+
+     Właściciel 2026-10-14: „Uprość budowanie samych checklist, wydają się przekomplikowane”. Jedno okno: nazwa, kto
+     (dział, linia, osoba), kiedy (codziennie, w wybrane dni albo ręcznie; zmiany) i pozycje — każda to godzina od startu
+     zmiany i co zrobić; czynność, maszyna i wymagania (📷 📝 ▣) tylko, gdy potrzebne. → { bledy, kod, wartosc } do
+     slownik.zapisany zlecenia_stale (jeden wpis z pozycjami). Te same zasady sprawdza hub (blad_pozycji). */
+  const CZYNNOSCI_POZYCJI = [['', 'zwykła pozycja'], ['obsada', '👥 Raport obsady'], ['obchod', '▣ Obchód (skan QR)'],
+    ['proba', '🔬 Próba jakościowa'], ['bhp', '⛑ Audyt BHP'], ['przekazanie', '📋 Przekazanie zmiany'], ['przeglad', '🔧 Przegląd UR']];
+  function checklistaZFormularza(f, slowniki, istniejacyKod, autor) {
     const nazwa = String(f.nazwa || '').trim().replace(/\s+/g, ' ');
-    if (!nazwa) bledy.push('Nazwij checklistę.');
-    const pozycje = (f.pozycje || []).filter(p => String(p.tytul || '').trim());
-    if (!pozycje.length) bledy.push('Dodaj co najmniej jedną pozycję.');
-    const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => !(f.istniejace || []).includes(k));
-    const wpisy = [];
-    pozycje.forEach((p, i) => {
-      const min = parseInt(p.minuty, 10);
-      const w = stalyZFormularza(Object.assign({}, f, {
-        tytul: `${nazwa}: ${String(p.tytul).trim()}`, opis: p.opis || f.opis || '', maszyna: p.maszyna || '',
-        wymagaj_zdjecia: !!p.zdjecie, wymagaj_notatki: !!p.notatka, wymagaj_skanu: !!p.skan,
-        termin_rodzaj: min >= 1 ? 'minuty' : 'koniec_zmiany', minuty: min >= 1 ? min : '',
-      }), slowniki, (f.istniejace || [])[i] || null, autor);
-      for (const b of w.bledy) if (!bledy.includes(b)) bledy.push(`Pozycja ${i + 1}: ${b}`);
-      let kod = w.kod;
-      if (!(f.istniejace || [])[i]) { kod = kodZNazwy(`${nazwa} ${i + 1}`, zajete); zajete.push(kod); }
-      wpisy.push({ kod, wartosc: Object.assign(w.wartosc, { checklista: nazwa, pozycja: i + 1 }) });
+    const w = stalyZFormularza(Object.assign({}, f, { tytul: nazwa, termin_rodzaj: 'koniec_zmiany', maszyna: '', pilne: false, co_min: '',
+                                                      wymagaj_zdjecia: false, wymagaj_notatki: false, wymagaj_skanu: false }),
+                               slowniki, istniejacyKod, autor);
+    const bledy = w.bledy.map(b => (b === 'Napisz, co zrobić.' ? 'Nazwij checklistę.' : b));
+    const czynnosci = new Set(CZYNNOSCI_POZYCJI.map(([k]) => k).filter(Boolean));
+    const ids = new Set();
+    const pozycje = [];
+    (f.pozycje || []).forEach(p => {
+      const n = String((p && p.nazwa) || '').trim().replace(/\s+/g, ' ');
+      if (!n) return;                                         // pusty wiersz — pomijamy po cichu
+      const nr = pozycje.length + 1;
+      let id = /^[A-Za-z0-9_.-]{1,60}$/.test(String(p.id || '')) && !ids.has(p.id) ? p.id : null;
+      for (let i = nr; !id; i++) if (!ids.has(`p${i}`)) id = `p${i}`;
+      ids.add(id);
+      const q = { id, nazwa: n.slice(0, 200) };
+      const g = String(p.godzina || '').trim();
+      if (g) {
+        const m = minutyZTekstu(g);
+        if (m === null || m > 10080) bledy.push(`Pozycja ${nr}: godzina od startu zmiany jako g:mm, np. 0:30.`);
+        else q.minuty = m;
+      }
+      if (p.czynnosc && czynnosci.has(p.czynnosc)) q.czynnosc = p.czynnosc;
+      if (p.maszyna) q.maszyna = String(p.maszyna);
+      if (p.zdjecie) q.wymagaj_zdjecia = true;
+      if (p.notatka) q.wymagaj_notatki = true;
+      if (p.skan) {
+        if (q.maszyna) q.wymagaj_skanu = true;
+        else bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę albo ustaw czynność „Obchód”.`);
+      }
+      pozycje.push(q);
     });
-    return { bledy, wpisy };
+    if (!pozycje.length) bledy.push('Dodaj co najmniej jedną pozycję — co trzeba zrobić.');
+    if (pozycje.length > 60) bledy.push('Najwyżej 60 pozycji w jednej checkliście.');
+    const wartosc = Object.assign(w.wartosc, { pozycje });
+    delete wartosc.wymagaj_skanu;
+    const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => k !== istniejacyKod);
+    const kod = istniejacyKod || kodZNazwy(`checklista ${nazwa || ''}`, zajete);
+    return { bledy, kod, wartosc };
+  }
+  /* Checklista ze słownika → pola okna. */
+  function checklistaDoFormularza(s) {
+    const h = (s && s.harmonogram) || {};
+    return { nazwa: (s && s.tytul) || '', dzial: (s && s.dzial) || 'produkcja', linia: (s && s.linia) || '', wykonawca: (s && s.wykonawca) || '',
+             rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], zmiany: h.zmiany || [], aktywny: !s || s.aktywny !== false,
+             pozycje: ((s && s.pozycje) || []).map(p => ({ id: p.id, nazwa: p.nazwa || '', godzina: Number.isInteger(p.minuty) ? tekstZMinut(p.minuty) : '',
+                                                          czynnosc: p.czynnosc || '', maszyna: p.maszyna || '', zdjecie: !!p.wymagaj_zdjecia,
+                                                          notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu })) };
+  }
+  /* Zapisane zlecenie → pozycja checklisty (lista „➕ Z zapisanych…” — bez pisania drugi raz). */
+  function pozycjaZZapisanego(z) {
+    const m = parseInt(z && z.minuty, 10);
+    return { nazwa: (z && z.tytul) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '',
+             czynnosc: (z && z.czynnosc) || '', zdjecie: !!(z && z.zdjecie), notatka: !!(z && z.notatka), skan: !!(z && z.skan) };
   }
 
 
@@ -1794,25 +1772,17 @@
     const bez = new Set(pomin || []);
     const maszyny = (slowniki && slowniki.maszyny) || {};
     return Object.entries((slowniki && slowniki.zlecenia_stale) || {})
-      .filter(([kod, s]) => s && s.tytul && !s.checklista && !bez.has(kod))
+      .filter(([kod, s]) => s && s.tytul && !s.checklista && !(Array.isArray(s.pozycje) && s.pozycje.length) && !bez.has(kod))
       .map(([kod, s]) => {
         const t = s.termin || {};
         const reczny = ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny';
-        return { kod, tytul: s.tytul, opis: s.opis || '', maszyna: s.maszyna || '', zdjecie: s.wymagaj_zdjecia === true,
+        return { kod, tytul: s.tytul, opis: s.opis || '', maszyna: s.maszyna || '', czynnosc: s.czynnosc || '', zdjecie: s.wymagaj_zdjecia === true,
                  notatka: s.wymagaj_notatki === true, skan: s.wymagaj_skanu === true && !!s.maszyna,
                  minuty: t.rodzaj === 'minuty' && t.minuty ? t.minuty : '',
                  opisWyboru: `${s.tytul}${s.maszyna ? ` · ${(maszyny[s.maszyna] || {}).nazwa || s.maszyna}` : ''} (${reczny ? 'pojedyncze' : 'stałe'})` };
       })
       .sort((a, b) => a.tytul.localeCompare(b.tytul, 'pl'));
   }
-  /* Zapisane zlecenie → pozycja szablonu checklisty lidera: nazwa z tytułu; z wymaganym skanem maszyny — obchód z punktem
-     QR tej maszyny, inaczej zadanie; termin „g:mm” z minut od startu zmiany (puste — do uzupełnienia). */
-  function pozycjaSzablonuZZapisanego(z) {
-    const m = parseInt(z && z.minuty, 10);
-    return { nazwa: (z && z.tytul) || '', typ: z && z.skan ? 'obchod' : 'zadanie', cel: z && z.skan ? z.maszyna : '',
-             termin: m >= 1 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : '' };
-  }
-
 
   // ================================================================ D56 (właściciel 2026-10-13)
 
@@ -1855,12 +1825,12 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
-                       zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, TYPY_POZYCJI, minutyZTekstu, godzinaPozycji, zakresSzablonu, szablonyLista, szablonZFormularza, szablonDoFormularza,
+                       zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;

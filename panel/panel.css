@@ -303,20 +303,6 @@ dialog.okno .zaznaczenia .zaznacz { font-size: 15px; color: var(--tekst); }
            border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 12px; }
 .szablon .akcje { display: flex; gap: 6px; flex-wrap: wrap; }
 dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
-.pozycje-szablonu { display: grid; gap: 6px; margin-bottom: 8px; }
-.pozycja-szablonu { display: grid; grid-template-columns: 70px 52px minmax(0, 1fr) 190px 110px auto; gap: 6px; align-items: center; }
-/* Krój pola z hala.css (15 px, na telefonie 16 px — inaczej iPhone powiększa stronę przy wpisywaniu). */
-.pozycja-szablonu input, .pozycja-szablonu select { min-height: 44px; font-weight: 400; color: var(--tekst); }
-.pozycja-szablonu .godzina { font-variant-numeric: tabular-nums; font-size: .9em; text-align: center; }
-.pozycja-szablonu .cel[hidden] { display: block !important; visibility: hidden; }
-.pozycja-szablonu .przyciski-wiersza { display: flex; gap: 4px; }
-.pozycja-szablonu .przyciski-wiersza button { min-width: 36px; padding: 0 8px; }
-@media (max-width: 700px) {
-  .pozycja-szablonu { grid-template-columns: 70px 52px minmax(0, 1fr); border-bottom: 1px solid var(--ramka); padding-bottom: 6px; }
-  .pozycja-szablonu .typ, .pozycja-szablonu .cel { grid-column: 1 / -1; }
-  .pozycja-szablonu .cel[hidden] { display: none !important; }
-  .pozycja-szablonu .przyciski-wiersza { grid-column: 1 / -1; justify-content: flex-end; }
-}
 
 /* Telefon: wiersze z przyciskami (szablon, osoba) w jednej kolumnie — przyciski pod opisem, a nie obok
    (inaczej opis dostawał kilka liter szerokości). */
@@ -472,13 +458,29 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .urlop-formularz .blad { flex-basis: 100%; }
 #zlecenie-osoby .zaznaczenia { max-height: 180px; overflow: auto; }
 
-/* D55: pozycje checklisty zadań w oknie zapisanego zlecenia. */
+/* D55/D67: pozycje checklisty w oknie „Checklista”. */
 .pozycje-checklisty { display: grid; gap: 8px; }
 .dodaj-pozycje { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .dodaj-pozycje select { min-width: 220px; max-width: 100%; }
-.pozycja-checklisty { display: grid; grid-template-columns: minmax(140px, 2fr) minmax(110px, 1.3fr) 100px repeat(3, auto) auto; gap: 6px; align-items: center; }
-dialog.okno .pozycja-checklisty label { display: flex; align-items: center; gap: 2px; font-size: 15px; }
-@media (max-width: 640px) { .pozycja-checklisty { grid-template-columns: 1fr 1fr; } .pozycja-checklisty [data-p="tytul"] { grid-column: 1 / -1; } }
+/* D67: okno „Checklista” — wiersz pozycji: godzina od startu zmiany (= godzina zegara), co zrobić, ikony szczegółów
+   i ⋯ (czynność, maszyna, 📷 📝 ▣ — schowane, póki niepotrzebne). */
+.pozycja-checklisty { display: grid; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--ramka); }
+.pozycja-glowna { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pozycja-glowna .godzina { width: 74px; text-align: center; font-variant-numeric: tabular-nums; }
+.pozycja-glowna .godz { width: 52px; font-variant-numeric: tabular-nums; }
+.pozycja-glowna .nazwa { flex: 1 1 220px; min-width: 0; }
+.pozycja-glowna .ikony { min-width: 24px; letter-spacing: 2px; }
+.pozycja-glowna button { min-width: 40px; padding: 0 8px; }
+.pozycja-szczegoly { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; padding-left: 132px; }
+.pozycja-szczegoly label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.pozycja-szczegoly label.zaznacz { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--tekst); }
+@media (max-width: 640px) { .pozycja-szczegoly { padding-left: 0; } }
+/* D67: pozycje checklisty w wierszu zadania (kierownik widzi, co odhaczone, co pominięte i dlaczego). */
+.pozycje-zlecenia { margin-top: 6px; }
+.pozycje-zlecenia summary { cursor: pointer; font-weight: 700; }
+.pozycje-zlecenia ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.pozycje-zlecenia .stan-wykonana > span:first-child { color: var(--zielony); font-weight: 700; }
+.pozycje-zlecenia .stan-pominieta { color: var(--tekst-slaby); }
 /* D56: postęp zlecenia na żywo i próby jakościowe w Raportach. */
 .postep-zlecenia { margin-top: 4px; font-weight: 700; color: var(--niebieski); }
 .sekcja-prob { margin-top: 22px; }

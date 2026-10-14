@@ -282,7 +282,7 @@
     const kafelki = W.obchody({
       slowniki: d.slowniki, pracownicy: d.pracownicy, zmiana: d.zmiana, teraz: d.teraz, stale: d.stale,
       prog: hala.ustawienie('prog_zolty_min', 30), awarie,
-      zmianaLinii: klucz => hala.obiekt('zmiana_linii', klucz),
+      zmianaLinii: klucz => hala.obiekt('zmiana_linii', klucz), zlecenia: hala.obiekty('zlecenie'),
     });
     $('kafelki').innerHTML = kafelki.map(k => {
       const proc = k.wszystkie ? Math.round(k.zrobione * 100 / k.wszystkie) : 0;
@@ -374,7 +374,7 @@
   let nieotwarteRozwiniete = false;
   $('bez-raportu').addEventListener('toggle', ev => { if (ev.target.matches('details.nieotwarte')) nieotwarteRozwiniete = ev.target.open; }, true);
   const bezRaportu = d => W.zmianyBezRaportu({ zmianaLinii: klucz => hala.obiekt('zmiana_linii', klucz), slowniki: d.slowniki,
-                                                pracownicy: d.pracownicy, teraz: d.teraz });
+                                                pracownicy: d.pracownicy, teraz: d.teraz, zlecenia: hala.obiekty('zlecenie') });
 
   function rysujRaporty(d) {
     if (Panel.widoki.proby) Panel.widoki.proby.rysuj(d);
@@ -611,7 +611,6 @@
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
-    $('nowy-szablon').hidden = !(trybZlecen === 'stale' && Panel.dostepAdministracji().szablony);
     if (trybZlecen === 'stale') {
       if (Panel.widoki.checklisty) Panel.widoki.checklisty.rysuj();
       if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d);
@@ -646,7 +645,11 @@
     const ja = hala.pracownik && hala.pracownik.id;
     const zrob = z.rodzaj === 'kierownik' && z.otwarte && ((hala.pracownik && hala.pracownik.role) || []).some(r => r === 'kierownik' || r === 'admin')
       && (!z.wykonawcaId || z.wykonawcaId === ja);
-    const rodzajNapis = z.rodzaj === 'checklista' && z.checklista ? `Checklista: ${z.checklista}` : W.nazwaRodzaju(z.rodzaj);
+    const rodzajNapis = z.checklista ? `☑ Checklista ${z.checklista.gotowe}/${z.checklista.wszystkie}` : W.nazwaRodzaju(z.rodzaj);
+    // D67: pozycje checklisty — kierownik widzi, co odhaczone, co pominięte (z powodem) i co zostało.
+    const ZNAK = { wykonana: '✓', pominieta: '–', czeka: '○' };
+    const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Pozycje (${z.checklista.gotowe}/${z.checklista.wszystkie})</summary>
+      <ul>${z.pozycje.map(p => `<li class="stan-${esc(p.stan)}"><span aria-hidden="true">${ZNAK[p.stan]}</span> ${p.godz ? `<span class="slaby">${esc(p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}</li>`).join('')}</ul></details>` : '';
     return `
       <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-rodzaj="zlecenie" data-id="${esc(z.id)}">
         <div class="opis">
@@ -665,6 +668,7 @@
             ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">📷${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">📝${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
+          ${pozycje}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
           ${z.notatka ? `<div class="odpowiedz">📝 ${esc(z.notatka)}</div>` : ''}
           ${z.uwagiZwrotu && z.otwarte ? `<div class="slaby">Zwrócone: ${esc(z.uwagiZwrotu)}</div>` : ''}

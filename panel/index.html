@@ -90,8 +90,7 @@
       <h2 id="t-zlecenia">Zlecenia dla działów
         <span class="licznik"><button type="button" id="nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
           <button type="button" id="nowe-stale" class="glowny" hidden>+ Nowe zapisane</button>
-          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista zadań</button>
-          <button type="button" id="nowy-szablon" hidden>+ Checklista lidera</button></span></h2>
+          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista</button></span></h2>
       <!-- Jak w GK Trasy: zlecenia i zapisane (szablony). Zapisane POJEDYNCZE zleca kierownik „Zleć teraz” ile razy chce,
            STAŁE (z harmonogramem) hub zleca sam — D31; właściciel 2026-10-13: zapis nie tylko stałych. -->
       <!-- D60 (właściciel 2026-10-14): jedna lista zadań — zlecenia, zapisane/stałe, checklisty zadań, zadania kierownika,
@@ -123,11 +122,9 @@
       <div id="zlecenia-stale" class="zlecenia-czesc" hidden>
         <p class="slaby opis-widoku">Zapisane zlecenie zapamiętuje zadanie i dział. <b>Pojedyncze</b> zlecasz sam — „Zleć teraz”,
           ile razy trzeba, także kilka razy na zmianę. <b>Stałe</b> ma harmonogram — serwer sam je zleca (też co 1–4 h w ciągu zmiany).
-          Najprościej: przy gotowym zleceniu użyj „💾 Zapisz”. <b>Checklista lidera</b> — plan zmiany na linii (lider dostaje
-          najwęższy pasujący: np. na „Zmianę III” wygrywa z tym na wszystkie zmiany; zmiana działa od następnej zmiany).</p>
+          Najprościej: przy gotowym zleceniu użyj „💾 Zapisz”. <b>Checklista</b> — jedno zadanie z listą pozycji do odhaczenia
+          (np. plan zmiany lidera: obsada, obchody, próby, przekazanie); serwer zleca ją na każdą wybraną zmianę.</p>
         <button type="button" id="zestaw-stalych" hidden>+ Zadania mistrza i lidera</button>
-        <!-- D60: szablony checklisty lidera przeniesione z Administracji (checklisty.js) — ta sama lista wzorów. -->
-        <div id="lista-szablonow" class="lista"></div>
         <div id="lista-stalych" class="lista"></div>
       </div>
     </section>
@@ -283,14 +280,6 @@
       <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
       <label id="stale-maszyna">Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
     </div>
-    <!-- D55: „Checklista zadań” — te same ustawienia, a każda pozycja to osobne zapisane zlecenie z własnymi wymaganiami. -->
-    <fieldset id="stale-pozycje" hidden><legend>Pozycje — każda to osobne zlecenie</legend>
-      <div class="pozycje-checklisty" data-pozycje></div>
-      <div class="dodaj-pozycje">
-        <button type="button" data-dodaj-pozycje>+ Pozycja</button>
-        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
-      </div>
-    </fieldset>
     <fieldset><legend>Kiedy</legend>
       <div class="dwie">
         <label>Powtarzaj<select name="rodzaj">
@@ -384,22 +373,38 @@
   </form>
 </dialog>
 
-<dialog id="okno-szablonu" class="okno okno-szerokie" aria-labelledby="t-okno-szablonu">
-  <form method="dialog" id="formularz-szablonu" autocomplete="off">
-    <h2 id="t-okno-szablonu">Nowy szablon</h2>
-    <label>Nazwa<input name="nazwa" required maxlength="120" placeholder="np. Nocka na Pakowaniu"></label>
-    <fieldset class="pole-linii"><legend>Linie (nic nie zaznaczone = wszystkie)</legend><div id="szablon-linie" class="zaznaczenia"></div></fieldset>
-    <fieldset><legend>Zmiany (nic nie zaznaczone = wszystkie)</legend><div id="szablon-zmiany" class="zaznaczenia"></div></fieldset>
-    <fieldset><legend>Pozycje — termin to godziny:minuty od startu zmiany</legend>
-      <p id="szablon-podglad" class="slaby"></p>
-      <div id="szablon-pozycje" class="pozycje-szablonu"></div>
+<!-- D67 (właściciel 2026-10-14: „jeden rodzaj checklist… uprość budowanie”): checklista = jedno zadanie z pozycjami.
+     Okno: nazwa, kto, kiedy i pozycje (godzina od startu zmiany + co zrobić; szczegóły pozycji pod „⋯”). checklisty.js -->
+<dialog id="okno-checklisty" class="okno okno-szerokie" aria-labelledby="t-okno-checklisty">
+  <form method="dialog" id="formularz-checklisty" autocomplete="off">
+    <h2 id="t-okno-checklisty">Nowa checklista</h2>
+    <label>Nazwa<input name="nazwa" required maxlength="200" placeholder="np. Start zmiany na linii"></label>
+    <div class="dwie">
+      <label>Kto robi<select name="dzial" required></select></label>
+      <label>Osoba (opcjonalnie)<select name="wykonawca"><option value="">— cały dział —</option></select></label>
+    </div>
+    <label class="pole-linii">Linia<select name="linia"></select></label>
+    <fieldset><legend>Kiedy</legend>
+      <label>Powtarzaj<select name="rodzaj">
+        <option value="codziennie">Codziennie</option>
+        <option value="dni_tygodnia">W wybrane dni tygodnia</option>
+        <option value="reczny">Ręcznie — zlecam sam („Zleć teraz”)</option>
+      </select></label>
+      <div id="checklista-dni" class="zaznaczenia"></div>
+      <p class="slaby konto-drobne" id="checklista-zmiany-opis">Na które zmiany (nic nie zaznaczone = raz dziennie, na start pierwszej zmiany):</p>
+      <div id="checklista-zmiany" class="zaznaczenia"></div>
+      <p class="slaby" id="checklista-podglad"></p>
+    </fieldset>
+    <fieldset><legend>Pozycje — godzina od startu zmiany i co zrobić</legend>
+      <div id="checklista-pozycje" class="pozycje-checklisty"></div>
       <div class="dodaj-pozycje">
-        <button type="button" id="szablon-dodaj">+ Dodaj pozycję</button>
-        <select id="szablon-z-zapisanych" aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
+        <button type="button" data-dodaj-pozycje>+ Pozycja</button>
+        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
       </div>
     </fieldset>
+    <label class="zaznacz"><input type="checkbox" name="aktywny" checked> Aktywna (serwer zleca według harmonogramu)</label>
     <p class="blad" role="alert" hidden></p>
-    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz szablon</button></div>
+    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz checklistę</button></div>
   </form>
 </dialog>
 

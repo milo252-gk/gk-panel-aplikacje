@@ -315,13 +315,16 @@
     Lider.narysuj();
   };
 
-  /* Bieżąca zmiana na mojej linii: { linia, zmiana, klucz, zl }. zmiana = null poza godzinami zmian.
-     zmianaInna / liniaInna — kontekst ustalony wcześniej (formularz zapamiętał go przy otwarciu, etap 1). */
+  /* Bieżąca zmiana na mojej linii: { linia, zmiana, klucz, zl, lista }. zmiana = null poza godzinami zmian.
+     zmianaInna / liniaInna — kontekst ustalony wcześniej (formularz zapamiętał go przy otwarciu, etap 1).
+     D67: lista = checklista tej zmiany złożona ze zleceń działu Lider (Hala.checklistaZmiany) — ten sam kształt co dawna
+     migawka w zmianie na linii ({ dane: { pozycje, wykonane, pominiete } } + mapa id → zlecenie i pozycja). */
   Lider.kontekst = (zmianaInna, liniaInna) => {
     const zmiana = zmianaInna || hala.zmianaTeraz();
     const linia = liniaInna || Lider.stan.linia;
     const klucz = zmiana && linia ? W.kluczZmiany(linia, zmiana) : null;
-    return { linia, zmiana, klucz, zl: klucz ? hala.obiekt('zmiana_linii', klucz) : null };
+    return { linia, zmiana, klucz, zl: klucz ? hala.obiekt('zmiana_linii', klucz) : null,
+             lista: Hala.checklistaZmiany(hala.obiekty('zlecenie'), linia, zmiana, 'produkcja') };
   };
 
   function wyborLinii() {
@@ -485,6 +488,7 @@
     'awaria.zgloszona': 'Zgłoszenie awarii', 'awaria.potwierdzona': 'Potwierdzenie naprawy',
     'awaria.potwierdzenie_odrzucone': 'Odrzucenie naprawy', 'awaria.anulowana': 'Anulowanie awarii',
     'zmiana.rozpoczeta': 'Otwarcie zmiany', 'checklista.pozycja_wykonana': 'Odhaczenie pozycji',
+    'zlecenie.pozycja_wykonana': 'Odhaczenie pozycji', 'zlecenie.pozycja_pominieta': 'Pominięcie pozycji', 'zlecenie.pozycja_cofnieta': 'Cofnięcie pozycji',
     'checklista.pozycja_cofnieta': 'Cofnięcie pozycji', 'checklista.pozycja_pominieta': 'Pominięcie pozycji',
     'zmiana.przekazanie': 'Przekazanie zmiany', 'zmiana.raport': 'Raport końcowy', 'zmiana.przekazanie_odczytane': 'Odczyt przekazania',
     'proba.zarejestrowana': 'Próba', 'alert.potwierdzony': 'Potwierdzenie alertu', 'reklamacja.odczytana': 'Odczyt reklamacji',
@@ -595,7 +599,14 @@
      mistrz (przełożony liderów, D34) — dział „mistrz”, jego linie (bez zaznaczonych — wszystkie): to dwa stanowiska
      z osobnymi zadaniami. */
   Lider.dzialZlecen = () => W.dzialZlecen(hala.pracownik, Lider.stan.linia, hala.slowniki);
-  Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Object.assign({ komunikat: t => Lider.komunikat(t, 'ok') }, Lider.dzialZlecen())) };
+  /* D67: pozycja checklisty z czynnością (obsada, próba, audyt BHP, przekazanie) otwiera w karcie zlecenia ten sam formularz
+     co na ekranie Zmiana — po wysłaniu formularz odhacza pozycję (L.odhacz). */
+  Lider.czynnoscPozycji = {
+    nazwy: { obsada: 'Raport obsady', proba: 'Wypełnij próbę', bhp: 'Audyt BHP', przekazanie: 'Przekazanie zmiany' },
+    wykonaj: (z, q) => Lider.wykonajPozycje(`${z.id}|${q.id}`),
+  };
+  Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji }, Lider.dzialZlecen());
+  Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.opcjeZlecen()) };
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (window.HalaDzialania) HalaDzialania.przyciskSkanu(hala, { zlecenia: Lider.dzialZlecen, otworzZlecenia: () => Lider.pokazEkran('zlecenia'),
