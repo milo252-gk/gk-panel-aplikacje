@@ -610,6 +610,8 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-aplikacja-qr.brak { display: flex; align-items: center; justify-content: center; font-size: 36px; background: var(--tlo-neutralne); }
 .hala-aplikacja figcaption { display: grid; gap: 4px; min-width: 0; }
 .hala-aplikacja figcaption a { overflow-wrap: anywhere; font-size: 13px; }
+/* D61: druk jednego kodu aplikacji — mały przycisk pod opisem (wszystkie naraz: „🖨 Drukuj wszystkie” na dole okna). */
+.hala-aplikacja-drukuj { justify-self: start; min-height: var(--dotyk-maly); padding: 4px 12px; font-size: 14px; }
 /* D56: „▣ Skanuj” na wierzchu każdego ekranu (Lider, UR, KJ) — nad dolnym paskiem na telefonie, w rogu na komputerze. */
 .hala-skan-fab { position: fixed; right: 16px; bottom: calc(var(--dol-wys) + 14px + env(safe-area-inset-bottom, 0px)); z-index: 45;
   display: inline-flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 22px; border: 0; border-radius: 999px;

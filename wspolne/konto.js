@@ -381,8 +381,57 @@
   }
   /* Wiersze okna (czysta funkcja — testy: reduktor-testy.js): z kodem (adres albo adres w firmowym wifi) albo bez. */
   function wierszeAplikacji(lista) {
-    return (lista || []).map(a => ({ nazwa: a.nazwa, adres: a.adres || a.siec || null, tylkoSiec: !a.adres && !!a.siec,
-                                     komputer: !!a.komputer, opis: a.opis || '' }));
+    return (lista || []).map(a => {
+      const adres = a.adres || a.siec || null;
+      // D61: stały adres = GitHub Pages (aplikacje hali, GK Trasy, GK Flota). Tunel i adres w sieci firmy (GK Szkolenia,
+      // GK Wycena) zmieniają się po ponownym uruchomieniu programu — wydrukowany kod przestaje wtedy działać.
+      return { kod: a.kod || '', nazwa: a.nazwa, adres, tylkoSiec: !a.adres && !!a.siec, komputer: !!a.komputer, opis: a.opis || '',
+               staly: !!adres && /^https:\/\/[^/]+\.github\.io\//.test(adres) };
+    });
+  }
+
+  /* D61 (właściciel 2026-10-14: „daj mi opcję wydrukowania kodów QR do aplikacji mobilnych — jednego kodu do jednej
+     aplikacji i do całości”): arkusz A4 z kodami aplikacji (czysta funkcja — testy: reduktor-testy.js). wiersze =
+     wierszeAplikacji (tylko z adresem), svg = tekst → SVG kodu. Duży kod (55 mm), nazwa, jak wejść, adres; przy adresie
+     tymczasowym — ostrzeżenie, żeby wydrukować go jeszcze raz po ponownym uruchomieniu programu. */
+  function arkuszKodow(wiersze, svg) {
+    const karty = (wiersze || []).filter(a => a && a.adres).map(a => `<section class="karta">
+      <div class="qr">${svg(a.adres)}</div>
+      <div class="opis"><h2>${esc(a.nazwa)}</h2>
+        <p>Zeskanuj aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego.</p>
+        ${a.opis ? `<p>${esc(a.opis)}</p>` : ''}
+        ${a.tylkoSiec ? '<p class="uwaga">Działa tylko w firmowym wifi.</p>' : ''}
+        ${a.staly ? '' : '<p class="uwaga">Adres tymczasowy — po ponownym uruchomieniu programu wydrukuj ten kod jeszcze raz.</p>'}
+        <p class="adres">${esc(a.adres)}</p></div></section>`).join('');
+    return `<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Kody QR aplikacji GK</title><style>
+      @page { size: A4; margin: 12mm; }
+      body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
+      .arkusz { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+      .karta { display: grid; grid-template-rows: auto 1fr; justify-items: center; gap: 3mm; padding: 5mm; border: .3mm dashed #888;
+               break-inside: avoid; page-break-inside: avoid; text-align: center; }
+      .qr svg { display: block; width: 55mm; height: 55mm; }
+      h2 { margin: 0 0 2mm; font-size: 16pt; }
+      p { margin: 0 0 1.5mm; font-size: 9pt; line-height: 1.3; }
+      .uwaga { font-weight: 700; }
+      .adres { font-family: Consolas, monospace; font-size: 7.5pt; overflow-wrap: anywhere; color: #444; }
+    </style></head><body><div class="arkusz">${karty}</div></body></html>`;
+  }
+
+  /* Druk arkusza w ukrytej ramce — działa w każdej aplikacji GK bez jej własnego CSS druku (okno Moje konto jest wspólne). */
+  function drukujArkusz(html) {
+    const ramka = document.createElement('iframe');
+    ramka.setAttribute('aria-hidden', 'true');
+    ramka.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    const sprzatnij = () => setTimeout(() => ramka.remove(), 1000);
+    ramka.onload = () => {
+      const w = ramka.contentWindow;
+      w.addEventListener('afterprint', sprzatnij);
+      w.focus();
+      w.print();
+      setTimeout(() => { if (ramka.isConnected) ramka.remove(); }, 120000);   // przeglądarka bez afterprint
+    };
+    ramka.srcdoc = html;
+    document.body.appendChild(ramka);
   }
   async function aplikacjeNaTelefon(hala, opcje) {
     let d = document.getElementById('hala-okno-aplikacji');
@@ -397,23 +446,34 @@
       <p class="hala-okno-opis">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego. Aplikacje hali, GK Trasy
         i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
       <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>
-      <div class="hala-okno-przyciski"><button type="button" class="glowny" data-zamknij>Zamknij</button></div></form>`;
+      <div class="hala-okno-przyciski"><button type="button" data-drukuj-wszystkie hidden>🖨 Drukuj wszystkie</button>
+        <button type="button" class="glowny" data-zamknij>Zamknij</button></div></form>`;
     d.querySelector('[data-zamknij]').addEventListener('click', () => d.close());
     d.showModal();
     const el = d.querySelector('[data-lista]');
     try {
       const w = wierszeAplikacji((await hala.aplikacje()).aplikacje);
-      el.innerHTML = w.map(a => `<figure class="hala-aplikacja">
+      el.innerHTML = w.map((a, i) => `<figure class="hala-aplikacja">
           ${a.adres ? `<div class="hala-aplikacja-qr" data-qr="${esc(a.adres)}"></div>` : `<div class="hala-aplikacja-qr brak">${a.komputer ? '💻' : '—'}</div>`}
           <figcaption><b>${esc(a.nazwa)}</b>
             ${a.adres ? `<a href="${esc(a.adres)}" target="_blank" rel="noopener">${esc(a.adres)}</a>` : ''}
             ${a.tylkoSiec ? '<span class="hala-konto-drobne">Tylko w firmowym wifi.</span>' : ''}
-            ${a.opis ? `<span class="hala-konto-drobne">${esc(a.opis)}</span>` : ''}</figcaption></figure>`).join('')
+            ${a.opis ? `<span class="hala-konto-drobne">${esc(a.opis)}</span>` : ''}
+            ${a.adres ? `<button type="button" class="hala-aplikacja-drukuj" data-drukuj="${i}">🖨 Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
         || '<p class="hala-okno-opis">To konto nie ma aplikacji na telefon.</p>';
       const pola = [...el.querySelectorAll('[data-qr]')];
       if (pola.length) {
         const ZX = await wczytajZXing();
         for (const p of pola) p.innerHTML = svgQR(p.dataset.qr, ZX);
+        // D61: druk — jeden kod (przycisk przy aplikacji) albo wszystkie z adresem naraz.
+        const drukuj = lista => drukujArkusz(arkuszKodow(lista, t => svgQR(t, ZX)));
+        const wszystkie = d.querySelector('[data-drukuj-wszystkie]');
+        wszystkie.hidden = false;
+        wszystkie.addEventListener('click', () => drukuj(w));
+        el.addEventListener('click', ev => {
+          const b = ev.target.closest('[data-drukuj]');
+          if (b) drukuj([w[+b.dataset.drukuj]]);
+        });
       }
     } catch (e) {
       el.innerHTML = `<p class="hala-okno-blad">${esc(e && e.kod === 0 ? 'Lista aplikacji wymaga połączenia z serwerem.' : (e && e.message) || 'Nie udało się wczytać listy.')}</p>`;
@@ -475,7 +535,7 @@
     await rysuj();
   }
 
-  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
+  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
                        biuro, bezSieci, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

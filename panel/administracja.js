@@ -372,7 +372,8 @@
     }
     const lista = maszyny.map(([mk, m]) => `
           <div class="admin-maszyna"><span><b>${esc(m.nazwa)}</b> <span class="slaby">${esc(mk)}${m.typ ? ` · ${esc(m.typ)}` : ''}${wiele ? ` · ${esc((linie[m.linia] || {}).nazwa || m.linia)}` : ''}</span></span>
-            <span><button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
+            <span><button type="button" class="maly" data-akcja="etykieta" data-kod="${esc(mk)}" title="Drukuj etykietę QR tej maszyny">🖨 Etykieta</button>
+            <button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
             <button type="button" class="maly" data-akcja="wycofaj" data-kod="${esc(mk)}">Wycofaj</button></span></div>`).join('')
           || '<p class="pusto">Nie ma jeszcze maszyn</p>';
     const el2 = $('lista-maszyn');
@@ -932,8 +933,11 @@
     });
   }
 
-  async function drukujEtykiety() {
-    const lista = window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: etykietyLinie, rodzaje: rodzajeEtykiet(hala.slowniki || {}) });
+  /* kod maszyny — D61 (właściciel 2026-10-14: „kody QR … do całości i poszczególnych maszyn pojedynczo”): etykieta
+     jednej maszyny (np. zniszczona naklejka); bez kodu — arkusz wybranych linii i rodzajów (wszystkie). */
+  async function drukujEtykiety(kod) {
+    const lista = kod ? window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: [], rodzaje: ['maszyny'] }).filter(p => p.kod === kod)
+      : window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: etykietyLinie, rodzaje: rodzajeEtykiet(hala.slowniki || {}) });
     if (!lista.length) return;
     const ZX = await wczytajZXing();
     $('etykiety-druk').innerHTML = window.PanelEtykiety.arkusz(lista, ZX);
@@ -997,6 +1001,7 @@
         catch (e) { pole.select(); P.komunikat('Zaznaczyłem klucz — skopiuj go (Ctrl+C).', 'uwaga'); }
       }
       if (akcja === 'maszyna') otworzMaszyne(b.dataset.kod);
+      if (akcja === 'etykieta') await drukujEtykiety(b.dataset.kod);
       // Okno aplikacji (D30), nie systemowe okienko przeglądarki — ten sam wygląd co reszta pytań i nie wstrzymuje strony.
       if (akcja === 'wycofaj' && await P.potwierdz('Wycofać maszynę?', `${b.dataset.kod} — zostanie w historii awarii i przeglądów.`, 'Wycofaj'))
         await hala.zapisz('slownik.usuniety', `maszyny/${b.dataset.kod}`, { slownik: 'maszyny', klucz: b.dataset.kod });
