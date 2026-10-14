@@ -1456,7 +1456,7 @@
 
   /* Treść paska: nic przy działającym strumieniu; „Odświeżanie co kilka sekund”, gdy sieć zatrzymuje strumień;
      przy braku połączenia od kiedy i — etap 3 — „N czeka na wysłanie” (zapisy kierownika w kolejce, KONTRAKT §9);
-     „Odrzucone: N — dotknij” zawsze. ostatnio = ms ostatniego połączenia, laska = zaraz po starcie (łączy się). */
+     „Nie wysłane: N — dotknij” zawsze (D64). ostatnio = ms ostatniego połączenia, laska = zaraz po starcie (łączy się). */
   function pasekPolaczenia({ zalogowany, polaczenie, kolejka, laska, ostatnio, teraz }) {
     const p = polaczenie || {}, k = kolejka || {};
     let klasa = 'ok', tekst = '';
@@ -1466,10 +1466,11 @@
         klasa = p.online ? 'brak-huba' : 'offline';
         tekst = laska || !ostatnio ? 'Łączenie z serwerem…'
           : `Brak połączenia od ${dataKrotka(ostatnio) === dataKrotka(teraz) ? '' : dataKrotka(ostatnio) + ' '}${godzina(ostatnio)} — dane mogą być nieaktualne`;
-        if (k.moje) tekst += ` · ${k.moje} czeka na wysłanie`;
+        if (k.moje) tekst += ` · ${H().czekaNaWyslanie(k.moje)}`;
       }
     }
-    if (zalogowany && k.odrzucone) { klasa = 'odrzucone'; tekst = (tekst ? tekst + ' · ' : '') + `Odrzucone: ${k.odrzucone} — dotknij`; }
+    // D64: „Nie wysłane” — ta sama nazwa co w Liderze, UR i KJ (wcześniej „Odrzucone”).
+    if (zalogowany && k.odrzucone) { klasa = 'odrzucone'; tekst = (tekst ? tekst + ' · ' : '') + H().nieWyslane(k.odrzucone); }
     return { klasa, tekst };
   }
 

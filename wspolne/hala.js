@@ -32,7 +32,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.23.0';
+  const WERSJA_KLIENTA = '0.24.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -654,6 +654,43 @@
      kodZeSkanu w lider/web/widok.js i ur/web/widok.js. */
   const bezOdstepow = s => String(s || '').replace(/\s+/g, '').toUpperCase();
   const PRZEDROSTKI_KODU = { maszyny: 'M', stanowiska: 'S', linie: 'L' };
+  /* Odmiana po liczebniku: „1 zapis czeka”, „3 zapisy czekają”, „5 zapisów czeka” (ta sama co lider/web/widok.js). */
+  function liczebnik(n, jeden, kilka, wiele) {
+    const d = Math.abs(n) % 100, j = Math.abs(n) % 10;
+    const slowo = n === 1 ? jeden : (j >= 2 && j <= 4 && !(d >= 12 && d <= 14)) ? kilka : wiele;
+    return `${n} ${slowo}`;
+  }
+
+  /* D64 (właściciel 2026-10-14: „jedno spójne środowisko”): pasek połączenia (KONTRAKT §9) — te same słowa w Liderze, UR
+     i KJ (wcześniej „Wysyłanie… 3” / „Wysyłam: 3”, „3 czeka na wysłanie”, „w telefonie” także na komputerze).
+     Panel (monitor) ma swój tekst „Brak połączenia od …”, ale tę samą odmianę i „Nie wysłane”. Czysta funkcja.
+     → { klasa: ok|kolejka|brak-huba|offline|odrzucone, tekst }. */
+  const czekaNaWyslanie = n => `${liczebnik(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
+  const nieWyslane = n => `Nie wysłane: ${n} — dotknij`;
+  function pasekPolaczenia({ zalogowany, polaczenie, kolejka, laska, komputer } = {}) {
+    const p = polaczenie || {}, k = kolejka || {}, n = k.moje || 0;
+    if (!zalogowany) return { klasa: 'ok', tekst: '' };
+    const czesci = [];
+    let klasa = 'ok';
+    // Dociąganie (sieć buforuje strumień, np. szybki tunel) to NIE brak połączenia — zmiany przychodzą co kilka sekund.
+    const dociaga = !p.strumien && p.dociaganie && !p.blad;
+    if (!p.online) {
+      klasa = 'offline';
+      czesci.push(`Brak sieci — ${n ? czekaNaWyslanie(n) : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`);
+    } else if (dociaga) {
+      klasa = 'kolejka';
+      czesci.push('Odświeżanie co kilka sekund' + (n ? ` · Wysyłanie: ${n}` : ''));
+    } else if (!p.strumien && !laska) {
+      klasa = 'brak-huba';
+      czesci.push(`Brak połączenia z serwerem${n ? ` — ${czekaNaWyslanie(n)}` : ''}`);
+    } else if (n) {
+      klasa = 'kolejka';
+      czesci.push(`Wysyłanie: ${n}`);
+    }
+    if (k.odrzucone) { klasa = 'odrzucone'; czesci.push(nieWyslane(k.odrzucone)); }
+    return { klasa, tekst: czesci.join(' · ') };
+  }
+
   function kodZeSkanu(tekst, slowniki) {
     const t = String(tekst || '').trim();
     const k = odczytajKod(t, slowniki);
@@ -1680,7 +1717,7 @@
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
-    odczytajKod, kodZeSkanu, zmniejszZdjecie, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
+    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
   };
   global.Hala = Hala;

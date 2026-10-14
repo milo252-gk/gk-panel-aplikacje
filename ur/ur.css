@@ -53,7 +53,7 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
 
 .tytul-ekranu { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .tytul-ekranu h1 { margin: 4px 0; }
-.wstecz { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--tekst-slaby); font-weight: 600; }
+.wstecz { display: inline-flex; align-items: center; min-height: var(--dotyk); text-decoration: none; color: var(--tekst-slaby); font-weight: 600; }
 .lista { display: flex; flex-direction: column; gap: 8px; }
 .pusto { margin: 16px 0; text-align: center; color: var(--tekst-slaby); }
 .pusto.ok { color: var(--zielony); font-weight: 600; }
@@ -89,7 +89,7 @@ details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: 
 
 /* Wybór z kilku (linie, okres, źródło): przyciski-przełączniki. */
 .wybor { display: flex; flex-wrap: wrap; gap: 8px; }
-.wybor button { min-height: 44px; padding: 0 14px; font-weight: 600; font-size: 14px; }   /* jak .chip w GK Trasy */
+.wybor button { min-height: var(--dotyk); padding: 0 14px; font-weight: 600; font-size: 14px; }   /* jak .chip w GK Trasy */
 /* Wybrany = grafit, jak .chip.wybrany w GK Flota. */
 .wybor button { border-radius: 999px; }
 .wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
@@ -133,7 +133,7 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .zdjecia { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .miniatura { position: relative; margin: 0; width: 96px; height: 96px; border-radius: var(--promien); overflow: hidden; background: var(--ramka); }
 .miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
-.usun-zdjecie { position: absolute; top: 2px; right: 2px; min-height: 36px; width: 36px; padding: 0; border-radius: 50%;
+.usun-zdjecie { position: absolute; top: 2px; right: 2px; min-height: 44px; width: 44px; padding: 0; border-radius: 50%;
   background: var(--nakladka); color: var(--na-nakladce); border: 0; font-size: 1.3em; line-height: 1; }
 .zrob-zdjecie { width: 96px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   padding: 4px; font-size: .8em; border-style: dashed; }
@@ -183,10 +183,7 @@ body.kierownik-ur .tylko-kierownik { display: flex !important; }
 
 /* Prośba o dźwięk: przeglądarka gra dopiero po pierwszym dotknięciu strony. UI etap 3: pasek duży, z 🔇, przyklejony
    u góry — wcześniej cienki żółty napis łatwo było przeoczyć, a mechanik bez dźwięku nie usłyszy awarii. */
-.dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5;   /* pod przyklejonym nagłówkiem, nie za nim */ display: flex; align-items: center; justify-content: center; gap: 10px;
-  min-height: 56px; padding: 10px 14px; background: var(--zolty-tlo); color: var(--tekst); border-bottom: 3px solid var(--zolty);
-  text-align: center; font-weight: 700; font-size: 1.05em; cursor: pointer; }
-.dzwonek .ikona { font-size: 1.6em; line-height: 1; }
+/* Pasek „Dźwięk powiadomień wyłączony” — wspólny styl .hala-dzwonek w hala.css (D64). */
 /* UI etap 4: nazwa zmiany z godzinami nie może się uciąć („Zmiana II 14…”) — na 390 px mieści się w całości. */
 .naglowek .zmiana { flex: 0 0 auto; }
 

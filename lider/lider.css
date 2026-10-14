@@ -69,7 +69,7 @@ body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
 .przyciski-kolumna { display: grid; gap: 8px; margin-top: 12px; }
 /* Wybór motywu w menu — chipy jak „Motyw” w UR i KJ (.chip w GK Trasy). */
 .wybor { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
-.wybor button { min-height: 44px; padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
+.wybor button { min-height: var(--dotyk); padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
 .wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
 
 .lista, .lista-prosta { list-style: none; margin: 0; padding: 0; }
@@ -79,7 +79,7 @@ body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
   background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); cursor: pointer; }
 .wiersz .czas { font-variant-numeric: tabular-nums; color: var(--tekst-slaby); min-width: 3.2em; }
 .wiersz .tresc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.lista.podglad .wiersz { cursor: default; min-height: 40px; }
+.lista.podglad .wiersz { cursor: default; min-height: var(--dotyk); }
 
 dl.dane { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0; }
 dl.dane dt { color: var(--tekst-slaby); }
@@ -198,7 +198,7 @@ details.wiecej[open] { display: grid; gap: 12px; }
 /* D47: zdjęcie ze zgłoszenia awarii na karcie — mniejsze, żeby lista awarii została listą. */
 .galeria-awarii { margin: 6px 0; }
 .galeria-awarii .galeria img { width: 72px; height: 72px; }
-.miniatura .usun { position: absolute; top: -8px; right: -8px; min-height: 32px; width: 32px; padding: 0; border-radius: 50%;
+.miniatura .usun { position: absolute; top: -8px; right: -8px; min-height: 44px; width: 44px; padding: 0; border-radius: 50%;
   background: var(--nakladka); color: var(--na-nakladce); border: 0; }
 .dodaj-zdjecie { display: inline-flex; align-items: center; justify-content: center; min-height: var(--dotyk); }
 .podpis { font-weight: 600; margin: 8px 0 4px; }

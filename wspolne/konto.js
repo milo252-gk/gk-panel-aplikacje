@@ -308,7 +308,7 @@
         <div data-dodatki></div>
         <fieldset><legend>Dane w tym urządzeniu</legend>
           <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} od innych osób)` : ''}</p>
-          ${d.odrzucone && d.zOdrzuconymi ? `<button type="button" data-odrzucone>Odrzucone przez serwer: ${Number(d.odrzucone)}</button>` : ''}
+          ${d.odrzucone && d.zOdrzuconymi ? `<button type="button" data-odrzucone>Nie wysłane: ${Number(d.odrzucone)}</button>` : ''}
         </fieldset>
         <p class="hala-konto-drobne" data-wersja></p>
         <div class="hala-okno-przyciski"><button type="button" data-zamknij>Zamknij</button><button type="button" class="glowny" data-wyloguj>Wyloguj</button></div>
@@ -442,7 +442,8 @@
       d.setAttribute('aria-labelledby', 'hala-okno-aplikacji-tytul');
       document.body.appendChild(d);
     }
-    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">📱 Aplikacje na telefon</h2>
+    // D64: tytuł jak przycisk, który je otworzył — na komputerze „Kody QR aplikacji” (STYL-GK §6: bez „telefon” na komputerze).
+    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">${naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon'}</h2>
       <p class="hala-okno-opis">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego. Aplikacje hali, GK Trasy
         i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
       <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>

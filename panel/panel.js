@@ -85,8 +85,8 @@
     $('aplikacja').hidden = !z;
     const ekran = !!(hala.pracownik && (hala.pracownik.role || []).includes('ekran'));
     document.body.classList.toggle('tryb-ekran', z && ekran);
-    $('kto').textContent = z && hala.pracownik ? hala.pracownik.nazwa : '';
-    $('menu-kto').textContent = $('kto').textContent;
+    // D64: w nagłówku sama ikona konta (STYL-GK §3) — imię tylko w menu na komputerze.
+    $('menu-kto').textContent = z && hala.pracownik ? hala.pracownik.nazwa : '';
     // Zapis tylko tam, gdzie kontrakt pozwala roli (konto ekranu i kierownik KJ nie zgłaszają awarii).
     $('menu-awaria').hidden = !(z && mozeWyslac('awaria.zgloszona'));
     $('nowe-zlecenie').hidden = !(z && mozeWyslac('zlecenie.utworzone'));
@@ -153,7 +153,7 @@
     const ekran = document.body.classList.contains('tryb-ekran');
     const k = hala.stanKolejki().moje;
     if (k && !(await Panel.potwierdz('Wylogować?', `Czeka na wysłanie: ${k}. Wyślą się, gdy znowu zalogujesz się na tym urządzeniu.`, 'Wyloguj'))) return;
-    if (!k && ekran && !(await Panel.potwierdz('Wylogować ekran?', 'Trzeba będzie wpisać identyfikator i PIN ekranu ponownie.', 'Wyloguj'))) return;
+    if (!k && ekran && !(await Panel.potwierdz('Wylogować ekran?', 'Trzeba będzie wpisać imię i nazwisko konta ekranu i PIN ponownie.', 'Wyloguj'))) return;
     const konto = document.getElementById('hala-okno-konta');
     if (konto && konto.open) konto.close();
     await hala.wyloguj();
@@ -274,7 +274,7 @@
     const z = W.opisBiezacejZmiany(d.zmiana, d.teraz);
     $('zmiana').innerHTML = z
       ? `<b>${esc(z.nazwa)}</b> <span>${esc(z.od)}–${esc(z.do)}</span> <span class="slaby">zostało ${esc(Hala.formatCzasu(z.zostaloMs))}</span>`
-      : '<span class="slaby">Poza godzinami zmian</span>';
+      : '<span class="slaby">Poza zmianą</span>';                // D64: ten sam tekst co Lider, UR i KJ
     $('zegar').textContent = W.godzina(d.teraz);
   }
 
@@ -1193,7 +1193,7 @@
   }
 
   /* Pasek (KONTRAKT §9): treść liczy W.pasekPolaczenia — „Brak połączenia od…”, „N czeka na wysłanie” (etap 3),
-     „Odrzucone: N” zawsze. Dotknięcie przy odrzuconych otwiera konto z listą i powodami. */
+     „Nie wysłane: N” zawsze (D64 — ta sama nazwa co w Liderze, UR i KJ). Dotknięcie otwiera listę z powodami. */
   let kolejka = { oczekuje: 0, moje: 0, odrzucone: 0 };
   function rysujPasek(p) {
     const pasek = $('pasek');
@@ -1205,6 +1205,7 @@
     const w = W.pasekPolaczenia({ zalogowany, polaczenie: p, kolejka, laska, ostatnio: ostatnioPolaczony, teraz: hala.teraz() });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
+    pasek.disabled = !kolejka.odrzucone;            // D64: przycisk jak w Liderze, UR i KJ (dotknięcie — lista „Nie wysłane”)
   }
   $('pasek').addEventListener('click', () => { if (hala.zalogowany() && kolejka.odrzucone) pokazOdrzucone(); });
 

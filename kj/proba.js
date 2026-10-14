@@ -48,7 +48,7 @@
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Plan próbkowania</h1><span class="licznik-planu ${plan.zrobione >= plan.plan && plan.plan ? 'tekst-ok' : ''}">${plan.zrobione}/${plan.plan}</span></div>
         <div class="postep ${W.stanPaskaPlanu(plan, zmiana, hala.teraz())}"><span style="width:${proc}%"></span></div>
-        ${KJ.mozna('proba.zarejestrowana') ? `<button type="button" class="glowny szeroki duzy" id="skanuj-stanowisko">${esc(W.napisSkanu(hala.slowniki))}</button>` : ''}
+        ${KJ.mozna('proba.zarejestrowana') ? `<button type="button" class="glowny szeroki duzy" id="skanuj-stanowisko">▣ ${esc(W.napisSkanu(hala.slowniki))}</button>` : ''}
         ${plan.linie.map(g => `
           <section class="grupa">
             <h2>${esc(g.nazwa)} <span class="slaby">${g.zrobione}/${g.plan}</span></h2>
@@ -212,7 +212,7 @@
         ${opcje.map(o => `<option value="${esc(o.wartosc)}">${esc(o.opis)}</option>`).join('')}</select></details>` : '';
     if (!f.linia) {
       box.innerHTML = `<h2>Miejsce kontroli</h2>
-        <button type="button" class="glowny szeroki duzy" data-akcja="skanuj-stanowisko">${esc(W.napisSkanu(sl))}</button>
+        <button type="button" class="glowny szeroki duzy" data-akcja="skanuj-stanowisko">▣ ${esc(W.napisSkanu(sl))}</button>
         ${lista || '<p class="pusto">Brak linii w systemie — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'}`;
       return;
     }
@@ -223,7 +223,7 @@
         <div class="slaby">${f.czas_rozpoczecia ? `Start ${esc(W.kiedy(f.czas_rozpoczecia, hala.teraz()))} · ` : ''}${f.qr ? '✓ zeskanowano' : '<span class="tekst-uwaga">bez skanu</span>'}</div>
         ${W.skanZInnejZmiany(f.czas_rozpoczecia, hala.zmianaTeraz()) ? '<div class="tekst-uwaga">Skan z innej zmiany — jeśli kontrola jest teraz, zeskanuj ponownie.</div>' : ''}
       </div>
-      <button type="button" data-akcja="skanuj-stanowisko">${f.qr ? 'Zmień' : esc(W.napisSkanu(sl))}</button>
+      <button type="button" data-akcja="skanuj-stanowisko">${f.qr ? 'Zmień' : `▣ ${esc(W.napisSkanu(sl))}`}</button>
       ${lista}`;
   }
 

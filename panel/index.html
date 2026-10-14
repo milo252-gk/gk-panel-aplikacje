@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="panel.css">
 </head>
 <body>
-<div id="pasek" class="hala-polaczenie ok" role="status" aria-live="polite"></div>
+<button id="pasek" class="hala-polaczenie ok" type="button" aria-live="polite"></button>
 
 <main id="logowanie" class="hala-logowanie" hidden>
   <div class="hala-karta-logowania">
@@ -63,7 +63,7 @@
   <header class="naglowek">
     <div class="zmiana" id="zmiana"></div>
     <div class="zegar" id="zegar">--:--</div>
-    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false">🔕</button><span id="kto" class="tylko-telefon"></span><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
+    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false">🔕</button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
   <div id="na-zywo" class="na-zywo">
@@ -475,7 +475,7 @@
      Powiadomienia Panelu dorysowuje panel.js (id="konto-powiadomienia"). Tu tylko lista odrzuconych przez hub. -->
 <dialog id="okno-odrzucone" class="okno" aria-labelledby="t-okno-odrzucone">
   <form method="dialog">
-    <h2 id="t-okno-odrzucone">Odrzucone przez serwer</h2>
+    <h2 id="t-okno-odrzucone">Nie wysłane</h2>
     <div id="lista-odrzuconych"></div>
     <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
   </form>

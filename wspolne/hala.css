@@ -278,7 +278,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-uklad > .naglowek .zmiana { font-size: 17px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hala-uklad > .naglowek .zmiana :is(span, .slaby) { font-size: 15px; font-weight: 400; opacity: .75; color: inherit; }
 .hala-uklad > .naglowek button {
-  min-height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--na-marce); font-weight: 600; box-shadow: none;
+  min-height: var(--dotyk); padding: 0 10px;   /* D64: 52 px na telefonie (CLAUDE.md, D29), 44 px na komputerze */ border: 0; border-radius: 10px; background: none; color: var(--na-marce); font-weight: 600; box-shadow: none;
   font-size: 15px; display: inline-flex; align-items: center; justify-content: center;   /* .maly w pasku nie zmniejsza pisma */
   gap: .3em;   /* inline-flex zjada spacje między <b> a <span> — „L1 Wtrysk” zlepiało się w „L1Wtrysk” */
 }
@@ -382,7 +382,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-zlecenia-naglowek { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .hala-zlecenia-naglowek h2 { margin: 4px 0; }
 .hala-zlecenia-filtr { display: flex; gap: 6px; }
-.hala-zlecenia-filtr button { min-height: 44px; border-radius: 999px; padding: 0 14px; font-size: 14px; }   /* jak .chip w GK Trasy */
+.hala-zlecenia-filtr button { min-height: var(--dotyk); border-radius: 999px; padding: 0 14px; font-size: 14px; }   /* jak .chip w GK Trasy */
 .hala-zlecenia-filtr button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
 .hala-zlecenie-zdjecia { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .hala-zlecenie-foto { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); background: var(--tlo); }
@@ -465,6 +465,14 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
 .komunikat.znika { opacity: 0; }
 @keyframes hala-wjazd { from { opacity: 0; transform: translateY(10px); } }
 @media (min-width: 821px) { .komunikaty { bottom: 18px; } }
+/* D64: przy pływającym „▣ Skanuj” (body.hala-ma-skan) komunikat stoi nad nim, a koniec listy da się przewinąć spod
+   przycisku — ostatnie „Zrobione / Nie mogę” nie leżą już pod nim. */
+body.hala-ma-skan .komunikaty { bottom: calc(var(--dol-wys) + 84px + env(safe-area-inset-bottom, 0px)); }
+body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: calc(var(--dol-wys) + 90px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 821px) {
+  body.hala-ma-skan .komunikaty { bottom: 90px; }
+  body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: 96px; }
+}
 @media (prefers-reduced-motion: reduce) { .komunikat { animation: none; } }
 
 /* ------------------------------------------------ wspólne okno (konto.js: „Zmień PIN”) i pasek „Pobierz CSV” (eksport.js) — D32 */
@@ -495,7 +503,7 @@ dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; col
 .hala-konto-kto span { font-size: 14px; color: var(--tekst-slaby); }
 .hala-konto-drobne { margin: 0; font-size: 12px; color: var(--tekst-slaby); }
 .hala-wybor { display: flex; flex-wrap: wrap; gap: 8px; }
-.hala-wybor button { min-height: 44px; padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
+.hala-wybor button { min-height: var(--dotyk); padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
 .hala-wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
 /* Powiadomienia (konto.js → powiadomienia): jeden przycisk albo stan; „Zablokowane…” zwykłym tekstem w kolorze ostrzeżenia. */
 .hala-konto-push [data-push-stan] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
@@ -610,6 +618,14 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-aplikacja-qr.brak { display: flex; align-items: center; justify-content: center; font-size: 36px; background: var(--tlo-neutralne); }
 .hala-aplikacja figcaption { display: grid; gap: 4px; min-width: 0; }
 .hala-aplikacja figcaption a { overflow-wrap: anywhere; font-size: 13px; }
+/* D64: pasek „Dźwięk powiadomień wyłączony — dotknij” (HalaDzwieki.pasek; wzór GK UR) — Lider, UR i KJ jednakowo.
+   Przyklejony pod nagłówkiem, nie do przeoczenia, aż ktoś dotknie ekranu. */
+.hala-dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5; display: flex;
+  align-items: center; justify-content: center; gap: 10px; min-height: 56px; padding: 10px 14px; background: var(--zolty-tlo);
+  color: var(--tekst); border-bottom: 3px solid var(--zolty); text-align: center; font-weight: 700; font-size: 1.05em; cursor: pointer; }
+.hala-dzwonek .ikona { font-size: 1.6em; line-height: 1; }
+.hala-dzwonek[hidden] { display: none; }
+
 /* D61: druk jednego kodu aplikacji — mały przycisk pod opisem (wszystkie naraz: „🖨 Drukuj wszystkie” na dole okna). */
 .hala-aplikacja-drukuj { justify-self: start; min-height: var(--dotyk-maly); padding: 4px 12px; font-size: 14px; }
 /* D56: „▣ Skanuj” na wierzchu każdego ekranu (Lider, UR, KJ) — nad dolnym paskiem na telefonie, w rogu na komputerze. */

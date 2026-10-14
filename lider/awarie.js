@@ -43,7 +43,7 @@
         <div class="siatka-wyboru" data-grupa="maszyna">
           ${maszyny.map(m => { const k = W.kafelekMaszyny(m);   // nazwa duża, kod mały (UI etap 3)
             return `<button type="button" data-wartosc="${esc(m.kod)}"><b>${esc(k.duzy)}</b>${k.maly ? `<span>${esc(k.maly)}</span>` : ''}</button>`; }).join('')}
-          <button type="button" class="skan" data-skanuj>📷 Skanuj QR maszyny</button>
+          <button type="button" class="skan" data-skanuj>▣ Skanuj QR maszyny</button>
         </div>
         <div class="wybrana-inna slaby" hidden></div>
         <div class="ostrzezenie duplikat" hidden><p></p>

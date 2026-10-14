@@ -48,7 +48,8 @@
     const pudlo = $('komunikaty');
     if (pudlo.showPopover) { try { pudlo.hidePopover(); } catch (e) { /* nie był otwarty */ } try { pudlo.showPopover(); } catch (e) { /* stara przeglądarka */ } }
     clearTimeout(komunikatZegar);
-    komunikatZegar = setTimeout(() => { k.hidden = true; }, rodzaj === 'alarm' ? 7000 : 3500);
+    // D64: błąd wisi 7 s jak w Panelu i Liderze — także „blad” z konto.js (wcześniej znikał po 3,5 s).
+    komunikatZegar = setTimeout(() => { k.hidden = true; }, rodzaj === 'alarm' || rodzaj === 'blad' ? 7000 : 3500);
   };
 
   /* Okno z pytaniem. przyciski: [{tekst, wartosc, glowny?, alarm?, sprawdz?(FormData)}]. Zwraca
@@ -400,9 +401,9 @@
 
   function rysujNaglowek() {
     const z = hala.zmianaTeraz();
-    $('zmiana').innerHTML = z ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '';
-    $('kto').textContent = hala.pracownik ? hala.pracownik.nazwa : '';
-    $('menu-kto').textContent = $('kto').textContent;   // nagłówek menu na komputerze, jak w GK Trasy
+    // D64: „Poza zmianą” jak w Liderze; w nagłówku sama ikona konta (STYL-GK §3) — imię tylko w menu na komputerze.
+    $('zmiana').innerHTML = z ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '<span>Poza zmianą</span>';
+    $('menu-kto').textContent = hala.pracownik ? hala.pracownik.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
   }
 
   /* Plakietki na zakładkach: ile awarii czeka na przyjęcie i ile przeglądów jest opóźnionych. */
@@ -464,7 +465,7 @@
   $('formularz-logowania').addEventListener('submit', ev => { ev.preventDefault(); zaloguj(); });
   // Skan karty aparatem wpisuje identyfikator i przenosi do PIN-u — nie loguje od razu (D24).
   $('skanuj-karte').addEventListener('click', async () => {
-    const t = await UR.skanuj('Zeskanuj identyfikator', 'Numer karty');
+    const t = await UR.skanuj('Zeskanuj identyfikator', 'Albo wpisz numer karty');
     if (!t) return;
     $('identyfikator').value = t.replace(/^HALA:P:/i, '');
     poleSekretu.odswiez();
@@ -480,8 +481,16 @@
   $('menu-wyloguj').addEventListener('click', wyloguj);   // stopka menu na komputerze, jak w GK Trasy
   /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
      dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
+  /* D64: powiadomienia i „Sprawdź dźwięk” w Moim koncie — to samo miejsce co w Panelu i Liderze (wcześniej „Więcej”). */
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
-    aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone') }));
+    aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone'),
+    dodatki: el => {
+      el.innerHTML = '<div data-powiadomienia></div><button type="button" data-test-dzwieku>Sprawdź dźwięk</button>';
+      global.HalaKonto.powiadomienia(el.querySelector('[data-powiadomienia]'), hala, {
+        opis: 'Awarie (syrena) i zlecenia od kierownika — dźwięk i wibracja także przy aplikacji w tle.', lokalne: true,
+        komunikat: (t, r) => UR.komunikat(t, r) });
+      el.querySelector('[data-test-dzwieku]').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.awaria(true), 150); });
+    } }));
 
   function pokazSesje() {
     const z = hala.zalogowany();
@@ -501,26 +510,13 @@
 
   function rysujPasek() {
     const p = hala.polaczenie, pasek = $('pasek');
-    const czesci = [];
-    let klasa = 'ok';
-    if (hala.zalogowany()) {
-      const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
-      if (!p.strumien && p.dociaganie && !p.blad) {
-        // Sieć zatrzymuje strumień, ale hub odpowiada — zmiany przychodzą co kilka sekund. To nie „brak połączenia”.
-        klasa = 'kolejka';
-        czesci.push('Odświeżanie co kilka sekund' + (kolejka.moje ? ` — wysyłam: ${kolejka.moje}` : ''));
-      } else if (!p.strumien && !laska) {
-        klasa = p.online ? 'brak-huba' : 'offline';
-        czesci.push(p.online ? 'Brak połączenia z serwerem' + (kolejka.moje ? ` — ${W.czekaNaWyslanie(kolejka.moje)}` : '')
-          : 'Brak sieci — zapisy zostają w telefonie' + (kolejka.moje ? ` (${kolejka.moje})` : ''));   // STYL-GK §6, jak Lider
-      } else if (kolejka.moje) {
-        klasa = 'kolejka';
-        czesci.push(`Wysyłam: ${kolejka.moje}`);
-      }
-      if (kolejka.odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${kolejka.odrzucone} — dotknij`); }
-    }
-    pasek.className = 'hala-polaczenie ' + klasa;
-    pasek.textContent = czesci.join(' · ');
+    // Tuż po otwarciu strumień dopiero się łączy — bez okresu łaski każde odświeżenie mignęłoby „Brak sieci”.
+    const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
+    // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia); tylko zapisy zalogowanej osoby (moje).
+    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska,
+                                            komputer: !global.matchMedia('(max-width: 820px)').matches });
+    pasek.className = 'hala-polaczenie ' + w.klasa;
+    pasek.textContent = w.tekst;
     pasek.disabled = !kolejka.odrzucone;
   }
   $('pasek').addEventListener('click', () => { if (kolejka.odrzucone) UR.idz('odrzucone'); });
@@ -558,47 +554,6 @@
 
   // ------------------------------------------------------------ „Więcej”
 
-  /* Jeden przycisk na powiadomienia: zgoda przeglądarki i push przy zamkniętej aplikacji (D28) naraz.
-     Gdzie push nie działa (http, iPhone poza ekranem początkowym), zostają powiadomienia przy otwartej aplikacji
-     (`lokalne` — aplikacja sama je pokazuje). Stan pyta przeglądarkę, więc rysujemy później. */
-  async function rysujPush(el, komunikat, lokalne) {
-    const s = await hala.push.stan();
-    const zgoda = 'Notification' in window ? Notification.permission : 'brak';
-    const ok = t => `<p class="tekst-ok">${t}</p>`;
-    const przycisk = (co, t) => `<button type="button" class="glowny szeroki" data-push="${co}">${t}</button>`;
-    el.innerHTML = s === 'wlaczone' ? ok('Włączone — także przy zamkniętej aplikacji') + '<button type="button" class="szeroki" data-push="wylacz">Wyłącz</button>'
-      : s === 'zablokowane' || zgoda === 'denied' ? '<p class="tekst-uwaga">Zablokowane — zezwól na powiadomienia w ustawieniach przeglądarki dla tej strony.</p>'
-      : s === 'wylaczone' ? (lokalne && zgoda === 'granted' ? ok('Włączone, gdy aplikacja jest otwarta') + przycisk('wlacz', 'Włącz też przy zamkniętej aplikacji')
-                                                             : przycisk('wlacz', 'Włącz powiadomienia'))
-      : (lokalne && zgoda === 'granted' ? ok('Włączone, gdy aplikacja jest otwarta') : lokalne && zgoda === 'default' ? przycisk('zgoda', 'Włącz powiadomienia') : '')
-        + '<p class="slaby">Przy zamkniętej aplikacji: potrzebny adres https, a na iPhonie aplikacja dodana do ekranu początkowego (iOS 16.4+).</p>';
-    const b = el.querySelector('[data-push]');
-    if (b) b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        if (b.dataset.push === 'zgoda') await Notification.requestPermission();
-        else await hala.push[b.dataset.push]();
-      } catch (e) { komunikat(e.message || 'Nie udało się. Spróbuj jeszcze raz.'); }
-      rysujPush(el, komunikat, lokalne);
-    });
-  }
-
-  /* Stopka „Więcej”: „Wersja z 12.10.2026” (W.wersjaZDnia) — mechanik nie czyta skrótów; pełny opis w podpowiedzi. */
-  function wpiszWersje(el) {
-    global.HalaAktualizacja.wpiszWersje(el, 'ur');               // od razu: wersja klienta + podpowiedź dla serwisu
-    if (!global.caches) return;
-    global.caches.keys().then(klucze => {
-      const stempel = klucze.filter(k => k.startsWith('ur-')).sort().pop() || '';
-      let zapis = null;
-      try { zapis = JSON.parse(localStorage.getItem('hala.ur.wersja') || 'null'); } catch (e) { /* bez pamięci — dziś */ }
-      const w = W.wersjaZDnia(stempel, zapis, W.dzienZakladu(hala.teraz()));
-      if (!w.tekst) return;
-      try { localStorage.setItem('hala.ur.wersja', JSON.stringify(w.zapis)); } catch (e) { /* data policzy się od nowa */ }
-      el.textContent = w.tekst;
-      el.title = `klient ${hala.wersja} · aplikacja ${stempel}`;
-    }, () => {});
-  }
-
   UR.ekran('wiecej', {
     rysuj(el) {
       el.innerHTML = `<h1>Więcej</h1>
@@ -607,14 +562,7 @@
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
-        <h2>Powiadomienia o awariach</h2>
-        <p class="slaby">Dźwięk i wibracja działają, gdy aplikacja jest otwarta (także w tle).</p>
-        <div id="push"></div>
-        <button type="button" class="szeroki" id="test-dzwieku" style="margin-top:10px">Sprawdź dźwięk</button>
-        <p class="slaby stopka">Zalogowany: ${esc(hala.pracownik && hala.pracownik.nazwa)} · <span id="wersja">klient ${esc(hala.wersja)}</span></p>`;
-      wpiszWersje(el.querySelector('#wersja'));
-      rysujPush(el.querySelector('#push'), t => UR.komunikat(t, 'alarm'), true);
-      el.querySelector('#test-dzwieku').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.awaria(true), 150); });
+        <p class="slaby">Powiadomienia, dźwięk, wersja i wylogowanie — 👤 Moje konto.</p>`;
     },
   });
 

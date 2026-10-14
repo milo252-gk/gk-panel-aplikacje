@@ -497,7 +497,7 @@
     const lista = await hala.odrzucone();
     const konf = Lider.stan.konflikty;
     Lider.okno({
-      tytul: 'Nie wysłane i konflikty',
+      tytul: 'Nie wysłane',          // D64: jedna nazwa we wszystkich aplikacjach hali
       html: `<h3>Nie wysłane</h3>
         ${lista.length ? `<p class="slaby">Serwer nie przyjął tych zapisów. Przepisz je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>` : '<p class="slaby">Brak.</p>'}
         <ul class="lista-prosta">${lista.map(o => `<li><b>${esc(Lider.nazwaTypu(o.zd.typ))}</b> ${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}
@@ -518,8 +518,6 @@
 
   function rysujPasek() {
     const p = hala.polaczenie, k = Lider.stan.kolejka, pasek = $('pasek');
-    const czesci = [];
-    let klasa = 'ok';
     if (!hala.zalogowany()) {
       pasek.className = 'hala-polaczenie ok';
       pasek.textContent = '';
@@ -527,18 +525,10 @@
       return;
     }
     const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
-    // Wysyłamy tylko zapisy zalogowanej osoby (moje) — cudze czekają na jej powrót.
-    const n = k.moje || 0;
-    // Dociąganie (sieć buforuje strumień, np. szybki tunel) to NIE brak połączenia — zmiany przychodzą co kilka sekund.
-    const dociaga = p.dociaganie && !p.blad;
-    // Odmiana po liczebniku: „3 zapisy czekają”, „5 zapisów czeka” (wcześniej „3 czeka na wysłanie”).
-    if (!p.online) { klasa = 'offline'; czesci.push(n ? `Brak sieci — ${W.czekaNaWyslanie(n)}` : 'Brak sieci — zapisy zostają w telefonie'); }
-    else if (!p.strumien && !dociaga && !laska) { klasa = 'brak-huba'; czesci.push(`Brak połączenia z serwerem${n ? ` — ${W.czekaNaWyslanie(n)}` : ''}`); }
-    else if (n) { klasa = 'kolejka'; czesci.push(`Wysyłanie… ${n}`); }
-    else if (dociaga) { klasa = 'kolejka'; czesci.push('Odświeżanie co kilka sekund'); }
-    if (k.odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${k.odrzucone} — dotknij`); }
-    pasek.className = 'hala-polaczenie ' + klasa;
-    pasek.textContent = czesci.join(' · ');
+    // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia). Wysyłamy tylko zapisy zalogowanej osoby (moje).
+    const w = Hala.pasekPolaczenia({ zalogowany: true, polaczenie: p, kolejka: k, laska, komputer: !matchMedia('(max-width: 820px)').matches });
+    pasek.className = 'hala-polaczenie ' + w.klasa;
+    pasek.textContent = w.tekst;
   }
   $('pasek').addEventListener('click', () => { if (hala.zalogowany()) pokazOdrzucone(); });
 
@@ -678,6 +668,8 @@
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* zostaje w adresie */ }
     }
     pokazSesje();
+    // D64: pasek „Dźwięk powiadomień wyłączony — dotknij” jak w UR i KJ (HalaDzwieki.pasek).
+    if (window.HalaDzwieki) window.HalaDzwieki.pasek(hala);
     setTimeout(rysujPasek, LASKA_MS + 500);   // po okresie łaski pasek mówi prawdę
     // Nowa wersja: odświeża sama, ale nie przy otwartym oknie (formularz, okno awarii) — aktualizacja.js.
     HalaAktualizacja.pilnuj({ komunikat: Lider.komunikat, zajety: () => Lider.oknoOtwarte() });

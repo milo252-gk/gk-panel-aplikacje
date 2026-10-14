@@ -101,7 +101,39 @@
   const bhpPilne = (kontrakt, rodzaj) => (((kontrakt && kontrakt.stale && kontrakt.stale.rodzaje_bhp) || [])
     .some(r => r && r.kod === rodzaj && r.pilne));
 
-  global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY, bhpPilne };
+  /* D64 (właściciel 2026-10-14: „jedno spójne środowisko”): pasek „🔇 Dźwięk powiadomień wyłączony — dotknij, żeby
+     włączyć” — wzór z GK Utrzymanie Ruchu, teraz ten sam w Liderze i KJ (wcześniej tylko UR, a Lider i KJ nie mówiły,
+     że przeglądarka trzyma dźwięk do pierwszego dotknięcia). Pod nagłówkiem, nad ekranem; znika, gdy dźwięk ruszy. */
+  function pasek(hala, opcje) {
+    const doc = global.document;
+    if (!doc) return;
+    const o = opcje || {};
+    let el = doc.getElementById('hala-dzwonek');
+    const pokaz = () => {
+      const a = kontekst();
+      el.hidden = !(hala.zalogowany() && a && a.state !== 'running');
+      if (a && !a.halaPasek) { a.halaPasek = true; a.addEventListener('statechange', pokaz); }
+    };
+    if (!el) {
+      el = doc.createElement('div');
+      el.id = 'hala-dzwonek';
+      el.className = 'hala-dzwonek';
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.hidden = true;
+      el.innerHTML = '<span class="ikona" aria-hidden="true">🔇</span><span>Dźwięk powiadomień wyłączony — <u>dotknij, żeby włączyć</u></span>';
+      const miejsce = o.przed || doc.querySelector('#aplikacja > main, #aplikacja > .ekrany');
+      if (miejsce && miejsce.parentNode) miejsce.parentNode.insertBefore(el, miejsce); else doc.body.prepend(el);
+      const wlacz = () => { odblokuj(); setTimeout(() => { zagraj('pilne'); pokaz(); }, 150); };
+      el.addEventListener('click', wlacz);
+      el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); wlacz(); } });
+      hala.na('sesja', pokaz);
+      doc.addEventListener('visibilitychange', () => { if (doc.visibilityState === 'visible') pokaz(); });
+    }
+    pokaz();
+  }
+
+  global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY, bhpPilne, pasek };
 
   // ================================================================ okno (wspólne)
 
@@ -431,6 +463,7 @@
     if (!b) {
       b = doc.createElement('button');
       b.type = 'button'; b.id = 'hala-skan-fab'; b.className = 'hala-skan-fab';
+      doc.body.classList.add('hala-ma-skan');          // D64: miejsce pod listą i nad komunikatami (hala.css)
       b.setAttribute('aria-label', 'Skanuj kod QR maszyny');
       b.innerHTML = '<span aria-hidden="true">▣</span> Skanuj';
       doc.body.appendChild(b);

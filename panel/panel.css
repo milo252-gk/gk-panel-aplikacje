@@ -175,7 +175,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 /* ---------------------------------------------------------------- zlecenia dla działów */
 
 .chipy { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.chip { min-height: 40px; border-radius: 999px; padding: 0 16px; }
+.chip { min-height: var(--dotyk); border-radius: 999px; padding: 0 16px; }
 .chip[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
 .zlecenie {
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center;

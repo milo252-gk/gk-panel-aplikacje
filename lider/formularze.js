@@ -69,8 +69,8 @@
       html: `<form class="formularz" novalidate>
         ${zeStanowiskami ? `<label>Stanowisko
           <div class="rzad"><select name="stanowisko">${opcjeStanowisk(linia, d.stanowisko)}</select>
-          <button type="button" data-skan="stanowisko" aria-label="Skanuj stanowisko albo maszynę">📷</button></div></label>`
-          : '<button type="button" data-skan="stanowisko">📷 Skanuj QR maszyny</button>'}
+          <button type="button" data-skan="stanowisko" aria-label="Skanuj stanowisko albo maszynę">▣</button></div></label>`
+          : '<button type="button" data-skan="stanowisko">▣ Skanuj QR maszyny</button>'}
         ${wyroby.length ? `<label>Wyrób<select name="wyrob"><option value="">—</option>${wyroby.map(w => `<option value="${esc(w.kod)}">${esc(w.kod)} ${esc(w.nazwa)}</option>`).join('')}</select></label>` : ''}
         <div class="liczby-proby">
           <label>Sprawdzone<input name="sprawdzone" type="number" inputmode="numeric" min="1" step="1"></label>
@@ -87,7 +87,7 @@
           <fieldset><legend>Zlecenie</legend>
             <div class="pole-zlecenia"></div>
             <div class="rzad"><input name="numer" placeholder="Numer zlecenia (opcjonalnie)" autocapitalize="characters">
-            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">📷</button></div>
+            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">▣</button></div>
           </fieldset>
           <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000"></textarea></label>
           <label>Działania korygujące<textarea name="dzialania" rows="2" maxlength="2000"></textarea></label>
