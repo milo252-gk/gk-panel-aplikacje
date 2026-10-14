@@ -1,11 +1,14 @@
 {
   "hub": "https://requirements-coaches-med-spell.trycloudflare.com",
-  "zmieniono": "2026-10-14T13:42:24.762Z",
+  "zmieniono": "2026-10-14T13:50:53.383Z",
   "wersje": {
     "wspolne": "wspolne-264ced34f453",
     "panel": "panel-24b2cdcc63aa",
     "lider": "lider-661fc9b45161",
     "ur": "ur-ec6957e6436d",
     "kj": "kj-f4da552ebb8b"
+  },
+  "programy": {
+    "wycena": "https://stunning-imagination-questionnaire-avenue.trycloudflare.com"
   }
 }
