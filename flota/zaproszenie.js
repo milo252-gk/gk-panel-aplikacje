@@ -1,4 +1,5 @@
-/* „Dla kierowców" — jak wsadzić program do telefonu kierowcy.
+/* „Zaproś kierowcę" — jak wsadzić program do telefonu kierowcy (do etapu 2
+   poprawek UI ekran nazywał się „Dla kierowców”; ta sama nazwa co w GK Trasy).
 
    Ekran biura, pokazywany kierowcy stojącemu obok. Cała robota polega na tym,
    żeby nikt nie musiał przepisywać adresu: kierowca skanuje kod aparatem,
@@ -11,7 +12,7 @@
    stertą kartek, z których żadna nie działa.                                 */
 
 EKRANY.zaproszenie = {
-  tytul: 'Dla kierowców',
+  tytul: 'Zaproś kierowcę',
   tylkoBiuro: true,
 
   async rysuj(pole) {
@@ -31,7 +32,7 @@ EKRANY.zaproszenie = {
       ${z.skad === 'siec' ? `<div class="wstega uwaga">
         <b>Ten adres działa tylko w firmowym wifi.</b>
         Kierowca spod domu albo z drogi się nie połączy. Żeby program otwierał się
-        z dowolnej sieci, włącz tunel w <b>Ustawieniach → Adres HTTPS dla kierowców</b>.
+        z dowolnej sieci, włącz tunel w <b>Ustawieniach → Zaawansowane → Adres HTTPS dla kierowców</b>.
         </div>` : ''}
 
       ${naGithubie && daneWSwiat ? `<div class="wstega ok">
@@ -44,8 +45,8 @@ EKRANY.zaproszenie = {
       ${naGithubie && !daneWSwiat ? `<div class="wstega uwaga">
         <b>Sama aplikacja otworzy się wszędzie, ale dane są tylko w firmowym wifi.</b>
         Kierowca spod domu zobaczy ekran logowania i nic więcej. Włącz tunel
-        w <b>Ustawieniach → Adres HTTPS dla kierowców</b> — nowy adres wpisze na GitHub sam
-        Panel Kierownika (hub na tym komputerze).
+        w <b>Ustawieniach → Zaawansowane → Adres HTTPS dla kierowców</b> — nowy adres wpisze na GitHub sam
+        Panel Kierownika na tym komputerze.
         </div>` : ''}
 
       ${tunelowy && !z.adres_trwaly ? `<div class="wstega uwaga">
@@ -53,7 +54,7 @@ EKRANY.zaproszenie = {
         wtedy, gdy program sam uruchomi nowy tunel, bo stary przestał odpowiadać
         (strażnik tunelu). Tunel działa w trybie szybkim. Nie drukuj tego kodu
         ani nie rozsyłaj go na stałe — do tego służy GitHub Pages (aplikację wysyła tam
-        Panel Kierownika — hub na tym komputerze; stan w <b>Ustawieniach → Stały adres dla
+        Panel Kierownika na tym komputerze; stan w <b>Ustawieniach → Zaawansowane → Stały adres dla
         kierowców</b>) albo tryb stały z własnym adresem. Telefony z aplikacją z GitHub Pages
         znajdą nowy adres tunelu same.
         </div>` : ''}

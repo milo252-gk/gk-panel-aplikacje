@@ -7,7 +7,7 @@
 
 const OPIS_ROLI = {
   kierowca: 'kierowca — widzi tylko swoje auto, oddaje przeglądy i zgłasza usterki',
-  biuro: 'biuro — cała flota: pojazdy, terminy, przeglądy, usterki',
+  biuro: 'biuro — cała flota: auta, terminy, przeglądy, usterki',
   admin: 'administrator — to co biuro, plus konta i Ustawienia',
 };
 const MIN_PIN = { kierowca: 4, biuro: 8, admin: 8 };
@@ -16,11 +16,11 @@ const MIN_PIN = { kierowca: 4, biuro: 8, admin: 8 };
    PIN i aktywność przychodzą z GK Trasy co kilka minut, więc pole do edycji
    byłoby kłamstwem: zmiana wróciłaby do starej przy najbliższej wymianie,
    a serwer i tak odpowiada na nią odmową. Auto przypisuje się dalej tutaj,
-   na karcie pojazdu — to jest sprawa floty, nie planu dnia.                 */
+   na karcie auta — to jest sprawa floty, nie planu dnia.                 */
 /* Konto z Panelu Kierownika (GK-KONTA.md) — jedna osoba, jedno konto we
    wszystkich aplikacjach GK. Zakłada się je i zmienia w Panelu → Administracja;
    tutaj tylko oglądamy. PIN osoba zmienia sama w „Moje konto” (idzie do Panelu),
-   auto przypisuje się dalej tutaj, na karcie pojazdu.                       */
+   auto przypisuje się dalej tutaj, na karcie auta.                          */
 function oknoKontaZPanelu(u) {
   okno({
     tytul: 'Konto ' + u.imie,
@@ -101,7 +101,7 @@ EKRANY.konta = {
     pole.innerHTML = `
       ${stan.kontaZPanelu ? `<div class="wstega info">Konta zakłada się w <b>Panelu
         Kierownika → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
-        GK. GK Flota pobiera je sama co kilka minut (Ustawienia → Konta GK). ${stan.zespolGk
+        GK. GK Flota pobiera je sama co kilka minut (Ustawienia → Zaawansowane → Konta GK). ${stan.zespolGk
           ? `Konta <b>biura i kierowców</b> zakładasz też tutaj — „+ Dodaj konto” zapisuje
             je w Panelu.` : `Tutaj zostaje tylko awaryjny administrator.${zespol.powod
             ? `<br>${escHtml(zespol.powod)}` : ''}`}</div>` : ''}
@@ -241,7 +241,7 @@ function oknoEdycjiKonta(u, adminow) {
       const odswiez = () => {
         opisRoli.textContent = OPIS_ROLI[rola.value] || '';
         opisPinu.textContent = `PIN dla tej roli musi mieć co najmniej `
-          + `${MIN_PIN[rola.value]} znaków`
+          + `${MIN_PIN[rola.value]} ${odmiana(MIN_PIN[rola.value], 'znak', 'znaki', 'znaków')}`
           + (rola.value === 'kierowca'
               ? ' — kierowca wstukuje go w rękawicach, więc może być krótki.'
               : ' — to konto widzi całą firmę, więc ma mieć prawdziwe hasło.');
@@ -273,7 +273,8 @@ function oknoEdycjiKonta(u, adminow) {
         // w oknie odbijał się komunikatem po zamknięciu formularza, więc
         // wszystkie pozostałe pola trzeba było wpisywać drugi raz.
         if (pin && pin.length < MIN_PIN[rola]) {
-          komunikat(`PIN dla roli „${rola}" musi mieć co najmniej ${MIN_PIN[rola]} znaków`,
+          komunikat(`PIN dla roli „${rola}” musi mieć co najmniej ${MIN_PIN[rola]} ${
+            odmiana(MIN_PIN[rola], 'znak', 'znaki', 'znaków')}`,
                     'blad');
           return;
         }
@@ -293,7 +294,7 @@ function oknoEdycjiKonta(u, adminow) {
    haslo123, a „Ustaw hasło startowe” / „Resetuj PIN” działają jak w Panelu. Usuwa
    tylko administrator w Panelu — tutaj konto się wyłącza.                         */
 const ROLE_ZESPOLU = [
-  ['flota_biuro', 'Biuro', 'cała flota: pojazdy, terminy, przeglądy, usterki'],
+  ['flota_biuro', 'Biuro', 'cała flota: auta, terminy, przeglądy, usterki'],
   ['trasy_kierowca', 'Kierowca', 'swoje auto, przeglądy i usterki'],
 ];
 

@@ -33,9 +33,19 @@ EKRANY.moj = {
       return;
     }
 
-    pole.innerHTML = przyciskPowrotu() + auta.map(p => kartaMojegoAuta(p, d.okres)).join('')
+    // Przegląd zrobiony bez zasięgu leży w kolejce telefonu, a serwer o nim
+    // jeszcze nie wie i dalej każe go zrobić. Bez tej wstęgi kierowca robił
+    // cały obchód auta drugi raz.
+    const czeka = await przegladyWTelefonie(auta);
+    // „Moje przeglądy” i „Instrukcja w razie awarii” stoją tu jako przyciski,
+    // bo menu boczne kierowcy to od etapu 2 tylko cztery pozycje paska
+    // dolnego — historia przeglądów nie ma już własnej pozycji, a instrukcja
+    // ma być pod ręką także na komputerze, gdzie paska dolnego nie ma.
+    pole.innerHTML = przyciskPowrotu() + auta.map(p => kartaMojegoAuta(p, d.okres, czeka)).join('')
       + `<div class="przyciski">
            <button id="m-usterka">Zgłoś usterkę</button>
+           <button id="m-przeglady">Moje przeglądy</button>
+           <button id="m-awaria">🆘 Instrukcja w razie awarii</button>
          </div>`;
     podepnijPowrot(pole);
 
@@ -45,15 +55,31 @@ EKRANY.moj = {
     // Cała lista, nie pierwsze auto: kierowca ciągnika z przyczepą zgłaszał
     // usterkę przyczepy zawsze na ciągnik, bo okno nie dawało wyboru.
     pole.querySelector('#m-usterka').onclick = () => oknoZgloszeniaUsterki(auta);
+    pole.querySelector('#m-przeglady').onclick = () => pokazEkran('przeglady');
+    pole.querySelector('#m-awaria').onclick = () => pokazEkran('awaria');
   },
 };
 
-function kartaMojegoAuta(p, okres) {
+/* Przeglądy czekające w kolejce telefonu na wysłanie (Kolejka.dlaPojazdu),
+   tylko własne — po jednej liście na każde auto kierowcy.                   */
+async function przegladyWTelefonie(auta) {
+  if (!stan.uz) return [];
+  const listy = await Promise.all(auta.map(a =>
+    Kolejka.dlaPojazdu(a.id, stan.uz.id).catch(() => [])));
+  return [].concat(...listy).filter(o => o.typ === 'przeglad');
+}
+
+function przegladCzeka(czeka, pojazdId, okres) {
+  return (czeka || []).some(o => Number(o.pojazd) === Number(pojazdId) && o.okres === okres);
+}
+
+function kartaMojegoAuta(p, okres, czeka) {
   const pr = p.protokol || {};
   const odrzucony = pr.status === 'odrzucony';
+  const wTelefonie = przegladCzeka(czeka, p.id, pr.okres || okres);
   return `
-    ${odrzucony ? `<div class="wstega blad">
-      Biuro odrzuciło Twój przegląd za ${escHtml(pr.okres || okres)}.<br>
+    ${odrzucony && !wTelefonie ? `<div class="wstega blad">
+      Biuro odrzuciło Twój przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))}.<br>
       <b>Powód: ${escHtml(pr.powod || 'nie podano')}</b><br>
       Popraw to i wyślij jeszcze raz — zdjęcia, które biuro już ma, zostają;
       zrób na nowo tylko te, o które prosi biuro.</div>` : ''}
@@ -61,7 +87,7 @@ function kartaMojegoAuta(p, okres) {
     <div class="karta">
       <div class="karta-gora">
         <div>
-          <h2 style="margin:0;font-size:26px">${escHtml(p.rejestracja)}</h2>
+          <h2 class="rejestracja" style="margin:0;font-size:26px">${escHtml(p.rejestracja)}</h2>
           <p class="slaby" style="margin:4px 0 0">${escHtml(
             [p.marka, p.model].filter(Boolean).join(' ') || '')}</p>
         </div>
@@ -73,9 +99,13 @@ function kartaMojegoAuta(p, okres) {
         ${p.przebieg_o ? `<span class="slaby male">(${escHtml(polskaData(p.przebieg_o))})</span>`
                        : ''}</p>
 
-      ${pr.do_zrobienia ? `
+      ${pr.do_zrobienia && wTelefonie ? `<div class="wstega info">
+          Przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))} czeka w telefonie
+          na wysłanie — wyślę go sam, gdy wróci zasięg. Nie rób go drugi raz.</div>`
+      : pr.do_zrobienia ? `
         <button class="glowny duzy" data-protokol-pojazd="${p.id}" style="width:100%">
-          ${odrzucony ? 'Popraw i wyślij ponownie' : `Zrób przegląd za ${escHtml(pr.okres || okres)}`}
+          ${odrzucony ? 'Popraw i wyślij ponownie'
+            : `Zrób przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))}`}
         </button>`
       : pr.status === 'nie_teraz'
       // Auto z przeglądem co kilka miesięcy — ta sama reguła co pulpit biura
@@ -85,13 +115,17 @@ function kartaMojegoAuta(p, okres) {
            (co ${escHtml(String(pr.co_mies || 1))} ${odmiana(pr.co_mies || 1,
              'miesiąc', 'miesiące', 'miesięcy')}).</div>
          <button data-protokol-pojazd="${p.id}" style="width:100%">Zrób przegląd teraz</button>`
-      : `<div class="wstega ok">Przegląd za ${escHtml(pr.okres || okres)} jest oddany${
+      : `<div class="wstega ok">Przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))} jest oddany${
+          pr.wykonano_o ? ' ' + escHtml(polskaData(pr.wykonano_o)) : ''}${
           pr.status === 'zatwierdzony' ? ' i zatwierdzony przez biuro' : ' — czeka na biuro'}.</div>
          <button data-protokol-pojazd="${p.id}" style="width:100%">Otwórz przegląd</button>`}
     </div>
 
     ${(p.terminy && p.terminy.lista || []).length ? `
-      <details class="karta karta-zwijana"><summary>Moje terminy</summary>
+      <!-- UI etap 3: terminy (badanie, OC, przegląd…) rozwinięte od razu.
+           Zwinięte zostawiały pustą dolną połowę ekranu, a to jedyna rzecz,
+           którą kierowca chce tu zobaczyć poza przyciskiem przeglądu. -->
+      <details class="karta karta-zwijana" open><summary>Moje terminy</summary>
         <div class="zwijana-tresc">${(p.terminy.lista).map(t => `
           <div class="brak">
             <span class="plakietka p-${escHtml(t.stan)}">${escHtml(opisTerminu(t.dni))}</span>
@@ -104,7 +138,7 @@ function kartaMojegoAuta(p, okres) {
         <div class="zwijana-tresc">${p.usterki.map(u => `
           <div class="brak">
             <span class="plakietka p-${escHtml(u.status)}">${
-              escHtml(u.status.replace('_', ' '))}</span>
+              escHtml(opisKodu(OPIS_USTERKI, u.status))}</span>
             <span>${escHtml(u.opis)}<br><span class="slaby male">${
               escHtml(polskaData(u.utworzono))}</span></span>
           </div>`).join('')}</div></details>` : ''}`;
@@ -138,7 +172,12 @@ EKRANY.przeglad = {
     const szkic = await Zdjecia.wczytajSzkic(p.id).catch(() => null);
     const komplet = (szkic && szkic.komplet) || Zdjecia.pustyKomplet();
 
+    const czeka = przegladCzeka(await przegladyWTelefonie([p]), p.id, okres);
+
     pole.innerHTML = `
+      ${czeka ? `<div class="wstega uwaga">Przegląd za ${escHtml(miesiacSlownie(okres))}
+        czeka w telefonie na wysłanie — wyślę go sam, gdy wróci zasięg.
+        Nie rób go drugi raz.</div>` : ''}
       ${pr.status === 'odrzucony' ? `<div class="wstega blad">
         Biuro odrzuciło poprzednią wysyłkę.<br><b>${escHtml(pr.powod || '')}</b></div>` : ''}
       ${naSerwerze.length ? `<div class="wstega info">Biuro ma już zdjęcia:
@@ -154,8 +193,8 @@ EKRANY.przeglad = {
           <select id="pg-pojazd">${auta.map(a => `<option value="${a.id}"${
             a.id === p.id ? ' selected' : ''}>${escHtml(a.rejestracja)}</option>`).join('')}
           </select></label>`
-        : `<h2 style="margin:0 0 8px;font-size:24px">${escHtml(p.rejestracja)}</h2>`}
-        <p class="slaby" style="margin:0">Przegląd za <b>${escHtml(okres)}</b></p>
+        : `<h2 class="rejestracja" style="margin:0 0 8px;font-size:24px">${escHtml(p.rejestracja)}</h2>`}
+        <p class="slaby" style="margin:0">Przegląd za <b>${escHtml(miesiacSlownie(okres))}</b></p>
 
         <label class="pole">Stan licznika (km) *
           <input id="pg-przebieg" type="number" inputmode="numeric" class="duzy"
@@ -277,6 +316,78 @@ async function wyslijProtokol(p, okres, komplet, pole) {
 
 /* ---------------------------------------------------------- ZGŁOSZENIE USTERKI */
 
+/* Formularz zgłoszenia żyje w dwóch miejscach: w oknie (z „Moje auto”
+   i z przeglądu — tam nie wolno zgubić zaczętego obchodu) i wprost na
+   ekranie „Usterka” (zakładka paska dolnego otwiera od razu formularz, a pod
+   nim listę własnych zgłoszeń — etap 2 poprawek UI). Treść, podpięcie
+   i wysyłka są więc wspólne, a różni się tylko opakowanie.                   */
+const WAGI_USTERKI = [['drobna', 'drobna — może poczekać'],
+                      ['powazna', 'poważna — do naprawy szybko'],
+                      ['unieruchamiajaca', 'nie da się jechać']];
+
+function trescZgloszeniaUsterki(auta) {
+  return `
+      ${auta.length > 1 ? `<label class="pole">Auto
+        <select id="u-pojazd">${auta.map(a => `<option value="${a.id}">${
+          escHtml(a.rejestracja)}</option>`).join('')}</select></label>`
+      : `<p class="slaby">Auto: <b>${escHtml(auta[0].rejestracja)}</b></p>`}
+      <label class="pole">Co jest nie tak *
+        <textarea id="u-opis" rows="3" maxlength="500"
+          placeholder="np. Świeci kontrolka silnika od wtorku, auto szarpie przy ruszaniu"></textarea>
+      </label>
+      <label class="pole">Jak pilne</label>
+      <div class="chipy" id="u-wagi">${WAGI_USTERKI.map(([kod, opis], i) =>
+        `<button type="button" class="chip${i === 0 ? ' wybrany' : ''}" data-waga="${kod}">${
+          escHtml(opis)}</button>`).join('')}</div>
+      <label class="pole">Zdjęcie (opcjonalnie)</label>
+      <div class="miniatury" id="u-miniatury"></div>
+      <div class="chipy">
+        <label class="chip">📷 Zrób zdjęcie
+          <input type="file" class="ukryty" accept="image/*" capture="environment" id="u-aparat"></label>
+        <label class="chip">🖼️ Z galerii
+          <input type="file" class="ukryty" accept="image/*" multiple id="u-galeria"></label>
+      </div>`;
+}
+
+function podepnijZgloszenieUsterki(tresc, zdjecia) {
+  const pojemnik = tresc.querySelector('#u-miniatury');
+  const opcje = { maks: 3, nazwa: 'Usterka' };
+  ['#u-aparat', '#u-galeria'].forEach(sel => {
+    const we = tresc.querySelector(sel);
+    we.onchange = () => Zdjecia.dodaj(we.files, zdjecia, pojemnik, we, opcje);
+  });
+  tresc.querySelectorAll('[data-waga]').forEach(b => {
+    b.onclick = () => {
+      tresc.querySelectorAll('[data-waga]').forEach(x => x.classList.remove('wybrany'));
+      b.classList.add('wybrany');
+    };
+  });
+}
+
+/* true = zgłoszenie leży w kolejce (albo już na serwerze). */
+async function wyslijZgloszenieUsterki(tresc, auta, zdjecia) {
+  const opis = tresc.querySelector('#u-opis').value.trim();
+  if (opis.length < 3) {
+    komunikat('Napisz krótko, co jest nie tak — biuro musi wiedzieć, czego szukać', 'blad');
+    return false;
+  }
+  const wybrana = tresc.querySelector('[data-waga].wybrany');
+  const wybor = tresc.querySelector('#u-pojazd');
+  try {
+    await doKolejki({
+      typ: 'usterka',
+      pojazd: wybor ? Number(wybor.value) : auta[0].id,
+      opis,
+      waga: wybrana ? wybrana.dataset.waga : 'drobna',
+      czas: czasTeraz(),
+      zdjecia: Zdjecia.doPaczkiUsterki(zdjecia),
+    }, 'Usterka zgłoszona');
+  } catch (e) {
+    return false;                 // doKolejki samo powiedziało, co się stało
+  }
+  return true;
+}
+
 /* `pojazd`: jedno auto (zgłoszenie z ekranu przeglądu), lista aut (z ekranu
    „Moje auto" — przy kilku jest wybór) albo nic (pobieramy listę).        */
 async function oknoZgloszeniaUsterki(pojazd) {
@@ -288,73 +399,55 @@ async function oknoZgloszeniaUsterki(pojazd) {
   if (!auta || !auta.length) { komunikat('Nie masz przypisanego auta', 'blad'); return; }
 
   const zdjecia = [];
-  const WAGI = [['drobna', 'drobna — może poczekać'],
-                ['powazna', 'poważna — do naprawy szybko'],
-                ['unieruchamiajaca', 'nie da się jechać']];
   okno({
     tytul: 'Zgłoszenie usterki',
-    tresc: `
-      ${auta.length > 1 ? `<label class="pole">Auto
-        <select id="u-pojazd">${auta.map(a => `<option value="${a.id}">${
-          escHtml(a.rejestracja)}</option>`).join('')}</select></label>`
-      : `<p class="slaby">Auto: <b>${escHtml(auta[0].rejestracja)}</b></p>`}
-      <label class="pole">Co jest nie tak *
-        <textarea id="u-opis" rows="3" maxlength="500"
-          placeholder="np. Świeci kontrolka silnika od wtorku, auto szarpie przy ruszaniu"></textarea>
-      </label>
-      <label class="pole">Jak pilne</label>
-      <div class="chipy" id="u-wagi">${WAGI.map(([kod, opis], i) =>
-        `<button type="button" class="chip${i === 0 ? ' wybrany' : ''}" data-waga="${kod}">${
-          escHtml(opis)}</button>`).join('')}</div>
-      <label class="pole">Zdjęcie (opcjonalnie)</label>
-      <div class="miniatury" id="u-miniatury"></div>
-      <div class="chipy">
-        <label class="chip">📷 Zrób zdjęcie
-          <input type="file" class="ukryty" accept="image/*" capture="environment" id="u-aparat"></label>
-        <label class="chip">🖼️ Z galerii
-          <input type="file" class="ukryty" accept="image/*" multiple id="u-galeria"></label>
-      </div>`,
+    tresc: trescZgloszeniaUsterki(auta),
     poOtwarciu: (tresc) => {
-      const pojemnik = tresc.querySelector('#u-miniatury');
-      const opcje = { maks: 3, nazwa: 'Usterka' };
-      ['#u-aparat', '#u-galeria'].forEach(sel => {
-        const we = tresc.querySelector(sel);
-        we.onchange = () => Zdjecia.dodaj(we.files, zdjecia, pojemnik, we, opcje);
-      });
-      tresc.querySelectorAll('[data-waga]').forEach(b => {
-        b.onclick = () => {
-          tresc.querySelectorAll('[data-waga]').forEach(x => x.classList.remove('wybrany'));
-          b.classList.add('wybrany');
-        };
-      });
+      podepnijZgloszenieUsterki(tresc, zdjecia);
       tresc.querySelector('#u-opis').focus();
     },
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zgłoś', klasa: 'glowny', klik: async (zamknij) => {
         const tresc = document.getElementById('okno-tresc');
-        const opis = tresc.querySelector('#u-opis').value.trim();
-        if (opis.length < 3) {
-          komunikat('Napisz krótko, co jest nie tak — biuro musi wiedzieć, czego szukać', 'blad');
-          return;
-        }
-        const wybrana = tresc.querySelector('[data-waga].wybrany');
-        const wybor = tresc.querySelector('#u-pojazd');
-        try {
-          await doKolejki({
-            typ: 'usterka',
-            pojazd: wybor ? Number(wybor.value) : auta[0].id,
-            opis,
-            waga: wybrana ? wybrana.dataset.waga : 'drobna',
-            czas: czasTeraz(),
-            zdjecia: Zdjecia.doPaczkiUsterki(zdjecia),
-          }, 'Usterka zgłoszona');
-        } catch (e) {
-          return;
-        }
+        if (!await wyslijZgloszenieUsterki(tresc, auta, zdjecia)) return;
         zamknij();
         odswiezEkran();
       } },
     ],
   });
+}
+
+/* Czy kierowca zaczął zgłoszenie na ekranie „Usterka”: opis albo zdjęcie.
+   Wybrana waga się nie liczy — „drobna” jest zaznaczona z góry.           */
+function zgloszenieZaczete() {
+  const f = document.getElementById('us-formularz');
+  if (!f) return false;
+  const opis = f.querySelector('#u-opis');
+  return !!f.querySelector('.miniatura') || !!(opis && opis.value.trim());
+}
+
+/* Formularz wprost na ekranie „Usterka” (kierowca). Bez ustawiania kursora
+   w polu opisu: na telefonie to wysuwa klawiaturę na pół ekranu, zanim
+   kierowca zobaczy, gdzie jest. Po wysłaniu ekran rysuje się od nowa —
+   z czystym formularzem i nowym zgłoszeniem na liście pod nim.             */
+async function formularzUsterkiNaEkranie(kontener) {
+  const d = await API.get('/api/moj-pojazd').catch(() => null);
+  const auta = (d && d.pojazdy) || [];
+  if (!auta.length) {
+    kontener.innerHTML = `<div class="pusto"><span class="duza-ikona">🚗</span>
+      Nie masz przypisanego auta.<br><span class="male">Zgłoś to biuru — bez
+      przypisanego auta nie da się zgłosić usterki.</span></div>`;
+    return;
+  }
+  const zdjecia = [];
+  kontener.innerHTML = `<div class="karta">
+      <h2 style="margin-top:0">Zgłoś usterkę</h2>
+      ${trescZgloszeniaUsterki(auta)}
+      <div class="przyciski"><button class="glowny duzy" id="u-wyslij">Zgłoś</button></div>
+    </div>`;
+  podepnijZgloszenieUsterki(kontener, zdjecia);
+  kontener.querySelector('#u-wyslij').onclick = async () => {
+    if (await wyslijZgloszenieUsterki(kontener, auta, zdjecia)) odswiezEkran();
+  };
 }

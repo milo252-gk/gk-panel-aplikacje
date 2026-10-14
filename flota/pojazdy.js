@@ -62,6 +62,7 @@ EKRANY.pulpit = {
 
     pole.innerHTML = `
       ${wstegiAlarmow(d.alarmy_systemu)}
+      ${kafelekNaStart(kaf)}
 
       <div class="karta">
         <div class="karta-gora">
@@ -69,14 +70,19 @@ EKRANY.pulpit = {
           <span class="slaby male">${escHtml(miesiacSlownie(d.okres))}</span>
         </div>
         <div class="kafelki">
-          <div class="${klasa(kaf.po_terminie, 'pilne')}">
-            <span class="etykieta">Po terminie</span><b>${kaf.po_terminie || 0}</b></div>
-          <div class="${klasa(kaf.terminy_30, 'uwaga')}">
-            <span class="etykieta">Terminy w 30 dni</span><b>${kaf.terminy_30 || 0}</b></div>
-          <div class="${klasa(kaf.zalegle, 'uwaga')}">
-            <span class="etykieta">Zaległe przeglądy</span><b>${kaf.zalegle || 0}</b></div>
-          <div class="${klasa(kaf.usterki, 'uwaga')}">
-            <span class="etykieta">Otwarte usterki</span><b>${kaf.usterki || 0}</b></div>
+          <button type="button" data-kafel="terminy" class="${klasa(kaf.po_terminie, 'pilne')}">
+            <span class="etykieta">Po terminie</span><b>${kaf.po_terminie || 0}</b></button>
+          <button type="button" data-kafel="terminy" class="${klasa(kaf.terminy_w_oknie, 'uwaga')}">
+            <span class="etykieta">Terminy w ciągu ${Number(kaf.okno_dni) || 30} ${
+              odmiana(Number(kaf.okno_dni) || 30, 'dnia', 'dni', 'dni')}</span><b>${
+              kaf.terminy_w_oknie || 0}</b></button>
+          <button type="button" data-kafel="zalegle" class="${klasa(kaf.zalegle, 'uwaga')}">
+            <span class="etykieta">Zaległe przeglądy</span><b>${kaf.zalegle || 0}</b></button>
+          <button type="button" data-kafel="usterki" class="${klasa(kaf.usterki, 'uwaga')}">
+            <span class="etykieta">Otwarte usterki</span><b>${kaf.usterki || 0}</b></button>
+          <button type="button" data-kafel="do-zatwierdzenia"
+                  class="${klasa(kaf.do_zatwierdzenia, 'uwaga')}">
+            <span class="etykieta">Do zatwierdzenia</span><b>${kaf.do_zatwierdzenia || 0}</b></button>
         </div>
         <p class="slaby male" style="margin:12px 0 0">
           Aut w kartotece: <b>${kaf.auta || 0}</b>${(d.bez_kierowcy || []).length
@@ -115,10 +121,64 @@ EKRANY.pulpit = {
     pole.querySelectorAll('[data-pojazd]').forEach(el => {
       el.onclick = () => pokazEkran('pojazd', { id: Number(el.dataset.pojazd) });
     });
+    pole.querySelectorAll('[data-kafel]').forEach(b => {
+      b.onclick = () => otworzKafelPulpitu(b.dataset.kafel, pole);
+    });
+    podepnijWstegiAlarmow(pole);
     const doInstrukcji = pole.querySelector('#p-do-instrukcji');
     if (doInstrukcji) doInstrukcji.onclick = () => pokazEkran('awaria');
+    const pierwszeAuto = pole.querySelector('#p-start-auto');
+    if (pierwszeAuto) pierwszeAuto.onclick = () => oknoPojazdu(null);
   },
 };
+
+/* „Na start” (UI etap 3) — świeży program miał pusty pulpit z samymi zerami
+   i nic nie mówiło, od czego zacząć. Cztery kroki w kolejności, w jakiej
+   naprawdę trzeba je zrobić. Karta znika, gdy w kartotece jest pierwsze auto
+   — dalej pulpit sam pokazuje, czego brakuje (terminy, instrukcja, kierowcy). */
+function kafelekNaStart(kaf) {
+  if ((kaf || {}).auta) return '';
+  return `<div class="karta" id="p-na-start">
+    <h2 style="margin-top:0">Na start</h2>
+    <ol class="na-start">
+      <li><b>Dodaj auta</b> — sam numer rejestracyjny wystarczy, resztę dopiszesz później.</li>
+      <li><b>Wpisz terminy</b> (badanie techniczne, OC) w menu <b>📅 Terminy</b> — program
+        przypomni, zanim miną.</li>
+      <li><b>Zaproś kierowców</b> — <b>📱 Zaproś kierowcę</b> (kod QR do telefonu), potem
+        w karcie auta „Przypisz” kierowcę.</li>
+      <li><b>Uzupełnij 🆘 Instrukcję w razie awarii</b> — kierowca otworzy ją także bez zasięgu.</li>
+    </ol>
+    <button class="glowny" id="p-start-auto">Dodaj pierwsze auto</button>
+  </div>`;
+}
+
+/* Dokąd prowadzi kafelek pulpitu. Terminy i zaległe przeglądy mają swoją
+   listę na tym samym pulpicie, liczoną z tych samych danych co liczba
+   (ekran „Terminy” pokazuje wszystkie daty, nie tylko pilne),
+   więc przewijamy do niej. Usterki i przeglądy do zatwierdzenia otwierają
+   swój ekran z filtrem, który daje dokładnie te pozycje.                   */
+function celKafelkaPulpitu(kafel) {
+  return {
+    terminy: { przewin: 'p-alarmy' },
+    zalegle: { przewin: 'p-zalegle' },
+    usterki: { ekran: 'usterki', filtr: '_filtrUsterek', wartosc: { status: '' } },
+    'do-zatwierdzenia': { ekran: 'przeglady', filtr: '_filtrProtokolow',
+                          wartosc: { status: 'wykonany', okres: '' } },
+  }[kafel] || null;
+}
+
+function otworzKafelPulpitu(kafel, pole) {
+  const cel = celKafelkaPulpitu(kafel);
+  if (!cel) return;
+  if (cel.ekran) {
+    stan[cel.filtr] = Object.assign({}, cel.wartosc);
+    pokazEkran(cel.ekran);
+    return;
+  }
+  // Do nagłówka nad listą — sama lista zaczynałaby się bez tytułu.
+  const lista = pole.querySelector('#' + cel.przewin);
+  if (lista) (lista.previousElementSibling || lista).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 function listaAlarmow(alarmy) {
   if (!alarmy.length) {
@@ -127,7 +187,7 @@ function listaAlarmow(alarmy) {
   }
   return alarmy.map(a => `
     <button class="pozycja s-${escHtml(a.stan)}" data-pojazd="${a.pojazd}">
-      <span class="numer">${escHtml((a.rejestracja || '').slice(0, 8))}</span>
+      <span class="numer">${escHtml(a.rejestracja || '')}</span>
       <span class="srodek">
         <span class="nazwa">${escHtml(a.nazwa || a.rodzaj || 'termin')}</span>
         <span class="adres">${escHtml(a.rejestracja || '')}${a.kierowca_imie
@@ -148,7 +208,7 @@ function listaZaleglych(zalegle) {
   return zalegle.map(z => `
     <button class="pozycja s-${escHtml(z.status === 'brak' ? 'zalegly' : z.status)}"
             data-pojazd="${z.pojazd}">
-      <span class="numer">${escHtml((z.rejestracja || '').slice(0, 8))}</span>
+      <span class="numer">${escHtml(z.rejestracja || '')}</span>
       <span class="srodek">
         <span class="nazwa">${escHtml(z.rejestracja)} · ${escHtml(
           [z.marka, z.model].filter(Boolean).join(' ') || 'bez opisu')}</span>
@@ -158,7 +218,7 @@ function listaZaleglych(zalegle) {
       </span>
       <span class="prawo">
         <span class="plakietka p-${escHtml(z.status === 'brak' ? 'zalegly' : z.status)}">${
-          escHtml(z.status === 'brak' ? 'nie oddany' : z.status)}</span>
+          escHtml(z.status === 'brak' ? 'nie oddany' : (OPIS_STATUSU[z.status] || z.status))}</span>
       </span>
     </button>`).join('');
 }
@@ -166,15 +226,15 @@ function listaZaleglych(zalegle) {
 function listaUsterekPulpitu(usterki) {
   return usterki.map(u => `
     <button class="pozycja s-${escHtml(u.status)}" data-pojazd="${u.pojazd}">
-      <span class="numer">${escHtml((u.rejestracja || '').slice(0, 8))}</span>
+      <span class="numer">${escHtml(u.rejestracja || '')}</span>
       <span class="srodek">
         <span class="nazwa">${escHtml(u.opis)}</span>
         <span class="adres">${escHtml(u.rejestracja || '')} · zgłoszona
           ${escHtml(polskaData(u.utworzono))}</span>
       </span>
       <span class="prawo">
-        <span class="plakietka p-${escHtml(u.waga)}">${escHtml(u.waga)}</span>
-        <span class="plakietka p-${escHtml(u.status)}">${escHtml(u.status)}</span>
+        <span class="plakietka p-${escHtml(u.waga)}">${escHtml(opisKodu(OPIS_WAGI, u.waga))}</span>
+        <span class="plakietka p-${escHtml(u.status)}">${escHtml(opisKodu(OPIS_USTERKI, u.status))}</span>
       </span>
     </button>`).join('');
 }
@@ -206,12 +266,12 @@ EKRANY.pojazdy = {
         </select></label>
         <label class="male"><input type="checkbox" id="p-wszystkie"${
           f.wszystkie ? ' checked' : ''}> pokaż wycofane</label>
-        <button class="glowny" id="p-nowy">Dodaj pojazd</button>` : ''}
+        <button class="glowny" id="p-nowy">Dodaj auto</button>` : ''}
       </div>
       ${lista.length ? tabelaFloty(lista, biuro) : `<div class="pusto">
         <span class="duza-ikona">🚗</span>
         ${f.szukaj || f.rodzaj ? 'Nic nie pasuje do tych warunków.'
-          : (biuro ? 'Nie ma jeszcze żadnego pojazdu — dodaj pierwszy.'
+          : (biuro ? 'Nie ma jeszcze żadnego auta — dodaj pierwsze.'
                    : 'Nie masz przypisanego żadnego auta. Zgłoś to biuru.')}</div>`}
     `;
 
@@ -237,16 +297,25 @@ EKRANY.pojazdy = {
   },
 };
 
+/* Lupa w górnym pasku (app.js, #btn-szukaj). Osobnej wyszukiwarki nie ma —
+   kartoteka floty ma pole „Szukaj” (rejestracja, marka, VIN), więc lupa
+   otwiera ją i stawia kursor w tym polu.                                    */
+async function oknoSzukania() {
+  if (stan.ekran !== 'pojazdy') await pokazEkran('pojazdy');
+  const pole = document.getElementById('p-szukaj');
+  if (pole) { pole.focus(); pole.select(); }
+}
+
 function tabelaFloty(lista, biuro) {
   return `<div class="karta scisla"><div class="tabela-przewijana"><table>
     <thead><tr>
-      <th>Rejestracja</th><th>Pojazd</th>${biuro ? '<th>Kierowca</th>' : ''}
+      <th>Rejestracja</th><th>Auto</th>${biuro ? '<th>Kierowca</th>' : ''}
       <th class="liczba">Przebieg</th><th>Najbliższy termin</th>
     </tr></thead>
     <tbody>${lista.map(p => `
       <tr data-pojazd="${p.id}" style="cursor:pointer"${
         p.aktywny ? '' : ' class="slaby"'}>
-        <td><b>${escHtml(p.rejestracja)}</b>${p.aktywny ? '' : ' <span class="plakietka">wycofany</span>'}</td>
+        <td><b class="rejestracja">${escHtml(p.rejestracja)}</b>${p.aktywny ? '' : ' <span class="plakietka">wycofane</span>'}</td>
         <td>${escHtml(nazwaPojazdu(p))}<br><span class="slaby male">${
           escHtml(NAZWY_RODZAJU[p.rodzaj] || p.rodzaj || '')}${p.rok ? ', ' + p.rok : ''}</span></td>
         ${biuro ? `<td>${p.kierowca_imie ? escHtml(p.kierowca_imie)
@@ -260,7 +329,7 @@ function tabelaFloty(lista, biuro) {
 /* --------------------------------------------------------- KARTA POJAZDU */
 
 EKRANY.pojazd = {
-  tytul: 'Karta pojazdu',
+  tytul: 'Karta auta',
   poSynchronizacji() { if (stan.ekran === 'pojazd') odswiezEkran(); },
 
   async rysuj(pole, param) {
@@ -272,13 +341,13 @@ EKRANY.pojazd = {
     const biuro = jestBiuro();
 
     pole.innerHTML = `
-      ${p.aktywny ? '' : `<div class="wstega uwaga">Ten pojazd jest wycofany z floty.
+      ${p.aktywny ? '' : `<div class="wstega uwaga">To auto jest wycofane z floty.
         Zostaje w kartotece razem z całą historią, ale nie liczy się do alarmów.</div>`}
 
       <div class="karta">
         <div class="karta-gora">
           <div>
-            <h2 style="margin:0">${escHtml(p.rejestracja)}</h2>
+            <h2 class="rejestracja" style="margin:0">${escHtml(p.rejestracja)}</h2>
             <p class="slaby" style="margin:4px 0 0">${escHtml(nazwaPojazdu(p))}${
               p.rok ? ', rocznik ' + p.rok : ''} · ${escHtml(NAZWY_RODZAJU[p.rodzaj] || p.rodzaj)}</p>
           </div>
@@ -301,6 +370,8 @@ EKRANY.pojazd = {
             ${p.vin ? `<p><b>VIN:</b> ${escHtml(p.vin)}</p>` : ''}
             ${p.ubezpieczyciel ? `<p><b>Ubezpieczyciel:</b> ${escHtml(p.ubezpieczyciel)}</p>` : ''}
             ${p.polisa_nr ? `<p><b>Polisa:</b> ${escHtml(p.polisa_nr)}</p>` : ''}
+            ${biuro && (p.ubezpieczyciel || p.polisa_nr) ? `<p class="slaby male">Ubezpieczyciela
+              i numer polisy poprawia się we wpisie OC w Terminach.</p>` : ''}
           </div>
         </div>
         ${p.uwagi ? `<p class="dopisek">${escHtml(p.uwagi)}</p>` : ''}
@@ -308,7 +379,7 @@ EKRANY.pojazd = {
 
       <div class="karta">
         <div class="karta-gora"><h3>Terminy</h3>
-          ${biuro ? '<button id="p-termin-nowy">Dodaj termin</button>' : ''}</div>
+          ${biuro ? '<button id="p-do-terminow">Otwórz w Terminach</button>' : ''}</div>
         ${terminyPojazdu(p.terminy, biuro)}
       </div>
 
@@ -331,25 +402,27 @@ EKRANY.pojazd = {
         <summary>Usterki otwarte (${(p.usterki || []).length})</summary>
         <div class="zwijana-tresc">${(p.usterki || []).length
           ? (p.usterki || []).map(u => `<div class="brak">
-              <span class="plakietka p-${escHtml(u.waga)}">${escHtml(u.waga)}</span>
+              <span class="plakietka p-${escHtml(u.waga)}">${escHtml(opisKodu(OPIS_WAGI, u.waga))}</span>
               <span>${escHtml(u.opis)}<br><span class="slaby male">zgłoszona ${
                 escHtml(polskaData(u.utworzono))}</span></span></div>`).join('')
           : '<p class="slaby">Nic nie wisi na tym aucie.</p>'}</div></details>
 
       <div class="przyciski"><button id="p-wroc">← Wróć do floty</button>
-        ${biuro && p.aktywny ? '<button class="niszczacy" id="p-wycofaj">Wycofaj z floty</button>' : ''}
+        ${jestAdministratorem() && p.aktywny
+          ? '<button class="niszczacy" id="p-wycofaj">Wycofaj z floty</button>' : ''}
       </div>`;
 
     pole.querySelector('#p-wroc').onclick = () => pokazEkran('pojazdy');
     if (biuro) {
       pole.querySelector('#p-edytuj').onclick = () => oknoPojazdu(p);
       pole.querySelector('#p-kierowca').onclick = () => oknoPrzypisania(p);
-      const nowy = pole.querySelector('#p-termin-nowy');
-      if (nowy) nowy.onclick = () => oknoTerminu(null, p);
       const wycofaj = pole.querySelector('#p-wycofaj');
       if (wycofaj) wycofaj.onclick = () => wycofajPojazd(p);
-      pole.querySelectorAll('[data-odnow]').forEach(b => {
-        b.onclick = () => oknoOdnowienia(Number(b.dataset.odnow), p);
+      // Karta tylko pokazuje terminy; dopisuje się je, poprawia i odnawia
+      // w Terminach — odfiltrowanych do tego auta (i tego terminu).
+      pole.querySelector('#p-do-terminow').onclick = () => pokazEkran('terminy', { pojazd: p.id });
+      pole.querySelectorAll('[data-do-terminow]').forEach(b => {
+        b.onclick = () => pokazEkran('terminy', { pojazd: p.id, rodzaj: b.dataset.doTerminow });
       });
     }
     pole.querySelectorAll('[data-protokol]').forEach(b => {
@@ -358,16 +431,27 @@ EKRANY.pojazd = {
   },
 };
 
+/* Terminy auta na karcie — TYLKO do odczytu (etap 2 poprawek UI, decyzja
+   właściciela: jedna lista terminów). Badanie i OC wpisywało się kiedyś
+   w formularzu karty, a odnawiało w Terminach, i biuro nie wiedziało, które
+   miejsce jest prawdziwe. Teraz każda data żyje w Terminach; tu biuro widzi
+   ją i jednym kliknięciem przechodzi do tego wpisu.                         */
 function terminyPojazdu(t, biuro) {
   const lista = (t && t.lista) || [];
-  if (!lista.length) return '<p class="slaby">Nie wpisano żadnej pilnowanej daty.</p>';
+  const brakuje = ['badanie', 'oc'].filter(r => !lista.some(w => w.rodzaj === r));
+  const podpowiedz = biuro && brakuje.length
+    ? `<p class="slaby male">${brakuje.length === 2 ? 'Badania technicznego i OC'
+        : (brakuje[0] === 'badanie' ? 'Badania technicznego' : 'OC')} jeszcze nie wpisano —
+        dopisuje się je w <b>Terminach</b> („Otwórz w Terminach” → „Dodaj termin”).</p>` : '';
+  if (!lista.length) return '<p class="slaby">Nie wpisano żadnej pilnowanej daty.</p>' + podpowiedz;
   return lista.map(w => `
     <div class="brak">
       <span class="plakietka p-${escHtml(w.stan)}">${escHtml(opisTerminu(w.dni))}</span>
-      <span><b>${escHtml(w.nazwa)}</b>${w.termin ? ' — do ' + escHtml(polskaData(w.termin)) : ''}
-        ${w.id && biuro ? `<button class="tekstowy" data-odnow="${w.id}">odnów</button>` : ''}
-        ${w.id ? '' : '<br><span class="slaby male">data z karty pojazdu</span>'}</span>
-    </div>`).join('');
+      <span>${biuro ? `<button class="tekstowy" data-do-terminow="${escHtml(w.rodzaj)}"
+          title="Otwórz ten termin w Terminach"><b>${escHtml(w.nazwa)}</b></button>`
+          : `<b>${escHtml(w.nazwa)}</b>`}${w.termin ? ' — do ' + escHtml(polskaData(w.termin)) : ''}
+        ${w.id ? '' : '<br><span class="slaby male">data z karty auta</span>'}</span>
+    </div>`).join('') + podpowiedz;
 }
 
 function historiaProtokolow(lista) {
@@ -375,7 +459,7 @@ function historiaProtokolow(lista) {
   return `<ul class="os-czasu">${lista.map(g => `
     <li class="${g.status === 'zatwierdzony' ? 'ok' : (g.status === 'odrzucony' ? 'nie' : '')}">
       <b>${escHtml(miesiacSlownie(g.okres))}</b>
-      <span class="plakietka p-${escHtml(g.status)}">${escHtml(g.status)}</span>
+      <span class="plakietka p-${escHtml(g.status)}">${escHtml(OPIS_STATUSU[g.status] || g.status)}</span>
       ${g.przebieg != null ? ' · ' + escHtml(kilometry(g.przebieg)) : ''}
       ${g.kierowca_imie ? ' · ' + escHtml(g.kierowca_imie) : ''}
       <button class="tekstowy" data-protokol="${g.id}">otwórz</button>
@@ -389,7 +473,7 @@ function historiaOdczytow(lista) {
     <tbody>${lista.map(o => `<tr>
       <td>${escHtml(polskaData(o.czas))}</td>
       <td class="liczba">${escHtml(kilometry(o.km))}</td>
-      <td>${escHtml(o.zrodlo)}</td>
+      <td>${escHtml(opisKodu(OPIS_ZRODLA, o.zrodlo))}</td>
       <td>${escHtml(o.kierowca_imie || '—')}</td></tr>`).join('')}
     </tbody></table></div>`;
 }
@@ -441,7 +525,7 @@ function historiaTankowan(lista, spalanie) {
 function oknoPojazdu(p) {
   const nowy = !p;
   okno({
-    tytul: nowy ? 'Nowy pojazd' : 'Pojazd ' + p.rejestracja,
+    tytul: nowy ? 'Nowe auto' : 'Auto ' + p.rejestracja,
     szerokie: true,
     tresc: `
       <div class="dwie-kolumny">
@@ -460,14 +544,6 @@ function oknoPojazdu(p) {
           value="${p && p.rok ? p.rok : ''}"></label>
         <label class="pole">VIN<input id="w-vin" maxlength="20"
           value="${escHtml(p ? p.vin || '' : '')}"></label>
-        <label class="pole">Badanie techniczne do<input id="w-badanie" type="date"
-          value="${escHtml(p ? p.data_badania || '' : '')}"></label>
-        <label class="pole">OC do<input id="w-oc" type="date"
-          value="${escHtml(p ? p.data_oc || '' : '')}"></label>
-        <label class="pole">Ubezpieczyciel<input id="w-ubezpieczyciel" maxlength="60"
-          value="${escHtml(p ? p.ubezpieczyciel || '' : '')}"></label>
-        <label class="pole">Numer polisy<input id="w-polisa" maxlength="40"
-          value="${escHtml(p ? p.polisa_nr || '' : '')}"></label>
         <label class="pole">Przegląd co ile miesięcy
           <input id="w-co-mies" type="number" inputmode="numeric" min="1" max="24"
                  value="${p ? p.przeglad_co_mies || 1 : 1}"></label>
@@ -479,7 +555,9 @@ function oknoPojazdu(p) {
         maxlength="2000">${escHtml(p ? p.uwagi || '' : '')}</textarea></label>
       ${nowy ? `<p class="slaby male">Licznik można wpisać tylko przy zakładaniu karty.
         Później zmienia go przegląd kierowcy albo poprawka biura — dzięki temu
-        zostaje ślad, kto i kiedy go zmienił.</p>` : ''}`,
+        zostaje ślad, kto i kiedy go zmienił.</p>` : ''}
+      <p class="slaby male">Badanie techniczne, OC (z ubezpieczycielem i numerem polisy)
+        i inne daty wpisuje się w <b>Terminach</b> — karta auta tylko je pokazuje.</p>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zapisz', klasa: 'glowny', klik: async (zamknij) => {
@@ -492,10 +570,6 @@ function oknoPojazdu(p) {
           model: we('w-model').value.trim(),
           rok: we('w-rok').value ? Number(we('w-rok').value) : null,
           vin: we('w-vin').value.trim(),
-          data_badania: we('w-badanie').value,
-          data_oc: we('w-oc').value,
-          ubezpieczyciel: we('w-ubezpieczyciel').value.trim(),
-          polisa_nr: we('w-polisa').value.trim(),
           przeglad_co_mies: Number(we('w-co-mies').value) || 1,
           uwagi: we('w-uwagi').value.trim(),
           aktywny: p ? p.aktywny : 1,
@@ -504,8 +578,16 @@ function oknoPojazdu(p) {
           dane.przebieg = Number(we('w-przebieg').value);
         }
         if (!dane.rejestracja) { komunikat('Podaj numer rejestracyjny', 'blad'); return; }
-        const w = await sprobuj(() => API.post('/api/pojazdy', dane),
-                                nowy ? 'Pojazd dopisany do kartoteki' : 'Zapisane');
+        // Nowy pojazd dostaje numer od programu — bez niego nie poczeka.
+        const w = await sprobuj(() => (nowy ? API.post('/api/pojazdy', dane)
+          : zapisBiura('POST', '/api/pojazdy', dane, {
+            opis: 'auto ' + dane.rejestracja,
+            zrodla: ['/api/pojazdy/' + p.id],
+            popraw: (sciezka, d) => {
+              if (!sciezka.startsWith('/api/pojazdy')) return;
+              wPamieci(d, p.id, x => Object.assign(x, dane));
+            },
+          })), nowy ? 'Auto dopisane do kartoteki' : 'Zapisane');
         if (!w) return;
         zamknij();
         if (nowy) pokazEkran('pojazd', { id: w.id }); else odswiezEkran();
@@ -546,44 +628,62 @@ async function wycofajPojazd(p) {
     + 'zdjęciami i historią licznika. Nic nie jest kasowane.',
     { tak: 'Wycofaj', groznie: true });
   if (!tak) return;
-  if (!await sprobuj(() => API.del('/api/pojazdy/' + p.id), 'Pojazd wycofany')) return;
+  if (!await sprobuj(() => API.del('/api/pojazdy/' + p.id), 'Auto wycofane')) return;
   pokazEkran('pojazdy');
 }
 
 /* -------------------------------------------------------------- TERMINY */
 
 EKRANY.terminy = {
-  tytul: 'Badania techniczne',
+  tytul: 'Terminy',
   tylkoBiuro: true,
   poSynchronizacji() { if (stan.ekran === 'terminy') odswiezEkran(); },
 
-  /* Ekran nazywa się „Badania techniczne", bo tak nazywa to firma i tego szuka
-     w menu — badanie jest jedyną datą, po której auto przestaje mieć prawo
-     wyjechać z placu. Ale te same daty prowadzi się dokładnie tak samo dla OC,
-     serwisu i opon, więc nie robimy czterech bliźniaczych ekranów: rodzaj
-     przełącza się chipem, a tytuł mówi, co właśnie widać. Domyślnie badania. */
-  async rysuj(pole) {
+  /* JEDNA lista wszystkich pilnowanych dat (etap 2 poprawek UI, decyzja
+     właściciela): badanie techniczne, OC z ubezpieczycielem i numerem polisy,
+     AC, serwis, opony… Tylko tu się je dopisuje, poprawia („Popraw”)
+     i odnawia („Załatwione”) — karta auta pokazuje je do odczytu i prowadzi
+     tutaj. Dawny ekran „Badania techniczne” otwierał się na samych badaniach
+     i biuro szukało OC w karcie auta; teraz domyślnie widać wszystko, a chipy
+     stoją zawsze w tej samej kolejności (kolejność RODZAJE z serwera), żeby
+     kciuk trafiał w to samo miejsce niezależnie od tego, co akurat wypada.
+
+     Parametry ekranu: { pojazd, rodzaj } z karty auta zawężają listę do tego
+     auta (i tego terminu). Filtr auta żyje w parametrach, a nie w pamięci
+     filtra: wejście z menu pokazuje znów całą flotę.                         */
+  async rysuj(pole, param) {
     const f = stan._filtrTerminow
-      || (stan._filtrTerminow = { rodzaj: 'badanie', widok: 'lista' });
+      || (stan._filtrTerminow = { rodzaj: '', widok: 'lista' });
+    const p = param || {};
+    const autoFiltra = Number(p.pojazd) || null;
+    if (p.rodzaj !== undefined) {
+      // Rodzaj z karty auta działa raz — potem chip zmienia go jak zwykle,
+      // a odświeżenie ekranu (te same parametry) nie może go cofać.
+      f.rodzaj = String(p.rodzaj || '');
+      delete p.rodzaj;
+    }
     const [ewidencja, flota] = await Promise.all([
       sprobuj(() => API.get('/api/terminy')),
       sprobuj(() => API.get('/api/pojazdy')),
     ]);
-    const wszystkie = polaczTerminy(ewidencja || [], flota || []);
+    const wszystkie = polaczTerminy(ewidencja || [], flota || [])
+      .filter(t => !autoFiltra || t.pojazd === autoFiltra);
     const lista = f.rodzaj ? wszystkie.filter(t => t.rodzaj === f.rodzaj) : wszystkie;
     const rodzaje = (stan.ustawienia && stan.ustawienia.rodzaje_terminow) || {};
-    // Chipy pokazują tylko te rodzaje, które firma naprawdę prowadzi — plus
-    // badanie, bo ono ma być widoczne nawet wtedy, gdy akurat żadne nie wypada.
-    const uzywane = new Set(wszystkie.map(t => t.rodzaj));
-    uzywane.add('badanie');
+    const chipy = chipyTerminow(rodzaje, wszystkie, f.rodzaj);
     const nazwaWidoku = f.rodzaj ? (rodzaje[f.rodzaj] || f.rodzaj) : 'Wszystkie terminy';
+    const auto = autoFiltra ? (flota || []).find(a => a.id === autoFiltra) || null : null;
 
     pole.innerHTML = `
+      ${autoFiltra ? `<div class="wstega info">Terminy auta
+        <b>${escHtml(auto ? auto.rejestracja : '')}</b>
+        <button class="tekstowy" id="t-cala-flota">Pokaż całą flotę</button>
+        ${auto ? `<button class="tekstowy" id="t-karta">Karta auta</button>` : ''}</div>` : ''}
       <div class="pasek-narzedzi">
         <div class="chipy">
-          ${[...uzywane].map(kod => `<button class="chip${f.rodzaj === kod ? ' wybrany' : ''}"
-            data-rodzaj="${escHtml(kod)}">${escHtml(rodzaje[kod] || kod)}</button>`).join('')}
           <button class="chip${f.rodzaj === '' ? ' wybrany' : ''}" data-rodzaj="">wszystkie</button>
+          ${chipy.map(kod => `<button class="chip${f.rodzaj === kod ? ' wybrany' : ''}"
+            data-rodzaj="${escHtml(kod)}">${escHtml(rodzaje[kod] || kod)}</button>`).join('')}
         </div>
         <div class="chipy">
           <button class="chip${f.widok === 'lista' ? ' wybrany' : ''}" data-widok="lista">Lista</button>
@@ -603,41 +703,81 @@ EKRANY.terminy = {
     pole.querySelectorAll('[data-widok]').forEach(b => {
       b.onclick = () => { f.widok = b.dataset.widok; odswiezEkran(); };
     });
-    pole.querySelector('#t-nowy').onclick = () => oknoTerminu(null, null);
+    // Zawężone do jednego auta: nowy termin od razu dla niego.
+    pole.querySelector('#t-nowy').onclick = () => oknoTerminu(null, auto);
+    const calaFlota = pole.querySelector('#t-cala-flota');
+    if (calaFlota) calaFlota.onclick = () => pokazEkran('terminy');
+    const karta = pole.querySelector('#t-karta');
+    if (karta) karta.onclick = () => pokazEkran('pojazd', { id: autoFiltra });
     pole.querySelectorAll('[data-pojazd]').forEach(el => {
       el.onclick = () => pokazEkran('pojazd', { id: Number(el.dataset.pojazd) });
+      if (el.tagName === 'DIV') {
+        el.onkeydown = e => {
+          if (e.target === el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); el.onclick(); }
+        };
+      }
     });
+    const wpis = id => lista.find(t => t.id === id) || null;
     pole.querySelectorAll('[data-odnow]').forEach(b => {
       b.onclick = (e) => {
         e.stopPropagation();          // odnowienie, a nie przejście do karty auta
-        oknoOdnowienia(Number(b.dataset.odnow), null);
+        const t = wpis(Number(b.dataset.odnow));
+        oknoOdnowienia(Number(b.dataset.odnow), null, t && t.rodzaj);
+      };
+    });
+    pole.querySelectorAll('[data-popraw]').forEach(b => {
+      b.onclick = (e) => {
+        e.stopPropagation();          // poprawka wpisu, a nie przejście do karty auta
+        const t = wpis(Number(b.dataset.popraw));
+        if (t) oknoTerminu(t, null);
       };
     });
   },
 };
 
+/* Chipy rodzajów w STAŁEJ kolejności — tej, w której serwer podaje słownik
+   rodzaje_terminow (RODZAJE we flotex.py: badanie, OC, AC, serwis…). Badanie
+   i OC stoją zawsze, bo bez nich auto nie wyjedzie; reszta tylko wtedy, gdy
+   firma je prowadzi albo właśnie jest wybrana. Wcześniej kolejność brała się
+   z kolejności dat na liście i chipy zamieniały się miejscami z dnia na dzień. */
+function chipyTerminow(rodzaje, wpisy, wybrany) {
+  const uzywane = new Set((wpisy || []).map(t => t.rodzaj));
+  ['badanie', 'oc'].forEach(r => uzywane.add(r));
+  if (wybrany) uzywane.add(wybrany);
+  const kolejnosc = Object.keys(rodzaje || {});
+  const znane = kolejnosc.filter(kod => uzywane.has(kod));
+  // Rodzaj spoza słownika (stara baza) na końcu, żeby nie zniknął z widoku.
+  return znane.concat([...uzywane].filter(kod => !kolejnosc.includes(kod)).sort());
+}
+
 function listaTerminow(lista) {
   if (!lista.length) {
     return `<div class="pusto"><span class="duza-ikona">📅</span>
-      Nie ma żadnych pilnowanych dat. Dodaj termin albo wpisz badanie i OC
-      w karcie pojazdu.</div>`;
+      Nie ma żadnych pilnowanych dat. Dodaj termin — badanie techniczne, OC
+      i inne daty wpisuje się tutaj.</div>`;
   }
+  /* Wiersz to <div>, a nie <button>: w środku siedzą przyciski „Popraw”
+     i „Załatwione”, a przycisk w przycisku przeglądarka rozcina po swojemu
+     (jak lista usterek w przeglady.js). Kliknięcie w wiersz dalej otwiera kartę auta. */
   return lista.map(t => `
-    <button class="pozycja s-${escHtml(t.stan)}" data-pojazd="${t.pojazd}">
-      <span class="numer">${escHtml((t.rejestracja || '').slice(0, 8))}</span>
+    <div class="pozycja s-${escHtml(t.stan)}" data-pojazd="${t.pojazd}" role="button" tabindex="0">
+      <span class="numer">${escHtml(t.rejestracja || '')}</span>
       <span class="srodek">
         <span class="nazwa">${escHtml(t.nazwa)} — ${escHtml(polskaData(t.termin))}</span>
         <span class="adres">${escHtml(t.rejestracja)} · ${escHtml(
           [t.marka, t.model].filter(Boolean).join(' ') || 'bez opisu')}</span>
-        ${t.dokument ? `<span class="dopisek slaby">nr ${escHtml(t.dokument)}</span>` : ''}
+        ${t.dokument || t.ubezpieczyciel ? `<span class="dopisek slaby">${
+          [t.ubezpieczyciel, t.dokument ? 'nr ' + t.dokument : '']
+            .filter(Boolean).map(escHtml).join(' · ')}</span>` : ''}
         ${t.uwagi ? `<span class="dopisek">${escHtml(t.uwagi)}</span>` : ''}
       </span>
       <span class="prawo">
         <span class="plakietka p-${escHtml(t.stan)}">${escHtml(opisTerminu(t.dni))}</span>
-        ${t.id ? `<span class="uchwyty"><button data-odnow="${t.id}">Załatwione</button></span>`
-          : '<span class="slaby male">data z karty pojazdu</span>'}
+        ${t.id ? `<span class="uchwyty"><button data-popraw="${t.id}">Popraw</button>
+          <button data-odnow="${t.id}">Załatwione</button></span>`
+          : '<span class="slaby male">data z karty auta</span>'}
       </span>
-    </button>`).join('');
+    </div>`).join('');
 }
 
 /* Kalendarz liczymy w przeglądarce z tej samej listy, którą pokazuje widok
@@ -674,13 +814,13 @@ function kalendarzTerminow(lista) {
 
 /* Wszystkie pilnowane daty w jednym miejscu.
 
-   Program trzyma je w DWÓCH miejscach i to jest celowe: badanie i OC wpisuje
-   się wprost w karcie pojazdu (bo tyle wystarczy małej firmie przy zakładaniu
-   auta), a ewidencja terminów niesie dodatkowo numer dokumentu, koszt
-   i historię odnowień. Serwer liczy z obu naraz — i dlatego pulpit ostrzegał
+   Do etapu 2 (2026-10-12) badanie i OC wpisywało się też wprost w karcie
+   auta, a serwer liczył z obu miejsc naraz — i dlatego pulpit ostrzegał
    o badaniu, którego ekran „Terminy" nie pokazywał wcale, bo pytał wyłącznie
-   o ewidencję. Człowiek nie ma powodu znać tej różnicy: pyta o terminy
-   i ma zobaczyć terminy.
+   o ewidencję. Od etapu 2 karta jest tylko do odczytu, a program przy starcie
+   przenosi daty z kart do Terminów (przenies_daty_kart_do_terminow), więc
+   data „z karty” zdarza się już tylko w kopii sprzed aktualizacji. Zostaje
+   pokazana, żeby nie zniknęła z widoku.
 
    Gdy ten sam rodzaj jest w obu miejscach, wygrywa wpis z ewidencji — ma id,
    więc da się go odnowić jednym przyciskiem. Tę samą regułę stosuje
@@ -700,15 +840,29 @@ function polaczTerminy(ewidencja, flota) {
   return wynik.sort((a, b) => String(a.termin || '').localeCompare(String(b.termin || '')));
 }
 
+/* `termin` podany = poprawka istniejącego wpisu (zła data, literówka w numerze
+   polisy). Wysyłamy wtedy jego `id` — serwer nadpisuje wpis zamiast dopisywać
+   drugi; „Załatwione” zamknęłoby termin i założyło następny, a to nie to samo.
+
+   Wpis OC ma od etapu 2 pola „Numer polisy” i „Ubezpieczyciel” — to, co do
+   etapu 2 wpisywało się w karcie auta. Serwer trzyma je dalej przy aucie
+   (eksport floty), a numer polisy także jako numer dokumentu wpisu; pole
+   podpowiada numer z karty, gdy wpis go jeszcze nie ma, żeby zapis okna
+   niczego nie skasował.                                                     */
 async function oknoTerminu(termin, pojazd) {
   const rodzaje = (stan.ustawienia && stan.ustawienia.rodzaje_terminow) || {};
   const pojazdy = pojazd ? [pojazd]
     : (await sprobuj(() => API.get('/api/pojazdy')) || []);
+  const t = termin || {};
+  // Terminu nie da się przenieść na inne auto (serwer odmawia), więc przy
+  // poprawce auto jest zablokowane tak samo jak w karcie auta.
+  const pojazdStaly = pojazd ? pojazd.id : (termin ? termin.pojazd : null);
+  const polisaWpisu = t.dokument || (t.rodzaj === 'oc' ? t.polisa_nr || '' : '');
   okno({
-    tytul: 'Nowy termin',
+    tytul: termin ? 'Popraw termin' : 'Nowy termin',
     tresc: `
-      <label class="pole">Pojazd
-        <select id="t-pojazd"${pojazd ? ' disabled' : ''}>
+      <label class="pole">Auto
+        <select id="t-pojazd"${pojazdStaly ? ' disabled' : ''}>
           ${pojazdy.map(p => `<option value="${p.id}">${escHtml(p.rejestracja)} — ${
             escHtml(nazwaPojazdu(p))}</option>`).join('')}
         </select></label>
@@ -716,15 +870,40 @@ async function oknoTerminu(termin, pojazd) {
         <label class="pole">Czego dotyczy
           <select id="t-rodzaj-nowy">${Object.entries(rodzaje).map(([kod, nazwa]) =>
             `<option value="${escHtml(kod)}">${escHtml(nazwa)}</option>`).join('')}</select></label>
-        <label class="pole">Ważny do<input id="t-data" type="date"></label>
-        <label class="pole">Numer dokumentu<input id="t-dokument" maxlength="60"
-          placeholder="nr polisy, zaświadczenia"></label>
+        <label class="pole">Ważny do<input id="t-data" type="date"
+          value="${escHtml(t.termin || '')}"></label>
+        <label class="pole"><span id="t-dokument-napis">Numer dokumentu</span><input id="t-dokument"
+          maxlength="60" placeholder="nr polisy, zaświadczenia" value="${escHtml(polisaWpisu)}"></label>
+        <label class="pole" id="t-ubezpieczyciel-pole">Ubezpieczyciel<input id="t-ubezpieczyciel"
+          maxlength="60" placeholder="np. PZU, Warta" value="${escHtml(t.ubezpieczyciel || '')}"></label>
         <label class="pole">Koszt (zł)<input id="t-koszt" type="number" step="0.01"
-          inputmode="decimal"></label>
+          inputmode="decimal" value="${t.koszt != null ? escHtml(String(t.koszt)) : ''}"></label>
       </div>
-      <label class="pole">Uwagi<textarea id="t-uwagi" rows="2" maxlength="2000"></textarea></label>`,
+      <label class="pole">Uwagi<textarea id="t-uwagi" rows="2" maxlength="2000">${
+        escHtml(t.uwagi || '')}</textarea></label>`,
     poOtwarciu: (tresc) => {
-      if (pojazd) tresc.querySelector('#t-pojazd').value = String(pojazd.id);
+      if (pojazdStaly) tresc.querySelector('#t-pojazd').value = String(pojazdStaly);
+      if (termin && termin.rodzaj) tresc.querySelector('#t-rodzaj-nowy').value = termin.rodzaj;
+      const wybor = tresc.querySelector('#t-rodzaj-nowy');
+      const auto = tresc.querySelector('#t-pojazd');
+      const dopasuj = () => {
+        const oc = wybor.value === 'oc';
+        tresc.querySelector('#t-ubezpieczyciel-pole').classList.toggle('ukryty', !oc);
+        tresc.querySelector('#t-dokument-napis').textContent =
+          ['oc', 'ac'].includes(wybor.value) ? 'Numer polisy' : 'Numer dokumentu';
+        // Nowy wpis OC: podpowiedź z karty auta (to, co było tam wpisane do
+        // etapu 2), ale tylko do pustych pól — wpisanego nie nadpisujemy.
+        const p = pojazdy.find(x => String(x.id) === auto.value);
+        if (oc && p) {
+          const ub = tresc.querySelector('#t-ubezpieczyciel');
+          const nr = tresc.querySelector('#t-dokument');
+          if (!ub.value && p.ubezpieczyciel) ub.value = p.ubezpieczyciel;
+          if (!nr.value && p.polisa_nr) nr.value = p.polisa_nr;
+        }
+      };
+      wybor.onchange = dopasuj;
+      auto.onchange = dopasuj;
+      dopasuj();
     },
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
@@ -732,14 +911,20 @@ async function oknoTerminu(termin, pojazd) {
         const we = id => document.getElementById(id);
         const data = we('t-data').value;
         if (!data) { komunikat('Podaj datę, do kiedy termin jest ważny', 'blad'); return; }
-        const w = await sprobuj(() => API.post('/api/terminy', {
-          pojazd: pojazd ? pojazd.id : Number(we('t-pojazd').value),
+        const dane = {
+          pojazd: pojazdStaly || Number(we('t-pojazd').value),
           rodzaj: we('t-rodzaj-nowy').value,
           termin: data,
           dokument: we('t-dokument').value.trim(),
           koszt: we('t-koszt').value ? Number(we('t-koszt').value) : null,
           uwagi: we('t-uwagi').value.trim(),
-        }), 'Termin dopisany');
+        };
+        // Tylko przy OC: serwer po obecności pola poznaje nowe okno i przepisuje
+        // numer polisy oraz ubezpieczyciela do karty auta.
+        if (dane.rodzaj === 'oc') dane.ubezpieczyciel = we('t-ubezpieczyciel').value.trim();
+        if (termin && termin.id) dane.id = termin.id;
+        const w = await sprobuj(() => API.post('/api/terminy', dane),
+          termin ? 'Termin poprawiony' : 'Termin dopisany');
         if (!w) return;
         zamknij();
         odswiezEkran();
@@ -752,7 +937,12 @@ async function oknoTerminu(termin, pojazd) {
    od DZIŚ (albo od dnia, w którym rzecz naprawdę załatwiono), a nie od starego
    terminu — badanie zrobione dwa tygodnie po czasie ważne jest rok od badania,
    nie rok od daty, którą przegapiono.                                         */
-function oknoOdnowienia(id, pojazd) {
+function oknoOdnowienia(id, pojazd, rodzaj) {
+  // Cykl podpowiada serwer dla rodzaju terminu (CYKLE_TERMINOW: opony 6,
+  // tachograf 24) — sztywne 12 przesuwało wymianę opon o pół roku za daleko.
+  // Człowiek dalej może wpisać własny.
+  const cykle = (stan.ustawienia && stan.ustawienia.cykle_terminow) || {};
+  const cykl = Number(cykle[rodzaj]) || 12;
   okno({
     tytul: 'Termin załatwiony',
     tresc: `
@@ -760,14 +950,14 @@ function oknoOdnowienia(id, pojazd) {
         <label class="pole">Kiedy załatwione
           <input id="o-zalatwiono" type="date" value="${dzisiaj()}"></label>
         <label class="pole">Co ile miesięcy wraca
-          <input id="o-cykl" type="number" inputmode="numeric" min="1" max="120" value="12"></label>
+          <input id="o-cykl" type="number" inputmode="numeric" min="1" max="120" value="${cykl}"></label>
         <label class="pole">Nowy termin (jeśli inny niż z cyklu)
           <input id="o-termin" type="date"></label>
         <label class="pole">Koszt (zł)<input id="o-koszt" type="number" step="0.01"
           inputmode="decimal"></label>
       </div>
       <label class="pole">Numer dokumentu<input id="o-dokument" maxlength="60"></label>
-      <p class="slaby male">Stary wpis zostaje w historii pojazdu jako załatwiony,
+      <p class="slaby male">Stary wpis zostaje w historii auta jako załatwiony,
       a program od razu zakłada następny — żeby ten termin nie zniknął z kalendarza
       na rok i nie wrócił dopiero mandatem.</p>`,
     przyciski: [
@@ -776,7 +966,7 @@ function oknoOdnowienia(id, pojazd) {
         const we = i => document.getElementById(i);
         const w = await sprobuj(() => API.post(`/api/terminy/${id}/odnow`, {
           zalatwiono: we('o-zalatwiono').value,
-          cykl_mies: Number(we('o-cykl').value) || 12,
+          cykl_mies: Number(we('o-cykl').value) || cykl,
           termin: we('o-termin').value,
           koszt: we('o-koszt').value ? Number(we('o-koszt').value) : null,
           dokument: we('o-dokument').value.trim(),

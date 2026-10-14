@@ -13,7 +13,15 @@ EKRANY.ustawienia = {
   tytul: 'Ustawienia',
   tylkoAdministrator: true,
 
-  async rysuj(pole) {
+  /* Na wierzchu tylko to, co biuro zmienia na co dzień: firma, okno
+     ostrzegania i cykle, checklista, zestawienia do Excela. Wszystko
+     techniczne (poczta, tunel, GitHub Pages, kopie, klucze połączeń z Panelem
+     i GK Trasy, trzymanie danych) leży w jednej zwiniętej sekcji
+     „Zaawansowane” (etap 2 poprawek UI, decyzja właściciela) — ustawia się to
+     raz, a na wierzchu straszyło i zasłaniało resztę. Alarm, który prowadzi
+     do takiej sekcji (kopia, tunel, adres na Pages), rozwija „Zaawansowane”
+     i przewija do niej: param.sekcja = id karty (pokazSekcjeUstawien).      */
+  async rysuj(pole, param) {
     const u = await sprobuj(() => API.get('/api/ustawienia'));
     if (!u) { pole.innerHTML = '<div class="pusto">Nie udało się wczytać ustawień.</div>'; return; }
     const pocztaStan = u.poczta_stan || {};
@@ -31,7 +39,54 @@ EKRANY.ustawienia = {
       </div>
 
       <div class="karta">
-        <div class="karta-gora"><h3>Powiadamianie o terminach</h3>
+        <h3>Cykle i progi</h3>
+        <div class="dwie-kolumny">
+          <label class="pole">Ostrzegaj na ile dni przed terminem
+            <input id="u-ostrzegaj" type="number" inputmode="numeric" min="1" max="365"
+                   value="${escHtml(u.ostrzegaj_dni || '30')}"></label>
+          <label class="pole">Dzień zakładania przeglądów
+            <input id="u-dzien-protokolu" type="number" inputmode="numeric" min="1" max="28"
+                   value="${escHtml(u.przeglad_dzien_miesiaca || '1')}"></label>
+          <label class="pole">Dzień ponaglenia kierowców
+            <input id="u-dzien-ponaglenia" type="number" inputmode="numeric" min="1" max="28"
+                   value="${escHtml(u.dzien_ponaglenia || '10')}"></label>
+          <label class="pole">Próg skoku licznika (km/mies.)
+            <input id="u-prog-skoku" type="number" inputmode="numeric" min="0"
+                   value="${escHtml(u.prog_skoku_km || '10000')}"></label>
+        </div>
+        <p class="slaby male">Próg skoku niczego nie blokuje — przegląd z większym
+        przebiegiem przejdzie, ale auto pokaże się na pulpicie do sprawdzenia.
+        Zablokowanie zapisu kończyłoby się telefonem kierowcy do biura zamiast zdjęciami.</p>
+      </div>
+
+      <div class="karta">
+        <h3>Checklista przeglądu wewnętrznego</h3>
+        <p class="slaby male">Jedna pozycja na linię. Pusta lista = lista fabryczna.
+        Jeśli zależy Ci, żeby zmiana nazwy punktu nie odcięła starych przeglądów,
+        pisz <code>kod|Nazwa punktu</code>.</p>
+        <label class="pole"><textarea id="u-punkty" rows="10" maxlength="6000">${
+          escHtml(u.punkty_przegladu
+            || (u.punkty || []).map(p => `${p.kod}|${p.etykieta}`).join('\n'))}</textarea></label>
+      </div>
+
+      <div class="karta">
+        <h3>Zestawienia do Excela</h3>
+        <div class="chipy">
+          <button class="chip" data-eksport="flota">Flota</button>
+          <button class="chip" data-eksport="przeglady">Przeglądy</button>
+          <button class="chip" data-eksport="koszty">Koszty</button>
+        </div>
+      </div>
+
+      <details class="karta karta-zwijana zaawansowane" id="u-zaawansowane">
+        <summary>Zaawansowane</summary>
+        <div class="zwijana-tresc">
+      <p class="slaby male" style="margin-top:0">Poczta, tunel i adres dla telefonów, kopie
+        zapasowe, połączenia z Panelem Kierownika i GK Trasy, trzymanie danych — ustawia się
+        je raz. Zmiany w polach zapisuje ten sam przycisk „Zapisz ustawienia” na dole.</p>
+
+      <div class="karta" id="u-poczta">
+        <div class="karta-gora"><h3>Poczta (alarmy o terminach e-mailem)</h3>
           <span class="plakietka p-${wlaczona ? 'wykonany' : 'oczekuje'}">${
             wlaczona ? 'automat włączony' : 'automat wyłączony'}</span></div>
 
@@ -97,38 +152,7 @@ EKRANY.ustawienia = {
 
       ${sekcjaTrasexu(u)}
 
-      <div class="karta">
-        <h3>Cykle i progi</h3>
-        <div class="dwie-kolumny">
-          <label class="pole">Ostrzegaj na ile dni przed terminem
-            <input id="u-ostrzegaj" type="number" inputmode="numeric" min="1" max="365"
-                   value="${escHtml(u.ostrzegaj_dni || '30')}"></label>
-          <label class="pole">Dzień zakładania przeglądów
-            <input id="u-dzien-protokolu" type="number" inputmode="numeric" min="1" max="28"
-                   value="${escHtml(u.przeglad_dzien_miesiaca || '1')}"></label>
-          <label class="pole">Dzień ponaglenia kierowców
-            <input id="u-dzien-ponaglenia" type="number" inputmode="numeric" min="1" max="28"
-                   value="${escHtml(u.dzien_ponaglenia || '10')}"></label>
-          <label class="pole">Próg skoku licznika (km/mies.)
-            <input id="u-prog-skoku" type="number" inputmode="numeric" min="0"
-                   value="${escHtml(u.prog_skoku_km || '10000')}"></label>
-        </div>
-        <p class="slaby male">Próg skoku niczego nie blokuje — przegląd z większym
-        przebiegiem przejdzie, ale pojazd pokaże się na pulpicie do sprawdzenia.
-        Zablokowanie zapisu kończyłoby się telefonem kierowcy do biura zamiast zdjęciami.</p>
-      </div>
-
-      <div class="karta">
-        <h3>Checklista przeglądu wewnętrznego</h3>
-        <p class="slaby male">Jedna pozycja na linię. Pusta lista = lista fabryczna.
-        Jeśli zależy Ci, żeby zmiana nazwy punktu nie odcięła starych przeglądów,
-        pisz <code>kod|Nazwa punktu</code>.</p>
-        <label class="pole"><textarea id="u-punkty" rows="10" maxlength="6000">${
-          escHtml(u.punkty_przegladu
-            || (u.punkty || []).map(p => `${p.kod}|${p.etykieta}`).join('\n'))}</textarea></label>
-      </div>
-
-      <div class="karta">
+      <div class="karta" id="u-retencja">
         <h3>Trzymanie danych</h3>
         <div class="dwie-kolumny">
           <label class="pole">Zdjęcia trzymaj (miesięcy)
@@ -144,15 +168,8 @@ EKRANY.ustawienia = {
         znikają też z archiwów zdjęć (w <code>kopie/</code> i w folderze kopii poza
         komputerem). Zdjęcia usterek zostają.</div>
       </div>
-
-      <div class="karta">
-        <h3>Zestawienia do Excela</h3>
-        <div class="chipy">
-          <button class="chip" data-eksport="flota">Flota</button>
-          <button class="chip" data-eksport="przeglady">Przeglądy</button>
-          <button class="chip" data-eksport="koszty">Koszty</button>
         </div>
-      </div>
+      </details>
 
       <div class="przyciski">
         <button class="glowny duzy" id="u-zapisz">Zapisz ustawienia</button>
@@ -162,13 +179,56 @@ EKRANY.ustawienia = {
     podepnijKopie(pole);
     podepnijKontaGk(pole);
     podepnijTrasex(pole);
+    podepnijWstegiAlarmow(pole);
     pole.querySelector('#u-zapisz').onclick = () => zapiszUstawienia();
     pole.querySelector('#u-test').onclick = () => oknoProbnejWiadomosci();
     pole.querySelectorAll('[data-eksport]').forEach(b => {
       b.onclick = () => pobierzZestawienie(b.dataset.eksport);
     });
+    // „Zaawansowane” fabrycznie zwinięte; raz rozwinięte zostaje rozwinięte
+    // po zapisie i odświeżeniu ekranu (do końca tej wizyty w programie).
+    const zaawansowane = pole.querySelector('#u-zaawansowane');
+    zaawansowane.open = !!stan._zaawansowaneOtwarte;
+    zaawansowane.ontoggle = () => { stan._zaawansowaneOtwarte = zaawansowane.open; };
+    // Wejście z alarmu: rozwinąć „Zaawansowane” i pokazać tę jedną sekcję —
+    // raz; odświeżenie po zapisie nie przewija drugi raz.
+    const p = param || {};
+    if (p.sekcja) {
+      const sekcja = p.sekcja;
+      delete p.sekcja;
+      pokazSekcjeUstawien(sekcja);
+    }
   },
 };
+
+/* Sekcje „Zaawansowane”, do których prowadzą alarmy programu (alarmy_systemu
+   we flotex.py, pole `kod`). Alarm bez sekcji (mało miejsca na dysku) nie ma
+   czego otworzyć w Ustawieniach.                                             */
+const SEKCJE_ALARMOW = {
+  kopia: 'u-kopie', kopia_folder: 'u-kopie', pages: 'u-pages', tunel: 'u-tunel',
+};
+
+/* Rozwija „Zaawansowane” i przewija do karty `id`. Z innego ekranu (wstęga
+   alarmu na pulpicie) najpierw otwiera Ustawienia z tym samym celem.        */
+function pokazSekcjeUstawien(id) {
+  const zaawansowane = document.getElementById('u-zaawansowane');
+  if (stan.ekran !== 'ustawienia' || !zaawansowane) {
+    pokazEkran('ustawienia', { sekcja: id });
+    return;
+  }
+  zaawansowane.open = true;
+  stan._zaawansowaneOtwarte = true;
+  const karta = document.getElementById(id);
+  if (karta) karta.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* Przycisk „Pokaż w Ustawieniach” we wstędze alarmu — na pulpicie
+   i w samych Ustawieniach. Ustawienia widzi tylko administrator.            */
+function podepnijWstegiAlarmow(pole) {
+  pole.querySelectorAll('[data-do-sekcji]').forEach(b => {
+    b.onclick = () => pokazSekcjeUstawien(b.dataset.doSekcji);
+  });
+}
 
 /* Adres HTTPS dla kierowców.
 
@@ -190,7 +250,7 @@ function sekcjaTunelu(u) {
 
   return `
     <div class="karta">
-      <div class="karta-gora"><h3>Adres HTTPS dla kierowców</h3>
+      <div class="karta-gora" id="u-tunel"><h3>Adres HTTPS dla kierowców</h3>
         <span class="plakietka ${klasa}">${escHtml(opis)}</span></div>
 
       <div class="wstega info">Bez tego kierowcy mają <b>ograniczony</b> tryb offline:
@@ -222,7 +282,7 @@ function sekcjaTunelu(u) {
           <option value="brak"${tryb === 'brak' ? ' selected' : ''}>
             wyłączony — program widoczny tylko w sieci firmy</option>
           <option value="szybki"${tryb === 'szybki' ? ' selected' : ''}>
-            szybki — losowy adres, do sprawdzenia czy działa</option>
+            szybki — losowy adres, wystarczy z aplikacją na GitHub Pages</option>
           <option value="staly"${tryb === 'staly' ? ' selected' : ''}>
             stały — własny adres z panelu Cloudflare</option>
         </select></label>
@@ -238,7 +298,7 @@ function sekcjaTunelu(u) {
       <!-- W trybie szybkim adres wypisuje sam cloudflared i program go stamtąd
            bierze. W stałym nie wypisuje go wcale — zna go tylko panel
            Cloudflare — więc bez tego pola program działałby publicznie, nie
-           znając własnego adresu: ekran „Dla kierowców" podawałby adres
+           znając własnego adresu: ekran „Zaproś kierowcę" podawałby adres
            z firmowej sieci, a hub nie miałby czego wpisać do adres.json
            na Pages przy tunelu, który właśnie stoi. -->
       <label class="pole" id="u-tunel-adres-pole">Adres, pod którym tunel wystawia program
@@ -260,11 +320,11 @@ function stanStraznika(s, tryb) {
   if (!s || !s.wlaczony || tryb === 'brak') return '';
   if (s.odpowiada === false && s.internet === false) {
     return `<div class="wstega blad">Brak internetu w biurze od ${escHtml(s.od)}
-      (${s.proby} ${s.proby === 1 ? 'próba' : 'prób'}) — tunel ruszy sam, gdy internet wróci.</div>`;
+      (${s.proby} ${odmiana(s.proby, 'próba', 'próby', 'prób')}) — tunel ruszy sam, gdy internet wróci.</div>`;
   }
   if (s.odpowiada === false) {
     return `<div class="wstega uwaga">Adres nie odpowiada od ${escHtml(s.od)}
-      (${s.proby} ${s.proby === 1 ? 'próba' : 'prób'}): ${escHtml(s.powod)}.
+      (${s.proby} ${odmiana(s.proby, 'próba', 'próby', 'prób')}): ${escHtml(s.powod)}.
       Po 3 próbach program uruchamia tunel ponownie${s.ostatni_restart
         ? ` (ostatnio o ${escHtml(s.ostatni_restart)})` : ''}.</div>`;
   }
@@ -285,9 +345,12 @@ function podepnijTunel(pole) {
   const OPISY = {
     brak: 'Kierowcy wchodzą tylko z firmowego wifi, pod adresem http://192.168… '
       + 'Tryb offline działa w ograniczonym zakresie.',
+    // D42: z aplikacją na GitHub Pages tryb szybki wystarcza na co dzień — hub
+    // Panelu publikuje bieżący adres tunelu, a telefony same się na niego przełączają.
     szybki: 'Adres losowy, w rodzaju https://cos-tam.trycloudflare.com, i ZMIENIA SIĘ '
-      + 'po każdym uruchomieniu programu. Do sprawdzenia, czy wszystko działa — '
-      + 'do codziennej pracy się nie nadaje, bo kierowcy dostawaliby rano nowy link.',
+      + 'po każdym uruchomieniu programu. Z aplikacją na GitHub Pages to wystarcza '
+      + 'na co dzień: Panel Kierownika publikuje bieżący adres, a telefony kierowców '
+      + 'same się na niego przełączają — bez nowego linku i bez logowania od nowa.',
     staly: 'Własny, niezmienny adres. Token generuje się raz w panelu Cloudflare '
       + '(Zero Trust → Networks → Tunnels). Ten adres wpisuje się kierowcom raz '
       + 'i zostaje na zawsze.',
@@ -325,14 +388,14 @@ function sekcjaKontGk(u) {
     <ul class="male">${pozycje.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>` : '';
   return `
     <div class="karta">
-      <div class="karta-gora"><h3>Konta GK (Panel Kierownika)</h3>
+      <div class="karta-gora" id="u-konta-gk"><h3>Konta GK (Panel Kierownika)</h3>
         <span class="plakietka ${klasa}">${escHtml(opis)}</span></div>
 
       <div class="wstega info">Jedna osoba — jedno konto we wszystkich aplikacjach GK.
         Konta zakłada się w <b>Panelu → Administracja</b>, a GK Flota pobiera je sama co
         kilka minut. Logowanie: <b>imię i nazwisko + PIN</b>; stare loginy działają dalej.
         Bez połączenia GK Flota prowadzi konta sama, jak dotąd.
-        <b>Panel na tym komputerze łączy się sam</b> — hub robi klucz i podaje go programowi
+        <b>Panel na tym komputerze łączy się sam</b> — Panel robi klucz i podaje go programowi
         przez plik w profilu Windows, nic nie trzeba wklejać.</div>
       <p class="slaby male"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
         co w Panelu (ustawia się je w aplikacji hali). Lokalny awaryjny „admin” z lokalnym hasłem
@@ -464,7 +527,7 @@ function sekcjaTrasexu(u) {
   const wlaczone = !!u.gk_klucz_ustawiony;
   return `
     <div class="karta">
-      <div class="karta-gora"><h3>Połączenie z GK Trasy</h3>
+      <div class="karta-gora" id="u-polaczenie-gk"><h3>Połączenie z GK Trasy</h3>
         <span class="plakietka p-${wlaczone ? 'zatwierdzony' : 'oczekuje'}">${
           wlaczone ? 'klucz ustawiony' : 'wyłączone'}</span></div>
 
@@ -569,13 +632,13 @@ function sekcjaGithub(u) {
 
   return `
     <div class="karta">
-      <div class="karta-gora"><h3>Stały adres dla kierowców (GitHub Pages)</h3>
+      <div class="karta-gora" id="u-pages"><h3>Stały adres dla kierowców (GitHub Pages)</h3>
         <span class="plakietka ${klasa}">${escHtml(opis)}</span></div>
 
       <div class="wstega info">Kierowcy dostają <b>jeden adres na zawsze</b>, który
-        działa z każdej sieci. <b>Adres dla telefonów publikuje Panel Kierownika (hub)</b>
+        działa z każdej sieci. <b>Adres dla telefonów publikuje Panel Kierownika</b>
         na tym komputerze, tym samym tokenem co aplikacje hali: program podaje mu adres
-        tunelu i swoją wersję, hub wysyła je na GitHub sam. Na Pages leży sam wygląd
+        tunelu i swoją wersję, Panel wysyła je na GitHub sam. Na Pages leży sam wygląd
         aplikacji — dane zostają tutaj.<br>
         <a href="${escHtml(p.adres || '')}" target="_blank" rel="noopener"><b>${escHtml(p.adres || '')}</b></a></div>
 
@@ -586,8 +649,8 @@ function sekcjaGithub(u) {
         się gdzie połączyć po dane.</div>` : ''}
 
       <p class="slaby male">Nowy adres tunelu (po każdym uruchomieniu) i nową wersję
-      programu (po aktualizacji) hub wysyła sam, zwykle w ciągu minuty. Szczegóły i błędy:
-      Panel → Administracja → Dostęp z telefonów.</p>
+      programu (po aktualizacji) Panel wysyła sam, zwykle w ciągu minuty. Szczegóły i błędy:
+      Panel → Administracja → Serwis → Dostęp z telefonów.</p>
     </div>`;
 }
 
@@ -595,24 +658,24 @@ function sekcjaGithub(u) {
    program i czy adres danych jest bieżący. */
 function stanPages(p, tunel) {
   if (!p || !p.adres) return '';
-  if (!p.lokalne) return `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu hubowi
+  if (!p.lokalne) return `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Kierownika
     (kopia testowa albo druga kopia na innym porcie).</div>`;
   if (!p.hub_odpisal) return `<div class="wstega uwaga">Panel Kierownika jeszcze się nie odezwał.
-    Sprawdź, czy GK Panel Kierownika działa na tym komputerze (nowa wersja, D42).</div>`;
+    Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>`;
   const bezUkosnika = a => String(a || '').replace(/\/+$/, '');
   const staryAdres = !!tunel && !!p.adres_api && bezUkosnika(p.adres_api) !== bezUkosnika(tunel);
   return `
     ${p.opublikowano ? `<div class="wstega ${p.aktualna ? 'info' : 'uwaga'}">
-      ${p.aktualna ? '' : '<b>Hub wysyła nową wersję aplikacji</b><br>'}
+      ${p.aktualna ? '' : '<b>Panel wysyła nową wersję aplikacji</b><br>'}
       <span class="male">Wysłano: <b>${escHtml(polskaData(p.opublikowano))} ${escHtml(samaGodzina(p.opublikowano))}</b> ·
         wersja na Pages <code>${escHtml(p.wersja_pages || '?')}</code>,
         programu <code>${escHtml(p.wersja_programu || '?')}</code></span>
-    </div>` : '<div class="wstega uwaga">Hub jeszcze nie wysłał aplikacji na Pages.</div>'}
+    </div>` : '<div class="wstega uwaga">Panel Kierownika jeszcze nie wysłał aplikacji na Pages.</div>'}
     ${p.adres_blad ? `<div class="wstega blad">Panel Kierownika nie wysłał adresu na GitHub:
-      ${escHtml(p.adres_blad)} Hub ponawia sam — szczegóły w Panelu → Administracja →
-      Dostęp z telefonów.</div>`
+      ${escHtml(p.adres_blad)} Panel ponawia sam — szczegóły w Panelu → Administracja →
+      Serwis → Dostęp z telefonów.</div>`
       : staryAdres ? `<div class="wstega uwaga">Na Pages jest jeszcze poprzedni adres
-      tunelu (<code>${escHtml(p.adres_api)}</code>). Hub zwykle poprawia go sam w ciągu
+      tunelu (<code>${escHtml(p.adres_api)}</code>). Panel zwykle poprawia go sam w ciągu
       minuty.</div>` : ''}`;
 }
 
@@ -726,8 +789,14 @@ async function pobierzZestawienie(nazwa) {
    te same wstęgi na pulpicie administratora i na górze Ustawień. Serwer liczy
    je sam (alarmy_systemu) i wysyła też push do biura, raz na 6 godzin.       */
 function wstegiAlarmow(alarmy) {
-  return (alarmy || []).map(a => `<div class="wstega ${a.push ? 'blad' : 'uwaga'}">
-    <b>${escHtml(a.tytul || '')}</b> — ${escHtml(a.tekst || '')}</div>`).join('');
+  return (alarmy || []).map(a => {
+    // Sekcje techniczne leżą od etapu 2 w zwiniętych „Zaawansowanych” —
+    // bez tego przycisku administrator szukałby kopii czy tunelu po omacku.
+    const sekcja = jestAdministratorem() ? SEKCJE_ALARMOW[a.kod] : '';
+    return `<div class="wstega ${a.push ? 'blad' : 'uwaga'}">
+    <b>${escHtml(a.tytul || '')}</b> — ${escHtml(a.tekst || '')}${sekcja
+      ? ` <button class="tekstowy" data-do-sekcji="${escHtml(sekcja)}">Pokaż w Ustawieniach</button>` : ''}</div>`;
+  }).join('');
 }
 
 /* Kopie zapasowe (ETAP 2). Kopia na tym samym dysku co program chroni przed
