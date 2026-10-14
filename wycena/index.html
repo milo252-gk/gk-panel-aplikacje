@@ -1,0 +1,23 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>GK Wycena</title>
+<link rel="stylesheet" href="../wspolne/hala.css"></head>
+<body class="hala-start"><main><h1>GK Wycena</h1><p id="stan">Otwieram GK Wycena…</p>
+<p><button type="button" id="ponow" hidden>Spróbuj jeszcze raz</button></p></main>
+<script>
+(function () {
+  var stan = document.getElementById('stan'), ponow = document.getElementById('ponow');
+  function idz() {
+    fetch('../konfiguracja.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (k) {
+      var a = (k && k.programy && k.programy["wycena"]) || '';
+      if (a.indexOf('https://') === 0) { location.replace(a.replace(/[/]+$/, '') + "/gk" + location.search + location.hash); return; }
+      stan.textContent = "GK Wycena nie działa teraz na komputerze w biurze. Poproś o uruchomienie programu — strona sama spróbuje znowu.";
+      ponow.hidden = false; setTimeout(idz, 15000);
+    }).catch(function () {
+      stan.textContent = 'Brak połączenia z internetem — sprawdź sieć w telefonie.';
+      ponow.hidden = false; setTimeout(idz, 15000);
+    });
+  }
+  ponow.addEventListener('click', idz);
+  idz();
+})();
+</script></body></html>

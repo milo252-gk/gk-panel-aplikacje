@@ -11,7 +11,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej Panel nie wstaje wcale.                        */
 
-const WERSJA = 'panel-5a9dde207b49';
+const WERSJA = 'panel-5e9636729b17';
 
 // Powiadomienia przy zamkniętym Panelu (2026-10-02): kierownik, który zlecił, dowiaduje się, że zlecenie jest po
 // terminie (wspólna część z Liderem, UR i KJ — D28). Panel nie ma własnej obsługi dotknięcia: robi to wspólny plik
@@ -23,6 +23,7 @@ const ZASOBY = [
   './', './index.html', './panel.css', './panel.js', './widok.js', './administracja.js', './checklisty.js', './etykiety.js', './wskazniki.js', './stale.js', './zgloszenia.js', './urlopy.js', './proby.js',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
   '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/miary.js', '../wspolne/zespol.js', '../wspolne/dzialania.js', '../wspolne/zlecenia.js', '../wspolne/hala-push-sw.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png',
+  '../wspolne/skaner.js',
 ];
 
 /* Plik po pliku (allSettled), nie addAll: jedno mrugnięcie wifi przy addAll
