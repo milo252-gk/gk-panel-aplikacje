@@ -43,7 +43,7 @@ EKRANY.lokalizacje = {
           </span>
         </button>`).join('')
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">🏭</span>
-             Nie ma jeszcze żadnej lokalizacji. Dodaj magazyn, z którego wyjeżdżają busy.</div></div>`}
+             Nie ma jeszcze żadnej lokalizacji. Dodaj magazyn, z którego wyjeżdżają auta.</div></div>`}
 
       ${lista.some(l => l.lat != null) ? `<div class="karta">
         <div class="karta-gora"><h2>Na mapie</h2></div>
@@ -263,7 +263,7 @@ EKRANY.odrzucone = {
           <div class="male">${escHtml(o.kierowca || '?')} · zapisane ${escHtml(o.czas || '')}
             · odrzucone ${escHtml(o.odrzucono || '')}</div>
           <div class="male slaby">${escHtml(o.powod || (o.uszkodzony ? 'plik uszkodzony' : ''))}</div>
-          ${o.data_trasy ? `<div class="male slaby">punkt jest teraz na zleceniu
+          ${o.data_trasy ? `<div class="male slaby">punkt jest teraz na trasie
             ${escHtml(polskaData(o.data_trasy))} (${escHtml(o.status_punktu)})</div>` : ''}
           <div class="male slaby">${o.podpis ? 'podpis' : 'bez podpisu'}${o.zdjec
             ? ' · ' + o.zdjec + ' ' + odmiana(o.zdjec, 'zdjęcie', 'zdjęcia', 'zdjęć') : ''}${

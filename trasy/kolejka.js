@@ -114,5 +114,10 @@ const Kolejka = (() => {
     zapomnij(klucz) {
       return dzialanie('pamiec', 'readwrite', s => s.delete(klucz));
     },
+    /* Wszystkie klucze podręcznej pamięci — odpowiedzi programu (app.js,
+       „praca bez programu w biurze”) sprząta się po przedrostku. */
+    klucze() {
+      return dzialanie('pamiec', 'readonly', s => s.getAllKeys()).then(k => k || []);
+    },
   };
 })();

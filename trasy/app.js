@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-ac318a5979b3';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-8f52ed164a45';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -308,23 +308,28 @@ function samaGodzina(czas) { return czas ? String(czas).slice(11, 16) : ''; }
 
 /* ---------------------------------------------------------------- okienko */
 
-/* Okno, w ktorym cos juz wpisano, nie znika od dotkniecia obok. Zdjecia
-   robione aparatem w aplikacji nie trafiaja do galerii telefonu, wiec ich
-   utrata oznacza powrot pod rampe.                                          */
+/* Okno ze zdjęciem albo podpisem nie znika od dotknięcia obok bez pytania.
+   Zdjęcia robione aparatem w aplikacji nie trafiają do galerii telefonu, więc
+   ich utrata oznacza powrót pod rampę, a podpisu klienta nikt nie powtórzy.
+   Sam tekst (wyszukiwarka, notatka, wybrany chip) pytania nie wywołuje — pytanie
+   przy każdym oknie uczyło odpowiadać „tak” bez czytania (właściciel, 2026-10-12). */
 function oknoMaTresc() {
   const pole = document.getElementById('okno-tresc');
   if (!pole || document.getElementById('okno-tlo').classList.contains('ukryty')) return false;
-  if (pole.querySelector('.miniatura')) return true;
-  if (pole.querySelector('.pole-podpisu.zapelnione')) return true;
-  if (pole.querySelector('.chip.wybrany')) return true;
-  return [...pole.querySelectorAll('input, textarea')].some(p =>
-    p.type !== 'file' && p.type !== 'checkbox' && p.type !== 'date'
-    && p.type !== 'radio' && (p.value || '').trim() && !p.dataset.wstepne);
+  return !!pole.querySelector('.miniatura, .pole-podpisu.zapelnione');
+}
+
+/* Druga linijka pytania. „Telefon” tylko na telefonie (STYL-GK §6) — ten sam
+   próg co menu i „Jak w systemie” (komputer od 821 px).                     */
+function opisPorzuceniaOkna() {
+  const naKomputerze = typeof window.matchMedia === 'function'
+    && window.matchMedia('(min-width:821px)').matches;
+  return naKomputerze ? 'Zdjęcia i podpis z tego okna przepadną.'
+    : 'Zdjęcia i podpis z tego okna przepadną — nie ma ich w galerii telefonu.';
 }
 
 async function zamknijZPytaniem() {
-  if (oknoMaTresc() && !await potwierdz('Porzucić to, co wpisane?',
-    'Zdjęcia i podpis z tego okna przepadną — nie ma ich w galerii telefonu.')) return;
+  if (oknoMaTresc() && !await potwierdz('Porzucić to, co wpisane?', opisPorzuceniaOkna())) return;
   zamknijOkno();
 }
 
@@ -600,15 +605,368 @@ async function pobierz(sciezka, opcje) {
 
 /* ------------------------------------------------------------- serwer API */
 
+/* ----------------------------------------------- praca bez programu w biurze
+
+   Program w biurze bywa nieosiągalny: restart komputera-serwera, zanik prądu,
+   zerwany internet. Dawniej każdy ekran biura był wtedy pusty („Nie udało się
+   wczytać”). Teraz każda udana odpowiedź GET zostaje w tym urządzeniu
+   (IndexedDB, magazyn 'pamiec'), a gdy programu nie ma, ekran dostaje ją
+   z pamięci, a wstęga mówi, z której chwili są dane. Gdy program wraca, wstęga
+   proponuje odświeżenie — nie przerysowujemy ekranu sami, bo ktoś może właśnie
+   pisać w formularzu.
+
+   Zapisy biura dalej wymagają programu: to on ustala stan tras i aut, a dwie
+   osoby zmieniające to samo bez połączenia nie miałyby kto rozsądzić. Zapisy
+   kierowców idą jak dotąd przez kolejkę (synchronizuj).
+
+   Klucz ma id osoby: na wspólnym komputerze nikt nie zobaczy cudzych danych,
+   wylogowanie zabiera wszystko tej osoby, a zalogowanie innej — wszystko
+   poprzedniej. Nie zapamiętujemy tego, co otwiera drzwi albo żyje chwilę
+   (zaproszenia, linki z kluczem, stan tunelu, kopii i alarmów, wyszukiwanie),
+   ani odpowiedzi ponad 2 MB. Sekretów serwer i tak nie oddaje (same flagi
+   „ustawiony”).                                                              */
+const PAMIEC_ODPOWIEDZI = 'odp:';
+const MAKS_ODPOWIEDZI = 2 * 1024 * 1024;        // znaków JSON-a
+const MAKS_ODPOWIEDZI_OSOBY = 300;
+const BEZ_PAMIECI = /^\/api\/(zyje|push\/|zaproszenie|pages\/|kopia|kopie|alarmy|blokady|gk\/|eksport|szukaj|raporty\/podpowiedz|ikol\/)|\/mapa-link$/;
+const KODY_BEZ_PROGRAMU = [502, 503, 504, 530];
+const ODSTEP_PROBY_PROGRAMU_MS = 30 * 1000;
+
+const bezProgramu = { od: '', daneZ: '', proba: 0, zapisow: 0 };
+
+function kluczOdpowiedzi(sciezka) {
+  return PAMIEC_ODPOWIEDZI + stan.uz.id + ':' + sciezka;
+}
+
+function odpowiedzWPamieci(sciezka) {
+  return !!(stan.uz && stan.uz.id != null) && !BEZ_PAMIECI.test(String(sciezka).split('?')[0]);
+}
+
+async function zapamietajOdpowiedz(sciezka, dane) {
+  if (!odpowiedzWPamieci(sciezka)) return;
+  let dlugosc = 0;
+  try { dlugosc = JSON.stringify(dane).length; } catch (e) { return; }
+  if (dlugosc > MAKS_ODPOWIEDZI) return;
+  await Kolejka.zapamietaj(kluczOdpowiedzi(sciezka), { dane, czas: new Date().toISOString() });
+  bezProgramu.zapisow += 1;
+  if (bezProgramu.zapisow % 25 === 0) await przytnijPamiecOdpowiedzi();
+}
+
+async function odpowiedzZPamieci(sciezka) {
+  if (!odpowiedzWPamieci(sciezka)) return null;
+  const w = await Kolejka.przypomnij(kluczOdpowiedzi(sciezka)).catch(() => null);
+  return w && w.czas ? w : null;
+}
+
+/* Ponad MAKS_ODPOWIEDZI_OSOBY wypadają najstarsze odpowiedzi tej osoby
+   (zapytania z datami potrafią mnożyć adresy bez końca). */
+async function przytnijPamiecOdpowiedzi() {
+  const przedrostek = PAMIEC_ODPOWIEDZI + stan.uz.id + ':';
+  const klucze = (await Kolejka.klucze()).filter(k => String(k).startsWith(przedrostek));
+  if (klucze.length <= MAKS_ODPOWIEDZI_OSOBY) return;
+  const wpisy = [];
+  for (const k of klucze) {
+    const w = await Kolejka.przypomnij(k).catch(() => null);
+    wpisy.push([k, (w && w.czas) || '']);
+  }
+  wpisy.sort((a, b) => a[1].localeCompare(b[1]));
+  for (const [k] of wpisy.slice(0, wpisy.length - MAKS_ODPOWIEDZI_OSOBY)) await Kolejka.zapomnij(k);
+}
+
+/* Zabiera zapamiętane odpowiedzi wszystkich osób poza `zostaw` (id osoby;
+   null = wszystkich) — przy wylogowaniu i przy zalogowaniu innej osoby. */
+async function zapomnijOdpowiedzi(zostaw) {
+  const swoje = zostaw == null ? '' : PAMIEC_ODPOWIEDZI + zostaw + ':';
+  for (const k of await Kolejka.klucze()) {
+    const t = String(k);
+    if (t.startsWith(PAMIEC_ODPOWIEDZI) && !(swoje && t.startsWith(swoje))) await Kolejka.zapomnij(k);
+  }
+}
+
+/* Zapis bez programu: mówimy wprost, że NIE poszedł. Stary tekst („zapisy
+   poczekają w telefonie”) jest prawdziwy tylko dla kolejki kierowcy. */
+function bladBezProgramu(e, metoda, sciezka) {
+  if (metoda === 'GET' || String(sciezka).split('?')[0] === '/api/sync') return e;
+  const blad = new Error('Brak połączenia z programem w biurze — nie zapisano. '
+    + 'Spróbuj ponownie, gdy połączenie wróci.');
+  blad.bezPolaczenia = true;
+  return blad;
+}
+
+function pracaBezProgramu(czas) {
+  if (!bezProgramu.od) bezProgramu.od = new Date().toISOString();
+  if (!bezProgramu.daneZ || czas < bezProgramu.daneZ) bezProgramu.daneZ = czas;
+  pokazWstegeBezProgramu(false);
+  if (!bezProgramu.proba) bezProgramu.proba = setInterval(sprobujProgram, ODSTEP_PROBY_PROGRAMU_MS);
+}
+
+function programOdpowiada() {
+  if (!bezProgramu.od) return;
+  bezProgramu.od = '';
+  bezProgramu.daneZ = '';
+  clearInterval(bezProgramu.proba);
+  bezProgramu.proba = 0;
+  pokazWstegeBezProgramu(true);
+  wyslijZapisyBiura();
+}
+
+async function sprobujProgram() {
+  try {
+    const odp = await pobierz('/api/zyje', { cache: 'no-store' });
+    if (odp.ok) { programOdpowiada(); return true; }
+  } catch (e) { /* dalej bez programu */ }
+  return false;
+}
+
+/* „10:41” dla dzisiejszych danych, „7.10, 10:41” dla starszych. */
+function chwilaDanych(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'ostatniego połączenia';
+  const godz = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const dzis = new Date();
+  return d.toDateString() === dzis.toDateString() ? godz : `${d.getDate()}.${d.getMonth() + 1}, ${godz}`;
+}
+
+function pokazWstegeBezProgramu(wrocil) {
+  const tresc = document.getElementById('tresc');
+  let wstega = document.getElementById('wstega-bez-programu');
+  if (!wstega) {
+    if (!tresc || !tresc.parentNode) return;
+    wstega = document.createElement('div');
+    wstega.id = 'wstega-bez-programu';
+    tresc.parentNode.insertBefore(wstega, tresc);
+  }
+  if (wrocil) {
+    wstega.className = 'wstega ok';
+    wstega.innerHTML = 'Połączenie z programem wróciło. '
+      + '<button class="glowny maly" id="btn-odswiez-dane">Odśwież dane</button>';
+    wstega.querySelector('#btn-odswiez-dane').onclick = () => { wstega.remove(); odswiezEkran(); };
+    return;
+  }
+  wstega.className = 'wstega uwaga';
+  const czeka = zapisyBiura.ile
+    ? `czeka na wysłanie: ${zapisyBiura.ile}. ` : 'część zmian zapiszesz w tym komputerze. ';
+  wstega.innerHTML = `Bez połączenia z programem — dane z ${escHtml(chwilaDanych(bezProgramu.daneZ))}, `
+    + czeka + '<button class="maly" id="btn-sprobuj-program">Spróbuj teraz</button>';
+  wstega.querySelector('#btn-sprobuj-program').onclick = async () => {
+    if (!await sprobujProgram()) komunikat('Program dalej nie odpowiada', 'blad');
+  };
+}
+
+/* ------------------------------------------------- zapisy biura bez programu
+
+   Wybrane zapisy biura (zapisBiura — miejsca wywołania same o tym decydują)
+   nie przepadają, gdy programu nie ma: trafiają do pamięci tego urządzenia
+   (klucz 'biuro-op:<uuid>'), a ekran od razu pokazuje zmianę, bo funkcja
+   `popraw` z miejsca wywołania nanosi ją na zapamiętane odpowiedzi. Gdy program
+   wraca, zapisy idą po kolei, każdy z nagłówkiem X-GK-Operacja — program
+   pamięta numery przyjętych operacji, więc ponowienie niczego nie podwoi.
+
+   Przed wysłaniem każdy zapis sprawdza, czy dane, na których go zrobiono
+   (`zrodla` — adresy GET), nie zmieniły się w programie w międzyczasie
+   (np. kierowca zamknął punkt, drugi komputer biura przestawił trasę). Gdy się
+   zmieniły — zapis czeka na decyzję człowieka („Wyślij mimo to” / „Porzuć”),
+   a kolejka stoi, bo następne zapisy mogą od niego zależeć. Zapis, którego
+   program nie przyjął (4xx), zostaje na liście z powodem — nic nie znika samo.
+
+   Nowych rzeczy (zlecenie, pojazd, klient) bez programu się nie zakłada: numer
+   nadaje program, a ekran od razu go potrzebuje. Takie zapisy mówią „nie
+   zapisano”, jak dotąd.                                                     */
+const PAMIEC_ZAPISOW = 'biuro-op:';
+const KOMUNIKAT_KOLEJKI_BIURA = 'Zapisane w tym komputerze — wyślę, gdy program odpowie';
+const zapisyBiura = { wysyla: false, oczekiwane: {}, ile: 0, lista: [] };
+
+function numerOperacji() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'b-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
+/* Odcisk odpowiedzi (FNV-1a z JSON-a) — do porównania „czy to się zmieniło”. */
+function odcisk(dane) {
+  const t = JSON.stringify(dane === undefined ? null : dane);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) {
+    h ^= t.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16) + ':' + t.length;
+}
+
+function bezPolaczeniaZProgramem(e) {
+  return !!(e && (e.bezPolaczenia || KODY_BEZ_PROGRAMU.indexOf(e.kod) >= 0));
+}
+
+/* Zmiana na obiekcie o danym id — w liście albo w samym obiekcie odpowiedzi. */
+function wPamieci(dane, id, zmiana) {
+  if (Array.isArray(dane)) dane.forEach(x => { if (x && x.id === id) zmiana(x); });
+  else if (dane && dane.id === id) zmiana(dane);
+}
+
+async function zapisyBiuraOsoby() {
+  if (!stan.uz) return [];
+  const lista = [];
+  for (const k of await Kolejka.klucze()) {
+    if (!String(k).startsWith(PAMIEC_ZAPISOW)) continue;
+    const op = await Kolejka.przypomnij(k).catch(() => null);
+    if (op && op.uzytkownik === stan.uz.id) lista.push(op);
+  }
+  return lista.sort((a, b) => a.dodano.localeCompare(b.dodano));
+}
+
+/* Nanosi zmianę na zapamiętane odpowiedzi tej osoby; czas danych zostaje. */
+async function poprawPamiec(popraw) {
+  const przedrostek = PAMIEC_ODPOWIEDZI + stan.uz.id + ':';
+  for (const k of await Kolejka.klucze()) {
+    const t = String(k);
+    if (!t.startsWith(przedrostek)) continue;
+    const w = await Kolejka.przypomnij(k).catch(() => null);
+    if (!w) continue;
+    const przed = odcisk(w.dane);
+    const wynik = popraw(t.slice(przedrostek.length), w.dane);
+    const dane = wynik === undefined ? w.dane : wynik;
+    if (odcisk(dane) !== przed) await Kolejka.zapamietaj(k, { dane, czas: w.czas });
+  }
+}
+
+/* Zapis biura, który może poczekać. opcje: { opis, zrodla: [adresy GET],
+   popraw(sciezka, dane) }. Zwraca odpowiedź programu albo { wKolejce: true }. */
+async function zapisBiura(metoda, sciezka, dane, opcje) {
+  const o = opcje || {};
+  const op = { uuid: numerOperacji(), metoda, sciezka, dane: dane === undefined ? null : dane,
+               opis: o.opis || sciezka, uzytkownik: stan.uz ? stan.uz.id : null,
+               dodano: new Date().toISOString(), zrodla: [] };
+  // Bez zaległych zapisów i z programem — zwyczajnie, od razu. Zaległe zapisy
+  // idą pierwsze: kolejność zmian na tym komputerze ma zostać zachowana.
+  if (!bezProgramu.od && !(await zapisyBiuraOsoby()).length) {
+    try {
+      return await API.zadanie(metoda, sciezka, dane, { 'X-GK-Operacja': op.uuid });
+    } catch (e) {
+      if (!bezPolaczeniaZProgramem(e)) throw e;
+    }
+  }
+  if (!stan.uz) throw new Error('Zaloguj się ponownie — zapis bez konta nie poczeka');
+  for (const z of o.zrodla || []) {
+    const kopia = await odpowiedzZPamieci(z);
+    op.zrodla.push({ sciezka: z, odcisk: kopia ? odcisk(kopia.dane) : '' });
+  }
+  await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+  if (o.popraw) await poprawPamiec(o.popraw).catch(() => { /* ekran pokaże stare dane */ });
+  await pokazZapisyBiura();
+  if (!bezProgramu.od) wyslijZapisyBiura();
+  return { ok: true, wKolejce: true };
+}
+
+/* Wysyła zaległe zapisy po kolei. Woła ją powrót programu, start aplikacji
+   i każdy nowy zapis przy działającym programie. */
+async function wyslijZapisyBiura() {
+  if (zapisyBiura.wysyla || !stan.uz || !stan.token) return;
+  zapisyBiura.wysyla = true;
+  try {
+    for (const op of await zapisyBiuraOsoby()) {
+      if (op.blad) continue;                       // czeka na człowieka, nie blokuje
+      if (op.konflikt) break;                       // kolejka stoi do decyzji
+      if (!op.mimoTo) {
+        let zmienione = false;
+        for (const z of op.zrodla || []) {
+          const teraz = await API.zadanie('GET', z.sciezka);
+          if (bezProgramu.od) return;               // odpowiedź z pamięci — programu dalej nie ma
+          const oczekiwany = zapisyBiura.oczekiwane[z.sciezka] || z.odcisk;
+          if (oczekiwany && odcisk(teraz) !== oczekiwany) zmienione = true;
+        }
+        if (zmienione) {
+          op.konflikt = new Date().toISOString();
+          await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+          break;
+        }
+      }
+      try {
+        await API.zadanie(op.metoda, op.sciezka, op.dane === null ? undefined : op.dane,
+                          { 'X-GK-Operacja': op.uuid });
+      } catch (e) {
+        if (bezPolaczeniaZProgramem(e) || !e.kod || e.kod >= 500 || e.kod === 401) return;
+        op.blad = poLudzku(e);
+        await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+        continue;
+      }
+      await Kolejka.zapomnij(PAMIEC_ZAPISOW + op.uuid);
+      for (const z of op.zrodla || []) {
+        try { zapisyBiura.oczekiwane[z.sciezka] = odcisk(await API.zadanie('GET', z.sciezka)); }
+        catch (e) { /* sprawdzi następny zapis */ }
+      }
+    }
+  } catch (e) {
+    /* program znowu zniknął w trakcie — następna próba przy jego powrocie */
+  } finally {
+    zapisyBiura.wysyla = false;
+    await pokazZapisyBiura();
+  }
+}
+
+/* Wstęga zapisów biura: konflikt i odrzucone (z decyzją człowieka); liczba
+   czekających idzie do wstęgi „bez połączenia”. */
+async function pokazZapisyBiura() {
+  const lista = await zapisyBiuraOsoby().catch(() => []);
+  zapisyBiura.lista = lista;
+  zapisyBiura.ile = lista.filter(op => !op.blad).length;
+  if (bezProgramu.od) pokazWstegeBezProgramu(false);
+  const tresc = document.getElementById('tresc');
+  let wstega = document.getElementById('wstega-zapisy-biura');
+  const sprawy = lista.filter(op => op.blad || op.konflikt);
+  if (!sprawy.length) {
+    if (wstega) wstega.remove();
+    return;
+  }
+  if (!wstega) {
+    if (!tresc || !tresc.parentNode) return;
+    wstega = document.createElement('div');
+    wstega.id = 'wstega-zapisy-biura';
+    tresc.parentNode.insertBefore(wstega, tresc);
+  }
+  wstega.className = 'wstega blad';
+  wstega.innerHTML = sprawy.map(op => op.konflikt
+    ? `<div>Nie wysłano „${escHtml(op.opis)}”: w programie ktoś to zmienił, gdy nie było połączenia.
+        <button class="maly" data-mimo-to="${escHtml(op.uuid)}">Wyślij mimo to</button>
+        <button class="maly" data-porzuc="${escHtml(op.uuid)}">Porzuć</button></div>`
+    : `<div>Program nie przyjął „${escHtml(op.opis)}”: ${escHtml(op.blad)}
+        <button class="maly" data-porzuc="${escHtml(op.uuid)}">Usuń z listy</button></div>`).join('');
+  wstega.querySelectorAll('[data-mimo-to]').forEach(b => b.onclick = async () => {
+    const op = await Kolejka.przypomnij(PAMIEC_ZAPISOW + b.dataset.mimoTo).catch(() => null);
+    if (!op) return;
+    op.konflikt = '';
+    op.mimoTo = true;
+    await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+    await pokazZapisyBiura();
+    await wyslijZapisyBiura();
+    odswiezEkran();
+  });
+  wstega.querySelectorAll('[data-porzuc]').forEach(b => b.onclick = async () => {
+    await Kolejka.zapomnij(PAMIEC_ZAPISOW + b.dataset.porzuc);
+    await pokazZapisyBiura();          // wysyłka w tle mogła właśnie trwać — wstęga od razu
+    await wyslijZapisyBiura();
+    odswiezEkran();
+  });
+}
+
 const API = {
-  async zadanie(metoda, sciezka, dane) {
-    const opcje = { method: metoda, headers: {} };
+  async zadanie(metoda, sciezka, dane, naglowki) {
+    const opcje = { method: metoda, headers: Object.assign({}, naglowki || {}) };
     if (stan.token) opcje.headers.Authorization = 'Bearer ' + stan.token;
     if (dane !== undefined) {
       opcje.headers['Content-Type'] = 'application/json';
       opcje.body = JSON.stringify(dane);
     }
-    const odp = await pobierz(sciezka, opcje);
+    let odp;
+    try {
+      odp = await pobierz(sciezka, opcje);
+    } catch (e) {
+      const kopia = metoda === 'GET' ? await odpowiedzZPamieci(sciezka) : null;
+      if (kopia) { pracaBezProgramu(kopia.czas); return kopia.dane; }
+      throw bladBezProgramu(e, metoda, sciezka);
+    }
+    if (metoda === 'GET' && KODY_BEZ_PROGRAMU.indexOf(odp.status) >= 0) {
+      const kopia = await odpowiedzZPamieci(sciezka);
+      if (kopia) { pracaBezProgramu(kopia.czas); return kopia.dane; }
+    }
     if (odp.status === 401) { sesjaWygasla(); throw new Error('Sesja wygasła — zaloguj się ponownie'); }
     let wynik = null;
     try { wynik = await odp.json(); } catch (e) { wynik = null; }
@@ -619,6 +977,8 @@ const API = {
       blad.kod = odp.status;
       throw blad;
     }
+    programOdpowiada();
+    if (metoda === 'GET') zapamietajOdpowiedz(sciezka, wynik).catch(() => { /* pamięć to tylko zapas */ });
     return wynik;
   },
   get(s) { return API.zadanie('GET', s); },
@@ -745,7 +1105,7 @@ async function sprobuj(praca, komunikatSukcesu) {
   zajety(true);
   try {
     const w = await praca();
-    if (komunikatSukcesu) komunikat(komunikatSukcesu, 'ok');
+    if (komunikatSukcesu) komunikat(w && w.wKolejce ? KOMUNIKAT_KOLEJKI_BIURA : komunikatSukcesu, 'ok');
     return w;
   } catch (e) {
     komunikat(poLudzku(e), 'blad');
@@ -874,6 +1234,7 @@ async function odswiezStanSieci() {
       : (stan.wKolejce ? `${ileZapisow} w wysyłce` : 'Połączono');
   const znacznik = document.getElementById('znacznik-kolejki');
   if (znacznik) znacznik.textContent = stan.wKolejce ? `⏳ ${stan.wKolejce}` : '';
+  odswiezPasekPolaczenia();
 }
 
 /* ------------------------------------------------------------- logowanie */
@@ -1051,6 +1412,7 @@ async function przyjmijLogowanie(odpowiedz, wpisany) {
   Pamiec.zapisz('token', wynik.token);   // tryb prywatny albo pełna pamięć — zalogowanie i tak ma się udać
   stan.uz = wynik;
   zakonczTrybDoOdczytu();
+  await zapomnijOdpowiedzi(wynik.id).catch(() => { /* wejście ważniejsze */ });
   await Kolejka.zapamietaj('profil', wynik);   // zeby jutro wejsc bez zasiegu
   poprosOTrwalaPamiec();
   Powiadomienia.odnow();                       // w tle — logowanie na to nie czeka
@@ -1081,6 +1443,7 @@ async function wyloguj(cicho) {
   try {
     await Kolejka.zapomnij('slowniki');
     await Kolejka.zapomnij('profil');
+    await zapomnijOdpowiedzi(null);
   } catch (e) { /* brak pamieci nie moze zatrzymac wylogowania */ }
   stan.klienci = []; stan.pojazdy = []; stan.lokalizacje = []; stan.ustawienia = {};
   pokazLogowanie();
@@ -1308,17 +1671,24 @@ function menuDlaRoli() {
   const przyciskAuta = document.getElementById('btn-moje-auto');
   if (przyciskAuta) przyciskAuta.classList.toggle('ukryty', !mojeAuto);
 
+  // D65: najwyżej cztery ekrany + „☰ Więcej” (jak w hali). Kierowca z GK Flota
+  // ma „Moje auto” zamiast „Klientów” — Klienci są w menu „Więcej”.
   const dolne = biuro
     ? [['pulpit', '📊', 'Pulpit'], ['trasy', '🗺️', 'Trasy'],
        ['zalegle', '⏰', 'Zaległe'], ['klienci', '🏢', 'Klienci']]
     : [['moja', '🚚', 'Moja trasa'], ['zaladunek', '📦', 'Załadunek'],
-       ['klienci', '🏢', 'Klienci'], ['raporty', '🕒', 'Raport pracy']]
-      .concat(mojeAuto ? [['mojeauto', '🔧', 'Moje auto']] : []);
+       mojeAuto ? ['mojeauto', '🔧', 'Moje auto'] : ['klienci', '🏢', 'Klienci'],
+       ['raporty', '🕒', 'Raport pracy']];
   const pasek = document.getElementById('pasek-dolny');
   pasek.innerHTML = dolne.map(([e, i, n]) =>
     `<button data-ekran="${e}"><span class="i">${i}</span><span>${n}</span></button>`).join('');
   pasek.querySelectorAll('button').forEach(b =>
     b.onclick = () => pokazEkran(b.dataset.ekran));
+  // D65: „☰ Więcej” zawsze ostatnie na dolnym pasku — jak w aplikacjach hali
+  // (STYL-GK, D64); otwiera menu boczne z resztą ekranów. ☰ w nagłówku zniknęło.
+  pasek.insertAdjacentHTML('beforeend',
+    '<button type="button" data-wiecej><span class="i">☰</span><span>Więcej</span></button>');
+  pasek.querySelector('[data-wiecej]').onclick = otworzMenu;
 }
 
 async function pokazEkran(nazwa, parametry) {
@@ -1327,6 +1697,7 @@ async function pokazEkran(nazwa, parametry) {
   if (ekran.tylkoBiuro && !jestBiuro()) return;
   if (ekran.tylkoAdministrator && !jestAdministratorem()) return;
   stan.ekran = nazwa;
+  stan.parametryEkranu = parametry || {};
   document.getElementById('tytul-ekranu').textContent = ekran.tytul;
   document.querySelectorAll('.menu button[data-ekran], .pasek-dolny button[data-ekran]')
     .forEach(b => b.classList.toggle('wybrany', b.dataset.ekran === nazwa));
@@ -1341,6 +1712,12 @@ async function pokazEkran(nazwa, parametry) {
       <p class="slaby">${escHtml(poLudzku(e))}</p>
       <button class="glowny" onclick="pokazEkran('${nazwa}')">Spróbuj ponownie</button></div>`;
   }
+}
+
+/* Przerysowanie tego, co stoi na widoku, z tymi samymi parametrami
+   (np. po powrocie połączenia z programem — ta sama trasa, nie pulpit). */
+function odswiezEkran() {
+  if (stan.ekran) pokazEkran(stan.ekran, stan.parametryEkranu);
 }
 
 function otworzMenu() {
@@ -1480,7 +1857,8 @@ function stempelWersji() {
         warstwa okna: <code id="stempel-warstwa">…</code>
       </div>
       ${pagesStarsze ? `<div class="male" style="margin-top:6px">Na GitHub Pages jest inna wersja
-        aplikacji niż program w biurze — administrator: Ustawienia → „Wyślij aplikację na GitHub”.</div>` : ''}
+        aplikacji niż program w biurze. Nową wersję wysyła sam Panel Kierownika — stan:
+        Ustawienia → Zaawansowane → Adres dla telefonów (GitHub Pages).</div>` : ''}
       ${zgodne ? '' : `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>`}
     </div>`;
@@ -1513,7 +1891,8 @@ async function sprawdzSpojnoscWersji() {
     // nie ma dostępu do Ustawień i dostałby ostrzeżenie bez wyjścia.
     if (osobneAdresy && dysk !== skrypt && jestAdministratorem()) {
       komunikat('Na GitHub Pages jest inna wersja aplikacji niż program w biurze. '
-        + 'Ustawienia → „Wyślij aplikację na GitHub”.', 'blad');
+        + 'Nową wersję wysyła sam Panel Kierownika — stan: Ustawienia → Zaawansowane → Adres dla telefonów '
+        + '(GitHub Pages).', 'blad');
     }
     return;
   }
@@ -1583,6 +1962,134 @@ function pokazKolejkeWKoncie(pole) {
   wyslij.parentNode.classList.toggle('ukryty', !(stan.wKolejce > 0));
 }
 
+/* ------------------------------------------------ D65: kody QR aplikacji GK
+
+   Ten sam przycisk i to samo okno co w aplikacjach hali (STYL-GK §3, hala:
+   konto.js → aplikacjeNaTelefon): aplikacje osoby z kodem QR, „🖨 Drukuj kod”
+   przy aplikacji i „🖨 Drukuj wszystkie”. Listę daje Panel Kierownika (hub,
+   GK-KONTA.md §3.6) przez program — tylko konto z Panelu (zrodlo 'gk'). Kody
+   rysuje serwer programu (qr_svg), więc okno działa bez biblioteki QR.     */
+function naKomputerze() {
+  return typeof matchMedia === 'function' && matchMedia('(min-width:821px)').matches;
+}
+function napisKodowQR() {
+  return naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon — kody QR';
+}
+function maKodyQR() { return !!stan.uz && stan.uz.zrodlo === 'gk'; }
+
+/* Arkusz A4 do druku — ten sam układ co w hali (konto.js → arkuszKodow). */
+function arkuszKodowQR(lista) {
+  const karty = (lista || []).filter(a => a && a.qr).map(a => `<section class="karta">
+      <div class="qr">${a.qr}</div>
+      <div class="opis"><h2>${escHtml(a.nazwa)}</h2>
+        <p>Zeskanuj aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego.</p>
+        ${a.opis ? `<p>${escHtml(a.opis)}</p>` : ''}
+        ${!a.adres && a.siec ? '<p class="uwaga">Działa tylko w firmowym wifi.</p>' : ''}
+        ${/^https:\/\/[^/]+\.github\.io\//.test(a.adres || '') ? ''
+          : '<p class="uwaga">Adres tymczasowy — po ponownym uruchomieniu programu wydrukuj ten kod jeszcze raz.</p>'}
+        <p class="adres">${escHtml(a.adres || a.siec)}</p></div></section>`).join('');
+  return `<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Kody QR aplikacji GK</title><style>
+      @page { size: A4; margin: 12mm; }
+      body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
+      .arkusz { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+      .karta { display: grid; grid-template-rows: auto 1fr; justify-items: center; gap: 3mm; padding: 5mm; border: .3mm dashed #888;
+               break-inside: avoid; page-break-inside: avoid; text-align: center; }
+      .qr svg { display: block; width: 55mm; height: 55mm; }
+      h2 { margin: 0 0 2mm; font-size: 16pt; }
+      p { margin: 0 0 1.5mm; font-size: 9pt; line-height: 1.3; }
+      .uwaga { font-weight: 700; }
+      .adres { font-family: Consolas, monospace; font-size: 7.5pt; overflow-wrap: anywhere; color: #444; }
+    </style></head><body><div class="arkusz">${karty}</div></body></html>`;
+}
+
+/* Druk arkusza w ukrytej ramce (jak w hali) — bez własnego CSS druku programu. */
+function drukujArkuszQR(html) {
+  const ramka = document.createElement('iframe');
+  ramka.setAttribute('aria-hidden', 'true');
+  ramka.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  const sprzatnij = () => setTimeout(() => ramka.remove(), 1000);
+  ramka.onload = () => {
+    const w = ramka.contentWindow;
+    w.addEventListener('afterprint', sprzatnij);
+    w.focus();
+    w.print();
+    setTimeout(() => { if (ramka.isConnected) ramka.remove(); }, 120000);
+  };
+  ramka.srcdoc = html;
+  document.body.appendChild(ramka);
+}
+
+function oknoKodowAplikacji() {
+  let lista = [];
+  okno({
+    tytul: naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon',
+    konto: true,
+    tresc: `<p class="konto-drobne">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu
+        głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN);
+        inne logowanie jest opisane przy aplikacji.</p>
+      <div class="kody-aplikacji" id="kody-aplikacji"><p class="konto-drobne">Wczytuję…</p></div>`,
+    przyciski: [
+      { napis: '🖨 Drukuj wszystkie', klasa: 'ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
+      { napis: 'Zamknij', klasa: 'glowny', klik: z => z() },
+    ],
+    poOtwarciu: async pole => {
+      const el = pole.querySelector('#kody-aplikacji');
+      try {
+        lista = (await API.get('/api/aplikacje-gk')).aplikacje || [];
+      } catch (e) {
+        if (el.isConnected) el.innerHTML = `<p class="blad-ustawienia">${escHtml(poLudzku(e))}</p>`;
+        return;
+      }
+      if (!el.isConnected) return;               // okno zamknięte w trakcie
+      el.innerHTML = lista.map((a, i) => `<figure class="kod-aplikacji">
+          ${a.qr ? `<div class="kod-aplikacji-qr">${a.qr}</div>`
+                 : `<div class="kod-aplikacji-qr brak">${a.komputer ? '💻' : '—'}</div>`}
+          <figcaption><b>${escHtml(a.nazwa)}</b>
+            ${a.adres || a.siec ? `<a href="${escHtml(a.adres || a.siec)}" target="_blank" rel="noopener">${escHtml(a.adres || a.siec)}</a>` : ''}
+            ${!a.adres && a.siec ? '<span class="konto-drobne">Tylko w firmowym wifi.</span>' : ''}
+            ${a.opis ? `<span class="konto-drobne">${escHtml(a.opis)}</span>` : ''}
+            ${a.qr ? `<button type="button" data-drukuj="${i}">🖨 Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
+        || '<p class="konto-drobne">To konto nie ma aplikacji na telefon.</p>';
+      el.querySelectorAll('[data-drukuj]').forEach(b =>
+        b.onclick = () => drukujArkuszQR(arkuszKodowQR([lista[+b.dataset.drukuj]])));
+      const wszystkie = [...document.querySelectorAll('#okno-stopka button')]
+        .find(b => b.textContent === '🖨 Drukuj wszystkie');
+      if (wszystkie && lista.some(a => a.qr)) wszystkie.classList.remove('ukryty');
+    },
+  });
+}
+
+/* ------------------------------------------------ D65: pasek połączenia
+
+   Kropka w nagłówku zostaje, ale jej podpowiedź (title) jest na telefonie
+   niewidoczna. Pod nagłówkiem pasek z tekstem — te same słowa i odmiana co
+   w aplikacjach hali (hala.js → Hala.pasekPolaczenia). Przy „wszystko
+   wysłane” go nie ma. Dotknięcie → Moje konto (lista „Nie wysłane”).      */
+function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer }) {
+  const n = wKolejce || 0;
+  const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
+  const czesci = [];
+  let klasa = 'ok';
+  if (!online) {
+    klasa = 'offline';
+    czesci.push(`Brak sieci — ${n ? czeka : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`);
+  } else if (n) {
+    klasa = 'kolejka';
+    czesci.push(`Wysyłanie: ${n}`);
+  }
+  if (odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${odrzucone} — dotknij`); }
+  return { klasa, tekst: czesci.join(' · ') };
+}
+function odswiezPasekPolaczenia() {
+  const el = document.getElementById('pasek-polaczenia');
+  if (!el) return;
+  const p = tekstPaskaPolaczenia({ online: stan.online, wKolejce: stan.wKolejce,
+    odrzucone: stan.odrzucone, komputer: naKomputerze() });
+  el.className = 'pasek-polaczenia ' + p.klasa;
+  el.textContent = p.tekst;
+  el.hidden = !p.tekst;
+}
+
 /* „Moje konto” w układzie okna konta aplikacji hali (konto.js → HalaKonto.mojeKonto):
    osoba i rola → Wygląd → Zmień hasło/PIN (formularz rozwija się w oknie) →
    Powiadomienia → Dane w tym urządzeniu → wersja → Zamknij + Wyloguj na dole. */
@@ -1598,10 +2105,11 @@ function oknoKonta() {
         <p class="konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
       </fieldset>
       ${trescZmianySekretu(zmien)}
+      ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${napisKodowQR()}</button>` : ''}
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${jestBiuro()
           ? 'Nieudana dostawa i raport z usterkami — od razu, także przy zamkniętej aplikacji.'
-          : 'Nowe albo zmienione zlecenie na dziś i jutro oraz uwagi od biura — także przy zamkniętej aplikacji.'}</p>
+          : 'Nowa albo zmieniona trasa na dziś i jutro oraz uwagi od biura — także przy zamkniętej aplikacji.'}</p>
         <div id="push-konto" class="konto-push"><p class="konto-drobne">Sprawdzam…</p></div>
       </fieldset>
       <fieldset><legend>Dane w tym urządzeniu</legend>
@@ -1625,6 +2133,8 @@ function oknoKonta() {
         Motyw.ustaw(b.dataset.wyglad);
         pigulki.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       });
+      const kodyQR = pole.querySelector('#btn-kody-qr');
+      if (kodyQR) kodyQR.onclick = oknoKodowAplikacji;
       podepnijZmianeSekretu(pole);
       rysujPowiadomienia(pole.querySelector('#push-konto'));
       pokazKolejkeWKoncie(pole);
@@ -1803,6 +2313,8 @@ async function rysujOdrzucone(pole) {
     if (o.typ === 'raport') return `Raport pracy z ${polskaData(o.data)}`;
     if (o.typ === 'pozycje') return 'Ślad GPS';
     if (o.typ === 'stan_trasy') return 'Rozpoczęcie/zakończenie trasy';
+    if (o.typ === 'zaladunek') return `Załadunek (punkt ${o.przystanek})`;
+    if (o.typ === 'zdjecie_ladunku') return 'Zdjęcie ładunku';
     return o.typ;
   };
 
@@ -1872,7 +2384,10 @@ async function uruchom() {
     }
   };
 
-  document.getElementById('btn-menu').onclick = otworzMenu;
+  // D65: ☰ już nie w nagłówku, tylko „Więcej” na dolnym pasku (menuDlaRoli).
+  const przyciskMenu = document.getElementById('btn-menu');
+  if (przyciskMenu) przyciskMenu.onclick = otworzMenu;
+  document.getElementById('pasek-polaczenia').onclick = oknoKonta;
   document.getElementById('zaslona').onclick = zamknijMenu;
   document.getElementById('okno-zamknij').onclick = zamknijZPytaniem;
   document.getElementById('okno-tlo').onclick = e => {
@@ -1975,6 +2490,7 @@ async function wejdzDoAplikacji() {
   await sprawdzSpojnoscWersji();
   await wczytajSlowniki();
   synchronizuj();
+  wyslijZapisyBiura();
   // Aplikację otworzyło dotknięcie powiadomienia (sw.js: „./#trasa=12”) —
   // od razu właściwy ekran, a adres czyścimy, żeby odświeżenie nie wracało tam.
   const zPowiadomienia = location.hash;

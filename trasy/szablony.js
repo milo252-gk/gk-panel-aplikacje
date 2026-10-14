@@ -8,7 +8,7 @@
    wejść w każdy punkt po kolei — więc nikt tego nie robi.                   */
 
 EKRANY.szablony = {
-  tytul: 'Zlecenia stałe',
+  tytul: 'Trasy stałe',
   tylkoBiuro: true,
   async rysuj(pole) {
     const [szablony, kierowcy] = await Promise.all([
@@ -19,7 +19,7 @@ EKRANY.szablony = {
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         <button class="glowny" id="sz-nowy">+ Nowy szablon</button>
-        <button id="sz-wroc">← Zlecenia</button>
+        <button id="sz-wroc">← Trasy</button>
       </div>
       <p class="male slaby">Szablon zapamiętuje zestaw klientów i ich kolejność.
         Z jednego szablonu robisz dzień jednym kliknięciem — bez przeklikiwania
@@ -35,7 +35,7 @@ EKRANY.szablony = {
                 ${s.pojazd_nazwa ? '· ' + escHtml(s.pojazd_nazwa) : ''}</div>
             </div>
             <div class="przyciski">
-              <button class="maly glowny" data-uzyj="${s.id}">Zrób z tego zlecenie</button>
+              <button class="maly glowny" data-uzyj="${s.id}">Zrób z tego trasę</button>
               <button class="maly" data-edytuj="${s.id}">Zmień</button>
               <button class="maly" data-usun="${s.id}">Usuń</button>
             </div>
@@ -55,7 +55,7 @@ EKRANY.szablony = {
     pole.querySelectorAll('[data-uzyj]').forEach(b => b.onclick = () =>
       oknoTrasyZSzablonu(szablony.find(s => s.id === Number(b.dataset.uzyj)), kierowcy, busy));
     pole.querySelectorAll('[data-usun]').forEach(b => b.onclick = async () => {
-      if (!await potwierdz('Usunąć zlecenie stałe?', 'Zlecenia zrobione z niego zostają nietknięte.')) return;
+      if (!await potwierdz('Usunąć trasę stałą?', 'Trasy zrobione z niej zostają nietknięte.')) return;
       const w = await sprobuj(() => API.del('/api/szablony/' + b.dataset.usun), 'Usunięto');
       if (w) pokazEkran('szablony');
     });
@@ -76,7 +76,7 @@ async function oknoSzablonu(s, kierowcy, busy) {
   const lista = (szukaj) => listaPunktowDoWyboru({ juz: new Set(), wybrane, szukaj });
 
   okno({
-    tytul: nowy ? 'Nowe zlecenie stałe' : 'Zlecenie stałe: ' + s.nazwa,
+    tytul: nowy ? 'Nowa trasa stała' : 'Trasa stała: ' + s.nazwa,
     szerokie: true,
     tresc: `
       <label>Nazwa <span class="slaby">(np. „Poniedziałek — Kalisz północ")</span>
@@ -86,22 +86,22 @@ async function oknoSzablonu(s, kierowcy, busy) {
           <select id="sb-kierowca"><option value="">— wybiorę przy tworzeniu —</option>
             ${kierowcy.map(k => `<option value="${k.id}" ${s.kierowca === k.id ? 'selected' : ''}>
               ${escHtml(k.imie)}</option>`).join('')}</select></label>
-        <label>Domyślny bus
+        <label>Domyślne auto
           <select id="sb-pojazd"><option value="">— nie wybieram —</option>
             ${busy.map(b => `<option value="${b.id}" ${s.pojazd === b.id ? 'selected' : ''}>
               ${escHtml(b.nazwa)}</option>`).join('')}</select></label>
       </div>
       <div class="dwie">
-        <label>Baza w tym zleceniu
+        <label>Baza na tej trasie
           <select id="sb-baza"><option value="">— baza domyślna —</option>
             ${(stan.lokalizacje || []).filter(l => l.aktywna !== 0).map(l =>
               `<option value="${l.id}" ${s.baza === l.id ? 'selected' : ''}>
                 ${escHtml(l.nazwa)}</option>`).join('')}</select></label>
-        <label>Układ zlecenia
+        <label>Układ trasy
           <select id="sb-uklad">${opcjeUkladu(s.uklad)}</select></label>
       </div>
-      <p class="male slaby" style="margin:-6px 0 10px">Układ jedzie razem ze zleceniem
-        zrobionym z tego wzorca — stały kurs między naszymi magazynami nie będzie
+      <p class="male slaby" style="margin:-6px 0 10px">Układ jedzie razem z trasą
+        zrobioną z tego wzorca — stały kurs między naszymi magazynami nie będzie
         co tydzień doliczał powrotu, którego nikt nie robi.</p>
       <label>Uwagi dla kierowcy<textarea id="sb-uwagi">${escHtml(s.uwagi || '')}</textarea></label>
       <h3 style="margin-top:14px">Punkty w szablonie</h3>
@@ -112,9 +112,9 @@ async function oknoSzablonu(s, kierowcy, busy) {
       <div id="sb-lista" style="margin-top:10px;max-height:38vh;overflow-y:auto">${lista('')}</div>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: 'Zapisz zlecenie stałe', klasa: 'glowny', klik: async z => {
+      { napis: 'Zapisz trasę stałą', klasa: 'glowny', klik: async z => {
         const nazwa = val('sb-nazwa');
-        if (!nazwa) { komunikat('Podaj nazwę zlecenia stałego', 'blad'); return; }
+        if (!nazwa) { komunikat('Podaj nazwę trasy stałej', 'blad'); return; }
         if (!wybrane.length) { komunikat('Zaznacz przynajmniej jeden punkt', 'blad'); return; }
         const w = await sprobuj(() => API.post('/api/szablony', {
           id: s.id, nazwa,
@@ -147,7 +147,7 @@ async function oknoSzablonu(s, kierowcy, busy) {
 
 function oknoTrasyZSzablonu(s, kierowcy, busy) {
   okno({
-    tytul: 'Zlecenie ze stałego „' + s.nazwa + '"',
+    tytul: 'Nowa trasa z trasy stałej „' + s.nazwa + '"',
     tresc: `
       <p class="male slaby">Powstanie nowa trasa z ${s.ile}
         ${odmiana(s.ile, 'punktem', 'punktami', 'punktami')} w kolejności z szablonu.</p>
@@ -157,19 +157,19 @@ function oknoTrasyZSzablonu(s, kierowcy, busy) {
           <select id="ts-kierowca"><option value="">— jak w szablonie —</option>
             ${kierowcy.map(k => `<option value="${k.id}" ${s.kierowca === k.id ? 'selected' : ''}>
               ${escHtml(k.imie)}</option>`).join('')}</select></label>
-        <label>Bus
+        <label>Auto
           <select id="ts-pojazd"><option value="">— jak w szablonie —</option>
             ${busy.map(b => opcjaBusa(b, s.pojazd === b.id)).join('')}</select></label>
       </div>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: 'Utwórz zlecenie', klasa: 'glowny', klik: async z => {
+      { napis: 'Utwórz trasę', klasa: 'glowny', klik: async z => {
         if (!await zgodaNaBus(document.getElementById('ts-pojazd').value || s.pojazd)) return;
         const w = await sprobuj(() => API.post(`/api/szablony/${s.id}/trasa`, {
           data: document.getElementById('ts-data').value,
           kierowca: document.getElementById('ts-kierowca').value || null,
           pojazd: document.getElementById('ts-pojazd').value || null,
-        }), 'Zlecenie utworzone');
+        }), 'Trasa utworzona');
         if (w) { z(); pokazEkran('trasa', { id: w.id }); }
       } },
     ],
@@ -179,10 +179,15 @@ function oknoTrasyZSzablonu(s, kierowcy, busy) {
 /* ==================================================== lista załadunku */
 
 /* Załadunek nie jest już samym odhaczaniem na telefonie. Każda pozycja wymaga
-   zdjęcia towaru i numeru zamówienia PRZEPISANEGO Z DOKUMENTU przy palecie —
-   kierowca nie widzi numeru wpisanego przez biuro, bo wtedy przepisywałby go
-   z ekranu i cała kontrola nic by nie dawała. Telefon porównuje skróty na
-   miejscu, więc pomyłka wychodzi pod rampą, a nie po powrocie.            */
+   numeru zamówienia PRZEPISANEGO Z DOKUMENTU przy palecie — kierowca nie widzi
+   numeru wpisanego przez biuro, bo wtedy przepisywałby go z ekranu i cała
+   kontrola nic by nie dawała. Telefon porównuje skróty na miejscu, więc
+   pomyłka wychodzi pod rampą, a nie po powrocie.
+
+   Zdjęcie przy pozycji jest od UI etapu 2 (2026-10-12, decyzja właściciela)
+   NIEOBOWIĄZKOWE — zdjęcie każdej palety z osobna trzymało kierowcę pod rampą.
+   Zamiast tego jest jedno, też nieobowiązkowe, „📷 Zdjęcie ładunku” całego
+   auta nad listą (oknoZdjeciaLadunku).                                       */
 
 EKRANY.zaladunek = {
   tytul: 'Załadunek',
@@ -197,6 +202,7 @@ EKRANY.zaladunek = {
     // Nasze miejsca nie sa pozycjami zaladunku: przy doladunku w magazynie nie
     // ma dokumentu z numerem przy palecie ani palety do sfotografowania.
     const pozycje = trasa.przystanki.filter(p => p.status !== 'odwolany' && !p.nasze);
+    trasa.zdjecia_ladunku = Number(await Kolejka.przypomnij('zdjecia-ladunku-' + trasa.id)) || 0;
 
     const rysuj = () => {
       const gotowe = pozycje.filter(p => p.zaladowano_o).length;
@@ -212,9 +218,12 @@ EKRANY.zaladunek = {
           ${niezgodne ? `<div class="wstega blad" style="margin-top:10px">
               ${niezgodne === 1 ? 'Jedna pozycja ma'
                 : `${niezgodne} ${odmiana(niezgodne, 'pozycja ma', 'pozycje mają', 'pozycji ma')}`}
-              numer niezgodny z zamówieniem. Sprawdź, czy na busie stoi właściwy towar.</div>` : ''}
-          <p class="male slaby" style="margin-top:10px">Przy każdej pozycji zrób zdjęcie
-            i przepisz numer zamówienia <b>z dokumentu przy towarze</b>. Działa bez zasięgu.</p>
+              numer niezgodny z zamówieniem. Sprawdź, czy w aucie stoi właściwy towar.</div>` : ''}
+          <p class="male slaby" style="margin-top:10px">Przy każdej pozycji przepisz numer
+            zamówienia <b>z dokumentu przy towarze</b>. Zdjęcie nie jest obowiązkowe — wystarczy
+            jedno całego ładunku. Działa bez zasięgu.</p>
+          <button type="button" class="duzy" id="z-ladunek">📷 Zdjęcie ładunku${
+            trasa.zdjecia_ladunku ? ` <span class="plakietka p-dostarczone">✓ ${trasa.zdjecia_ladunku}</span>` : ''}</button>
         </div>
         ${pozycje.map((p, i) => {
           const zrobione = !!p.zaladowano_o;
@@ -232,10 +241,17 @@ EKRANY.zaladunek = {
               ${p.z_dnia ? `<span class="dopisek">⏰ zaległe z ${escHtml(p.z_dnia)}</span>` : ''}
             </span>
           </button>`;
-        }).join('')}`;
+        }).join('')}
+        ${trasa.status === 'planowana' && !ileDoZaladunku(trasa) ? `
+          <button class="glowny duzy" id="z-start">▶ Rozpocznij trasę</button>` : ''}`;
       pole.querySelectorAll('[data-poz]').forEach(b => b.onclick = () => {
         oknoZaladunku(pozycje.find(p => p.id === Number(b.dataset.poz)), trasa, rysuj);
       });
+      pole.querySelector('#z-ladunek').onclick = () => oknoZdjeciaLadunku(trasa, rysuj);
+      // Wszystko potwierdzone — kierowca stoi pod rampą na tym ekranie, więc
+      // rusza stąd, bez szukania przycisku na Mojej trasie (ta sama akcja).
+      const start = pole.querySelector('#z-start');
+      if (start) start.onclick = () => rozpocznijZlecenie(trasa, data);
     };
     rysuj();
   },
@@ -250,16 +266,16 @@ function oknoZaladunku(p, trasa, odswiez) {
       ${p.zaladowano_o ? `<div class="wstega ${p.zaladunek_zgodny ? 'ok' : 'blad'}">
           Ta pozycja jest już potwierdzona${p.zaladunek_zgodny ? '' : ', ale numer się nie zgadzał'}.
           Możesz potwierdzić jeszcze raz.</div>` : ''}
-      <label>Zdjęcia towaru <span class="slaby">(paleta, dokument przy niej)</span>
-        <input type="file" id="z-zdjecie" accept="image/*" capture="environment" multiple>
-      </label>
-      <div class="miniatury" id="z-miniatury"></div>
-      <label style="margin-top:12px">Numer zamówienia
+      <label>Numer zamówienia
         <span class="slaby">(przepisz z dokumentu przy towarze)</span>
         <input id="z-numer" autocapitalize="characters" autocomplete="off"
                inputmode="text" placeholder="np. WZ 12/34"></label>
       ${p.dokument_podany === false ? `<div class="male slaby">
-          Biuro nie podało numeru dla tej pozycji — zapiszemy to, co wpiszesz.</div>` : ''}`,
+          Biuro nie podało numeru dla tej pozycji — zapiszemy to, co wpiszesz.</div>` : ''}
+      <label style="margin-top:12px">Zdjęcie <span class="slaby">(nieobowiązkowe — np. gdy coś
+        jest nie tak z paletą)</span></label>
+      ${przyciskAparatu('z-zdjecie')}
+      <div class="miniatury" id="z-miniatury"></div>`,
     poOtwarciu: () => {
       const wejscie = document.getElementById('z-zdjecie');
       const miniatury = document.getElementById('z-miniatury');
@@ -270,7 +286,7 @@ function oknoZaladunku(p, trasa, odswiez) {
       { napis: '✓ Potwierdź załadunek', klasa: 'zielony', klik: async z => {
         const numer = document.getElementById('z-numer').value.trim();
         if (!numer) return komunikat('Wpisz numer zamówienia z dokumentu', 'blad');
-        if (!zdjecia.length) return komunikat('Zrób zdjęcie towaru', 'blad');
+        // Bez zdjęcia też wolno (UI etap 2) — kontrolą jest numer z dokumentu.
 
         // Porównanie na telefonie — działa bez zasięgu. Serwer i tak policzy
         // to jeszcze raz, bo temu, co przyszło z telefonu, nie ufa.
@@ -309,10 +325,54 @@ async function zapiszZaladunek(p, trasa, dane) {
   if (trasa) await Kolejka.zapamietaj('moja-trasa-' + trasa.data, trasa);
 }
 
+/* „📷 Zdjęcie ładunku” — jedno (albo kilka) zdjęć całego załadowanego auta,
+   nieobowiązkowe. Idzie osobnym zapisem `zdjecie_ladunku` z numerem trasy;
+   serwer przypina je do każdej pozycji załadunku (biuro widzi je w dowodach
+   każdego punktu). Działa bez zasięgu, jak każdy zapis z kolejki.           */
+function oknoZdjeciaLadunku(trasa, odswiez) {
+  const zdjecia = [];
+  okno({
+    tytul: 'Zdjęcie ładunku',
+    tresc: `
+      <p class="male slaby">Jedno zdjęcie całego ładunku w aucie — nie trzeba fotografować
+        każdej pozycji osobno. Nieobowiązkowe.</p>
+      ${przyciskAparatu('zl-zdjecie')}
+      <div class="miniatury" id="zl-miniatury"></div>`,
+    poOtwarciu: () => {
+      const wejscie = document.getElementById('zl-zdjecie');
+      const miniatury = document.getElementById('zl-miniatury');
+      wejscie.onchange = () => dodajZdjecia(wejscie.files, zdjecia, miniatury, wejscie);
+    },
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: '✓ Zapisz zdjęcie', klasa: 'zielony', klik: async z => {
+        if (!zdjecia.length) return komunikat('Zrób zdjęcie ładunku', 'blad');
+        z();
+        await zapiszZdjecieLadunku(trasa, zdjecia.slice(0, 4));
+        odswiez();
+      } },
+    ],
+  });
+}
+
+async function zapiszZdjecieLadunku(trasa, zdjecia) {
+  await doKolejki({ typ: 'zdjecie_ladunku', trasa: trasa.id, zdjecia, czas: czasTeraz() },
+    zdjecia.length === 1 ? 'Zdjęcie ładunku zapisane' : 'Zdjęcia ładunku zapisane');
+  // Licznik tylko dla ekranu („✓ 2” przy przycisku). Leży osobno od kopii
+  // trasy, bo tę każde wczytanie z serwera nadpisuje — a kierowca, który nie
+  // widzi już ptaszka, robiłby zdjęcie drugi raz.
+  trasa.zdjecia_ladunku = (trasa.zdjecia_ladunku || 0) + zdjecia.length;
+  await Kolejka.zapamietaj('zdjecia-ladunku-' + trasa.id, trasa.zdjecia_ladunku);
+}
+
 /* Ile pozycji nie ma jeszcze potwierdzonego załadunku. Bez tego trasa nie
-   ruszy — tak zdecydował właściciel: lepiej, żeby bus stał pod rampą, niż
+   ruszy — tak zdecydował właściciel: lepiej, żeby auto stało pod rampą, niż
    żeby pojechał nie ten towar. Serwer pilnuje tego samego, niezależnie. */
 async function nieodhaczone(trasa) {
+  return ileDoZaladunku(trasa);
+}
+/* To samo bez czekania — do rysowania ekranu Załadunku. */
+function ileDoZaladunku(trasa) {
   if (!trasa) return 0;
   return trasa.przystanki.filter(
     p => p.status === 'oczekuje' && !p.zaladowano_o && !p.nasze).length;

@@ -287,6 +287,18 @@ function adresJednymCiagiem(k) {
   return czesci.join(', ');
 }
 
+/* To samo co adresJednymCiagiem, ale jako HTML do kart punktów: kod pocztowy
+   z miastem w jednym nierozerwalnym kawałku. Przeglądarka łamała wiersz na
+   dywizie kodu i kierowca widział „62-” na końcu linii, a „800 Kalisz” pod
+   spodem (UI etap 3). Ulica dalej zawija się normalnie.                    */
+function adresHtml(k) {
+  const miejsce = [k.kod, k.miasto].filter(Boolean).join(' ').trim();
+  const czesci = [];
+  if (k.ulica && k.ulica.trim()) czesci.push(escHtml(k.ulica));
+  if (miejsce) czesci.push(`<span class="bez-lamania">${escHtml(miejsce)}</span>`);
+  return czesci.join(', ');
+}
+
 /* Nawigacja i eksport tras idą do Map Google — bo to one są w telefonie
    kierowcy i to ich używa biuro. Odnośnik jest zwykłym adresem, więc nie
    wymaga klucza, konta ani karty i nic nie kosztuje. To coś zupełnie innego

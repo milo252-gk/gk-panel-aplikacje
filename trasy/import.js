@@ -7,7 +7,7 @@
 
 const stanImportu = {
   token: '', arkusz: '', arkusze: [], podglad: null,
-  wierszNaglowka: 0, mapowanie: {}, plan: null,
+  wierszNaglowka: 0, mapowanie: {}, plan: null, skadMapowanie: '',
 };
 
 const OPISY_POL = {
@@ -18,6 +18,94 @@ const OPISY_POL = {
   godzina:  ['Godzina', 'rozumie 8;00 · 9:30 · 10.00, także razem z numerem'],
   kierowca: ['Kierowca / przewoźnik', 'wiersze z tego samego dnia i kierowcy trafią na jedną trasę'],
 };
+
+/* ------------------------------------------- pamięć ostatniego mapowania
+
+   Plan dostaw co tydzień ma ten sam układ kolumn, a biuro za każdym razem
+   wskazywało od nowa „Data = A, Klient = C…” i liczbę wierszy do pominięcia.
+   Ostatnie ustawienie pamiętamy w tej przeglądarce, osobno dla każdej osoby
+   z biura (Pamiec — klucz z przedrostkiem „gk-trasy.”, STYL-GK / D33), i
+   wstawiamy je przy następnym pliku. Bez pamięci próbujemy rozpoznać wiersz
+   nagłówka po nazwach kolumn — człowiek i tak wszystko widzi i poprawia. */
+
+function kluczPamieciImportu() {
+  return 'import-' + (stan.uz ? stan.uz.id : 0);
+}
+
+function zapamietajMapowanie() {
+  Pamiec.zapisz(kluczPamieciImportu(), JSON.stringify({
+    mapowanie: stanImportu.mapowanie, wierszNaglowka: stanImportu.wierszNaglowka,
+  }));
+}
+
+/* Zapis z pamięci → { mapowanie, wierszNaglowka } dla arkusza o `kolumn`
+   kolumnach albo null. Czysta funkcja (test: t_ui_etap1). Kolumny spoza
+   arkusza i nieznane pola odpadają — inny plik nie może wywrócić kreatora. */
+function mapowanieZPamieci(zapis, kolumn) {
+  let z = zapis;
+  if (typeof z === 'string') { try { z = JSON.parse(z); } catch (e) { z = null; } }
+  if (!z || typeof z !== 'object' || !z.mapowanie || typeof z.mapowanie !== 'object') return null;
+  const mapowanie = {};
+  let ile = 0;
+  Object.keys(OPISY_POL).forEach(pole => {
+    const i = z.mapowanie[pole];
+    if (Number.isInteger(i) && i >= 0 && i < kolumn) { mapowanie[pole] = i; ile++; }
+  });
+  if (!ile) return null;
+  const w = Number(z.wierszNaglowka);
+  return { mapowanie, wierszNaglowka: Number.isInteger(w) && w >= 0 && w <= 200 ? w : 0,
+           skad: 'pamiec' };
+}
+
+/* Nazwy kolumn, po których poznajemy nagłówek. Kolejność wzorców to
+   pierwszeństwo: „Klient” wygrywa z „Adres”, gdy arkusz ma obie kolumny.
+   (?![a-z]) zamiast \b: w JavaScripcie „ń” nie jest literą dla \b, więc
+   „Dzień” na końcu komórki nie dawał granicy słowa. */
+const NAZWY_KOLUMN = {
+  data:     [/^(dzie[nń]|data)(?![a-z])/],
+  miejsce:  [/^(klient|odbiorca|miejsce)/, /^adres/],
+  towar:    [/^towar/],
+  dokument: [/^(dokument|nr(?![a-z])|numer|wz(?![a-z])|zam[oó]wienie)/],
+  godzina:  [/^godz/],
+  kierowca: [/^(kierowca|przewo[zź]nik)/],
+};
+
+/* Wiersz nagłówka w pierwszych 10 wierszach → { mapowanie, wierszNaglowka }
+   albo null. Nagłówek = co najmniej dwie rozpoznane kolumny, w tym dzień
+   albo klient (jedno trafienie to zbieg okoliczności — tak samo liczy
+   analizuj_tabele w trasex.py). Pomijamy wiersze do nagłówka WŁĄCZNIE. */
+function wykryjNaglowek(wiersze, kolumn) {
+  let najlepszy = null;
+  (wiersze || []).slice(0, 10).forEach((wiersz, nr) => {
+    const nazwy = Array.from({ length: kolumn }, (_, i) =>
+      String((wiersz || [])[i] || '').trim().toLowerCase().replace(/\s+/g, ' '));
+    const mapowanie = {}, zajete = new Set();
+    Object.entries(NAZWY_KOLUMN).forEach(([pole, wzorce]) => {
+      for (const wzor of wzorce) {
+        const i = nazwy.findIndex((n, k) => !zajete.has(k) && n.length <= 40 && wzor.test(n));
+        if (i >= 0) { mapowanie[pole] = i; zajete.add(i); return; }
+      }
+    });
+    const ile = Object.keys(mapowanie).length;
+    if (ile >= 2 && (mapowanie.data != null || mapowanie.miejsce != null)
+        && (!najlepszy || ile > najlepszy.ile)) {
+      najlepszy = { ile, mapowanie, wierszNaglowka: nr + 1, skad: 'naglowek' };
+    }
+  });
+  if (!najlepszy) return null;
+  delete najlepszy.ile;
+  return najlepszy;
+}
+
+/* Mapowanie na start nowego pliku albo arkusza: pamięć, potem nagłówek. */
+function ustawPoczatkoweMapowanie() {
+  const p = stanImportu.podglad;
+  const start = mapowanieZPamieci(Pamiec.czytaj(kluczPamieciImportu()), p.kolumn)
+    || wykryjNaglowek(p.wiersze, p.kolumn);
+  stanImportu.mapowanie = start ? start.mapowanie : {};
+  stanImportu.wierszNaglowka = start ? start.wierszNaglowka : 0;
+  stanImportu.skadMapowanie = start ? start.skad : '';
+}
 
 EKRANY.import = {
   tytul: 'Wczytaj z Excela',
@@ -58,9 +146,8 @@ async function wgrajArkusz(plik) {
   stanImportu.arkusze = w.arkusze;
   stanImportu.arkusz = w.arkusze[0];
   stanImportu.podglad = w.podglad;
-  stanImportu.mapowanie = {};
-  stanImportu.wierszNaglowka = 0;
   stanImportu.plan = null;
+  ustawPoczatkoweMapowanie();
   rysujKrokMapowania();
 }
 
@@ -70,8 +157,8 @@ async function przelaczArkusz(nazwa) {
   if (!w) return;
   stanImportu.arkusz = nazwa;
   stanImportu.podglad = w;
-  stanImportu.mapowanie = {};
   stanImportu.plan = null;
+  ustawPoczatkoweMapowanie();
   rysujKrokMapowania();
 }
 
@@ -124,6 +211,10 @@ function rysujKrokMapowania() {
     <div class="karta">
       <h2>3. Która kolumna jest która</h2>
       <p class="male slaby">Gwiazdką oznaczone są kolumny obowiązkowe. Resztę możesz zostawić pustą.</p>
+      ${stanImportu.skadMapowanie === 'pamiec' ? `<div class="wstega info">Kolumny i liczba
+          pominiętych wierszy ustawione jak przy Twoim ostatnim wczytaniu — sprawdź, czy pasują.</div>`
+        : stanImportu.skadMapowanie === 'naglowek' ? `<div class="wstega info">Kolumny rozpoznane
+          po nagłówku w wierszu ${stanImportu.wierszNaglowka} — sprawdź, czy pasują.</div>` : ''}
       <div class="siatka">
         ${Object.entries(OPISY_POL).map(([pole, [nazwa, opis]]) => `
           <label>${escHtml(nazwa)}
@@ -150,7 +241,7 @@ function rysujKrokMapowania() {
             ${kierowcy.map(k => `<option value="${k.id}">${escHtml(k.imie)}</option>`).join('')}
           </select>
         </label>
-        <label>Bus
+        <label>Auto
           <select id="im-pojazd">
             <option value="">— nie wybieram —</option>
             ${busy.map(b => `<option value="${b.id}">${escHtml(b.nazwa)}</option>`).join('')}
@@ -193,6 +284,8 @@ async function pokazPodgladImportu() {
   const plan = await sprobuj(() => API.post('/api/import/podglad', parametryImportu()));
   if (!plan) return;
   stanImportu.plan = plan;
+  // Mapowanie, które serwer przyjął, zostaje na następny raz (pamięć tej osoby).
+  zapamietajMapowanie();
 
   const nowi = plan.nowi_klienci.length;
   document.getElementById('im-wynik').innerHTML = `

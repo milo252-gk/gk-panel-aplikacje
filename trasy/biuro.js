@@ -22,7 +22,7 @@ EKRANY.pulpit = {
         <label>Dzień<input type="date" id="p-data" value="${data}"></label>
         <button id="p-wczoraj">← Poprzedni</button>
         <button id="p-jutro">Następny →</button>
-        <button class="glowny" id="p-planuj">🗺️ Planuj zlecenia</button>
+        <button class="glowny" id="p-planuj">🗺️ Planuj trasy</button>
       </div>
 
       <div class="trzy kafle-pulpitu">
@@ -47,7 +47,7 @@ EKRANY.pulpit = {
       <div id="p-zalegle"></div>
       <div id="p-braki"></div>
 
-      <h2 style="margin-top:20px">Gdzie są busy
+      <h2 style="margin-top:20px">Gdzie są auta
         <span class="male slaby" style="font-weight:400">
           ${p.ostatnie_pozycje.length ? '' : '— żaden kierowca nie udostępnia teraz położenia'}</span>
       </h2>
@@ -66,8 +66,9 @@ EKRANY.pulpit = {
       const pole_al = pole.querySelector('#p-alarmy');
       if (!pole_al) return;
       pole_al.innerHTML = wstegiAlarmow(w.alarmy, true);
+      // Prosto do sekcji, która alarm naprawia — leży pod zwiniętym „Zaawansowane”.
       pole_al.querySelectorAll('[data-do-ustawien]').forEach(e =>
-        e.onclick = () => pokazEkran('ustawienia'));
+        e.onclick = () => pokazEkran('ustawienia', { sekcja: SEKCJA_ALARMU[e.dataset.doUstawien] }));
     }).catch(() => {});
 
     // Zaległości są pierwszą rzeczą, o którą pyta klient przez telefon
@@ -133,7 +134,7 @@ EKRANY.pulpit = {
       // przez moduł, nie przez Leaflet wprost — mapa może być od Google
       Mapa.znacznikPozycji(mapa, [poz.lat, poz.lon],
         `<b>${escHtml(poz.kierowca_imie)}</b><br>ostatnio: ${escHtml(poz.czas)}`
-        + `<br><span style="opacity:.7">${poz.zrodlo === 'lokalizator' ? 'lokalizator w busie' : 'telefon kierowcy'}</span>`);
+        + `<br><span style="opacity:.7">${poz.zrodlo === 'lokalizator' ? 'lokalizator w aucie' : 'telefon kierowcy'}</span>`);
       punkty.push([poz.lat, poz.lon]);
     });
     Mapa.dopasujWidok(mapa, punkty);
@@ -156,7 +157,7 @@ function przesunDate(iso, oIle) {
 /* ================================================================= TRASY */
 
 EKRANY.trasy = {
-  tytul: 'Zlecenia',
+  tytul: 'Trasy',
   async rysuj(pole, param) {
     const admin = jestBiuro();
     const data = param.data || dzisiaj();
@@ -176,7 +177,7 @@ EKRANY.trasy = {
           <label>Do<input type="date" id="t-do" value="${doDnia}"></label>
         </div>
         ${trasy.length ? trasy.map(t => kartaTrasy(t)).join('')
-          : '<div class="karta"><div class="pusto">Brak zleceń w tym okresie.</div></div>'}`;
+          : '<div class="karta"><div class="pusto">Brak tras w tym okresie.</div></div>'}`;
       const odswiez = () => pokazEkran('trasy', {
         od: pole.querySelector('#t-od').value, do: pole.querySelector('#t-do').value,
       });
@@ -194,7 +195,7 @@ EKRANY.trasy = {
       <div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="t-data" value="${data}"></label>
         <button id="t-wczoraj">←</button><button id="t-jutro">→</button>
-        <button class="glowny" id="t-nowa">+ Nowe zlecenie</button>
+        <button class="glowny" id="t-nowa">+ Nowa trasa</button>
         <button id="t-import">📄 Wczytaj z Excela</button>
       </div>
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
@@ -218,7 +219,7 @@ function kartaTrasy(t) {
     t.status === 'zakonczona' ? 'var(--zielony)' : t.status === 'w_toku' ? 'var(--zolty)' : 'var(--akcent)'}">
       <span class="numer">${t.ile}</span>
       <span class="srodek">
-        <span class="nazwa">${escHtml(t.nazwa || 'Zlecenie ' + polskaData(t.data))}</span>
+        <span class="nazwa">${escHtml(t.nazwa || 'Trasa ' + polskaData(t.data))}</span>
         <span class="adres">${polskaData(t.data)} · ${escHtml(t.kierowca_imie || 'bez kierowcy')}
           ${t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}</span>
         <span class="dopisek">${t.ile_ok} ${odmiana(t.ile_ok, 'dostarczona', 'dostarczone', 'dostarczonych')}${
@@ -286,7 +287,7 @@ async function zgodaNaBus(idBusa) {
 function oknoNowejTrasy(data, kierowcy) {
   const busy = stan.pojazdy.filter(p => p.aktywny);
   okno({
-    tytul: 'Nowe zlecenie',
+    tytul: 'Nowa trasa',
     tresc: `
       <label>Dzień<input type="date" id="nt-data" value="${data}"></label>
       <label>Kierowca
@@ -295,7 +296,7 @@ function oknoNowejTrasy(data, kierowcy) {
           ${kierowcy.map(k => `<option value="${k.id}">${escHtml(k.imie)}</option>`).join('')}
         </select>
       </label>
-      <label>Bus
+      <label>Auto
         <select id="nt-pojazd">
           <option value="">— nie wybrano —</option>
           ${busy.map(b => opcjaBusa(b, false)).join('')}
@@ -304,11 +305,9 @@ function oknoNowejTrasy(data, kierowcy) {
       <label>Nazwa <span class="slaby">(np. „Wschód", „Poranna")</span>
         <input id="nt-nazwa" placeholder="nieobowiązkowa">
       </label>
-      <label>Układ zlecenia
+      <label>Układ trasy
         <select id="nt-uklad">${opcjeUkladu('baza_baza')}</select></label>
-      <p class="male slaby">Domyślnie zlecenie wyjeżdża z bazy i do niej wraca.
-        Wożąc towar między naszymi magazynami wybierz „Bez bazy" — inaczej program
-        doliczy dojazd i powrót, których nikt nie jedzie. Da się to zmienić później.</p>`,
+      <p class="male slaby">Między naszymi magazynami wybierz „Bez bazy”. Zmienisz to później.</p>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Utwórz', klasa: 'glowny', klik: async z => {
@@ -329,7 +328,7 @@ function oknoNowejTrasy(data, kierowcy) {
 /* ------------------------------------------------- jedna trasa: edytor */
 
 EKRANY.trasa = {
-  tytul: 'Zlecenie',
+  tytul: 'Trasa',
   async rysuj(pole, param) {
     const id = param.id || (trasaWEdycji && trasaWEdycji.id);
     if (!id) return pokazEkran('trasy');
@@ -346,15 +345,20 @@ EKRANY.trasa = {
     ETA.policz(t);
 
     pole.innerHTML = `
-      <button class="tekstowy" id="tr-wroc">← Wszystkie zlecenia</button>
-      ${t.status === 'odwolana' ? `<div class="wstega uwaga">Zlecenie odwołane — nie ma go
+      <button class="tekstowy" id="tr-wroc">← Wszystkie trasy</button>
+      ${t.status === 'odwolana' ? `<div class="wstega uwaga">Trasa odwołana — nie ma jej
         w planie ani w telefonie kierowcy. Zostaje w historii razem z dowodami.</div>` : ''}
 
       ${admin ? `<div class="karta">
         ${t.flotex && !t.flotex.sprawny ? `<div class="wstega blad">⚠ GK Flota: auto
           ${escHtml(t.rejestracja || t.pojazd_nazwa || '')} jest niesprawne —
           ${escHtml((t.flotex.powody || []).join('; ') || 'bez podanego powodu')}.</div>` : ''}
-        <div class="dwie">
+        <!-- UI etap 3: na wierzchu tylko to, co biuro zmienia co dzień (dzień,
+             kierowca, auto) — punkty trasy mają być widać bez przewijania.
+             Reszta (nazwa, godzina, baza, układ, uwagi, rzadkie przyciski) leży
+             pod zwiniętym „▸ Więcej”; pola zostają w DOM-ie, więc „Zapisz
+             zmiany” zapisuje je tak samo, jak przedtem.                        -->
+        <div class="trzy">
           <label>Dzień<input type="date" id="tr-data" value="${t.data}"></label>
           <label>Kierowca
             <select id="tr-kierowca">
@@ -362,46 +366,49 @@ EKRANY.trasa = {
               ${kierowcy.map(k => `<option value="${k.id}" ${t.kierowca === k.id ? 'selected' : ''}>${escHtml(k.imie)}</option>`).join('')}
             </select>
           </label>
-          <label>Bus
+          <label>Auto
             <select id="tr-pojazd">
               <option value="">— nie wybrano —</option>
               ${busy.map(b => opcjaBusa(b, t.pojazd === b.id)).join('')}
             </select>
           </label>
-          <label>Nazwa<input id="tr-nazwa" value="${escHtml(t.nazwa || '')}"></label>
-          <label>Godzina wyjazdu
-            <input type="time" id="tr-wyjazd" value="${escHtml(t.wyjazd_o || '')}"
-                   placeholder="${escHtml(t.wyjazd || '07:00')}"></label>
-          <label>Baza w tym zleceniu
-            <select id="tr-baza">
-              <option value="">— ${escHtml(t.baza_nazwa || 'baza domyślna')} —</option>
-              ${(stan.lokalizacje || []).filter(l => l.aktywna !== 0).map(l =>
-                `<option value="${l.id}" ${t.baza === l.id ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
-            </select></label>
         </div>
-        <label>Układ zlecenia
-          <select id="tr-uklad">
-            ${opcjeUkladu(t.uklad)}
-          </select></label>
-        <p class="male slaby" style="margin:-6px 0 10px">Baza jest <b>podpowiedzią</b>,
-          nie założeniem. Zlecenie z jednego naszego magazynu do drugiego to same punkty
-          na mapie — wybierz wtedy „Bez bazy", a program przestanie doliczać przejazdy,
-          których nikt nie robi. Pusta godzina znaczy: domyślna z Ustawień
-          (${escHtml(stan.ustawienia.godzina_wyjazdu || '07:00')}).</p>
-        <label>Uwagi dla kierowcy <span class="slaby">(widzi je na górze swojego ekranu)</span>
-          <textarea id="tr-uwagi">${escHtml(t.uwagi || '')}</textarea>
-        </label>
-        <div class="przyciski rozstaw">
+        <div class="przyciski">
           <button class="glowny" id="tr-zapisz">Zapisz zmiany</button>
-          <div class="przyciski">
-            <button class="maly" id="tr-mapa-link">🧭 Wyślij do Google Maps</button>
-            <button class="maly" id="tr-szablon">Zapisz jako zlecenie stałe</button>
-            <button class="maly" id="tr-kopiuj">Kopiuj na inny dzień</button>
-            <button class="maly" id="tr-usun">Usuń zlecenie</button>
-          </div>
+          <button class="maly" id="tr-mapa-link">🧭 Wyślij do Google Maps</button>
         </div>
+        <details class="zaawansowane wiecej-trasy" id="tr-wiecej">
+          <summary><span class="znak-zwiniecia">▸</span> Więcej
+            <span class="slaby">nazwa, godzina, baza, układ, uwagi${t.uwagi ? ' · 📌 są uwagi' : ''}</span></summary>
+          <div class="dwie">
+            <label>Nazwa<input id="tr-nazwa" value="${escHtml(t.nazwa || '')}"></label>
+            <label>Godzina wyjazdu
+              <input type="time" id="tr-wyjazd" value="${escHtml(t.wyjazd_o || '')}"
+                     placeholder="${escHtml(t.wyjazd || '07:00')}"></label>
+            <label>Baza na tej trasie
+              <select id="tr-baza">
+                <option value="">— ${escHtml(t.baza_nazwa || 'baza domyślna')} —</option>
+                ${(stan.lokalizacje || []).filter(l => l.aktywna !== 0).map(l =>
+                  `<option value="${l.id}" ${t.baza === l.id ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
+              </select></label>
+            <label>Układ trasy
+              <select id="tr-uklad">
+                ${opcjeUkladu(t.uklad)}
+              </select></label>
+          </div>
+          <p class="male slaby" style="margin:-6px 0 10px">Między naszymi magazynami wybierz
+            „Bez bazy”. Pusta godzina = z Ustawień (${escHtml(stan.ustawienia.godzina_wyjazdu || '07:00')}).</p>
+          <label>Uwagi dla kierowcy <span class="slaby">(widzi je na górze ekranu)</span>
+            <textarea id="tr-uwagi">${escHtml(t.uwagi || '')}</textarea>
+          </label>
+          <div class="przyciski">
+            <button class="maly" id="tr-szablon">Zapisz jako trasę stałą</button>
+            <button class="maly" id="tr-kopiuj">Kopiuj na inny dzień</button>
+            <button class="maly" id="tr-usun">Usuń trasę</button>
+          </div>
+        </details>
       </div>` : `<div class="karta scisla">
-        <b>${escHtml(t.kierowca_imie || '')}</b> · ${escHtml(t.pojazd_nazwa || 'bez busa')}
+        <b>${escHtml(t.kierowca_imie || '')}</b> · ${escHtml(t.pojazd_nazwa || 'bez auta')}
         ${t.uwagi ? `<div class="wstega info" style="margin:10px 0 0">📌 ${escHtml(t.uwagi)}</div>` : ''}
       </div>`}
 
@@ -415,7 +422,7 @@ EKRANY.trasa = {
         </div>
         <div id="tr-lista">
           ${t.przystanki.length ? t.przystanki.map((p, i) => wierszPrzystanku(p, i, t.przystanki.length, admin)).join('')
-            : '<div class="pusto">Brak punktów. Dodaj klientów albo nasze miejsca, żeby ułożyć zlecenie.</div>'}
+            : '<div class="pusto">Brak punktów. Dodaj klientów albo nasze miejsca, żeby ułożyć trasę.</div>'}
         </div>
       </div>
 
@@ -441,12 +448,12 @@ EKRANY.trasa = {
             ${godzinyMinuty(t.szacunek.minuty_zaladunkow)}` : ''}${
             t.szacunek.minuty_przerw ? ` · przerwy kierowcy
             ${godzinyMinuty(t.szacunek.minuty_przerw)} (${t.szacunek.ile_przerw})` : ''}.
-          ${t.szacunek.powrot_do_bazy ? '' : '<br><span class="slaby">Zlecenie kończy się '
+          ${t.szacunek.powrot_do_bazy ? '' : '<br><span class="slaby">Trasa kończy się '
             + 'u ostatniego punktu — powrotu do bazy nie doliczam.</span>'}
           ${t.szacunek.start_w_bazie ? '' : '<br><span class="slaby">Liczę od pierwszego '
             + 'punktu — dojazdu z bazy nie doliczam.</span>'}
-          ${t.szacunek.przepisy ? '' : '<br><span class="slaby">Przy tym pojeździe '
-            + 'przerw nie doliczamy (ustawienie przy buscie).</span>'}
+          ${t.szacunek.przepisy ? '' : '<br><span class="slaby">Przy tym aucie '
+            + 'przerw nie doliczamy (ustawienie przy aucie).</span>'}
           ${t.szacunek.limit_jazdy_przekroczony
             ? `<br><span style="color:var(--czerwony)"><b>Sama jazda przekracza
               ${godzinyMinuty(Number(stan.ustawienia.dobowy_limit_jazdy_min) || 540)}</b>
@@ -479,7 +486,7 @@ EKRANY.trasa = {
         // na górze, a pytanie przy każdej poprawce uwag nauczyłoby klikać „tak".
         const bus = pole.querySelector('#tr-pojazd').value;
         if (Number(bus) !== Number(t.pojazd || 0) && !await zgodaNaBus(bus)) return;
-        const w = await sprobuj(() => API.post('/api/trasy', {
+        const zmiany = {
           id: t.id,
           data: pole.querySelector('#tr-data').value,
           kierowca: pole.querySelector('#tr-kierowca').value || null,
@@ -489,27 +496,44 @@ EKRANY.trasa = {
           wyjazd_o: pole.querySelector('#tr-wyjazd').value || '',
           baza: pole.querySelector('#tr-baza').value || null,
           uklad: pole.querySelector('#tr-uklad').value,
+        };
+        const w = await sprobuj(() => zapisBiura('POST', '/api/trasy', zmiany, {
+          opis: 'zmiana trasy ' + (t.nazwa || polskaData(t.data)),
+          zrodla: ['/api/trasy/' + t.id],
+          popraw: (sciezka, d) => {
+            if (sciezka !== '/api/trasy/' + t.id && !sciezka.startsWith('/api/trasy?')) return;
+            const kierowca = zmiany.kierowca ? Number(zmiany.kierowca) : null;
+            const pojazd = zmiany.pojazd ? Number(zmiany.pojazd) : null;
+            const k = (stan.kierowcy || []).find(x => x.id === kierowca);
+            const b = (stan.pojazdy || []).find(x => x.id === pojazd);
+            wPamieci(d, t.id, x => Object.assign(x, {
+              data: zmiany.data, nazwa: zmiany.nazwa, uwagi: zmiany.uwagi, wyjazd_o: zmiany.wyjazd_o,
+              uklad: zmiany.uklad, kierowca, kierowca_imie: k ? k.imie : (kierowca ? x.kierowca_imie : null),
+              pojazd, rejestracja: b ? b.rejestracja : (pojazd ? x.rejestracja : null),
+              baza: zmiany.baza ? Number(zmiany.baza) : null,
+            }));
+          },
         }), 'Zapisano');
         if (w) pokazEkran('trasa', { id: t.id });
       };
       pole.querySelector('#tr-usun').onclick = async () => {
-        if (!await potwierdz('Usunąć całe zlecenie?',
-          'Zlecenie z załadunkiem, zdjęciami albo czekającymi zapisami telefonu '
+        if (!await potwierdz('Usunąć całą trasę?',
+          'Trasa z załadunkiem, zdjęciami albo czekającymi zapisami telefonu '
           + 'zostanie tylko odwołane — dowody zostają w historii.')) return;
         const w = await sprobuj(() => API.del('/api/trasy/' + t.id));
         if (!w) return;
-        komunikat(w.odwolana ? `Zlecenie odwołane, nie skasowane — ${w.dlaczego}`
-          : 'Zlecenie usunięte', 'ok');
+        komunikat(w.odwolana ? `Trasa odwołana, nie skasowana — ${w.dlaczego}`
+          : 'Trasa usunięta', 'ok');
         pokazEkran('trasy', { data: t.data });
       };
       pole.querySelector('#tr-kopiuj').onclick = () => oknoKopiowania(t);
       pole.querySelector('#tr-mapa-link').onclick = () => oknoLinkuDoMap(t.id, false);
       pole.querySelector('#tr-szablon').onclick = () => okno({
-        tytul: 'Zapisz jako zlecenie stałe',
+        tytul: 'Zapisz jako trasę stałą',
         tresc: `<p class="male slaby">Zapamiętam klientów i ich kolejność. Bez dat,
             bez potwierdzeń — żeby dało się z tego robić kolejne dni.</p>
           <label>Nazwa szablonu<input id="zs-nazwa"
-            value="${escHtml(t.nazwa || 'Zlecenie ' + polskaData(t.data))}"></label>`,
+            value="${escHtml(t.nazwa || 'Trasa ' + polskaData(t.data))}"></label>`,
         przyciski: [
           { napis: 'Anuluj', klik: z => z() },
           { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
@@ -532,15 +556,25 @@ EKRANY.trasa = {
         if (!await potwierdz(
           `Zdjąć z trasy: ${punkt.klient_nazwa || 'ten punkt'}?`,
           ruszyla
-            ? 'Zlecenie już ruszyło, więc punkt zostanie w nim oznaczony jako zdjęty — '
+            ? 'Trasa już ruszyła, więc punkt zostanie na niej oznaczony jako zdjęty — '
               + 'gdyby kierowca zdążył go potwierdzić bez zasięgu, jego podpis nie przepadnie.'
-            : 'Punkt zniknie ze zlecenia. Jeśli ma załadunek albo telefon kierowcy ma '
+            : 'Punkt zniknie z trasy. Jeśli ma załadunek albo telefon kierowcy ma '
               + 'czekające zapisy, zostanie tylko zdjęty — dowody nie przepadną.')) return;
-        const w = await sprobuj(() => API.del('/api/przystanki/' + b.dataset.usunPrzystanek));
+        const idPunktu = Number(b.dataset.usunPrzystanek);
+        const w = await sprobuj(() => zapisBiura('DELETE', '/api/przystanki/' + idPunktu, undefined, {
+          opis: 'zdjęcie punktu ' + (punkt.klient_nazwa || ''),
+          zrodla: ['/api/trasy/' + t.id],
+          popraw: (sciezka, d) => {
+            if (sciezka !== '/api/trasy/' + t.id || !d || !Array.isArray(d.przystanki)) return;
+            if (d.status === 'planowana') d.przystanki = d.przystanki.filter(x => x.id !== idPunktu);
+            else d.przystanki.forEach(x => { if (x.id === idPunktu) x.status = 'odwolany'; });
+          },
+        }));
         if (!w) return;
+        if (w.wKolejce) { komunikat(KOMUNIKAT_KOLEJKI_BIURA, 'ok'); pokazEkran('trasa', { id: t.id }); return; }
         komunikat(w.zdjety_nie_skasowany
-          ? 'Punkt zdjęty ze zlecenia — zostaje widoczny razem z dowodami'
-          : 'Punkt usunięty ze zlecenia', 'ok');
+          ? 'Punkt zdjęty z trasy — zostaje widoczny razem z dowodami'
+          : 'Punkt usunięty z trasy', 'ok');
         pokazEkran('trasa', { id: t.id });
       });
     }
@@ -596,7 +630,7 @@ EKRANY.trasa = {
 function wierszPrzystanku(p, indeks, ile, admin) {
   const status = p.status === 'dostarczone' ? '<span class="plakietka p-dostarczone">✓</span>'
     : p.status === 'nieudane' ? `<span class="plakietka p-nieudane">✕ ${escHtml(p.powod)}</span>`
-    : p.status === 'odwolany' ? '<span class="plakietka p-odwolany">Zdjęte ze zlecenia</span>' : '';
+    : p.status === 'odwolany' ? '<span class="plakietka p-odwolany">Zdjęte z trasy</span>' : '';
   const dopiski = [];
   // Przy naszym miejscu nie ma zamowienia ani kontroli zaladunku — czerwone
   // ostrzezenie o niezgodnym numerze byloby tu falszywym alarmem.
@@ -623,7 +657,7 @@ function wierszPrzystanku(p, indeks, ile, admin) {
       <span class="numer">${indeks + 1}</span>
       <span class="srodek">
         <span class="nazwa">${nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}</span>
-        <span class="adres">${escHtml(adresJednymCiagiem(p))}</span>
+        <span class="adres">${adresHtml(p)}</span>
         ${dopiski.length ? `<span class="dopisek">${dopiski.join(' &nbsp;·&nbsp; ')}</span>` : ''}
       </span>
       <span class="prawo">
@@ -641,6 +675,20 @@ function wierszPrzystanku(p, indeks, ile, admin) {
     </div>`;
 }
 
+/* Kolejność punktów bez programu: lista punktów w zapamiętanej trasie
+   układa się tak, jak ją ustawiono. */
+function opcjeKolejnosci(t, kolejnosc) {
+  return {
+    opis: 'kolejność punktów ' + (t.nazwa || polskaData(t.data)),
+    zrodla: ['/api/trasy/' + t.id],
+    popraw: (sciezka, d) => {
+      if (sciezka !== '/api/trasy/' + t.id || !d || !Array.isArray(d.przystanki)) return;
+      const miejsce = id => { const i = kolejnosc.indexOf(id); return i < 0 ? kolejnosc.length : i; };
+      d.przystanki.sort((a, b) => miejsce(a.id) - miejsce(b.id));
+    },
+  };
+}
+
 async function przestaw(t, przystanekId, kierunek) {
   const kolejnosc = t.przystanki.map(p => p.id);
   const i = kolejnosc.indexOf(przystanekId);
@@ -650,7 +698,8 @@ async function przestaw(t, przystanekId, kierunek) {
   // Ekran rysuje się od nowa, więc bez tego lista skakałaby na samą górę
   // po każdym przesunięciu punktu — a przesuwa się je zwykle seriami.
   const gdzieBylem = window.scrollY;
-  const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/kolejnosc`, { kolejnosc }));
+  const w = await sprobuj(() => zapisBiura('POST', `/api/trasy/${t.id}/kolejnosc`, { kolejnosc },
+                                           opcjeKolejnosci(t, kolejnosc)));
   if (!w) return;
   await pokazEkran('trasa', { id: t.id });
   window.scrollTo(0, gdzieBylem);
@@ -678,7 +727,7 @@ function listaPunktowDoWyboru({ juz, wybrane, szukaj }) {
         <b>${nasze ? '🏭 ' : ''}${escHtml(x.nazwa)}</b>
         <span class="male slaby" style="display:block">${escHtml(adresJednymCiagiem(x)) || 'brak adresu'}
           ${nasze ? ' · nasze miejsce, nie dostawa' : ''}
-          ${juz.has(klucz) ? ' · już w zleceniu' : ''}
+          ${juz.has(klucz) ? ' · już na trasie' : ''}
           ${x.lat == null ? ' · <span style="color:var(--zolty)">brak punktu na mapie</span>' : ''}</span>
       </span>
     </label>`;
@@ -714,14 +763,14 @@ async function oknoDodawaniaKlientow(t) {
   const wybrane = [];          // tablica, nie zbiór — trzymamy kolejność
 
   okno({
-    tytul: 'Dodaj punkty do zlecenia',
+    tytul: 'Dodaj punkty do trasy',
     szerokie: true,
     tresc: `<input id="dk-szukaj" placeholder="Szukaj po nazwie, mieście, ulicy…" autocomplete="off">
             <div id="dk-lista" style="margin-top:12px">${
               listaPunktowDoWyboru({ juz, wybrane, szukaj: '' })}</div>
             <label style="margin-top:10px">Wstaw
               <select id="dk-gdzie">
-                <option value="">na końcu zlecenia</option>
+                <option value="">na końcu trasy</option>
                 ${t.przystanki.filter(x => x.status !== 'odwolany').map((x, i) =>
                   `<option value="${x.id}">zaraz po: ${i + 1}. ${
                     escHtml(x.klient_nazwa)}</option>`).join('')}
@@ -795,8 +844,8 @@ async function zaproponujKolejnosc(t) {
         z();
         const zamkniete = t.przystanki.filter(p => p.status !== 'oczekuje').map(p => p.id);
         const pelna = zamkniete.concat(w.kolejnosc.filter(id => !zamkniete.includes(id)));
-        const ok = await sprobuj(() => API.post(`/api/trasy/${t.id}/kolejnosc`, { kolejnosc: pelna }),
-          'Kolejność ustawiona');
+        const ok = await sprobuj(() => zapisBiura('POST', `/api/trasy/${t.id}/kolejnosc`,
+          { kolejnosc: pelna }, opcjeKolejnosci(t, pelna)), 'Kolejność ustawiona');
         if (ok) pokazEkran('trasa', { id: t.id });
       } },
     ],
@@ -805,7 +854,7 @@ async function zaproponujKolejnosc(t) {
 
 function oknoKopiowania(t) {
   okno({
-    tytul: 'Kopiuj zlecenie na inny dzień',
+    tytul: 'Kopiuj trasę na inny dzień',
     tresc: `<p class="male slaby">Powstanie nowa trasa z tą samą listą klientów i kolejnością.
               Potwierdzenia dostaw nie są kopiowane.</p>
             <label>Nowy dzień<input type="date" id="kp-data" value="${przesunDate(t.data, 1)}"></label>`,
@@ -833,8 +882,8 @@ function stanPunktu(t, p) {
     return '✓ Dostarczone' + (p.zamkniete_o ? ' o ' + godz(p.zamkniete_o) : '');
   }
   if (p.status === 'nieudane') return '✕ Nieudane — ' + (p.powod || 'bez podanego powodu');
-  if (p.status === 'odwolany') return 'Zdjęte ze zlecenia';
-  if (t.status === 'zakonczona') return '⚠ Zlecenie zamknięte, a ten punkt został otwarty';
+  if (p.status === 'odwolany') return 'Zdjęte z trasy';
+  if (t.status === 'zakonczona') return '⚠ Trasa zamknięta, a ten punkt został otwarty';
   if (t.status === 'w_toku') {
     return p.eta ? ('🚚 Kierowca w trasie — u klienta ok. ' + p.eta) : '🚚 Kierowca w trasie';
   }
@@ -871,7 +920,7 @@ function osCzasuPunktu(t, p, d) {
   const zrodlo = d || {};
 
   if (zrodlo.utworzono || p.utworzono) {
-    zdarzenia.push({ klasa: '', tekst: 'Wstawione do zlecenia przez biuro',
+    zdarzenia.push({ klasa: '', tekst: 'Wstawione do trasy przez biuro',
       czas: kiedy(zrodlo.utworzono || p.utworzono) });
   }
   if (p.z_dnia) {
@@ -891,7 +940,7 @@ function osCzasuPunktu(t, p, d) {
     }
   }
   if (t.start_o) {
-    zdarzenia.push({ klasa: '', tekst: 'Kierowca rozpoczął zlecenie', czas: kiedy(t.start_o) });
+    zdarzenia.push({ klasa: '', tekst: 'Kierowca rozpoczął trasę', czas: kiedy(t.start_o) });
   }
   (zrodlo.zalaczniki || []).forEach(z => {
     if (z.typ === 'zaladunek') return;      // pokazane wyżej razem z załadunkiem
@@ -922,7 +971,7 @@ function panelPostepu(t, p, d) {
   const wiersze = [];
   const poz = d.ostatnia_pozycja;
   if (poz) {
-    wiersze.push(`🛰 Ostatnia pozycja busa: ${escHtml(godz(poz.czas))}${
+    wiersze.push(`🛰 Ostatnia pozycja auta: ${escHtml(godz(poz.czas))}${
       poz.km_do_punktu != null ? ` · ok. ${poz.km_do_punktu} km od tego punktu` : ''}${
       poz.zrodlo === 'lokalizator' ? ' (lokalizator)' : ''}`);
   }
@@ -971,7 +1020,7 @@ function oknoSzczegolowPunktu(t, id) {
         ${zamkniety && !p.nasze ? '<button class="maly" id="sp-druk">🖨 Wydrukuj potwierdzenie</button>' : ''}
         ${p.nasze ? '' : '<button class="maly" id="sp-historia">Historia tego klienta</button>'}
         ${admin && !zamkniety && !p.nasze ? '<button class="maly" id="sp-powiadom">✉️ Powiadom klienta</button>' : ''}
-        ${admin && !zamkniety ? '<button class="maly" id="sp-przenies">➡ Przenieś do innego zlecenia</button>' : ''}
+        ${admin && !zamkniety ? '<button class="maly" id="sp-przenies">➡ Przenieś na inną trasę</button>' : ''}
         ${admin && !p.nasze && p.zaladowano_o && !p.zaladunek_zgodny && !p.zaladunek_zwolniony
           ? '<button class="maly czerwony" id="sp-zwolnij">⛔ Zwolnij mimo niezgodnego numeru</button>'
           : ''}
@@ -998,12 +1047,20 @@ function oknoSzczegolowPunktu(t, id) {
     przyciski: (admin && !zamkniety) ? [
       { napis: 'Zamknij', klik: z => z() },
       { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
-        const w = await sprobuj(() => API.post('/api/przystanki/' + p.id, {
+        const zmiany = {
           towar: document.getElementById('sp-towar').value,
           dokument: (document.getElementById('sp-dokument') || {}).value || '',
           okno_od: document.getElementById('sp-od').value,
           okno_do: document.getElementById('sp-do').value,
           uwagi: document.getElementById('sp-uwagi').value,
+        };
+        const w = await sprobuj(() => zapisBiura('POST', '/api/przystanki/' + p.id, zmiany, {
+          opis: 'punkt ' + (p.klient_nazwa || ''),
+          zrodla: ['/api/trasy/' + t.id],
+          popraw: (sciezka, d) => {
+            if (sciezka !== '/api/trasy/' + t.id || !d || !Array.isArray(d.przystanki)) return;
+            wPamieci(d.przystanki, p.id, x => Object.assign(x, zmiany));
+          },
         }), 'Zapisano');
         if (w) { z(); pokazEkran('trasa', { id: t.id }); }
       } },
@@ -1021,7 +1078,7 @@ function oknoSzczegolowPunktu(t, id) {
       podepnij('#sp-zwolnij', async () => {
         if (!await potwierdz('Zwolnić ten punkt?',
           `Kierowca wpisał numer „${p.numer_kierowcy || '—'}", a zamówienie ma `
-          + `„${p.dokument || '—'}". Zwolnienie puszcza bus w trasę i zostaje `
+          + `„${p.dokument || '—'}". Zwolnienie puszcza auto w trasę i zostaje `
           + 'zapisane w uwagach punktu z Twoim imieniem.')) return;
         const w = await sprobuj(() => API.post('/api/przystanki/' + p.id + '/zwolnij-zaladunek'),
           'Zwolnione — kierowca może jechać');
@@ -1093,7 +1150,7 @@ function kartaNaZywo(t) {
         + (b.przerwa_przed ? `<span class="slaby"> · po drodze przerwa ${b.przerwa_przed} min</span>` : '')
       : '<span class="slaby">godziny nie policzę — punkt nie ma adresu na mapie</span>'}</div>`
     : `<div style="margin:10px 0"><b>${t.status === 'zakonczona'
-        ? '✓ Zlecenie zakończone' : 'Brak punktów do zrobienia'}</b></div>`;
+        ? '✓ Trasa zakończona' : 'Brak punktów do zrobienia'}</b></div>`;
 
   const slady = [];
   if (t.ostatni) {
@@ -1102,7 +1159,7 @@ function kartaNaZywo(t) {
       t.ostatni.powod ? ' (' + escHtml(t.ostatni.powod) + ')' : ''}`);
   }
   if (t.pozycja) {
-    slady.push(`🛰 bus ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
+    slady.push(`🛰 auto ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
       t.pozycja.km_do_celu != null ? ` · ok. ${t.pozycja.km_do_celu} km od celu` : ''}`);
   }
   // Kontakt sprzed dzisiaj z datą — sama godzina „14:05” z wczoraj wyglądała
@@ -1117,7 +1174,7 @@ function kartaNaZywo(t) {
     <div class="karta-gora">
       <div>
         <h2 style="margin:0">${escHtml(t.kierowca || 'bez kierowcy')}</h2>
-        <div class="male slaby">${escHtml(t.pojazd || 'bez busa')}${
+        <div class="male slaby">${escHtml(t.pojazd || 'bez auta')}${
           t.rejestracja ? ' · ' + escHtml(t.rejestracja) : ''}${
           t.start_o ? ' · start ' + escHtml(t.start_o) : ' · wyjazd ' + escHtml(t.wyjazd || '')}</div>
       </div>
@@ -1133,7 +1190,7 @@ function kartaNaZywo(t) {
       kolor[a.waga] || 'inherit'}"><b>${a.waga === 'pilne' ? '⛔' : a.waga === 'uwaga' ? '⚠' : 'ℹ'}</b>
       ${escHtml(a.tekst)}</div>`).join('')}
     <div class="przyciski" style="margin-top:10px">
-      <button class="maly" data-trasa-zywo="${t.id}">Otwórz zlecenie</button>
+      <button class="maly" data-trasa-zywo="${t.id}">Otwórz trasę</button>
       ${b ? `<button class="maly" data-punkt-zywo="${b.id}" data-trasa="${t.id}">Szczegóły punktu</button>` : ''}
     </div>
   </div>`;
@@ -1155,8 +1212,8 @@ async function rysujZywo(cel, data) {
       ${odmiana(pilne, 'sprawa wymaga', 'sprawy wymagają', 'spraw wymaga')} decyzji.</b></div>` : ''}
     ${dane.trasy.length ? dane.trasy.map(kartaNaZywo).join('')
       : `<div class="karta"><div class="pusto"><span class="duza-ikona">🗓️</span>
-           Na ten dzień nie ma jeszcze żadnego zlecenia.
-           <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">Zaplanuj zlecenie</button></div>
+           Na ten dzień nie ma jeszcze żadnej trasy.
+           <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">Zaplanuj trasę</button></div>
          </div></div>`}`;
 
   cel.querySelectorAll('[data-trasa-zywo]').forEach(b =>
@@ -1436,7 +1493,7 @@ function oknoKlienta(k) {
         if (!await potwierdz('Przenieść do naszych lokalizacji?',
           'Ten wpis przestanie być odbiorcą, a stanie się naszym miejscem, z którego '
           + 'wyjeżdżamy. Adres, telefon i uwagi idą razem z nim. Jeśli był już na jakiejś '
-          + 'zleceniu, zostanie w historii jako ukryty klient.')) return;
+          + 'trasie, zostanie w historii jako ukryty klient.')) return;
         const w = await sprobuj(() => API.post(`/api/klienci/${k.id}/na-lokalizacje`));
         if (!w) return;
         z();
@@ -1449,7 +1506,7 @@ function oknoKlienta(k) {
       } }]),
       ...(nowy ? [] : [{ napis: 'Usuń', klasa: 'niszczacy', klik: async z => {
         if (!await potwierdz('Usunąć klienta?',
-          'Jeśli był w jakimś zleceniu, zostanie tylko ukryty — historia dostaw musi się zgadzać.')) return;
+          'Jeśli był na jakiejś trasie, zostanie tylko ukryty — historia dostaw musi się zgadzać.')) return;
         const w = await sprobuj(() => API.del('/api/klienci/' + k.id));
         if (!w) return;
         z();
@@ -1533,7 +1590,7 @@ async function rysujRaportyBiura(pole, param) {
       <div class="tabela-przewijana">
         <table>
           <thead><tr>
-            <th>Dzień</th><th>Kierowca</th><th>Bus</th><th>Start</th><th>Koniec</th>
+            <th>Dzień</th><th>Kierowca</th><th>Auto</th><th>Start</th><th>Koniec</th>
             <th>Przerwa</th><th>Godziny</th><th>km</th><th>Paliwo</th><th>Usterki / uwagi</th>
           </tr></thead>
           <tbody>${wiersze.length ? wiersze.map(w => `<tr>
@@ -1606,7 +1663,7 @@ const OPIS_ROLI = { admin: 'administrator', biuro: 'biuro', kierowca: 'kierowca'
 EKRANY.ustawienia = {
   tytul: 'Ustawienia',
   tylkoAdministrator: true,
-  async rysuj(pole) {
+  async rysuj(pole, param) {
     const [u, ustawienia] = await Promise.all([
       API.get('/api/uzytkownicy'), API.get('/api/ustawienia'),
     ]);
@@ -1618,7 +1675,7 @@ EKRANY.ustawienia = {
     stan.pojazdy = await API.get('/api/pojazdy');
 
     pole.innerHTML = `
-      ${wstegiAlarmow(ustawienia.alarmy, false)}
+      ${wstegiAlarmow(ustawienia.alarmy, true)}
       <div class="karta">
         <h2>Firma i baza</h2>
         <label>Nazwa firmy<input id="u-firma" value="${escHtml(ustawienia.firma || '')}"></label>
@@ -1635,26 +1692,8 @@ EKRANY.ustawienia = {
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
       </div>
 
-      ${zwin('Ślad GPS z telefonów', '', `
-        <p class="male slaby">Położenie kierowcy to dana osobowa. Program kasuje stare punkty sam,
-           a kierowca sam włącza i wyłącza udostępnianie w swoim telefonie.</p>
-        <div class="dwie">
-          <label>Trzymaj ślad GPS przez (dni)
-            <input type="number" id="u-retencja" min="1" max="730"
-                   value="${escHtml(ustawienia.retencja_pozycji_dni || '30')}">
-            <span class="male slaby">Ślad służy do pokazania, gdzie jest bus. Dłuższe
-              trzymanie nikomu nie służy, a rozdmuchuje kopie zapasowe.</span></label>
-          <label>Trzymaj zdjęcia i podpisy przez (miesiące)
-            <input type="number" id="u-retencja-zal" min="0" max="120"
-                   value="${escHtml(ustawienia.retencja_zalacznikow_mies || '0')}">
-            <span class="male slaby">0 = trzymaj bez końca. Podpisy też są danymi osobowymi,
-              ale bywają jedynym dowodem w sporze — kasuj świadomie.</span></label>
-        </div>
-        <p class="male slaby">Sprzątanie odbywa się przy każdym uruchomieniu programu.</p>
-        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
-
       ${zwin('Godziny dojazdu', '', `
-        <p class="male slaby">Z tego program liczy, o której bus będzie u każdego klienta,
+        <p class="male slaby">Z tego program liczy, o której auto będzie u każdego klienta,
           i ostrzega, gdy nie zdąży przed zamknięciem. Liczy w przeglądarce, więc działa
           też w telefonie bez zasięgu. To szacunek, nie nawigacja: odległość w linii prostej
           razy 1,35, bo drogi nie są proste.</p>
@@ -1697,7 +1736,7 @@ EKRANY.ustawienia = {
         <label class="plaska"><input type="checkbox" id="u-przepisy"
           ${String(ustawienia.przerwy_wlaczone || '1') === '0' ? '' : 'checked'}>
           Doliczaj przerwy do czasu trasy</label>
-        <p class="male slaby">Można to wyłączyć osobno dla każdego busa — przełącznik
+        <p class="male slaby">Można to wyłączyć osobno dla każdego auta — przełącznik
           jest przy nim na liście poniżej.</p>
         <div class="dwie">
           <label>Po ilu minutach jazdy przerwa
@@ -1733,6 +1772,87 @@ EKRANY.ustawienia = {
             <input type="number" id="u-doba" min="60" max="1440"
                    value="${escHtml(ustawienia.doba_pracy_min || '780')}"></label>
         </div>
+        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
+
+      <div class="karta">
+        <div class="karta-gora"><h2>Konta</h2>
+          ${!ustawienia.konta_z_panelu
+            ? '<button class="maly glowny" id="u-nowe-konto">+ Nowe konto</button>'
+            : kontaZespolu(ustawienia) ? '<button class="maly glowny" id="u-nowe-konto">+ Dodaj konto</button>' : ''}</div>
+        ${!ustawienia.konta_z_panelu ? '' : kontaZespolu(ustawienia) ? `<div class="wstega info">Kierowców
+          i biuro zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby
+          we wszystkich aplikacjach GK. Kierowników, administratorów i osoby z innymi rolami zmienia się
+          w <b>Panelu → Administracja</b>. Konta tutejsze (np. awaryjne „admin”) działają dalej.</div>`
+          : `<div class="wstega info">Konta zakłada się teraz
+          w <b>Panelu → Administracja</b> (GK Panel Kierownika) — jedno konto osoby we wszystkich
+          aplikacjach GK. Tutaj ustawisz tylko bazę wyjazdową. Konta tutejsze (np. awaryjne
+          „admin”) działają dalej.${(ustawienia.konta_zespolu || {}).powod === 'awaryjny'
+            ? ' Kierowców i biuro może tu zakładać administrator z kontem z Panelu — zaloguj się nim.' : ''}</div>`}
+        ${wstegaLogowaniaZInternetu(ustawienia.logowanie_z_internetu)}
+        <div class="tabela-przewijana"><table>
+          <thead><tr><th>Imię</th><th>Login</th><th>Rola</th><th>Telefon</th><th></th></tr></thead>
+          <tbody>${u.map(x => `<tr style="${x.aktywny ? '' : 'opacity:.5'}">
+            <td><b>${escHtml(x.imie)}</b>${x.aktywny ? '' : ' <span class="male">(wyłączone)</span>'}
+              ${x.zrodlo === 'gk' ? ' <span class="plakietka p-planowana">z Panelu</span>' : ''}
+              ${x.zrodlo === 'gk' && x.pin_w_panelu && x.aktywny
+                ? '<br><span class="male slaby">PIN do ustawienia w Panelu</span>' : ''}
+              ${x.zrodlo === 'gk' && x.aktywny && (x.haslo_do_zmiany || x.pin_do_zmiany)
+                ? `<br><span class="male slaby">${x.haslo_do_zmiany ? 'hasło startowe — ustawi przy pierwszym logowaniu'
+                  : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}
+              ${opisBlokadyZInternetu(x.z_internetu)}</td>
+            <td>${escHtml(x.login)}</td>
+            <td>${OPIS_ROLI[x.rola] || x.rola}${x.baza_nazwa
+                  ? `<br><span class="male slaby">🏭 ${escHtml(x.baza_nazwa)}</span>` : ''}</td>
+            <td>${escHtml(x.telefon || '')}</td>
+            <td><div class="przyciski"><button class="maly" data-konto="${x.id}">Zmień</button>
+              ${(x.z_internetu || {}).blokada
+                ? `<button class="maly glowny" data-odblokuj="${x.id}">Odblokuj</button>` : ''}</div></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+
+      <div class="karta">
+        <div class="karta-gora"><h2>Auta</h2>
+          <div class="przyciski">
+            ${(ustawienia.flotex_stan || {}).polaczony
+              ? '<button class="maly" id="u-flotex-import">Pobierz auta z GK Flota</button>' : ''}
+            <button class="maly glowny" id="u-nowy-bus">+ Nowe auto</button></div></div>
+        <div class="tabela-przewijana"><table>
+          <thead><tr><th>Nazwa</th><th>Rejestracja</th>
+            ${(ustawienia.flotex_stan || {}).polaczony ? '<th>GK Flota</th>' : ''}<th>Uwagi</th><th></th></tr></thead>
+          <tbody>${stan.pojazdy.length ? stan.pojazdy.map(b => `<tr style="${b.aktywny ? '' : 'opacity:.5'}">
+            <td><b>${escHtml(b.nazwa)}</b></td><td>${escHtml(b.rejestracja || '')}</td>
+            ${(ustawienia.flotex_stan || {}).polaczony ? `<td>${b.flotex
+              ? znacznikFlotexu(b.flotex) + powodyFlotexu(b.flotex)
+              : '<span class="male slaby">nie ma w GK Flota</span>'}</td>` : ''}
+            <td class="male">${escHtml(b.uwagi || '')}</td>
+            <td><button class="maly" data-bus="${b.id}">Zmień</button></td>
+          </tr>`).join('') : '<tr><td colspan="5"><div class="pusto">Nie ma jeszcze aut.</div></td></tr>'}</tbody>
+        </table></div>
+      </div>
+
+      <details class="zaawansowane" id="u-zaawansowane">
+        <summary><span class="znak-zwiniecia">▸</span> Zaawansowane
+          <span class="slaby">— połączenia, kopie, tunel, poczta, przechowywanie danych</span></summary>
+        <p class="male slaby">Rzadko zmieniane ustawienia techniczne. Na co dzień nie trzeba
+          tu zaglądać — program sam pokaże wstęgę, gdy coś stąd wymaga uwagi.</p>
+
+      ${zwin('Ślad GPS i przechowywanie danych', '', `
+        <p class="male slaby">Położenie kierowcy to dana osobowa. Program kasuje stare punkty sam,
+           a kierowca sam włącza i wyłącza udostępnianie w swoim telefonie.</p>
+        <div class="dwie">
+          <label>Trzymaj ślad GPS przez (dni)
+            <input type="number" id="u-retencja" min="1" max="730"
+                   value="${escHtml(ustawienia.retencja_pozycji_dni || '30')}">
+            <span class="male slaby">Ślad służy do pokazania, gdzie jest auto. Dłuższe
+              trzymanie nikomu nie służy, a rozdmuchuje kopie zapasowe.</span></label>
+          <label>Trzymaj zdjęcia i podpisy przez (miesiące)
+            <input type="number" id="u-retencja-zal" min="0" max="120"
+                   value="${escHtml(ustawienia.retencja_zalacznikow_mies || '0')}">
+            <span class="male slaby">0 = trzymaj bez końca. Podpisy też są danymi osobowymi,
+              ale bywają jedynym dowodem w sporze — kasuj świadomie.</span></label>
+        </div>
+        <p class="male slaby">Sprzątanie odbywa się przy każdym uruchomieniu programu.</p>
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
 
       ${zwin('Powiadamianie klienta', ustawienia.poczta_ustawiona
@@ -1794,71 +1914,15 @@ EKRANY.ustawienia = {
           ${ustawienia.ors_klucz_ustawiony ? '✓ Klucz zapisany' : 'Klucz nie jest ustawiony'}</div>
         <button class="glowny zapisz-ustawienia" style="margin-top:12px">Zapisz ustawienia</button>`)}
 
-      <div class="karta">
-        <div class="karta-gora"><h2>Konta</h2>
-          ${!ustawienia.konta_z_panelu
-            ? '<button class="maly glowny" id="u-nowe-konto">+ Nowe konto</button>'
-            : kontaZespolu(ustawienia) ? '<button class="maly glowny" id="u-nowe-konto">+ Dodaj konto</button>' : ''}</div>
-        ${!ustawienia.konta_z_panelu ? '' : kontaZespolu(ustawienia) ? `<div class="wstega info">Kierowców
-          i biuro zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby
-          we wszystkich aplikacjach GK. Kierowników, administratorów i osoby z innymi rolami zmienia się
-          w <b>Panelu → Administracja</b>. Konta tutejsze (np. awaryjne „admin”) działają dalej.</div>`
-          : `<div class="wstega info">Konta zakłada się teraz
-          w <b>Panelu → Administracja</b> (GK Panel Kierownika) — jedno konto osoby we wszystkich
-          aplikacjach GK. Tutaj ustawisz tylko bazę wyjazdową. Konta tutejsze (np. awaryjne
-          „admin”) działają dalej.${(ustawienia.konta_zespolu || {}).powod === 'awaryjny'
-            ? ' Kierowców i biuro może tu zakładać administrator z kontem z Panelu — zaloguj się nim.' : ''}</div>`}
-        ${wstegaLogowaniaZInternetu(ustawienia.logowanie_z_internetu)}
-        <div class="tabela-przewijana"><table>
-          <thead><tr><th>Imię</th><th>Login</th><th>Rola</th><th>Telefon</th><th></th></tr></thead>
-          <tbody>${u.map(x => `<tr style="${x.aktywny ? '' : 'opacity:.5'}">
-            <td><b>${escHtml(x.imie)}</b>${x.aktywny ? '' : ' <span class="male">(wyłączone)</span>'}
-              ${x.zrodlo === 'gk' ? ' <span class="plakietka p-planowana">z Panelu</span>' : ''}
-              ${x.zrodlo === 'gk' && x.pin_w_panelu && x.aktywny
-                ? '<br><span class="male slaby">PIN do ustawienia w Panelu</span>' : ''}
-              ${x.zrodlo === 'gk' && x.aktywny && (x.haslo_do_zmiany || x.pin_do_zmiany)
-                ? `<br><span class="male slaby">${x.haslo_do_zmiany ? 'hasło startowe — ustawi przy pierwszym logowaniu'
-                  : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}
-              ${opisBlokadyZInternetu(x.z_internetu)}</td>
-            <td>${escHtml(x.login)}</td>
-            <td>${OPIS_ROLI[x.rola] || x.rola}${x.baza_nazwa
-                  ? `<br><span class="male slaby">🏭 ${escHtml(x.baza_nazwa)}</span>` : ''}</td>
-            <td>${escHtml(x.telefon || '')}</td>
-            <td><div class="przyciski"><button class="maly" data-konto="${x.id}">Zmień</button>
-              ${(x.z_internetu || {}).blokada
-                ? `<button class="maly glowny" data-odblokuj="${x.id}">Odblokuj</button>` : ''}</div></td>
-          </tr>`).join('')}</tbody>
-        </table></div>
-      </div>
-
-      <div class="karta">
-        <div class="karta-gora"><h2>Busy</h2>
-          <div class="przyciski">
-            ${(ustawienia.flotex_stan || {}).polaczony
-              ? '<button class="maly" id="u-flotex-import">Pobierz auta z GK Flota</button>' : ''}
-            <button class="maly glowny" id="u-nowy-bus">+ Nowy bus</button></div></div>
-        <div class="tabela-przewijana"><table>
-          <thead><tr><th>Nazwa</th><th>Rejestracja</th>
-            ${(ustawienia.flotex_stan || {}).polaczony ? '<th>GK Flota</th>' : ''}<th>Uwagi</th><th></th></tr></thead>
-          <tbody>${stan.pojazdy.length ? stan.pojazdy.map(b => `<tr style="${b.aktywny ? '' : 'opacity:.5'}">
-            <td><b>${escHtml(b.nazwa)}</b></td><td>${escHtml(b.rejestracja || '')}</td>
-            ${(ustawienia.flotex_stan || {}).polaczony ? `<td>${b.flotex
-              ? znacznikFlotexu(b.flotex) + powodyFlotexu(b.flotex)
-              : '<span class="male slaby">nie ma w GK Flota</span>'}</td>` : ''}
-            <td class="male">${escHtml(b.uwagi || '')}</td>
-            <td><button class="maly" data-bus="${b.id}">Zmień</button></td>
-          </tr>`).join('') : '<tr><td colspan="5"><div class="pusto">Nie ma jeszcze busów.</div></td></tr>'}</tbody>
-        </table></div>
-      </div>
-
       ${zwin('Jak wejść z telefonu', '', `
         <p class="male">Najprościej: menu <b>📲 Zaproś kierowcę</b> — kierowca skanuje kod QR
           aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
           (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
-          a gdy Panel Kierownika (hub) jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
+          a gdy Panel Kierownika jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
         <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i PIN-em,
           a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego"</b>. Od tej pory
-          aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}`;
+          aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}
+      </details>`;
 
     const zapiszWszystko = async () => {
       const daneUstawien = {
@@ -1934,6 +1998,18 @@ EKRANY.ustawienia = {
     // o zjechaniu na sam gorny przycisk, a tego nikt nie robi.
     pole.querySelectorAll('.zapisz-ustawienia').forEach(p => p.onclick = zapiszWszystko);
 
+    // Otwarte sekcje (także „Zaawansowane”) zostają otwarte po zapisie i po
+    // każdym „Zrób kopię teraz”, „Sprawdź połączenie” — ekran rysuje się wtedy
+    // od nowa i bez tego administrator lądował przed zwiniętym nagłówkiem.
+    const otwarte = stan.otwarteUstawienia || (stan.otwarteUstawienia = new Set());
+    pole.querySelectorAll('details[id]').forEach(d => {
+      if (otwarte.has(d.id)) d.open = true;
+      d.addEventListener('toggle', () => { if (d.open) otwarte.add(d.id); else otwarte.delete(d.id); });
+    });
+    if (param && param.sekcja) otworzSekcjeUstawien(pole, param.sekcja);
+    pole.querySelectorAll('[data-do-ustawien]').forEach(e => e.onclick = () =>
+      otworzSekcjeUstawien(pole, SEKCJA_ALARMU[e.dataset.doUstawien]));
+
     podepnijKopie(pole);
 
     // Przycisk najpierw zapisuje to, co wpisano w pola obok, a dopiero potem
@@ -1989,7 +2065,7 @@ EKRANY.ustawienia = {
     // dopiero potem pytanie, inaczej sprawdzalibysmy stary klucz z bazy.
     pole.querySelector('#u-flotex-sprawdz').onclick = async () => {
       if (!val('u-flotex-klucz') && !ustawienia.flotex_klucz_ustawiony) {
-        komunikat('Wklej klucz z GK Flota (Ustawienia → Połączenie z GK Trasy)', 'blad');
+        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z GK Trasy)', 'blad');
         return;
       }
       const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
@@ -2180,7 +2256,7 @@ function oknoKontaZespolu(k) {
   const role = (stan.ustawienia.konta_zespolu || {}).role
     || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca' }, { kod: 'trasy_biuro', nazwa: 'Biuro' }];
   const opisRoli = {
-    trasy_kierowca: 'swoje zlecenia i raport pracy',
+    trasy_kierowca: 'swoje trasy i raport pracy',
     trasy_biuro: 'cała codzienna robota, bez Ustawień i kont',
   };
   const zaznaczone = new Set(k.role_zespolu || []);
@@ -2310,20 +2386,20 @@ function oknoBusa(b) {
   const nowy = !b;
   b = b || { nazwa: '', rejestracja: '', uwagi: '', aktywny: 1, czas_pracy: 1 };
   okno({
-    tytul: nowy ? 'Nowy bus' : b.nazwa,
+    tytul: nowy ? 'Nowe auto' : b.nazwa,
     tresc: `
-      <label>Nazwa <span class="slaby">(np. „Ducato", „Bus 1")</span>
+      <label>Nazwa <span class="slaby">(np. „Ducato", „Auto 1")</span>
         <input id="bu-nazwa" value="${escHtml(b.nazwa)}"></label>
       <label>Rejestracja<input id="bu-rej" value="${escHtml(b.rejestracja || '')}"></label>
       <label>Uwagi<textarea id="bu-uwagi">${escHtml(b.uwagi || '')}</textarea></label>
       <label class="plaska"><input type="checkbox" id="bu-czas-pracy"
         ${b.czas_pracy == null || Number(b.czas_pracy) ? 'checked' : ''}>
-        Doliczaj przerwy kierowcy do tras tego pojazdu</label>
+        Doliczaj przerwy kierowcy do tras tego auta</label>
       <p class="male slaby" style="margin:-4px 0 10px">Odznacz tam, gdzie przerwy
         nie mają sensu — np. przy osobówce na krótkich kursach. Inaczej każda jej
         trasa wyjdzie dłuższa, niż wychodzi naprawdę.</p>
       ${nowy ? '' : `<label class="plaska"><input type="checkbox" id="bu-aktywny" ${b.aktywny ? 'checked' : ''}>
-        Bus w użyciu</label>`}`,
+        Auto w użyciu</label>`}`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
@@ -2342,11 +2418,12 @@ function oknoBusa(b) {
 /* --------------------------------------------- alarmy dla administratora */
 
 /* Wstęgi alarmów (ETAP 2): kopia, adres na Pages (wpisuje go hub), tunel, dysk.
-   Na pulpicie są klikalne i prowadzą do Ustawień, gdzie da się coś zrobić. */
+   Klikalne — na pulpicie prowadzą do Ustawień, w Ustawieniach otwierają
+   sekcję pod „Zaawansowane”, która alarm naprawia (data-do-ustawien = kod). */
 function wstegiAlarmow(alarmy, doUstawien) {
   return (alarmy || []).map(a => `<div class="wstega ${a.poziom === 'blad' ? 'blad' : 'uwaga'}"
       style="margin-bottom:10px${doUstawien ? ';cursor:pointer' : ''}"
-      ${doUstawien ? 'data-do-ustawien="1"' : ''}>
+      ${doUstawien ? `data-do-ustawien="${escHtml(a.kod || '')}"` : ''}>
       <b>⚠ ${escHtml(a.tytul)}</b><br><span class="male">${escHtml(a.tresc)}</span></div>`).join('');
 }
 
@@ -2421,7 +2498,7 @@ function kartaKopii(u) {
     <p class="male slaby" style="margin-top:8px">Brak udanej kopii przez ponad dobę albo
       niedostępny folder włącza alarm: wstęgę na pulpicie i powiadomienie na telefonie
       administratora (najwyżej raz na 6 godzin). Jak przywrócić dane z kopii — instrukcja,
-      punkt 15.</p>`);
+      punkt 15.</p>`, 'u-kopie');
 }
 
 function podepnijKopie(pole) {
@@ -2483,7 +2560,7 @@ function kartaTunelu(u) {
       <span><b>Szybki</b><br><span class="male slaby">Działa od razu, bez konta i bez
         domeny. <b>Adres zmienia się po każdym uruchomieniu programu</b> — dlatego
         telefony otwierają stały adres aplikacji na GitHub Pages, a Panel Kierownika
-        (hub na tym komputerze) sam wpisuje tam bieżący adres tunelu (karta niżej).</span></span></label>
+        (na tym komputerze) sam wpisuje tam bieżący adres tunelu (karta niżej).</span></span></label>
 
     <label class="plaska"><input type="radio" name="tunel" value="staly" ${tryb === 'staly' ? 'checked' : ''}>
       <span><b>Stały — do codziennej pracy</b><br><span class="male slaby">Własny, niezmienny
@@ -2500,7 +2577,7 @@ function kartaTunelu(u) {
       <input id="u-tunel-adres" value="${escHtml(u.tunel_adres || '')}"
              placeholder="np. https://trasy.twojafirma.pl"></label>
     <div class="male slaby">Tylko w trybie stałym: ten sam adres, który ustawiono w panelu
-      Cloudflare. Program podaje go hubowi, a hub wpisuje go aplikacji na GitHub Pages.</div>
+      Cloudflare. Program podaje go Panelowi Kierownika, a Panel wpisuje go aplikacji na GitHub Pages.</div>
 
     <details style="margin-top:12px">
       <summary class="male" style="cursor:pointer">Jak zdobyć token tunelu stałego</summary>
@@ -2518,7 +2595,7 @@ function kartaTunelu(u) {
 
     <p class="male slaby" style="margin-top:10px">Zmiana trybu działa dopiero
       po zamknięciu i ponownym uruchomieniu programu.</p>
-    <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`);
+    <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`, 'u-tunel');
 }
 
 function zmienionoTunel(poprzednie) {
@@ -2545,20 +2622,20 @@ function kartaPages(u) {
   const kiedy = t => escHtml(String(t || '').slice(0, 16));
   return zwin('Adres dla telefonów (GitHub Pages)', plakietka, `
     <p class="male slaby">Stały adres aplikacji dla telefonów — ten sam po każdym restarcie
-      komputera w biurze. <b>Adres dla telefonów publikuje Panel Kierownika (hub)</b> na tym
+      komputera w biurze. <b>Adres dla telefonów publikuje Panel Kierownika</b> na tym
       komputerze, tym samym tokenem co aplikacje hali: program podaje mu adres tunelu i swoją
-      wersję, hub wysyła je na GitHub sam. Na GitHubie leży sam wygląd, bez żadnych danych firmy.</p>
+      wersję, Panel wysyła je na GitHub sam. Na GitHubie leży sam wygląd, bez żadnych danych firmy.</p>
 
-    ${p.adres ? `<div class="wstega info">Adres dla telefonów publikuje Panel Kierownika (hub):<br>
+    ${p.adres ? `<div class="wstega info">Adres dla telefonów publikuje Panel Kierownika:<br>
         <a href="${escHtml(p.adres)}" target="_blank" rel="noopener"
            style="font-size:15px;word-break:break-all"><b>${escHtml(p.adres)}</b></a></div>` : ''}
 
-    ${!p.lokalne ? `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu hubowi (kopia
+    ${!p.lokalne ? `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Kierownika (kopia
         testowa albo druga kopia na innym porcie).</div>` : ''}
     ${p.lokalne && !p.hub_odpisal ? `<div class="wstega uwaga">Panel Kierownika jeszcze się nie odezwał.
-        Sprawdź, czy GK Panel Kierownika działa na tym komputerze (nowa wersja, D42).</div>` : ''}
+        Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>` : ''}
     ${p.blad ? `<div class="wstega uwaga">Panel Kierownika nie wysłał adresu na GitHub:
-        ${escHtml(p.blad)} Hub ponawia sam; szczegóły w Panelu → Administracja → Dostęp z telefonów.</div>` : ''}
+        ${escHtml(p.blad)} Panel ponawia sam; szczegóły w Panelu → Administracja → Serwis → Dostęp z telefonów.</div>` : ''}
 
     <table class="male" style="margin-bottom:10px">
       <tr><td class="slaby">Aplikacja wysłana</td>
@@ -2572,7 +2649,7 @@ function kartaPages(u) {
             : '—'}${p.adres_zmieniono ? ` <span class="slaby">· ${kiedy(p.adres_zmieniono)}</span>` : ''}</td></tr>
     </table>
     <p class="male slaby">Nowy adres tunelu (po każdym uruchomieniu) i nową wersję programu
-      (po aktualizacji) hub wysyła sam, zwykle w ciągu minuty. Telefony dostają je same.</p>`);
+      (po aktualizacji) Panel wysyła sam, zwykle w ciągu minuty. Telefony dostają je same.</p>`, 'u-pages');
 }
 
 
@@ -2587,7 +2664,7 @@ function kartaIkol(u) {
     : s.stan === 'blad' ? '<span class="plakietka p-nieudane">✕ błąd</span>'
     : '<span class="plakietka p-w_toku">czeka na pierwsze pobranie</span>';
 
-  return zwin('Lokalizatory w busach (IKOL)', stanPlakietka, `
+  return zwin('Lokalizatory w autach (IKOL)', stanPlakietka, `
     <p class="male slaby">Program potrafi sam pobierać pozycje z Waszych lokalizatorów
       w <b>system.ikol.pl</b> i pokazywać je na Pulpicie obok potwierdzeń dostaw —
       bez przełączania się między dwiema stronami. Pyta o pozycję co półtorej minuty,
@@ -2607,10 +2684,10 @@ function kartaIkol(u) {
     </ol>
     <p class="male slaby">Bez wykupionej usługi API odpowiada kodem 3 — tym samym,
       co przy złym haśle. Dlatego łatwo wziąć to za pomyłkę w loginie.
-      <b>Nie musicie wykupywać jej dla wszystkich pojazdów</b> — wystarczy dla tych,
+      <b>Nie musicie wykupywać jej dla wszystkich aut</b> — wystarczy dla tych,
       które faktycznie wożą dostawy.</p>
-    <p class="male slaby">Póki tego nie ma, położenie busów i tak działa —
-      bezpłatnie, z telefonu kierowcy (ekran „Moje zlecenie” → „Udostępniaj położenie”).</p>
+    <p class="male slaby">Póki tego nie ma, położenie aut i tak działa —
+      bezpłatnie, z telefonu kierowcy (ekran „Moja trasa” → „Udostępniaj położenie”).</p>
 
     <label class="plaska"><input type="checkbox" id="u-ikol-wlaczony" ${wlaczony ? 'checked' : ''}>
       <b>Pobieraj pozycje z IKOL-a</b></label>
@@ -2634,11 +2711,11 @@ function kartaIkol(u) {
       Ostatnie sprawdzenie: ${escHtml(s.ostatnio)}</div>` : ''}
 
     ${lokalizatory.length ? `
-      <h3 style="margin-top:18px">Które busy</h3>
-      <p class="male slaby">Przypisz każdy lokalizator do busa albo wprost do kierowcy —
+      <h3 style="margin-top:18px">Które auta</h3>
+      <p class="male slaby">Przypisz każdy lokalizator do auta albo wprost do kierowcy —
         bez tego program nie wie, czyją trasę zapisać.</p>
       <div class="tabela-przewijana"><table>
-        <thead><tr><th>Lokalizator</th><th>Bus</th><th>Kierowca</th><th>Ostatnia pozycja</th><th></th></tr></thead>
+        <thead><tr><th>Lokalizator</th><th>Auto</th><th>Kierowca</th><th>Ostatnia pozycja</th><th></th></tr></thead>
         <tbody>${lokalizatory.map(l => `<tr style="${l.aktywny ? '' : 'opacity:.5'}">
           <td><b>${escHtml(l.nazwa || l.klucz)}</b>
               ${l.nazwa ? `<br><span class="male slaby">${escHtml(l.klucz)}</span>` : ''}</td>
@@ -2655,7 +2732,7 @@ function kartaIkol(u) {
         <li><b>Płatna usługa „Interfejs API"</b> włączona przy każdym lokalizatorze,
             z którego chcecie brać pozycje: IKOL → <b>Wybór usług</b> → <b>Zarządzaj
             usługami</b> → sekcja <b>Dodatki</b>. Kosztuje 10 zł netto miesięcznie
-            za pojazd. <b>Bez tego API odmawia dostępu</b>, nawet przy poprawnym haśle.</li>
+            za auto. <b>Bez tego API odmawia dostępu</b>, nawet przy poprawnym haśle.</li>
         <li><b>Uprawnienie „Interfejs API"</b> dla użytkownika przy każdym lokalizatorze:
             Konfiguracja → Konfiguracja lokalizatorów → Uprawnienia użytkowników →
             ostatnia kolumna. To jest bezpłatne, ale samo w sobie nie wystarcza.</li>
@@ -2665,7 +2742,7 @@ function kartaIkol(u) {
             tak samo jak reszta danych firmy. Trzymaj ten folder tam, gdzie inne
             dane firmowe.</li>
       </ul>
-    </details>`);
+    </details>`, 'u-ikol');
 }
 
 function oknoLokalizatora(klucz) {
@@ -2677,13 +2754,13 @@ function oknoLokalizatora(klucz) {
   okno({
     tytul: l.nazwa || klucz,
     tresc: `
-      <label>Bus
+      <label>Auto
         <select id="lk-pojazd">
           <option value="">— nie przypisano —</option>
           ${busy.map(b => `<option value="${b.id}" ${l.pojazd === b.id ? 'selected' : ''}>
             ${escHtml(b.nazwa)}${b.rejestracja ? ' · ' + escHtml(b.rejestracja) : ''}</option>`).join('')}
         </select></label>
-      <label>Kierowca na stałe <span class="slaby">(zostaw puste, jeśli busem jeżdżą różni —
+      <label>Kierowca na stałe <span class="slaby">(zostaw puste, jeśli tym autem jeżdżą różni —
         wtedy program bierze kierowcę z trasy na dany dzień)</span>
         <select id="lk-kierowca">
           <option value="">— wg trasy na dany dzień —</option>
@@ -2728,7 +2805,7 @@ function kartaFlotexu(u) {
 
   return zwin('GK Flota (GK Transport)', plakietka, `
     <p class="male slaby">GK Flota prowadzi przeglądy, terminy i usterki aut. Po połączeniu
-      planista widzi przy busach, czy auto jest sprawne, kierowca ma w menu „Moje auto”
+      planista widzi przy autach, czy są sprawne, kierowca ma w menu „Moje auto”
       (GK Flota bez drugiego logowania), a przebieg, tankowania i usterki z raportu
       pracy same trafiają do GK Flota. Konta kierowców zakłada się tylko tutaj —
       GK Flota dostaje je sama, z tym samym loginem i PIN-em.</p>
@@ -2743,7 +2820,7 @@ function kartaFlotexu(u) {
         <input id="u-flotex-klucz" type="password" autocomplete="new-password"
                placeholder="${u.flotex_klucz_ustawiony
                  ? 'klucz jest zapisany — wklej nowy, żeby zmienić'
-                 : 'z GK Flota: Ustawienia → Połączenie z GK Trasy'}"></label>
+                 : 'z GK Flota: Ustawienia → Zaawansowane → Połączenie z GK Trasy'}"></label>
     </div>
     <div class="male ${u.flotex_klucz_ustawiony ? '' : 'slaby'}">
       ${u.flotex_klucz_ustawiony ? '✓ Klucz ustawiony' : 'Klucz nie jest ustawiony'}</div>
@@ -2791,8 +2868,8 @@ function kartaFlotexu(u) {
           <td class="male">${escHtml(p.blad)}</td></tr>`).join('')}</tbody>
       </table></div>
       <p class="male slaby">Odrzucony raport nie wraca sam — popraw przyczynę (np. dopisz
-        auto w GK Flota albo rejestrację busa tutaj) i kliknij „Ponów wysyłkę”.</p>
-      <button id="u-flotex-ponow">Ponów wysyłkę</button>` : ''}` : ''}`);
+        auto w GK Flota albo jego rejestrację tutaj) i kliknij „Ponów wysyłkę”.</p>
+      <button id="u-flotex-ponow">Ponów wysyłkę</button>` : ''}` : ''}`, 'u-flota');
 }
 
 
@@ -2820,7 +2897,7 @@ function kartaKontGK(u) {
       <b>Panel → Administracja</b>. Osoba loguje się wszędzie imieniem i nazwiskiem i tym
       samym PIN-em. Program pobiera konta z Panelu co 5 minut i trzyma ich kopię — logowanie
       działa dalej, gdy Panel chwilowo nie odpowiada.</p>
-    <p class="male slaby"><b>Panel na tym komputerze łączy się sam</b> — hub robi klucz i podaje go
+    <p class="male slaby"><b>Panel na tym komputerze łączy się sam</b> — Panel robi klucz i podaje go
       programowi przez plik w profilu Windows, nic nie trzeba wklejać. Ręcznie (Panel na innym
       komputerze): adres <b>https://…</b> i klucz z Panelu → Administracja → Połączenia GK.</p>
     <p class="male slaby"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
@@ -2885,7 +2962,7 @@ function kartaKontGK(u) {
         konflikty ${(imp.konflikty || []).length}.</div>
         ${(imp.konflikty || []).length ? `<div class="wstega uwaga" style="margin-top:8px">
           ${imp.konflikty.map(k => `<div><b>${escHtml(k.login)}</b>${k.powod
-            ? ' — ' + escHtml(k.powod) : ''}</div>`).join('')}</div>` : ''}` : ''}` : ''}`);
+            ? ' — ' + escHtml(k.powod) : ''}</div>`).join('')}</div>` : ''}` : ''}` : ''}`, 'u-konta-gk');
 }
 
 function podepnijKontaGK(pole, ustawienia) {
@@ -2950,12 +3027,38 @@ function podepnijKontaGK(pole, ustawienia) {
 
 
 /* Ustawienia to osiem sekcji, z ktorych na co dzien dotyka sie dwoch. Reszta
-   ma byc pod reka, ale nie ma zajmowac ekranu — stad sekcje zwijane.        */
-function zwin(tytul, plakietka, tresc) {
-  return `<details class="karta karta-zwijana">
+   ma byc pod reka, ale nie ma zajmowac ekranu — stad sekcje zwijane.
+   Kazda ma id (podane albo z tytulu): po nim alarm otwiera wlasciwa sekcje,
+   a ekran po zapisie pamieta, ktore byly otwarte (UI etap 2).               */
+function zwin(tytul, plakietka, tresc, id) {
+  return `<details class="karta karta-zwijana" id="${escHtml(id || idSekcji(tytul))}">
     <summary><span>${escHtml(tytul)}</span>${plakietka || ''}</summary>
     <div class="zwijana-tresc">${tresc}</div>
   </details>`;
+}
+
+function idSekcji(tytul) {
+  return 'u-' + String(tytul).toLowerCase().replace(/ł/g, 'l').normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/* Alarm (kod z /api/alarmy) → sekcja Ustawień, która go naprawia. Wszystkie
+   leżą pod „Zaawansowane”, więc samo przejście do Ustawień zostawiało
+   administratora przed zwiniętym nagłówkiem — bez śladu, gdzie szukać.     */
+const SEKCJA_ALARMU = {
+  kopia: 'u-kopie', kopia_folder: 'u-kopie', miejsce: 'u-kopie',
+  pages: 'u-pages', tunel: 'u-tunel',
+};
+
+/* Otwiera „Zaawansowane” i podaną sekcję, przewija do niej. */
+function otworzSekcjeUstawien(pole, id) {
+  const sekcja = id && pole.querySelector('#' + id);
+  if (!sekcja) return false;
+  const zaawansowane = sekcja.closest('details.zaawansowane');
+  if (zaawansowane) zaawansowane.open = true;
+  sekcja.open = true;
+  setTimeout(() => sekcja.scrollIntoView({ block: 'start' }), 0);
+  return true;
 }
 
 
@@ -3023,7 +3126,7 @@ async function oknoPrzeniesienia(trasa, p) {
     wybor.innerHTML = inne.map(x => `<option value="${x.id}">${escHtml(x.nazwa || 'Trasa ' + x.id)}
         — ${escHtml(x.kierowca_imie || 'bez kierowcy')} (${x.ile}
         ${odmiana(x.ile, 'punkt', 'punkty', 'punktów')})</option>`).join('')
-      + '<option value="">— załóż nowe zlecenie tego dnia —</option>';
+      + '<option value="">— załóż nową trasę tego dnia —</option>';
   };
   okno({
     tytul: 'Przenieś: ' + p.klient_nazwa,
@@ -3032,8 +3135,8 @@ async function oknoPrzeniesienia(trasa, p) {
         oknem czasowym i uwagami dla kierowcy.</p>
       <label>Na dzień
         <input type="date" id="pn-dzien" value="${escHtml(trasa.data)}"></label>
-      <label>Do zlecenia <select id="pn-trasa"></select></label>
-      <label>Kierowca <span class="slaby">(gdy zakładamy nowe zlecenie)</span>
+      <label>Na trasę <select id="pn-trasa"></select></label>
+      <label>Kierowca <span class="slaby">(gdy zakładamy nową trasę)</span>
         <select id="pn-kierowca">
           <option value="">— nie przydzielono —</option>
           ${kierowcy.map(u => `<option value="${u.id}"${

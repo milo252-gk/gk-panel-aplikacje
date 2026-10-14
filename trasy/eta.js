@@ -139,7 +139,11 @@ const ETA = (() => {
       : (pojazd ? pojazd.czas_pracy : null);
     return {
       predkosc: Math.max(20, liczba(u.srednia_predkosc, 50)),
-      rozladunek: Math.max(0, Math.round(liczba(u.czas_rozladunku_min, 15))),
+      /* Postój z historii firmy, policzony przez serwer (szacuj_trase) — bez
+         niego telefon brał samo ustawienie i pokazywał inne godziny niż biuro. */
+      rozladunek: (t.szacunek && t.szacunek.postoj_min != null)
+        ? Math.max(0, Math.round(Number(t.szacunek.postoj_min)))
+        : Math.max(0, Math.round(liczba(u.czas_rozladunku_min, 15))),
       zaladunek: Math.max(0, Math.round(liczba(u.czas_zaladunku_min, 30))),
       kretosc: liczba(u.kretosc_drogi, KRETOSC_DOMYSLNA),
       wyjazd: t.wyjazd || t.wyjazd_o || u.godzina_wyjazdu || '07:00',
@@ -184,6 +188,20 @@ const ETA = (() => {
     return m ? Number(m[1]) * 60 + Number(m[2]) : null;
   }
 
+  /* Odpowiednik minuty_od_poczatku_dnia z trasex.py: pełny czas liczy się
+     RAZEM Z DATĄ zlecenia — dostawa zamknięta o 00:30 następnego dnia to 1470
+     minut, a nie 30, więc dalsze godziny nie cofają się na rano tego dnia. */
+  function minutyOdPoczatkuDnia(czas, data) {
+    const s = String(czas || '');
+    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(s);
+    const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(data || ''));
+    if (!m) return naMinuty(s);
+    if (!d) return naMinuty(s.slice(11, 16));
+    const dni = Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3])
+      - Date.UTC(+d[1], +d[2] - 1, +d[3])) / 86400000);
+    return dni * 1440 + Number(m[4]) * 60 + Number(m[5]);
+  }
+
   function naGodzine(minuty) {
     const m = ((Math.round(minuty) % 1440) + 1440) % 1440;
     return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
@@ -200,17 +218,21 @@ const ETA = (() => {
     });
 
     // punkt startowy: ostatnia zamknięta dostawa (jeśli dziś już jeżdżą),
-    // w przeciwnym razie baza i planowana godzina wyjazdu
+    // w przeciwnym razie baza i planowana godzina wyjazdu.
+    // Ostatnia W CZASIE, nie na liście — kierowca bywa u piątego klienta przed
+    // trzecim (tak samo liczy godziny_dojazdu w trasex.py).
     const zamkniete = punkty.filter(p => p.status !== 'oczekuje' && p.zamkniete_o);
-    const ostatnia = zamkniete[zamkniete.length - 1];
+    const ostatnia = zamkniete.reduce((naj, p) =>
+      (!naj || String(p.zamkniete_o) > String(naj.zamkniete_o) ? p : naj), null);
     let skad = null;
     let minuty = null;
     if (ostatnia && ostatnia.mapa_lat != null) {
       skad = [ostatnia.mapa_lat, ostatnia.mapa_lon];
-      minuty = naMinuty(String(ostatnia.zamkniete_o).slice(11, 16));
+      minuty = minutyOdPoczatkuDnia(ostatnia.zamkniete_o, trasa.data);
     } else {
       skad = u.startWBazie ? u.baza : null;
-      minuty = naMinuty(trasa.start_o ? String(trasa.start_o).slice(11, 16) : u.wyjazd);
+      minuty = trasa.start_o ? minutyOdPoczatkuDnia(trasa.start_o, trasa.data)
+        : naMinuty(u.wyjazd);
     }
     if (minuty == null) return 0;
 
@@ -267,5 +289,6 @@ const ETA = (() => {
     return `<span class="slaby">🕒 ok. ${p.eta}</span>` + przerwa;
   }
 
-  return { policz, opis, odlegloscKm, naGodzine, naMinuty, modelCzasu, liczba };
+  return { policz, opis, odlegloscKm, naGodzine, naMinuty, minutyOdPoczatkuDnia, modelCzasu,
+    liczba };
 })();

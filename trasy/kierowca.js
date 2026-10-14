@@ -31,8 +31,8 @@ async function wczytajMojaTrase(data, zPamieci) {
   } catch (e) {
     const kopia = await Kolejka.przypomnij(klucz);
     if (kopia === null || kopia === undefined) throw e;
-    komunikat(stan.sesjaWygasla ? 'Sesja wygasła — pokazuję zlecenie z pamięci telefonu'
-      : 'Brak sieci — pokazuję zlecenie z pamięci telefonu');
+    komunikat(stan.sesjaWygasla ? 'Sesja wygasła — pokazuję trasę z pamięci telefonu'
+      : 'Brak sieci — pokazuję trasę z pamięci telefonu');
     return kopia;
   }
 }
@@ -60,7 +60,9 @@ async function nalozKolejke(trasa) {
         // co telefon policzył pod rampą — inaczej ekran kłamałby na czerwono.
         zaladunek_zgodny: (!p.dokument_skrot
           || Skrot.numeru(o.numer) === p.dokument_skrot) ? 1 : 0,
-        ile_zalacznikow: (p.ile_zalacznikow || 0) + (o.zdjecie ? 1 : 0),
+        // Zdjęcie przy pozycji jest nieobowiązkowe (UI etap 2) i bywa ich kilka.
+        ile_zalacznikow: (p.ile_zalacznikow || 0)
+          + ((o.zdjecia || []).length || (o.zdjecie ? 1 : 0)),
         czeka_na_wyslanie: true,
       });
       continue;
@@ -112,7 +114,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
     : p.status === 'nieudane'
       ? '<span class="plakietka p-nieudane">✕ Nieudane</span>'
       : p.status === 'odwolany'
-        ? '<span class="plakietka p-odwolany">Zdjęte ze zlecenia</span>'
+        ? '<span class="plakietka p-odwolany">Zdjęte z trasy</span>'
         : `<span class="plakietka p-oczekuje">${nasze ? 'Do odwiedzenia' : 'Do zrobienia'}</span>`;
   const dopiski = [];
   if (p.towar) dopiski.push('📦 ' + escHtml(p.towar));
@@ -131,7 +133,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
       <span class="numer">${numer}</span>
       <span class="srodek">
         <span class="nazwa">${nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}</span>
-        <span class="adres">${escHtml(adresJednymCiagiem(p)) || '<i>brak adresu</i>'}</span>
+        <span class="adres">${adresHtml(p) || '<i>brak adresu</i>'}</span>
         ${dopiski.length ? `<span class="dopisek">${dopiski.join(' &nbsp;·&nbsp; ')}</span>` : ''}
       </span>
       <span class="prawo">${nasze ? '<span class="plakietka p-nasze">NASZE</span>' : ''}${plakietka}${okno}</span>
@@ -139,7 +141,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
 }
 
 EKRANY.moja = {
-  tytul: 'Moje zlecenie',
+  tytul: 'Moja trasa',
   poSynchronizacji() { if (stan.ekran === 'moja') pokazEkran('moja'); },
   async rysuj(pole, param) {
     const data = param.data || dzisiaj();
@@ -154,7 +156,7 @@ EKRANY.moja = {
       pole.innerHTML = wybor + `<div class="karta"><div class="pusto">
           <span class="duza-ikona">📭</span>
           Na ten dzień nie masz zaplanowanej trasy.
-          <div class="male" style="margin-top:8px">Biuro układa zlecenia rano — odśwież za chwilę.</div>
+          <div class="male" style="margin-top:8px">Biuro układa trasy rano — odśwież za chwilę.</div>
         </div></div>`;
       pole.querySelector('#data-trasy').onchange = e => pokazEkran('moja', { data: e.target.value });
       pole.querySelector('#btn-mapa').disabled = true;
@@ -176,9 +178,9 @@ EKRANY.moja = {
       <div class="karta scisla">
         <div class="karta-gora">
           <div>
-            <h2 style="margin:0">${escHtml(mojaTrasa.nazwa || 'Zlecenie ' + polskaData(mojaTrasa.data))}</h2>
+            <h2 style="margin:0">${escHtml(mojaTrasa.nazwa || 'Trasa ' + polskaData(mojaTrasa.data))}</h2>
             <div class="male slaby">
-              ${escHtml(mojaTrasa.pojazd_nazwa || 'bez przypisanego busa')}
+              ${escHtml(mojaTrasa.pojazd_nazwa || 'bez przypisanego auta')}
               ${mojaTrasa.rejestracja ? '· ' + escHtml(mojaTrasa.rejestracja) : ''}
               ${mojaTrasa.start_o ? '· start ' + samaGodzina(mojaTrasa.start_o) : ''}
             </div>
@@ -200,14 +202,14 @@ EKRANY.moja = {
         ${mojaTrasa.uwagi ? `<div class="wstega info" style="margin-top:12px">📌 ${escHtml(mojaTrasa.uwagi)}</div>` : ''}
         ${(mojaTrasa.inne_trasy_dnia || []).length ? `<div class="wstega uwaga" style="margin-top:10px">
             Masz dziś jeszcze ${mojaTrasa.inne_trasy_dnia.length}
-            ${odmiana(mojaTrasa.inne_trasy_dnia.length, 'zlecenie', 'zlecenia', 'zleceń')}:
+            ${odmiana(mojaTrasa.inne_trasy_dnia.length, 'trasę', 'trasy', 'tras')}:
             ${mojaTrasa.inne_trasy_dnia.map(x =>
               `<b>${escHtml(x.nazwa || 'bez nazwy')}</b> (${x.ile || 0} pkt)`).join(', ')}
             — pokaże się po zamknięciu tej.</div>` : ''}
         <div class="przyciski" style="margin-top:12px">
-          ${mojaTrasa.status === 'planowana' ? '<button class="glowny" id="btn-start">▶ Rozpocznij zlecenie</button>' : ''}
+          ${mojaTrasa.status === 'planowana' ? '<button class="glowny" id="btn-start">▶ Rozpocznij trasę</button>' : ''}
           ${zrobione === l.wszystkie && l.wszystkie && mojaTrasa.status !== 'zakonczona'
-        ? '<button class="zielony" id="btn-koniec">✓ Zakończ zlecenie</button>' : ''}
+        ? '<button class="zielony" id="btn-koniec">✓ Zakończ trasę</button>' : ''}
           <button id="btn-mapa-link">🧭 Cała trasa w Google Maps</button>
           <button id="btn-polozenie">${sledzenieWlaczone() ? '📍 Wyłącz położenie' : '📍 Udostępniaj położenie'}</button>
         </div>
@@ -215,7 +217,7 @@ EKRANY.moja = {
       <div class="mapa ukryty" id="mapa-kierowcy"></div>
       <div id="lista-przystankow">
         ${wSieci.map((p, i) => kartaPrzystanku(p, i + 1, true, p === nastepny)).join('') ||
-      '<div class="karta"><div class="pusto">Zlecenie jest puste — biuro jeszcze nie dodało punktów.</div></div>'}
+      '<div class="karta"><div class="pusto">Trasa jest pusta — biuro jeszcze nie dodało punktów.</div></div>'}
       </div>`;
 
     pole.querySelector('#data-trasy').onchange = e => pokazEkran('moja', { data: e.target.value });
@@ -234,28 +236,12 @@ EKRANY.moja = {
     }
 
     const btnStart = pole.querySelector('#btn-start');
-    if (btnStart) btnStart.onclick = async () => {
-      // Twarda blokada, nie pytanie. Bus nie rusza, dopoki kazda pozycja nie ma
-      // zdjecia i numeru zamowienia — serwer pilnuje tego samego niezaleznie,
-      // wiec objazd przez wylaczony JavaScript tez nic nie da.
-      const zostalo = await nieodhaczone(mojaTrasa);
-      if (zostalo) {
-        komunikat(`Najpierw potwierdź załadunek — zostało ${zostalo} `
-          + `${odmiana(zostalo, 'pozycja', 'pozycje', 'pozycji')}.`, 'blad');
-        pokazEkran('zaladunek', { data });
-        return;
-      }
-      await doKolejki({ typ: 'stan_trasy', trasa: mojaTrasa.id, stan: 'start', czas: czasTeraz() },
-        'Zlecenie rozpoczęte');
-      mojaTrasa.status = 'w_toku'; mojaTrasa.start_o = czasTeraz();
-      await Kolejka.zapamietaj('moja-trasa-' + data, mojaTrasa);
-      pokazEkran('moja', { data, zPamieci: true });
-    };
+    if (btnStart) btnStart.onclick = () => rozpocznijZlecenie(mojaTrasa, data);
     const btnKoniec = pole.querySelector('#btn-koniec');
     if (btnKoniec) btnKoniec.onclick = async () => {
-      if (!await potwierdz('Zakończyć zlecenie?', 'Wszystkie punkty są zamknięte.')) return;
+      if (!await potwierdz('Zakończyć trasę?', 'Wszystkie punkty są zamknięte.')) return;
       await doKolejki({ typ: 'stan_trasy', trasa: mojaTrasa.id, stan: 'koniec', czas: czasTeraz() },
-        'Zlecenie zakończone');
+        'Trasa zakończona');
       mojaTrasa.status = 'zakonczona';
       await Kolejka.zapamietaj('moja-trasa-' + data, mojaTrasa);
       pokazEkran('moja', { data, zPamieci: true });
@@ -297,12 +283,44 @@ EKRANY.moja = {
   },
 };
 
+/* „▶ Rozpocznij trasę” — jedna akcja dla dwóch miejsc: przycisku na Mojej
+   trasie i dużego przycisku pod listą Załadunku, który pojawia się, gdy
+   wszystko jest potwierdzone (kierowca kończy załadunek właśnie tam).
+
+   Twarda blokada, nie pytanie. Auto nie rusza, dopoki kazda pozycja nie ma
+   numeru zamowienia (zdjecie od UI etapu 2 jest nieobowiazkowe) — serwer
+   pilnuje tego samego niezaleznie, wiec objazd przez wylaczony JavaScript
+   tez nic nie da.                                                           */
+async function rozpocznijZlecenie(trasa, data) {
+  const zostalo = await nieodhaczone(trasa);
+  if (zostalo) {
+    komunikat(tekstNiepotwierdzonych(zostalo), 'blad');
+    pokazEkran('zaladunek', { data });
+    return;
+  }
+  await doKolejki({ typ: 'stan_trasy', trasa: trasa.id, stan: 'start', czas: czasTeraz() },
+    'Trasa rozpoczęta');
+  trasa.status = 'w_toku'; trasa.start_o = czasTeraz();
+  await Kolejka.zapamietaj('moja-trasa-' + data, trasa);
+  // Z Załadunku trasa przychodzi z osobnego wczytania — Moja trasa ma pokazać
+  // TEN stan (już „w toku”), a nie pytać serwer, do którego zapis jeszcze leci.
+  mojaTrasa = trasa;
+  pokazEkran('moja', { data, zPamieci: true });
+}
+
+/* „została 1 pozycja / zostały 4 pozycje / zostało 5 pozycji” — czasownik
+   odmienia się razem z rzeczownikiem („zostało 4 pozycje” raziło). */
+function tekstNiepotwierdzonych(ile) {
+  return `Najpierw potwierdź załadunek — ${odmiana(ile, 'została', 'zostały', 'zostało')} ${ile} `
+    + `${odmiana(ile, 'pozycja', 'pozycje', 'pozycji')}.`;
+}
+
 /* ------------------------------------------------------- „Moje auto” */
 
 /* Przegląd miesięczny, usterka, awaria — to prowadzi GK Flota, nie GK Trasy.
    GK Trasy prosi GK Flota o jednorazowy link (ważny 2 minuty, bez drugiego
    logowania) i przechodzi pod niego. Z GK Flota wraca się przyciskiem
-   „Moja trasa” na adres podany tutaj jako powrot. Zapisy czekające
+   „← GK Trasy” na adres podany tutaj jako powrot. Zapisy czekające
    w kolejce zostają w pamięci telefonu i wyślą się po powrocie.
 
    powrot = adres TEJ aplikacji, nie samo źródło: otwarta z GitHub Pages
@@ -343,7 +361,7 @@ function oknoPrzystanku(id) {
       ${p.uwagi ? `<p><b>Uwagi do dostawy:</b> ${escHtml(p.uwagi)}</p>` : ''}
       ${zamkniety ? `<div class="wstega ${p.status === 'dostarczone' ? 'info' : 'uwaga'}">
           ${p.status === 'dostarczone' ? (p.nasze ? '✓ Załatwione' : '✓ Dostarczone')
-            : odwolany ? 'Biuro zdjęło ten punkt ze zlecenia — nie musisz tam jechać'
+            : odwolany ? 'Biuro zdjęło ten punkt z trasy — nie musisz tam jechać'
             : '✕ Nieudane: ' + escHtml(p.powod)}
           ${p.zamkniete_o ? ' o ' + samaGodzina(p.zamkniete_o) : ''}
           ${p.odebral ? '<br>Odebrał: ' + escHtml(p.odebral) : ''}
@@ -446,9 +464,8 @@ function oknoDostarczone(p) {
         <canvas class="pole-podpisu" id="d-podpis"></canvas>
       </label>
       <button class="maly" id="d-czysc-podpis" type="button">Wyczyść podpis</button>`}
-      <label style="margin-top:16px">Zdjęcia <span class="slaby">(towar, dokument, miejsce)</span>
-        <input type="file" id="d-zdjecia" accept="image/*" capture="environment" multiple>
-      </label>
+      <label style="margin-top:16px">Zdjęcia <span class="slaby">(towar, dokument, miejsce)</span></label>
+      ${przyciskAparatu('d-zdjecia')}
       <div class="miniatury" id="d-miniatury"></div>
       <label style="margin-top:12px">Notatka <span class="slaby">(nieobowiązkowa)</span>
         <textarea id="d-notatka" placeholder="np. zostawione w magazynie od podwórza"></textarea>
@@ -559,9 +576,8 @@ function oknoNieudanej(p) {
       <label>Opis <span class="slaby">(co powiedzieć biuru)</span>
         <textarea id="n-notatka" placeholder="np. brama zamknięta, telefon nie odbiera, umówione na jutro"></textarea>
       </label>
-      <label>Zdjęcie <span class="slaby">(nieobowiązkowe — bywa dowodem)</span>
-        <input type="file" id="n-zdjecia" accept="image/*" capture="environment" multiple>
-      </label>
+      <label>Zdjęcie <span class="slaby">(nieobowiązkowe — bywa dowodem)</span></label>
+      ${przyciskAparatu('n-zdjecia')}
       <div class="miniatury" id="n-miniatury"></div>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
@@ -587,6 +603,16 @@ function oknoNieudanej(p) {
         dodajZdjecia(e.target.files, zdjecia, pole.querySelector('#n-miniatury'), e.target);
     },
   });
+}
+
+/* Wejście aparatu jako duży przycisk „📷 Zrób zdjęcie” (Załadunek, Dostawa,
+   Nieudana dostawa). Goły <input type="file"> pokazywał „Wybierz pliki / Nie
+   wybrano pliku” małym guzikiem w rogu — kierowca w rękawicach nie trafiał,
+   a napis nic mu nie mówił. Input zostaje (ukryty w etykiecie): `capture`
+   otwiera aparat od razu, `multiple` pozwala dodać kilka zdjęć naraz.       */
+function przyciskAparatu(id) {
+  return `<label class="przycisk-aparatu">📷 Zrób zdjęcie
+        <input type="file" class="ukryty" id="${id}" accept="image/*" capture="environment" multiple></label>`;
 }
 
 async function dodajZdjecia(pliki, zbior, pojemnik, wejscie) {
@@ -673,7 +699,7 @@ function przelaczSledzenie() {
   okno({
     tytul: 'Udostępnianie położenia',
     tresc: `<p>Telefon będzie zapisywał Twoją trasę <b>tylko w czasie pracy</b> i tylko
-       dopóki ta aplikacja jest włączona. Biuro widzi dzięki temu, gdzie jest bus.</p>
+       dopóki ta aplikacja jest włączona. Biuro widzi dzięki temu, gdzie jest auto.</p>
        <p class="male slaby">Możesz to wyłączyć w każdej chwili tym samym przyciskiem.
        Zapisane punkty kasują się automatycznie po
        ${escHtml(stan.ustawienia.retencja_pozycji_dni || '90')} dniach.</p>`,
@@ -756,7 +782,7 @@ EKRANY.raporty = {
       moj = await Kolejka.przypomnij('raport-' + data);
     }
     // Pięć z ośmiu pól program potrafi wypisać sam: bus i godziny z trasy tego
-    // dnia, licznik na start z ostatniego raportu tego busa. Raport pisany po
+    // dnia, licznik na start z ostatniego raportu tego auta. Raport pisany po
     // dziesięciu godzinach w busie inaczej bywa niedbały albo żaden.
     let podpowiedz = {};
     if (!moj) {
@@ -779,11 +805,11 @@ EKRANY.raporty = {
           <input type="date" id="r-data" value="${data}" style="width:auto">
         </div>
         ${w._podpowiedziane && (w.pojazd || w.start_o || w.km_start != null) ? `
-          <div class="wstega info">Część pól wypełniłem za Ciebie — bus i godziny z dzisiejszej
-            trasy, licznik na start z ostatniego raportu tego busa. Sprawdź i popraw,
+          <div class="wstega info">Część pól wypełniłem za Ciebie — auto i godziny z dzisiejszej
+            trasy, licznik na start z ostatniego raportu tego auta. Sprawdź i popraw,
             jeśli coś się nie zgadza.</div>` : ''}
         <div class="dwie">
-          <label>Bus
+          <label>Auto
             <select id="r-pojazd">
               <option value="">— nie wybrano —</option>
               ${busy.map(b => `<option value="${b.id}" ${w.pojazd === b.id ? 'selected' : ''}>
@@ -791,7 +817,8 @@ EKRANY.raporty = {
             </select>
           </label>
           <label>Przerwa (minuty)
-            <input type="number" id="r-przerwa" min="0" max="600" value="${w.przerwa_min || 0}">
+            <input type="number" id="r-przerwa" min="0" max="600" placeholder="0"
+              value="${w._podpowiedziane ? '' : (w.przerwa_min || 0)}">
           </label>
           <label>Start pracy
             <input type="time" id="r-start" value="${escHtml(w.start_o || '')}">
@@ -814,7 +841,7 @@ EKRANY.raporty = {
             <input type="number" step="0.01" id="r-paliwo-pln" inputmode="decimal" value="${w.paliwo_pln != null ? w.paliwo_pln : ''}">
           </label>
         </div>
-        <label>Usterki busa <span class="slaby">(co nie działa, co wymienić)</span>
+        <label>Usterki auta <span class="slaby">(co nie działa, co wymienić)</span>
           <textarea id="r-usterki" placeholder="np. świeci kontrolka oleju, przetarta wycieraczka">${escHtml(w.usterki || '')}</textarea>
         </label>
         <label>Uwagi z dnia
@@ -869,7 +896,9 @@ EKRANY.raporty = {
         pojazd: pole.querySelector('#r-pojazd').value || null,
         start_o: pole.querySelector('#r-start').value,
         koniec_o: pole.querySelector('#r-koniec').value,
-        przerwa_min: pole.querySelector('#r-przerwa').value || 0,
+        // Surowy tekst pola: „0” wpisane przez kierowcę poprawia przerwę na zero,
+        // a puste pole (formularz bez zasięgu) zostawia tę zapisaną w biurze.
+        przerwa_min: pole.querySelector('#r-przerwa').value,
         km_start: kms || null, km_koniec: kmk || null,
         paliwo_l: pole.querySelector('#r-paliwo-l').value || null,
         paliwo_pln: pole.querySelector('#r-paliwo-pln').value || null,
