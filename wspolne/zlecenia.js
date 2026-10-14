@@ -66,7 +66,7 @@
      linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich.
      D47: zlecenie ZAPLANOWANE przez kierownika zakładu na później (status „zaplanowane”) dział widzi dopiero, gdy hub je
      zleci (zlecenie.aktywowane → „nowe”) — wcześniej nie ma go ani na liście, ani na plakietce, ani w zaległych. */
-  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien }) {
+  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien, tylko }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms)) return null; const l = H.lokalny(ms);
       return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
@@ -76,6 +76,7 @@
       .filter(z => (z.dane || {}).dzial === dzial && naLinii(z.dane || {}, { linia, linie })
         && widoczneDla(z.dane || {}, { ja, widziWszystkie, slowniki, dzien, H }))
       .filter(z => !moje || (z.dane || {}).wykonawca === moje || (z.dane || {}).przyjal === moje)
+      .filter(z => !tylko || z.id === tylko)          // D60: Panel „▶ Wykonaj” — ekran wykonania jednego zlecenia
       .map(z => {
         const d = z.dane || {};
         const termin = Date.parse(d.termin);
@@ -342,17 +343,18 @@
         ${role.includes('mistrz') ? '<button type="button" data-gora="narzedzia">🧰 Odłóż narzędzia</button>' : ''}
       </div>${s.info ? `<p class="hala-zlecenia-info" role="status">${esc(s.info)}</p>` : ''}` : '';
     const moje = mojeZgloszenia(hala, ja, opcje.opcjeZgloszen);
+    // D60: opcje.tylko — jedno zlecenie (okno „▶ Wykonaj” w Panelu): bez nagłówka, filtra i zgłoszeń osoby.
     el.innerHTML = `<div class="hala-zlecenia">
       ${narzedziaGory}
-      <div class="hala-zlecenia-naglowek"><h2>${esc(opcje.naglowek || 'Zlecenia od kierownika')}</h2>
+      ${opcje.tylko ? '' : `<div class="hala-zlecenia-naglowek"><h2>${esc(opcje.naglowek || 'Zlecenia od kierownika')}</h2>
         <div class="hala-zlecenia-filtr" role="group" aria-label="Które zlecenia">
           <button type="button" data-filtr="wszystkie" aria-pressed="${!s.moje}">Wszystkie</button>
-          <button type="button" data-filtr="moje" aria-pressed="${s.moje}">Moje</button></div></div>
+          <button type="button" data-filtr="moje" aria-pressed="${s.moje}">Moje</button></div></div>`}
       ${zal.length ? `<h3 class="hala-zlecenia-zalegle">Zaległe — zrób najpierw <span class="hala-zlecenia-ile">${zal.length}</span></h3>
         ${zal.map((z, i) => wiersz(z, i + 1)).join('')}${doZ.length ? '<h3>Pozostałe do zrobienia</h3>' : ''}` : ''}
       ${doZ.map(z => wiersz(z)).join('') || (zal.length ? '' : `<p class="hala-zlecenia-pusto">${pusto}</p>`)}
       ${wys.length ? `<h3>Czeka na kierownika</h3>${wys.map(z => wiersz(z)).join('')}` : ''}
-      ${moje.length ? `<h3>Moje zgłoszenia i narzędzia</h3>${moje.map(g => `<div class="hala-zgloszenie ${esc(g.klasa)}" data-typ="${esc(g.typ)}" data-id="${esc(g.id)}">
+      ${moje.length && !opcje.tylko ? `<h3>Moje zgłoszenia i narzędzia</h3>${moje.map(g => `<div class="hala-zgloszenie ${esc(g.klasa)}" data-typ="${esc(g.typ)}" data-id="${esc(g.id)}">
           <button type="button" class="hala-zlecenie-tytul" data-historia>${esc(g.tytul)}</button>
           <span class="znacznik ${esc(g.klasa)}">${esc(g.status)}</span>${g.odpowiedz ? `<p class="hala-zlecenie-opis">${esc(g.odpowiedz)}</p>` : ''}</div>`).join('')}` : ''}
     </div>`;

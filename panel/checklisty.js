@@ -1,5 +1,6 @@
 /* Panel Kierownika — szablony checklisty lidera (2026-09-28). Kto: role z kontraktu
-   (slowniki.szablony_checklist.zapis — kierownik i admin).
+   (slowniki.szablony_checklist.zapis — kierownik i admin). D60 (właściciel 2026-10-14: „checklisty nie powinny być
+   schowane w ustawieniach, tylko w zleceniach”): lista leży w Zlecenia → 💾 Zapisane, razem z pozostałymi wzorami.
 
    Szablon = nazwa + zakres (linie, zmiany; puste = wszystkie) + pozycje z terminem „godziny:minuty od startu
    zmiany”. Aplikacja Lidera bierze najwęższy pasujący szablon (Hala.szablonDla) i przy otwarciu zmiany robi
@@ -17,13 +18,14 @@
     $('lista-szablonow').innerHTML = lista.map(s => `
       <article class="szablon" data-kod="${esc(s.kod)}">
         <div class="opis"><b>${esc(s.nazwa)}</b>
+          <div class="szczegoly"><span class="znacznik rodzaj-zadania">Checklista lidera</span></div>
           <div class="slaby">${esc(s.zakres)} · pozycji: ${s.pozycji}</div></div>
         <div class="akcje">
           <button type="button" class="maly" data-akcja="zmien">Zmień</button>
           <button type="button" class="maly" data-akcja="kopiuj">Kopiuj</button>
           <button type="button" class="maly" data-akcja="usun">Usuń</button>
         </div>
-      </article>`).join('') || '<p class="pusto">Nie ma jeszcze szablonów — bez nich lider nie ma checklisty.</p>';
+      </article>`).join('') || '<p class="pusto">Nie ma jeszcze checklisty lidera — bez niej lider nie ma planu zmiany („+ Checklista lidera”).</p>';
   }
 
   // ------------------------------------------------------------ okno edycji

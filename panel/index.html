@@ -90,18 +90,15 @@
       <h2 id="t-zlecenia">Zlecenia dla działów
         <span class="licznik"><button type="button" id="nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
           <button type="button" id="nowe-stale" class="glowny" hidden>+ Nowe zapisane</button>
-          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista zadań</button></span></h2>
+          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista zadań</button>
+          <button type="button" id="nowy-szablon" hidden>+ Checklista lidera</button></span></h2>
       <!-- Jak w GK Trasy: zlecenia i zapisane (szablony). Zapisane POJEDYNCZE zleca kierownik „Zleć teraz” ile razy chce,
            STAŁE (z harmonogramem) hub zleca sam — D31; właściciel 2026-10-13: zapis nie tylko stałych. -->
-      <div class="chipy tryb-zlecen" id="tryb-zlecen" role="group" aria-label="Zlecenia albo zapisane i stałe">
-        <button type="button" class="chip" data-tryb="biezace" aria-pressed="true">Zlecenia</button>
-        <button type="button" class="chip" data-tryb="stale" aria-pressed="false">💾 Zapisane i stałe</button>
-        <!-- D55: zgłoszenia nieprawidłowości od działów, zużyte narzędzia od mistrzów, zadania samego kierownika zakładu. -->
-        <button type="button" class="chip" data-tryb="zgloszenia" aria-pressed="false">📝 Zgłoszenia</button>
-        <button type="button" class="chip" data-tryb="narzedzia" aria-pressed="false">🧰 Narzędzia</button>
-        <!-- D59: zgłoszenia BHP od liderów (odstępstwo, incydent, sytuacja potencjalnie wypadkowa) — zamyka kierownik. -->
-        <button type="button" class="chip" data-tryb="bhp" aria-pressed="false">⛑ BHP</button>
-        <button type="button" class="chip" data-tryb="moje" aria-pressed="false" hidden>✅ Moje zadania</button>
+      <!-- D60 (właściciel 2026-10-14): jedna lista zadań — zlecenia, zapisane/stałe, checklisty zadań, zadania kierownika,
+           zgłoszenia, narzędzia i BHP razem, ze znacznikiem rodzaju i filtrem „Rodzaj”; obok wszystkie wzory (Zapisane). -->
+      <div class="chipy tryb-zlecen" id="tryb-zlecen" role="group" aria-label="Zadania albo zapisane">
+        <button type="button" class="chip" data-tryb="biezace" aria-pressed="true">Zadania</button>
+        <button type="button" class="chip" data-tryb="stale" aria-pressed="false">💾 Zapisane</button>
       </div>
       <div id="zlecenia-biezace" class="zlecenia-czesc">
         <!-- UI etap 2 (właściciel 2026-10-12): trzy filtry. Po terminie (⏰), zaplanowane i przepadłe to znaczniki na
@@ -115,6 +112,7 @@
         <form class="filtry-zlecen" id="filtry-zlecen" autocomplete="off">
           <label>Dział<select name="dzial"><option value="">wszystkie</option></select></label>
           <label>Osoba<select name="osoba"><option value="">wszyscy</option></select></label>
+          <label>Rodzaj<select name="rodzaj"><option value="">wszystkie</option></select></label>
           <label id="filtr-okres">Okres<select name="okres">
             <option value="2">2 dni</option><option value="7">7 dni</option><option value="30">30 dni</option><option value="90">90 dni</option>
           </select></label>
@@ -122,26 +120,14 @@
         </form>
         <div id="lista-zlecen" class="lista"></div>
       </div>
-      <div id="zlecenia-zgloszenia" class="zlecenia-czesc" hidden>
-        <p class="slaby opis-widoku">Działy informują o nieprawidłowościach. „Zrób zlecenie” albo „Zrób stałe” — od razu zlecasz robotę;
-          „Odrzuć” — zgłaszający zobaczy powód.</p>
-        <div id="lista-zgloszen" class="lista"></div>
-      </div>
-      <div id="zlecenia-narzedzia" class="zlecenia-czesc" hidden>
-        <p class="slaby opis-widoku">Mistrzowie odkładają zużyte narzędzia (frezy, piły…) ze zdjęciem. Odbierając, potwierdź zdjęciem.</p>
-        <div id="lista-narzedzi" class="lista"></div>
-      </div>
-      <div id="zlecenia-bhp" class="zlecenia-czesc" hidden>
-        <p class="slaby opis-widoku">Zgłoszenia BHP od liderów i mistrzów. Zamknij, gdy wiesz, co zrobiono — wpisz działania;
-          „Zrób zlecenie” — poprawa dla liderów tej linii ze zdjęciem.</p>
-        <div id="lista-bhp" class="lista"></div>
-      </div>
-      <div id="zlecenia-moje" class="zlecenia-czesc" hidden><div id="moje-zadania"></div></div>
       <div id="zlecenia-stale" class="zlecenia-czesc" hidden>
         <p class="slaby opis-widoku">Zapisane zlecenie zapamiętuje zadanie i dział. <b>Pojedyncze</b> zlecasz sam — „Zleć teraz”,
           ile razy trzeba, także kilka razy na zmianę. <b>Stałe</b> ma harmonogram — serwer sam je zleca (też co 1–4 h w ciągu zmiany).
-          Najprościej: przy gotowym zleceniu użyj „💾 Zapisz”.</p>
+          Najprościej: przy gotowym zleceniu użyj „💾 Zapisz”. <b>Checklista lidera</b> — plan zmiany na linii (lider dostaje
+          najwęższy pasujący: np. na „Zmianę III” wygrywa z tym na wszystkie zmiany; zmiana działa od następnej zmiany).</p>
         <button type="button" id="zestaw-stalych" hidden>+ Zadania mistrza i lidera</button>
+        <!-- D60: szablony checklisty lidera przeniesione z Administracji (checklisty.js) — ta sama lista wzorów. -->
+        <div id="lista-szablonow" class="lista"></div>
         <div id="lista-stalych" class="lista"></div>
       </div>
     </section>
@@ -185,22 +171,9 @@
         <button type="button" class="chip" data-czesc="urlopy" aria-pressed="false">🏖 Urlopy</button>
         <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
         <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false">Ustawienia</button>
-        <button type="button" class="chip" data-czesc="checklisty" aria-pressed="false">☑️ Checklisty</button>
         <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Serwis</button>
       </div>
       <div id="admin-tresc" class="admin-tresc"></div>
-      <!-- UI etap 3: szablony checklisty lidera — część Administracji (wcześniej osobna pozycja menu; #checklisty działa dalej).
-           Stały element, nie w admin-tresc: checklisty.js trzyma w nim swoich słuchaczy. -->
-      <div id="checklisty" hidden>
-        <h3 id="t-checklisty" class="naglowek-czesci">Szablony checklisty lidera
-          <button type="button" id="nowy-szablon" class="glowny">+ Nowy szablon</button></h3>
-        <p class="slaby opis-widoku">Lider dostaje najwęższy pasujący szablon (np. szablon na „Zmianę III” wygrywa z szablonem na wszystkie zmiany).
-          Zmiana szablonu działa od następnej zmiany — ta, która trwa, zostaje przy swojej checkliście.</p>
-        <p class="slaby opis-widoku">Checklista zadań dla dowolnego działu i osoby (zmiany, dni, a każda pozycja z własnym zdjęciem, notatką
-          albo skanem QR) — <button type="button" class="maly" id="checklista-zlecen-z-administracji">+ Checklista zadań</button>
-          (pozycje trafiają do Zlecenia → 💾 Zapisane i stałe).</p>
-        <div id="lista-szablonow" class="lista"></div>
-      </div>
     </section>
   </div>
 
@@ -369,6 +342,12 @@
 </dialog>
 
 <!-- Powód (Zwróć, Anuluj) — w oknie aplikacji zamiast prompt() przeglądarki (D30). -->
+<!-- D60: zadanie dla kierownika zakładu (dział „kierownik”) z jednej listy — wspólny ekran wykonania (zlecenia.js). -->
+<dialog id="okno-wykonania" class="okno okno-szerokie" aria-label="Wykonanie zadania">
+  <div id="wykonanie-zadania"></div>
+  <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
+</dialog>
+
 <dialog id="okno-tekstu" class="okno" aria-labelledby="t-okno-tekstu">
   <form method="dialog" id="formularz-tekstu">
     <h2 id="t-okno-tekstu"></h2>

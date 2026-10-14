@@ -278,7 +278,6 @@
   }
 
   $('nowa-checklista-zlecen').addEventListener('click', () => otworzChecklisty(null));
-  $('checklista-zlecen-z-administracji').addEventListener('click', () => otworzChecklisty(null));
 
   P.widoki.stale = { rysuj, zZlecenia, otworzChecklisty, otworzZ: (wartosci, tytul, fn) => otworz(wartosci, null, tytul, fn) };
 })();

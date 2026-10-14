@@ -359,12 +359,12 @@
     // UI etap 4: pusta Jakość nie zabiera pół ekranu — staje cienkim paskiem, a Awarie dostają całą szerokość (panel.css).
     $('na-zywo').classList.toggle('bez-jakosci', !w.lista.length && !wcz.length && !ileBhp);
   }
-  $('lista-jakosci').addEventListener('click', ev => { if (ev.target.closest('[data-bhp]')) Panel.pokazZlecenia(null, 'bhp'); });
+  $('lista-jakosci').addEventListener('click', ev => { if (ev.target.closest('[data-bhp]')) Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp'); });
 
   /* Lista raportów jest przerysowywana przy każdym zdarzeniu i co 20 s — bez tej
      pamięci rozwinięty raport zwijałby się kierownikowi w trakcie czytania.   */
   const otwarteRaporty = new Set();
-  $('lista-raportow').addEventListener('click', ev => { if (ev.target.closest('[data-bhp-raport]')) Panel.pokazZlecenia(null, 'bhp'); });
+  $('lista-raportow').addEventListener('click', ev => { if (ev.target.closest('[data-bhp-raport]')) Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp'); });
   $('lista-raportow').addEventListener('toggle', ev => {
     const k = ev.target.dataset && ev.target.dataset.klucz;
     if (k) { if (ev.target.open) otwarteRaporty.add(k); else otwarteRaporty.delete(k); }
@@ -460,6 +460,7 @@
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {
         rysujZlecenia(d, zlecenia);
+        if ($('okno-wykonania').open && Panel.widoki.zgloszenia) Panel.widoki.zgloszenia.odswiezWykonanie();
       } else if (widokAktywny === 'wskazniki') {
         if (Panel.widoki.wskazniki) Panel.widoki.wskazniki.rysuj(d);
       } else if (widokAktywny === 'administracja') {
@@ -485,16 +486,20 @@
     if (k && k.dataset.kafel === 'zlecenia') Panel.pokazZlecenia(null, 'biezace');
     if (k && k.dataset.kafel === 'po-terminie') Panel.pokazZlecenia('otwarte', 'biezace');
     if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();
-    if (k && k.dataset.kafel === 'bhp') Panel.pokazZlecenia(null, 'bhp');
+    if (k && k.dataset.kafel === 'bhp') Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp');
   });
 
   // ------------------------------------------------------------ zlecenia dla działów (kierownik)
 
   let filtrZlecen = 'otwarte', trybZlecen = 'biezace';
-  /* Wybór filtra albo trybu z zewnątrz (kafelek „Zlecenia po terminie” na pulpicie, push). */
-  Panel.pokazZlecenia = (filtr, tryb) => {
+  /* Wybór filtra, trybu (biezace | stale) i rodzaju z zewnątrz (kafelek „Zlecenia po terminie” na pulpicie, push, BHP).
+     Rodzaj podany — tylko ten (np. BHP); bez rodzaju — filtr rodzaju czyszczony, żeby kafelek pokazał wszystko. */
+  Panel.pokazZlecenia = (filtr, tryb, rodzaj) => {
     if (filtr) filtrZlecen = filtr;
     if (tryb) trybZlecen = tryb;
+    filtry.rodzaj = rodzaj || '';
+    const fr = $('filtry-zlecen');
+    if (fr && fr.rodzaj) fr.rodzaj.value = filtry.rodzaj;
     document.querySelector('.zakladki [data-widok="zlecenia"]').click();
     $('lista-zlecen').scrollTop = 0;       // spóźnione są na górze listy — tam ma patrzeć kierownik
   };
@@ -511,11 +516,12 @@
     if (adres === '#administracja') { if (!$('menu-administracja').hidden) $('menu-administracja').click(); return; }
     // #checklisty — dawna pozycja menu (UI etap 3: część Administracji); stare zakładki i linki dalej trafiają w szablony.
     if (adres === '#checklisty') {
-      if (!$('menu-administracja').hidden) { Panel.widoki.administracja.przejdz('checklisty'); $('menu-administracja').click(); }
+      // D60: szablony checklisty lidera są w Zlecenia → 💾 Zapisane (stare zakładki i linki trafiają tam).
+      Panel.pokazZlecenia(null, 'stale');
       return;
     }
     // #bhp — dotknięte powiadomienie o zgłoszeniu BHP (D59): lista ⛑ BHP, otwarte na górze.
-    if (adres === '#bhp') { Panel.pokazZlecenia(null, 'bhp'); return; }
+    if (adres === '#bhp') { Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp'); return; }
     Panel.pokazZlecenia('otwarte', 'biezace');
   }
   window.addEventListener('hashchange', obsluzAdres);
@@ -536,8 +542,8 @@
              przepadlo: 'alarm', zaplanowane: 'neutral' }[status] || 'neutral';
   }
 
-  const PUSTE_ZLECENIA = { otwarte: 'Żadne zlecenie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na przyjęcie',
-                           zamkniete: 'Brak zamkniętych zleceń w wybranym okresie' };
+  const PUSTE_ZLECENIA = { otwarte: 'Żadne zadanie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na przyjęcie',
+                           zamkniete: 'Brak zamkniętych zadań w wybranym okresie' };
 
   const mozeZapisacStale = () => {
     const role = (hala.pracownik && hala.pracownik.role) || [];
@@ -551,7 +557,7 @@
 
   /* D55: filtry listy zleceń. Okres dłuższy niż 2 dni (Zamknięte) — dociągamy zlecenia z serwera (GET /stan/zlecenie?od=),
      telefon/Panel trzyma w pamięci tylko dwie doby. */
-  const filtry = { dzial: '', osoba: '', okres: 2, spoznione: false };
+  const filtry = { dzial: '', osoba: '', okres: 2, spoznione: false, rodzaj: '' };
   let starsze = { od: null, lista: [], wczytuje: false };
   async function wczytajStarsze(dni) {
     const od = new Date(hala.teraz() - dni * 86400000).toISOString();
@@ -581,10 +587,14 @@
     const noweO = '<option value="">wszyscy</option>' + osoby.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('');
     if (f.osoba.dataset.html !== noweO) { f.osoba.innerHTML = noweO; f.osoba.dataset.html = noweO; f.osoba.value = filtry.osoba; if (f.osoba.value !== filtry.osoba) filtry.osoba = ''; }
     $('filtr-okres').hidden = filtrZlecen !== 'zamkniete';
+    const noweR = '<option value="">wszystkie</option>' + W.RODZAJE_ZADAN.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join('');
+    if (f.rodzaj.dataset.html !== noweR) { f.rodzaj.innerHTML = noweR; f.rodzaj.dataset.html = noweR; }
+    f.rodzaj.value = filtry.rodzaj;
   }
   $('filtry-zlecen').addEventListener('change', ev => {
     const f = $('filtry-zlecen');
-    Object.assign(filtry, { dzial: f.dzial.value, osoba: f.osoba.value, okres: +f.okres.value || 2, spoznione: f.spoznione.checked });
+    Object.assign(filtry, { dzial: f.dzial.value, osoba: f.osoba.value, okres: +f.okres.value || 2, spoznione: f.spoznione.checked,
+                            rodzaj: f.rodzaj.value });
     if (ev.target === f.okres && filtry.okres > 2) wczytajStarsze(filtry.okres);
     narysuj();
   });
@@ -593,50 +603,59 @@
   function rysujZlecenia(d, lista) {
     for (const b of document.querySelectorAll('#tryb-zlecen [data-tryb]')) b.setAttribute('aria-pressed', String(b.dataset.tryb === trybZlecen));
     for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) b.setAttribute('aria-pressed', String(b.dataset.filtr === filtrZlecen));
+    // D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):
+    // dwa tryby — Zadania (jedna lista wszystkich rodzajów, znacznik + filtr „Rodzaj”) i Zapisane (wszystkie wzory, także
+    // checklisty lidera, wcześniej w Administracji). Zgłoszenia, narzędzia i BHP — wiersze z zgloszenia.js.
     const ZG = Panel.widoki.zgloszenia;
-    // D55: „Moje zadania” tylko kierownikowi zakładu (dział „kierownik”); liczby na chipach — co czeka.
-    const kierownik = ((hala.pracownik && hala.pracownik.role) || []).includes('kierownik');
-    const ile = ZG ? ZG.liczby() : {};
-    for (const [tryb, napis] of [['zgloszenia', '📝 Zgłoszenia'], ['narzedzia', '🧰 Narzędzia'], ['bhp', '⛑ BHP'], ['moje', '✅ Moje zadania']]) {
-      const b = document.querySelector(`#tryb-zlecen [data-tryb="${tryb}"]`);
-      const t = ile[tryb] ? `${napis} · ${ile[tryb]}` : napis;
-      if (b.textContent !== t) b.textContent = t;
-      b.classList.toggle('spoznione', !!ile[tryb] && tryb !== 'moje');
-    }
-    document.querySelector('#tryb-zlecen [data-tryb="moje"]').hidden = !kierownik;
-    if (trybZlecen === 'moje' && !kierownik) trybZlecen = 'biezace';
-    for (const t of ['biezace', 'stale', 'zgloszenia', 'narzedzia', 'bhp', 'moje']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
+    for (const t of ['biezace', 'stale']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
-    if (trybZlecen === 'stale') { if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d); return; }
-    if (trybZlecen === 'zgloszenia') { if (ZG) ZG.rysujZgloszenia(d); return; }
-    if (trybZlecen === 'narzedzia') { if (ZG) ZG.rysujNarzedzia(d); return; }
-    if (trybZlecen === 'bhp') { if (ZG) ZG.rysujBhp(d); return; }
-    if (trybZlecen === 'moje') { if (ZG) ZG.rysujMoje(d); return; }
+    $('nowy-szablon').hidden = !(trybZlecen === 'stale' && Panel.dostepAdministracji().szablony);
+    if (trybZlecen === 'stale') {
+      if (Panel.widoki.checklisty) Panel.widoki.checklisty.rysuj();
+      if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d);
+      return;
+    }
     rysujFiltry(d);
-    const wiersze = W.filtrujZlecenia(W.zlecenia({ zlecenia: listaZOkresem(lista), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
-                                                   teraz: d.teraz, filtr: filtrZlecen, ja: hala.pracownik }), filtry);
-    // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego.
-    // Po terminie i przepadłe (D35) — chip na czerwono: to jest do dopilnowania, a nie tylko do przeczytania.
-    for (const c of W.chipyZlecen(lista, d.teraz)) {
+    const zlecenia = W.zlecenia({ zlecenia: listaZOkresem(lista), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
+                                  teraz: d.teraz, filtr: filtrZlecen, ja: hala.pracownik }).map(z => Object.assign(z, { html: wierszZlecenia(z) }));
+    const inne = ZG ? ZG.wiersze(d, filtrZlecen) : [];
+    const wiersze = W.polaczZadania(W.filtrujZlecenia(zlecenia, filtry), W.filtrujZlecenia(inne, filtry));
+    // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego (także
+    // zgłoszenia, narzędzia i BHP). Po terminie, przepadłe (D35) i pilne BHP — chip na czerwono.
+    for (const c of W.chipyZlecen(lista, d.teraz, ZG ? ZG.liczby() : null)) {
       const b = document.querySelector(`#filtr-zlecen [data-filtr="${c.filtr}"]`);
       if (!b) continue;
       if (b.textContent !== c.napis) b.textContent = c.napis;
       b.classList.toggle('spoznione', c.alarm);
     }
+    $('lista-zlecen').innerHTML = wiersze.map(w => w.html).join('') || `<p class="pusto">${PUSTE_ZLECENIA[filtrZlecen] || 'Brak zadań'}</p>`;
+    // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
+    for (const e of $('lista-zlecen').querySelectorAll('img[data-plik]'))
+      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+  }
+
+  /* Wiersz zlecenia na jednej liście (D60: znacznik rodzaju; zadanie dla kierownika — „▶ Wykonaj”). */
+  const zdjeciaWiersza = (ids, etykieta, podpis) => ids.length ? `<div class="zdjecia"><span class="slaby">${esc(etykieta)}</span>${ids.map(id =>
+    `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : '';
+  function wierszZlecenia(z) {
     const kier = mozeWyslac('zlecenie.zamkniete');
     const stale = mozeZapisacStale();
-    const zdjecia = (ids, etykieta, podpis) => ids.length ? `<div class="zdjecia"><span class="slaby">${esc(etykieta)}</span>${ids.map(id =>
-      `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : '';
-    $('lista-zlecen').innerHTML = wiersze.map(z => `
-      <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-id="${esc(z.id)}">
+    const zdjecia = zdjeciaWiersza;
+    const ja = hala.pracownik && hala.pracownik.id;
+    const zrob = z.rodzaj === 'kierownik' && z.otwarte && ((hala.pracownik && hala.pracownik.role) || []).some(r => r === 'kierownik' || r === 'admin')
+      && (!z.wykonawcaId || z.wykonawcaId === ja);
+    const rodzajNapis = z.rodzaj === 'checklista' && z.checklista ? `Checklista: ${z.checklista}` : W.nazwaRodzaju(z.rodzaj);
+    return `
+      <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-rodzaj="zlecenie" data-id="${esc(z.id)}">
         <div class="opis">
-          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button> <span class="slaby">${esc(z.numer)}</span>${z.stale ? ` <span class="slaby" title="Z zapisanego albo stałego">🔁</span>` : ''}${z.naZmiane ? ` <span class="znacznik neutral">${esc(z.naZmiane)}</span>` : ''}</div>
+          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button> <span class="slaby">${esc(z.numer)}</span>${z.naZmiane ? ` <span class="znacznik neutral">${esc(z.naZmiane)}</span>` : ''}</div>
           ${window.HalaZlecenia ? window.HalaZlecenia.krokiStatusu(z.status) : ''}
           ${z.postep && z.otwarte ? `<div class="postep-zlecenia">▶ W toku: ${esc(z.postep.opis)} <span class="slaby">(ostatnio ${esc(z.postep.ostatni)})</span></div>` : ''}
           ${z.czynnosc && z.otwarte ? `<div class="slaby">${z.czynnosc === 'proba' ? '🔬 zaliczy się samo po próbie jakościowej' : '🔧 zaliczy się samo po przeglądzie UR'}</div>` : ''}
           <div class="szczegoly">
+            <span class="znacznik rodzaj-zadania">${esc(rodzajNapis)}</span>
             <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
             ${z.spoznienie ? `<span class="znacznik alarm">${esc(z.spoznienie)}</span>` : ''}
@@ -654,6 +673,7 @@
         ${z.zaplanowane ? `<div class="numer slaby">zleci się<br><b class="tekst-planu">${esc(z.zaplanowaneNa || '—')}</b><br>${esc(z.terminPlanu)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}</div>`
           : `<div class="numer slaby">${esc(z.zleconoDzien)} ${esc(z.zlecono)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}${z.termin ? `<br><span class="${z.poTerminie ? 'tekst-alarm' : ''}">termin ${esc(z.termin)}</span>` : ''}</div>`}
         <div class="akcje">
+          ${zrob ? '<button type="button" class="maly glowny" data-akcja="wykonaj">▶ Wykonaj</button>' : ''}
           ${z.moznaZmienic ? `<button type="button" class="maly" data-akcja="zmien-plan">Zmień</button>
             <button type="button" class="maly glowny" data-akcja="zlec-teraz" title="Zleć od razu — dział dostanie powiadomienie">Zleć teraz</button>` : ''}
           ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
@@ -661,10 +681,7 @@
           ${kier && z.moznaAnulowac ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
           ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)">💾 Zapisz</button>' : ''}
         </div>
-      </article>`).join('') || `<p class="pusto">${PUSTE_ZLECENIA[filtrZlecen] || 'Brak zleceń'}</p>`;
-    // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
-    for (const e of $('lista-zlecen').querySelectorAll('img[data-plik]'))
-      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+      </article>`;
   }
 
   /* Zdjęcie od działu w dużym rozmiarze — kierownik ocenia wykonanie, a miniatura 64 px nic nie mówi. */
@@ -705,8 +722,12 @@
     if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
     const b = ev.target.closest('[data-akcja]');
     if (!b) return;
-    const id = b.closest('[data-id]').dataset.id;
+    const wiersz = b.closest('[data-id]');
+    const id = wiersz.dataset.id;
+    // D60: zgłoszenie, narzędzia, BHP — ta sama lista, ich przyciski obsługuje zgloszenia.js.
+    if (wiersz.dataset.rodzaj && wiersz.dataset.rodzaj !== 'zlecenie') { await Panel.widoki.zgloszenia.akcja(wiersz.dataset.rodzaj, b.dataset.akcja, id, b); return; }
     try {
+      if (b.dataset.akcja === 'wykonaj') { Panel.widoki.zgloszenia.wykonaj(id); return; }
       if (b.dataset.akcja === 'historia') { if (window.HalaDzialania) window.HalaDzialania.historia(hala, 'zlecenie', id); return; }
       if (b.dataset.akcja === 'zamknij') {
         await hala.zapisz('zlecenie.zamkniete', id, {});
@@ -973,7 +994,7 @@
         }
       }
       $('okno-zlecenia').close();
-      komunikat(`${ids.length > 1 ? `Zlecone ${ids.length} osobom` : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : 'Zlecone'}${zapisane ? ' i zapisane w „Zapisane i stałe”' : ''}`, 'ok');
+      komunikat(`${ids.length > 1 ? `Zlecone ${ids.length} osobom` : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : 'Zlecone'}${zapisane ? ' i zapisane w „💾 Zapisane”' : ''}`, 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
     } catch (e) { blad(komunikatBledu(e)); }
   }));

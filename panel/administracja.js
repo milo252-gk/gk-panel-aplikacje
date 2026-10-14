@@ -99,7 +99,7 @@
 
   function rysuj() {
     // D49: kierownik zakładu / UR / KJ — tylko Pracownicy (jego zespół); bez alarmów huba i ustawień.
-    // UI etap 3: + Checklisty dla tych, którym kontrakt pozwala zmieniać szablony — chipy, gdy części jest więcej niż jedna.
+    // Chipy, gdy części jest więcej niż jedna (D60: checklisty lidera są w Zlecenia → 💾 Zapisane, nie tutaj).
     const admin = jestAdmin();
     const dostepne = W.czesciAdministracji(P.dostepAdministracji());
     czesc = W.czescAdministracji(czesc, dostepne);
@@ -112,10 +112,8 @@
     if (!admin) { alarmy = []; rysujAlarmy(); }
     else if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();
     const el = $('admin-tresc');
-    el.hidden = czesc === 'checklisty';
-    $('checklisty').hidden = czesc !== 'checklisty';
-    if (czesc === 'checklisty') { if (P.widoki.checklisty) P.widoki.checklisty.rysuj(); }
-    else if (czesc === 'pracownicy') rysujPracownikow(el);
+    // D60: checklisty lidera przeniesione do Zlecenia → 💾 Zapisane (checklisty.js rysuje je tam).
+    if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'urlopy') { if (P.widoki.urlopy) P.widoki.urlopy.rysuj(el); }
     else if (czesc === 'maszyny') rysujMaszyny(el);
     else if (czesc === 'serwis') rysujSerwis(el);
@@ -510,7 +508,7 @@
       // Etap 3: numer zmiany, który znika, a jest w szablonach checklist albo zleceniach stałych — tam przestanie pasować.
       const uzycia = W.uzyciaZmian(hala.slowniki, wynik.zmiany.map(z => z.nr));
       if (uzycia.length && !(await P.potwierdz('Zmienić numery zmian?', `${uzycia.join(' ')} Po zapisie popraw je w Checklistach `
-        + 'i w Zleceniach → Zapisane i stałe — inaczej przestaną działać.', 'Zapisz mimo to'))) return;
+        + 'i w Zleceniach → 💾 Zapisane — inaczej przestaną działać.', 'Zapisz mimo to'))) return;
       try {
         const obecne = (hala.slowniki && hala.slowniki.zmiany) || {};
         const zapisy = wynik.zmiany.filter(z => JSON.stringify(obecne[z.nr]) !== JSON.stringify(z.wartosc))

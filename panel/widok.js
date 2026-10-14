@@ -314,7 +314,7 @@
         postep, czynnosc: d.czynnosc || null,
         pilne: d.priorytet === 'pilne',
         kto: nazwaPracownika(pracownicy, kto),
-        wykonawca: nazwaPracownika(pracownicy, d.wykonawca),
+        wykonawca: nazwaPracownika(pracownicy, d.wykonawca), wykonawcaId: d.wykonawca || null,
         zlecil: nazwaPracownika(pracownicy, d.zlecil),
         zlecono: godzina(d.czas_zlecenia), zleconoDzien: dataKrotka(d.czas_zlecenia),
         termin: isNaN(termin) ? null : `${dataKrotka(termin)} ${godzina(termin)}`,
@@ -335,6 +335,8 @@
         osoby: [d.wykonawca, d.przyjal, d.wykonal, d.odrzucil].filter(Boolean), spoznione: po || spoznioneWykonanie || przepadlo,
         naZmiane: d.zmiana ? (zmianySl(slowniki)[d.zmiana] || {}).nazwa || `Zmiana ${d.zmiana}` : null,
         podsumowanie: String(d.wystapienie || '').startsWith('podsumowanie|'),
+        // D60: rodzaj zadania — znacznik na wierszu i filtr „Rodzaj” (jedna lista zamiast osobnych zakładek).
+        rodzaj: rodzajZlecenia(d, szablony), checklista: d.stale ? ((szablony[d.stale] || {}).checklista || null) : null,
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
@@ -357,15 +359,17 @@
   /* Napisy trzech chipów filtra zleceń (UI etap 2). Liczby jak dotąd przy „W toku” i „Do przyjęcia”; to, co miało
      własne czerwone chipy, zostaje sygnałem na chipie swojej listy — „W toku · 5 · ⏰ 2” (po terminie) i „Zamknięte ·
      przepadło 1” (D35, dwie ostatnie doby) na czerwono (alarm), żeby egzekwowanie nie zniknęło razem z filtrami. */
-  function chipyZlecen(lista, teraz) {
+  function chipyZlecen(lista, teraz, inne) {
     const l = (lista || []).filter(Boolean);
     const wToku = l.filter(z => OTWARTE.has(z.status) || z.status === 'zaplanowane').length;
     const po = l.filter(z => poTerminie(z, teraz)).length;
-    const doPrzyjecia = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length;
+    // D60: „Do przyjęcia” = wszystko, co czeka na kierownika — także zgłoszenia, narzędzia i BHP (inne.czeka);
+    // otwarte pilne BHP (incydent) — chip na czerwono.
+    const doPrzyjecia = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length + ((inne && inne.czeka) || 0);
     const przepadlo = l.filter(z => z.status === 'przepadlo').length;
     return [
       { filtr: 'otwarte', napis: `W toku${wToku ? ` · ${wToku}` : ''}${po ? ` · ⏰ ${po}` : ''}`, alarm: po > 0 },
-      { filtr: 'do-zamkniecia', napis: `Do przyjęcia${doPrzyjecia ? ` · ${doPrzyjecia}` : ''}`, alarm: false },
+      { filtr: 'do-zamkniecia', napis: `Do przyjęcia${doPrzyjecia ? ` · ${doPrzyjecia}` : ''}`, alarm: !!(inne && inne.alarm) },
       { filtr: 'zamkniete', napis: `Zamknięte${przepadlo ? ` · przepadło ${przepadlo}` : ''}`, alarm: przepadlo > 0 },
     ];
   }
@@ -642,7 +646,7 @@
     if (zleca) return null;
     const tytuly = lista.slice(0, 3).map(s => `„${s.tytul}”`).join(', ') + (lista.length > 3 ? ` i ${lista.length - 3} więcej` : '');
     return `${osoba.nazwa} zleca zlecenia stałe (${lista.length}): ${tytuly}. Po zapisie przestaną się zlecać — kierownik musi `
-      + 'otworzyć każde w Zlecenia → Zapisane i stałe i kliknąć „Zmień” (zostanie autorem).';
+      + 'otworzyć każde w Zlecenia → 💾 Zapisane i kliknąć „Zmień” (zostanie autorem).';
   }
 
   /* Lista „Zlecenia stałe”: aktywne na górze, potem po tytule. */
@@ -1553,7 +1557,8 @@
     if (admin || zespol) c.push('pracownicy');
     if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
     if (admin) c.push('maszyny', 'ustawienia');
-    if (admin || szablony) c.push('checklisty');
+    // D60 (właściciel 2026-10-14: „checklisty nie powinny być schowane w ustawieniach, tylko w zleceniach”):
+    // szablony checklisty lidera są w Zlecenia → 💾 Zapisane, nie w Administracji (parametr szablony zostaje dla zgodności).
     if (admin) c.push('serwis');
     return c;
   }
@@ -1575,9 +1580,35 @@
 
   /* Filtry list zleceń („Dodaj filtry do wykonanych zleceń”): dział, osoba (zlecona, przyjęła, zrobiła albo odmówiła)
      i „tylko spóźnione” (po terminie, wykonane po terminie, przepadłe). Puste pole = bez filtra. */
-  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione } = {}) {
+  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione, rodzaj } = {}) {
     return (wiersze || []).filter(z => (!dzial || z.dzial === dzial) && (!osoba || (z.osoby || []).includes(osoba))
-      && (!spoznione || z.spoznione));
+      && (!spoznione || z.spoznione) && (!rodzaj || z.rodzaj === rodzaj));
+  }
+
+  /* D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):
+     jedna lista Zleceń. Rodzaje (kod, napis na znaczniku) — także filtr „Rodzaj”. */
+  const RODZAJE_ZADAN = [['zlecenie', 'Zlecenie'], ['zapisane', 'Zapisane 🔁'], ['checklista', 'Checklista zadań'],
+    ['kierownik', 'Dla kierownika'], ['podsumowanie', 'Podsumowanie zmiany'], ['zgloszenie', 'Zgłoszenie'],
+    ['narzedzia', 'Narzędzia'], ['bhp', 'BHP']];
+  const nazwaRodzaju = kod => (RODZAJE_ZADAN.find(([k]) => k === kod) || [kod, kod])[1];
+  /* Rodzaj zlecenia: zadanie samego kierownika zakładu (dział „kierownik” — „▶ Wykonaj”), podsumowanie zmiany (automat
+     D55), pozycja checklisty zadań, z zapisanego/stałego albo zwykłe. */
+  function rodzajZlecenia(d, szablony) {
+    const x = d || {};
+    if (x.dzial === 'kierownik') return 'kierownik';
+    if (String(x.wystapienie || '').startsWith('podsumowanie|')) return 'podsumowanie';
+    if (x.stale && ((szablony || {})[x.stale] || {}).checklista) return 'checklista';
+    if (x.stale) return 'zapisane';
+    return 'zlecenie';
+  }
+  /* Kolejność jednej listy: najpierw pilne rzeczy innych rodzajów (incydent BHP), potem to, co czeka na kierownika
+     (zgłoszenie, narzędzia do odbioru, BHP), potem zlecenia w swojej kolejności (spóźnione na górze — W.zlecenia),
+     na końcu zamknięte inne rodzaje; w grupach od najnowszych. */
+  function polaczZadania(zlecenia, inne) {
+    const nowsze = (a, b) => String(b.czas || '').localeCompare(String(a.czas || ''));
+    const i = (inne || []).filter(Boolean);
+    return [...i.filter(r => r.alarm).sort(nowsze), ...i.filter(r => !r.alarm && r.czeka).sort(nowsze),
+            ...(zlecenia || []), ...i.filter(r => !r.alarm && !r.czeka).sort(nowsze)];
   }
 
   /* Zlecenie NA ZMIANĘ (nr ze słownika zmian): start tej zmiany — dziś, a gdy już się skończyła, jutro; trwająca zmiana =
@@ -1823,7 +1854,7 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { listaProb, postepZlecenia, zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, pozycjaSzablonuZZapisanego, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
