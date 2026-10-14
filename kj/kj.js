@@ -407,7 +407,7 @@
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
-        <p class="slaby">Powiadomienia, wersja i wylogowanie — 👤 Moje konto.</p>`;
+        <p class="slaby">Powiadomienia, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
     },
   });
 

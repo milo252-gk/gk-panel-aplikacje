@@ -562,7 +562,7 @@
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
-        <p class="slaby">Powiadomienia, dźwięk, wersja i wylogowanie — 👤 Moje konto.</p>`;
+        <p class="slaby">Powiadomienia, dźwięk, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
     },
   });
 
