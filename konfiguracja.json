@@ -1,11 +1,14 @@
 {
   "hub": "https://realistic-oem-ruby-routing.trycloudflare.com",
-  "zmieniono": "2026-10-15T08:33:09.749Z",
+  "zmieniono": "2026-10-15T08:33:45.320Z",
   "wersje": {
     "wspolne": "wspolne-432a90a6cd47",
     "panel": "panel-1374536afbf0",
     "lider": "lider-31e43a11779e",
     "ur": "ur-edd279a125d3",
     "kj": "kj-d43c4fd50392"
+  },
+  "programy": {
+    "wycena": "https://rebecca-smilies-possess-intend.trycloudflare.com"
   }
 }
