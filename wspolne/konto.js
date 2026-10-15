@@ -403,6 +403,12 @@
         ${a.tylkoSiec ? '<p class="uwaga">Działa tylko w firmowym wifi.</p>' : ''}
         ${a.staly ? '' : '<p class="uwaga">Adres tymczasowy — po ponownym uruchomieniu programu wydrukuj ten kod jeszcze raz.</p>'}
         <p class="adres">${esc(a.adres)}</p></div></section>`).join('');
+    // Właściciel 2026-10-15: „kody QR do wszystkich aplikacji, nie tylko produkcyjnych” — arkusz wymienia też te bez kodu
+    // (tylko komputer albo program w biurze nie działa), żeby nikt nie szukał brakującej karty.
+    const bez = bezKodu(wiersze);
+    const stopka = [bez.komputer.length ? `Tylko na komputerze (bez kodu): ${bez.komputer.map(esc).join(', ')}.` : '',
+      bez.niedziala.length ? `Bez kodu — program w biurze wyłączony albo jeszcze nie na GitHub Pages: ${bez.niedziala.map(esc).join(', ')}.` : '']
+      .filter(Boolean).map(x => `<p>${x}</p>`).join('');
     return `<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Kody QR aplikacji GK</title><style>
       @page { size: A4; margin: 12mm; }
       body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
@@ -414,7 +420,25 @@
       p { margin: 0 0 1.5mm; font-size: 9pt; line-height: 1.3; }
       .uwaga { font-weight: 700; }
       .adres { font-family: Consolas, monospace; font-size: 7.5pt; overflow-wrap: anywhere; color: #444; }
-    </style></head><body><div class="arkusz">${karty}</div></body></html>`;
+      .stopka { margin-top: 5mm; color: #444; }
+    </style></head><body><div class="arkusz">${karty}</div>${stopka ? `<div class="stopka">${stopka}</div>` : ''}</body></html>`;
+  }
+
+  /* Aplikacje bez kodu QR (czysta funkcja — testy: reduktor-testy.js): komputer — GK Czytnik, GK Foto; niedziala — program
+     w biurze (GK Szkolenia, GK Wycena) wyłączony albo aplikacji jeszcze nie ma na GitHub Pages. */
+  function bezKodu(wiersze) {
+    const lista = (wiersze || []).filter(a => a && !a.adres);
+    return { komputer: lista.filter(a => a.komputer).map(a => a.nazwa), niedziala: lista.filter(a => !a.komputer).map(a => a.nazwa) };
+  }
+
+  /* Druk kodów wszystkich aplikacji konta (okno „Kody QR aplikacji” i Panel → Administracja → Serwis): lista z huba według
+     ról — kierownik zakładu i administrator dostają każdą aplikację GK, nie tylko cztery aplikacje hali. Zwraca bezKodu. */
+  async function drukujKodyAplikacji(hala) {
+    const w = wierszeAplikacji((await hala.aplikacje()).aplikacje);
+    if (!w.some(a => a.adres)) throw new Error('Żadna aplikacja nie ma jeszcze adresu — najpierw „Wyślij aplikacje na GitHub”.');
+    const ZX = await wczytajZXing();
+    drukujArkusz(arkuszKodow(w, t => svgQR(t, ZX)));
+    return bezKodu(w);
   }
 
   /* Druk arkusza w ukrytej ramce — działa w każdej aplikacji GK bez jej własnego CSS druku (okno Moje konto jest wspólne). */
@@ -536,7 +560,7 @@
     await rysuj();
   }
 
-  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
+  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, bezKodu, drukujKodyAplikacji, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
                        biuro, bezSieci, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

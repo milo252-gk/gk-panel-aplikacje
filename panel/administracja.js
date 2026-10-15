@@ -756,7 +756,7 @@
             <div class="dostep-kod" data-qr="${esc(a.adres)}" role="img" aria-label="Kod QR: ${esc(a.nazwa)}"></div>
             <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}</figcaption>
           </figure>`).join('')}</div>
-        ${s.aplikacje.some(a => a.adres) ? '<div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj kody aplikacji</button></div>' : ''}
+        <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj kody wszystkich aplikacji GK</button></div>
       </section>
       <section class="admin-linia">
         <h3><span>GK Trasy i GK Flota</span></h3>
@@ -810,17 +810,14 @@
     } finally { wysyla = false; rysuj(); }
   }
 
-  function drukujKodyAplikacji() {
-    const s = W.dostepZTelefonow(dostepStan, hala.teraz());
-    wczytajZXing().then(ZX => {
-      $('etykiety-druk').innerHTML = s.aplikacje.filter(a => a.adres).map(a => `
-        <div class="etykieta etykieta-aplikacja">
-          <div class="etykieta-qr">${window.PanelEtykiety.svgQR(a.adres, ZX)}</div>
-          <div class="etykieta-opis"><div class="etykieta-kod">${esc(a.nazwa)}</div>
-            <div class="etykieta-nazwa">Zeskanuj aparatem telefonu</div><div class="etykieta-tekst">${esc(a.adres)}</div></div>
-        </div>`).join('');
-      window.print();
-    }, e => P.komunikat(P.komunikatBledu(e), 'blad'));
+  /* Właściciel 2026-10-15: „chcę móc wydrukować kody QR do wszystkich aplikacji, nie tylko produkcyjnych” — ten sam arkusz
+     co okno „Kody QR aplikacji” (HalaKonto.drukujKodyAplikacji): aplikacje hali, GK Trasy, GK Flota, GK Szkolenia, GK Wycena;
+     na dole, które są bez kodu i dlaczego. */
+  async function drukujKodyAplikacji() {
+    try {
+      const bez = await window.HalaKonto.drukujKodyAplikacji(hala);
+      if (bez.niedziala.length) P.komunikat(`Bez kodu (program w biurze wyłączony albo jeszcze nie na GitHub Pages): ${bez.niedziala.join(', ')}`, 'uwaga');
+    } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   }
 
   // ------------------------------------------------------------ połączenia GK (D32, wspolne/GK-KONTA.md §3)
