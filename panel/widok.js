@@ -530,15 +530,199 @@
   function harmonogramPoLudzku(s, slowniki) {
     const h = (s && s.harmonogram) || {}, t = (s && s.termin) || {};
     if (h.rodzaj === 'reczny') return 'zlecasz sam („Zleć teraz”)';
-    const kiedy = h.rodzaj === 'codziennie' ? 'codziennie' : h.rodzaj === 'dni_tygodnia' ? dniPoLudzku(h.dni)
-      : h.rodzaj === 'miesiecznie' ? `${h.dzien_miesiaca}. dnia miesiąca` : '—';
+    const kiedy = kiedyPoLudzku(h);
     const wszystkie = Object.keys(zmianySl(slowniki));
     const zm = (h.zmiany || []).filter(z => wszystkie.includes(z));
     const zmiany = !zm.length ? null : wszystkie.every(z => zm.includes(z)) ? 'każda zmiana'
       : `${zm.length === 1 ? 'zmiana' : 'zmiany'} ${wszystkie.filter(z => zm.includes(z)).join(', ')}`;
     const termin = t.rodzaj === 'godzina' ? `do ${t.godzina}` : t.rodzaj === 'minuty' ? `w ciągu ${H().formatCzasu((+t.minuty || 0) * MIN)}` : 'do końca zmiany';
     const powtorz = h.co_min > 0 ? `co ${H().formatCzasu(h.co_min * MIN)} w ciągu zmiany` : null;
-    return [kiedy, zmiany, powtorz, termin].filter(Boolean).join(', ');
+    return [kiedy, zakresPoLudzku(h), zmiany, powtorz, termin].filter(Boolean).join(', ');
+  }
+
+  // ------------------------------------------------------------ D71: kalendarz zleceń stałych i „dla kogo”
+  // Właściciel 2026-10-15: „Pozwalaj zlecać kier. zak. zlecenia cykliczne, które można wrzucić wszystkim i powtarzają się
+  // same. Dodaj do aplikacji kalendarz, żeby móc też wybierać dni zleceń.” Badanie podobnych narzędzi:
+  // wspolne/BADANIE-ZLECENIA-CYKLICZNE.md — stąd podgląd dni przed zapisem, gotowe opcje i licznik adresatów.
+
+  const MIESIACE = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień',
+                    'październik', 'listopad', 'grudzień'];
+  const KTORY_M = ['pierwszy', 'drugi', 'trzeci', 'czwarty', 'ostatni'];
+  const KTORY_Z = ['pierwsza', 'druga', 'trzecia', 'czwarta', 'ostatnia'];   // środa, sobota, niedziela
+  const DNI_TYGODNIA_MIANOWNIK = ['poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela'];
+  const odmiana = (n, jeden, kilka, wiele) => n === 1 ? jeden : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? kilka : wiele;
+  /* „2026-10-07” → „7.10” (rok, gdy inny niż rokTeraz). */
+  function dzienPL(data, rokTeraz) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data || '');
+    if (!m) return data || '';
+    return `${+m[3]}.${m[2]}${rokTeraz && +m[1] !== rokTeraz ? `.${m[1]}` : ''}`;
+  }
+  /* „pierwszy poniedziałek miesiąca”, „ostatnia środa miesiąca”. */
+  function ktoryDzienPoLudzku(tydzien, dzienTygodnia) {
+    const z = [3, 6, 7].includes(dzienTygodnia);
+    return `${(z ? KTORY_Z : KTORY_M)[(tydzien || 1) - 1]} ${DNI_TYGODNIA_MIANOWNIK[(dzienTygodnia || 1) - 1]} miesiąca`;
+  }
+  function kiedyPoLudzku(h) {
+    if (h.rodzaj === 'codziennie') return 'codziennie';
+    if (h.rodzaj === 'dni_tygodnia') {
+      const co = parseInt(h.co_tygodni, 10) || 1;
+      return co > 1 ? `co ${co} ${odmiana(co, 'tydzień', 'tygodnie', 'tygodni')}: ${dniPoLudzku(h.dni)}` : dniPoLudzku(h.dni);
+    }
+    if (h.rodzaj === 'miesiecznie') return h.tydzien ? ktoryDzienPoLudzku(h.tydzien, h.dzien_tygodnia) : `${h.dzien_miesiaca}. dnia miesiąca`;
+    if (h.rodzaj === 'co_dni') return `co ${h.co} dni`;
+    if (h.rodzaj === 'daty') {
+      const d = [...(h.daty || [])].sort();
+      return `w ${d.length} ${odmiana(d.length, 'wybrany dzień', 'wybrane dni', 'wybranych dni')}: ${d.slice(0, 4).map(x => dzienPL(x)).join(', ')}${d.length > 4 ? ` (+${d.length - 4})` : ''}`;
+    }
+    return '—';
+  }
+  /* „od 5.10”, „5.10–20.11”, „bez świąt”, „pominięte: 2 dni”. */
+  function zakresPoLudzku(h) {
+    const cz = [];
+    if (h.od && h.do) cz.push(`${dzienPL(h.od)}–${dzienPL(h.do)}`);
+    else if (h.od && h.rodzaj !== 'daty') cz.push(`od ${dzienPL(h.od)}`);
+    else if (h.do) cz.push(`do dnia ${dzienPL(h.do)}`);
+    if (h.bez_swiat === true) cz.push('bez świąt');
+    const p = (h.pomin || []).length;
+    if (p) cz.push(`pominięte: ${p} ${odmiana(p, 'dzień', 'dni', 'dni')}`);
+    return cz.join(', ') || null;
+  }
+
+  /* „Dla kogo” jednym zdaniem: „Wszystkie działy · każdy osobno”, „UR, KJ · po jednym zleceniu na dział”,
+     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”. */
+  function dlaKogoPoLudzku(s, stale, pracownicy) {
+    const wszystkie = ((stale && stale.dzialy) || []);
+    const nazwy = new Map(wszystkie.map(d => [d.kod, d.nazwa]));
+    const lista = Array.isArray(s.dzialy) && s.dzialy.length ? s.dzialy : [s.dzial];
+    const dzialy = wszystkie.length > 1 && lista.length === wszystkie.length ? 'Wszystkie działy' : lista.map(d => nazwy.get(d) || d).join(', ');
+    if (s.kazdy === true) return `${dzialy} · każdy osobno`;
+    if (Array.isArray(s.wykonawcy) && s.wykonawcy.length) {
+      const n = s.wykonawcy.length;
+      const imiona = s.wykonawcy.slice(0, 3).map(id => nazwaPracownika(pracownicy, id) || id).join(', ');
+      return `${n} ${odmiana(n, 'osoba', 'osoby', 'osób')}: ${imiona}${n > 3 ? ` (+${n - 3})` : ''} · każda osobno`;
+    }
+    if (s.wykonawca) return `${dzialy} · ${nazwaPracownika(pracownicy, s.wykonawca) || s.wykonawca}`;
+    if (s.linia === LINIA_KAZDA) return `${dzialy} · każda linia osobno`;
+    return lista.length > 1 ? `${dzialy} · po jednym zleceniu na dział` : dzialy;
+  }
+
+  /* Licznik przed zapisem („trafi do 14 osób”) — ta sama reguła co hub (Hala.celeStalego ↔ cele_stalego). */
+  function adresaciPoLudzku(s, stale, pracownicy, slowniki, data) {
+    let cele = [];
+    try { cele = H().celeStalego(s, (stale && stale.dzialy) || [], pracownicy || [], slowniki || {}, data); } catch (e) { cele = []; }
+    const linie = s.linia === LINIA_KAZDA ? Object.keys((slowniki && slowniki.linie) || {}).length || 1 : 1;
+    const n = cele.length * linie;
+    if (!n) return { liczba: 0, tekst: 'Nikt nie dostanie tego zlecenia — zaznacz osoby albo sprawdź urlopy.', alarm: true };
+    if (s.kazdy === true || (Array.isArray(s.wykonawcy) && s.wykonawcy.length))
+      return { liczba: n, tekst: `Trafi do ${n} ${odmiana(n, 'osoby', 'osób', 'osób')} — każda dostaje własne zlecenie${linie > 1 ? ' na każdej linii' : ''}.` };
+    if (n > 1) return { liczba: n, tekst: `${n} ${odmiana(n, 'zlecenie', 'zlecenia', 'zleceń')} za każdym razem — ${linie > 1 ? 'po jednym na linię' : 'po jednym na dział'}; zrobi je jedna osoba z działu.` };
+    return { liczba: 1, tekst: s.wykonawca ? 'Jedno zlecenie dla wybranej osoby.' : 'Jedno zlecenie dla działu — zrobi je pierwsza osoba, która je weźmie.' };
+  }
+
+  function dataIso(rok, miesiac, dzien) { return new Date(Date.UTC(rok, miesiac - 1, dzien)).toISOString().slice(0, 10); }
+  /* Siatka miesiąca od poniedziałku: [{data, dzien, wMiesiacu, weekend}] — 4 do 6 pełnych tygodni. */
+  function siatkaMiesiaca(rok, miesiac) {
+    const pierwszy = Date.UTC(rok, miesiac - 1, 1);
+    const przes = (new Date(pierwszy).getUTCDay() + 6) % 7;
+    const dni = new Date(Date.UTC(rok, miesiac, 0)).getUTCDate();
+    return Array.from({ length: Math.ceil((przes + dni) / 7) * 7 }, (_, i) => {
+      const d = new Date(pierwszy + (i - przes) * 86400000);
+      return { data: d.toISOString().slice(0, 10), dzien: d.getUTCDate(), wMiesiacu: d.getUTCMonth() === miesiac - 1, weekend: i % 7 >= 5 };
+    });
+  }
+  /* Czy dzień wypadłby, gdyby nie „pomiń” albo „bez świąt” (podgląd pokazuje go przekreślony z powodem). */
+  function powodPominiecia(h, data) {
+    if (!h || h.rodzaj === 'reczny' || H().dzienHarmonogramu(h, data)) return null;
+    if ((h.pomin || []).includes(data) && H().dzienHarmonogramu(Object.assign({}, h, { pomin: [] }), data)) return 'pominięty';
+    const swieto = H().swietaPL(+data.slice(0, 4))[data];
+    if (swieto && h.bez_swiat === true && H().dzienHarmonogramu(Object.assign({}, h, { bez_swiat: false, pomin: [] }), data)) return swieto;
+    return null;
+  }
+  /* Podgląd w oknie zlecenia stałego: miesiąc z dniami wystąpień, pominiętymi i świętami (dotknięcie dnia przełącza). */
+  function podgladKalendarza(h, rok, miesiac, dzis) {
+    return { tytul: `${MIESIACE[miesiac - 1]} ${rok}`, dni: siatkaMiesiaca(rok, miesiac).map(c => {
+      const swieto = H().swietaPL(+c.data.slice(0, 4))[c.data] || null;
+      return Object.assign(c, { swieto, jest: !!h && H().dzienHarmonogramu(h, c.data), pominiety: powodPominiecia(h, c.data),
+                                dzis: c.data === dzis, przeszly: c.data < dzis });
+    }) };
+  }
+  /* Dotknięcie dnia w kalendarzu: przy „wybranych dniach” — dodaj albo zabierz dzień; przy regule — pomiń ten dzień
+     albo przywróć (seria i jej wyjątki zostają nietknięte, jak „tylko to wystąpienie” w Google Calendar). */
+  function przelaczDzien(h, data) {
+    const zmien = (lista, x) => (lista || []).includes(x) ? lista.filter(y => y !== x) : [...(lista || []), x].sort();
+    if (h.rodzaj === 'daty') return Object.assign({}, h, { daty: zmien(h.daty, data) });
+    if (!H().dzienHarmonogramu(Object.assign({}, h, { pomin: [] }), data)) return h;    // tego dnia i tak nic — nic do pominięcia
+    return Object.assign({}, h, { pomin: zmien(h.pomin, data) });
+  }
+  /* Najbliższe wystąpienia (do ile) i dni pominięte w tym samym oknie — „Najbliższe: …; pominięte: 11.11 (święto)”. */
+  function najblizszeWystapienia(kod, s, teraz, slowniki, ile) {
+    const wynik = { terminy: [], pominiete: [] };
+    if (!s || ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny') return wynik;
+    const l = H().lokalny(teraz);
+    for (let i = 0; i <= 92 && wynik.terminy.length < (ile || 5); i++) {
+      const data = dataIso(l.rok, l.miesiac, l.dzien + i);
+      const powod = powodPominiecia(s.harmonogram, data);
+      if (powod) wynik.pominiete.push({ data, powod, opis: `${dzienPL(data)} (${powod})` });
+      let lista = [];
+      try { lista = H().wystapieniaStale(kod || 'podglad', s, data, zmianySl(slowniki)); } catch (e) { lista = []; }
+      for (const w of lista) {
+        const start = Date.parse(w.start), termin = Date.parse(w.termin);
+        if (termin <= teraz || wynik.terminy.length >= (ile || 5)) continue;
+        wynik.terminy.push({ start, opis: `${dzienPoLudzku(start, teraz)} ${godzina(start)}${w.zmiana && (s.harmonogram.zmiany || []).length ? ` (${w.zmiana.split('/')[1]})` : ''}` });
+      }
+    }
+    return wynik;
+  }
+  /* Gotowe opcje „Kiedy” zależne od dnia (jak w Google Calendar): dzisiejszy dzień tygodnia i jego miejsce w miesiącu. */
+  function presetyHarmonogramu(dzis) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dzis || '');
+    if (!m) return [];
+    const [r, mi, d] = [+m[1], +m[2], +m[3]];
+    const dt = (new Date(Date.UTC(r, mi - 1, d)).getUTCDay() + 6) % 7 + 1;
+    const tydzien = d + 7 > new Date(Date.UTC(r, mi, 0)).getUTCDate() ? 5 : Math.floor((d - 1) / 7) + 1;
+    return [
+      { kod: 'codziennie', etykieta: 'Codziennie', h: { rodzaj: 'codziennie' } },
+      { kod: 'pn-pt', etykieta: 'Pn–pt', h: { rodzaj: 'dni_tygodnia', dni: [1, 2, 3, 4, 5] } },
+      { kod: 'tydzien', etykieta: `Co tydzień: ${DNI[dt - 1]}`, h: { rodzaj: 'dni_tygodnia', dni: [dt] } },
+      { kod: 'miesiac', etykieta: `Co miesiąc: ${ktoryDzienPoLudzku(tydzien, dt).replace(' miesiąca', '')}`, h: { rodzaj: 'miesiecznie', tydzien, dzien_tygodnia: dt } },
+      { kod: 'daty', etykieta: '📅 Wybieram dni', h: { rodzaj: 'daty', daty: [] } },
+    ];
+  }
+
+  /* Zakładka „📅 Kalendarz” (Zlecenia): miesiąc — co dnia zlecą zapisane stałe (i zaplanowane na później, D47).
+     Dzień: [{kod?, id?, tytul, godziny, dla, pominiety?, zaplanowane?, checklista?}]. Przeszłe dni też (to, co miało być). */
+  function kalendarzZlecen({ slowniki, pracownicy, stale, zlecenia, rok, miesiac, teraz }) {
+    const dzis = dzienZakladu(teraz);
+    const zm = zmianySl(slowniki);
+    const wpisy = Object.entries((slowniki && slowniki.zlecenia_stale) || {})
+      .filter(([, s]) => s && s.aktywny !== false && ((s.harmonogram || {}).rodzaj || 'reczny') !== 'reczny');
+    const plan = (zlecenia || []).filter(z => z.status === 'zaplanowane' && z.dane && z.dane.zaplanowane_na);
+    const dni = siatkaMiesiaca(rok, miesiac).map(c => {
+      const pozycje = [];
+      for (const [kod, s] of wpisy) {
+        let lista = [];
+        try { lista = H().wystapieniaStale(kod, s, c.data, zm); } catch (e) { lista = []; }
+        const dla = dlaKogoPoLudzku(s, stale, pracownicy);
+        const checklista = Array.isArray(s.pozycje) && s.pozycje.length > 0;
+        if (lista.length) {
+          pozycje.push({ kod, tytul: s.tytul || kod, dla, checklista, godziny: [...new Set(lista.map(w => godzina(Date.parse(w.start))))],
+                         start: Date.parse(lista[0].start) });
+        } else {
+          const powod = powodPominiecia(s.harmonogram, c.data);
+          if (powod) pozycje.push({ kod, tytul: s.tytul || kod, dla, checklista, godziny: [], pominiety: powod, start: Infinity });
+        }
+      }
+      for (const z of plan) {
+        const start = Date.parse(z.dane.zaplanowane_na);
+        if (dzienZakladu(start) === c.data)
+          pozycje.push({ id: z.id, tytul: z.dane.tytul || 'Zlecenie', dla: dlaKogoPoLudzku(z.dane, stale, pracownicy), godziny: [godzina(start)], zaplanowane: true, start });
+      }
+      pozycje.sort((a, b) => a.start - b.start || a.tytul.localeCompare(b.tytul, 'pl'));
+      return Object.assign(c, { pozycje, dzis: c.data === dzis, przeszly: c.data < dzis,
+                                swieto: H().swietaPL(+c.data.slice(0, 4))[c.data] || null,
+                                liczba: pozycje.filter(p => !p.pominiety).length });
+    });
+    return { tytul: `${MIESIACE[miesiac - 1]} ${rok}`, dni };
   }
 
   /* „dziś”, „jutro” albo „pn 05.10” — dzień zakładu względem teraz. */
@@ -667,6 +851,7 @@
         liniaNazwa: !wieleLinii(slowniki) ? null : s.linia === LINIA_KAZDA ? 'każda linia osobno' : s.linia ? nazwaLinii(slowniki, s.linia) : null,
         maszyna: s.maszyna ? ((maszyny[s.maszyna] || {}).nazwa || s.maszyna) : null,
         osoba: nazwaPracownika(pracownicy, s.wykonawca),
+        dla: dlaKogoPoLudzku(s, stale, pracownicy),           // D71: „Wszystkie działy · każdy osobno”
         harmonogram: harmonogramPoLudzku(s, slowniki),
         wymagajZdjecia: s.wymagaj_zdjecia === true, wymagajNotatki: s.wymagaj_notatki === true, wymagajSkanu: s.wymagaj_skanu === true,
         pilne: s.priorytet === 'pilne', aktywny: s.aktywny !== false, reczny: ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny',
@@ -686,11 +871,39 @@
     const tytul = String(f.tytul || '').trim().replace(/\s+/g, ' ');
     if (!tytul) bledy.push('Napisz, co zrobić.');
     if (tytul.length > 200) bledy.push('Tytuł może mieć najwyżej 200 znaków.');
-    if (!f.dzial) bledy.push('Wybierz dział.');
+    // D71: „Dla kogo” — działy (kilka = każdy dział własne zlecenie), kto: dział / każdy osobno / wybrane osoby.
+    // Bez pola „kto” (checklista, stare wywołania) — jak dotąd: jeden dział i opcjonalnie jedna osoba (f.wykonawca).
+    const dzialy = [...new Set([].concat(f.dzialy && [].concat(f.dzialy).length ? f.dzialy : (f.dzial ? [f.dzial] : [])))];
+    if (!dzialy.length) bledy.push(f.kto ? 'Zaznacz co najmniej jeden dział.' : 'Wybierz dział.');
+    const kto = ['kazdy', 'osoby'].includes(f.kto) ? f.kto : 'dzial';
+    const osoby = [...new Set([].concat(f.wykonawcy || []).filter(Boolean))];
+    if (kto === 'osoby' && !osoby.length) bledy.push('Zaznacz osoby albo wybierz „Dział — zrobi jedna osoba”.');
+    if (kto !== 'dzial' && f.linia === LINIA_KAZDA) bledy.push('„Każda linia osobno” nie łączy się z „każdy osobno” — wybierz jedną linię albo „Dział”.');
     if (f.linia === LINIA_KAZDA && String(f.maszyna || '').trim()) bledy.push('„Każda linia osobno” bez jednej maszyny — usuń maszynę albo wybierz linię.');
-    const rodzaj = ['reczny', 'codziennie', 'dni_tygodnia', 'miesiecznie'].includes(f.rodzaj) ? f.rodzaj : 'codziennie';
+    const rodzaj = ['reczny', 'codziennie', 'dni_tygodnia', 'miesiecznie', 'co_dni', 'daty'].includes(f.rodzaj) ? f.rodzaj : 'codziennie';
     const harmonogram = { rodzaj };
+    const dataOk = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
     if (rodzaj !== 'reczny') {
+      // D71: kalendarz — od/do, święta, pominięte dni (dotknięcie dnia w kalendarzu okna).
+      // „Od dnia” = dziś (domyślne w oknie) zapisujemy tylko tam, gdzie liczy się od niego (co N dni, co N tygodni).
+      const kotwica = rodzaj === 'co_dni' || (rodzaj === 'dni_tygodnia' && (parseInt(f.co_tygodni, 10) || 1) > 1);
+      if (dataOk(f.od) && (kotwica || !f.dzis || f.od > f.dzis)) harmonogram.od = f.od;
+      if (dataOk(f.do)) harmonogram.do = f.do;
+      if (harmonogram.od && harmonogram.do && harmonogram.do < harmonogram.od) bledy.push('„Do dnia” jest przed „od dnia” — popraw daty.');
+      if (f.bez_swiat) harmonogram.bez_swiat = true;
+      const pomin = [...new Set([].concat(f.pomin || []).filter(dataOk))].filter(d => !f.dzis || d >= f.dzis).sort();
+      if (pomin.length) harmonogram.pomin = pomin.slice(0, 366);
+      if (rodzaj === 'co_dni') {
+        const co = parseInt(f.co, 10);
+        if (!(co >= 2 && co <= 365)) bledy.push('„Co ile dni” — liczba od 2 do 365.');
+        harmonogram.co = co;
+        if (!harmonogram.od) bledy.push('Przy „co N dni” podaj dzień startu (od dnia).');
+      }
+      if (rodzaj === 'daty') {
+        harmonogram.daty = [...new Set([].concat(f.daty || []).filter(dataOk))].sort().slice(0, 366);
+        if (!harmonogram.daty.length) bledy.push('Dotknij w kalendarzu dni, w które ma być zlecenie.');
+        delete harmonogram.od; delete harmonogram.do;
+      }
       harmonogram.zmiany = [].concat(f.zmiany || []).filter(z => zmianySl(slowniki)[z]);
       // Kilka razy w ciągu zmiany (2026-10-13): co ile minut od startu zmiany, do jej końca. Puste = raz.
       const co = parseInt(f.co_min, 10);
@@ -701,8 +914,19 @@
       if (rodzaj === 'dni_tygodnia') {
         harmonogram.dni = [...new Set([].concat(f.dni || []).map(Number))].filter(x => x >= 1 && x <= 7).sort((a, b) => a - b);
         if (!harmonogram.dni.length) bledy.push('Zaznacz co najmniej jeden dzień tygodnia.');
+        const co = parseInt(f.co_tygodni, 10) || 1;
+        if (co > 1) {
+          if (co > 12) bledy.push('„Co ile tygodni” — od 1 do 12.');
+          harmonogram.co_tygodni = co;
+          if (!harmonogram.od) bledy.push('Przy „co N tygodni” podaj dzień startu (od dnia).');
+        }
       }
-      if (rodzaj === 'miesiecznie') {
+      if (rodzaj === 'miesiecznie' && f.mies_tryb === 'tydzien') {
+        const t = parseInt(f.tydzien, 10), dt = parseInt(f.dzien_tygodnia, 10);
+        if (!(t >= 1 && t <= 5) || !(dt >= 1 && dt <= 7)) bledy.push('Wybierz, który dzień tygodnia w miesiącu (np. pierwszy poniedziałek).');
+        harmonogram.tydzien = t;
+        harmonogram.dzien_tygodnia = dt;
+      } else if (rodzaj === 'miesiecznie') {
         const d = parseInt(f.dzien_miesiaca, 10);
         if (!(d >= 1 && d <= 31)) bledy.push('Dzień miesiąca to liczba od 1 do 31.');
         harmonogram.dzien_miesiaca = d;
@@ -720,12 +944,17 @@
       if (!(m >= 1 && m <= 10080)) bledy.push('Minuty od startu zmiany: liczba od 1 do 10080.');
       termin.minuty = m;
     }
-    const wartosc = { tytul, dzial: f.dzial, priorytet: f.pilne ? 'pilne' : 'normalny',
+    const wartosc = { tytul, dzial: dzialy[0] || f.dzial, priorytet: f.pilne ? 'pilne' : 'normalny',
                       wymagaj_zdjecia: !!f.wymagaj_zdjecia, wymagaj_notatki: !!f.wymagaj_notatki,
                       harmonogram, termin, aktywny: f.aktywny !== false, autor };
     // Skan QR ma sens tylko z maszyną (naklejka HALA:M:… na niej) — bez maszyny pole po cichu odpada.
     if (f.wymagaj_skanu && String(f.maszyna || '').trim()) wartosc.wymagaj_skanu = true;
-    for (const pole of ['opis', 'linia', 'maszyna', 'wykonawca']) { const v = String(f[pole] || '').trim(); if (v) wartosc[pole] = v; }
+    for (const pole of ['opis', 'linia', 'maszyna']) { const v = String(f[pole] || '').trim(); if (v) wartosc[pole] = v; }
+    if (dzialy.length > 1) wartosc.dzialy = dzialy;
+    if (!f.kto && String(f.wykonawca || '').trim()) wartosc.wykonawca = String(f.wykonawca).trim();
+    if (kto === 'kazdy') wartosc.kazdy = true;
+    if (kto === 'osoby' && osoby.length === 1) wartosc.wykonawca = osoby[0];
+    if (kto === 'osoby' && osoby.length > 1) wartosc.wykonawcy = osoby;
     const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => k !== istniejacyKod);
     const kod = istniejacyKod || kodZNazwy(tytul || 'zlecenie', zajete);
     return { bledy, kod, wartosc };
@@ -734,8 +963,14 @@
   /* Zlecenie stałe ze słownika → pola okna. */
   function stalyDoFormularza(s) {
     const h = (s && s.harmonogram) || {}, t = (s && s.termin) || {};
+    const osoby = Array.isArray(s.wykonawcy) && s.wykonawcy.length ? s.wykonawcy : (s.wykonawca ? [s.wykonawca] : []);
     return { tytul: s.tytul || '', opis: s.opis || '', dzial: s.dzial || 'produkcja', linia: s.linia || '', maszyna: s.maszyna || '',
+             dzialy: Array.isArray(s.dzialy) && s.dzialy.length ? s.dzialy : [s.dzial || 'produkcja'],
+             kto: s.kazdy === true ? 'kazdy' : osoby.length ? 'osoby' : 'dzial', wykonawcy: osoby,
              wykonawca: s.wykonawca || '', pilne: s.priorytet === 'pilne',
+             co: h.co || 7, co_tygodni: h.co_tygodni || 1, mies_tryb: h.tydzien ? 'tydzien' : 'dzien', tydzien: h.tydzien || 1,
+             dzien_tygodnia: h.dzien_tygodnia || 1, od: h.od || '', do: h.do || '', bez_swiat: h.bez_swiat === true,
+             pomin: h.pomin || [], daty: h.daty || [],
              wymagaj_zdjecia: s.wymagaj_zdjecia !== false, wymagaj_notatki: s.wymagaj_notatki !== false, wymagaj_skanu: s.wymagaj_skanu === true,
              rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], dzien_miesiaca: h.dzien_miesiaca || 1, zmiany: h.zmiany || [],
              co_min: h.co_min || '',
@@ -1707,6 +1942,34 @@
      slownik.zapisany zlecenia_stale (jeden wpis z pozycjami). Te same zasady sprawdza hub (blad_pozycji). */
   const CZYNNOSCI_POZYCJI = [['', 'zwykła pozycja'], ['obsada', '👥 Raport obsady'], ['obchod', '▣ Obchód (skan QR)'],
     ['proba', '🔬 Próba jakościowa'], ['bhp', '⛑ Audyt BHP'], ['przekazanie', '📋 Przekazanie zmiany'], ['przeglad', '🔧 Przegląd UR']];
+  /* D72 (właściciel 2026-10-15: „Takie rzeczy jak raport obsady, obchód bhp itp to wszystko czynności, które zlecam.
+     Wszystkie mają mieć jedną kategorię, a ja je opisuję (jeśli chcę inaczej niż jak są zapisane) i wybieram co
+     wymagam”): przy tworzeniu nie ma typów czynności — są GOTOWE CZYNNOŚCI jako podpowiedzi nazwy z domyślnymi
+     wymaganiami, które kierownik zmienia. Stare pozycje z `czynnosc` dalej się wyświetlają i zaliczają (D67). */
+  const GOTOWE_CZYNNOSCI = [
+    { nazwa: 'Raport obsady — ustaw ludzi na maszyny', notatka: true },
+    { nazwa: 'Obchód BHP', zdjecie: true, notatka: true },
+    { nazwa: 'Obchód linii', zdjecie: true },
+    { nazwa: 'Próba jakościowa', notatka: true },
+    { nazwa: 'Sprawdź ustawienia maszyn', zdjecie: true, notatka: true },
+    { nazwa: 'Sprawdź jakość produktów', zdjecie: true, notatka: true },
+    { nazwa: 'Przegląd UR', zdjecie: true, notatka: true },
+    { nazwa: 'Sprzątanie stanowiska', zdjecie: true },
+    { nazwa: 'Przekazanie zmiany', notatka: true },
+  ];
+  /* Podpowiedzi „Co zrobić”: gotowe czynności + tytuły zapisanych zleceń (bez powtórzeń, po polsku alfabetycznie). */
+  function podpowiedziCzynnosci(slowniki) {
+    const zapisane = Object.values((slowniki && slowniki.zlecenia_stale) || {})
+      .filter(s => s && s.tytul && !(Array.isArray(s.pozycje) && s.pozycje.length))
+      .map(s => ({ nazwa: s.tytul, opis: s.opis || '', zdjecie: s.wymagaj_zdjecia === true, notatka: s.wymagaj_notatki === true }));
+    const wynik = new Map();
+    for (const c of [...GOTOWE_CZYNNOSCI, ...zapisane]) if (!wynik.has(c.nazwa.toLowerCase())) wynik.set(c.nazwa.toLowerCase(), c);
+    return [...wynik.values()].sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+  function gotowaCzynnosc(nazwa, slowniki) {
+    const n = String(nazwa || '').trim().toLowerCase();
+    return n ? podpowiedziCzynnosci(slowniki).find(c => c.nazwa.toLowerCase() === n) || null : null;
+  }
   function checklistaZFormularza(f, slowniki, istniejacyKod, autor) {
     const nazwa = String(f.nazwa || '').trim().replace(/\s+/g, ' ');
     const w = stalyZFormularza(Object.assign({}, f, { tytul: nazwa, termin_rodzaj: 'koniec_zmiany', maszyna: '', pilne: false, co_min: '',
@@ -1736,7 +1999,7 @@
       if (p.notatka) q.wymagaj_notatki = true;
       if (p.skan) {
         if (q.maszyna) q.wymagaj_skanu = true;
-        else bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę albo ustaw czynność „Obchód”.`);
+        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę pod „⋯”.`);
       }
       pozycje.push(q);
     });
@@ -1825,9 +2088,11 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
+                       dlaKogoPoLudzku, adresaciPoLudzku, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
+                       presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,

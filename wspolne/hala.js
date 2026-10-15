@@ -23,6 +23,9 @@
      przesuniecieZakladu <-> przesuniecie_zakladu
      zmianaDla           <-> zmiana_dla
      wystapieniaStale    <-> wystapienia_stale
+     dzienHarmonogramu   <-> dzien_harmonogramu (D71: kalendarz zleceń stałych)
+     swietaPL            <-> swieta_pl
+     celeStalego         <-> cele_stalego (D71: Panel liczy „trafi do N”)
      jestKonflikt        <-> jest_konflikt
      kpiAwarii           <-> kpi_awarii   (etap 3: jedne liczby awarii; MTBF klasyczne — D44)
      wskaznikiOkresu     <-> wskazniki_okresu (D47: Panel → Wskaźniki, „Zakres” liczy hub)
@@ -32,7 +35,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.25.0';
+  const WERSJA_KLIENTA = '0.26.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -595,6 +598,106 @@
     return ((awaria && awaria.dane) || {}).zglosil === pracownik.id;
   }
 
+  /* D71: niedziela Wielkanocna (Meeus/Jones/Butcher) i dni ustawowo wolne w Polsce {'RRRR-MM-DD': nazwa} — Wigilia od 2025.
+     Bliźniak: swieta_pl w hala.py. */
+  function wielkanoc(rok) {
+    const a = rok % 19, b = Math.floor(rok / 100), c = rok % 100, d = Math.floor(b / 4), e = b % 4;
+    const g = Math.floor((8 * b + 13) / 25), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 19 * l) / 433);
+    const mies = Math.floor((h + l - 7 * m + 90) / 25);
+    return Date.UTC(rok, mies - 1, (h + l - 7 * m + 33 * mies + 19) % 32);
+  }
+  const _swieta = new Map();
+  function swietaPL(rok) {
+    if (_swieta.has(rok)) return _swieta.get(rok);
+    const w = {}, dzien = ms => new Date(ms).toISOString().slice(0, 10);
+    const stale = [[1, 1, 'Nowy Rok'], [1, 6, 'Trzech Króli'], [5, 1, 'Święto Pracy'], [5, 3, 'Święto Konstytucji 3 Maja'],
+                   [8, 15, 'Wniebowzięcie NMP'], [11, 1, 'Wszystkich Świętych'], [11, 11, 'Święto Niepodległości'],
+                   [12, 25, 'Boże Narodzenie'], [12, 26, 'Drugi dzień Bożego Narodzenia']];
+    if (rok >= 2025) stale.push([12, 24, 'Wigilia']);
+    for (const [m, d, n] of stale) w[dzien(Date.UTC(rok, m - 1, d))] = n;
+    const wn = wielkanoc(rok);
+    for (const [p, n] of [[0, 'Wielkanoc'], [1, 'Poniedziałek Wielkanocny'], [49, 'Zielone Świątki'], [60, 'Boże Ciało']]) w[dzien(wn + p * 86400000)] = n;
+    _swieta.set(rok, w);
+    return w;
+  }
+
+  /* D71: czy harmonogram zlecenia stałego obejmuje dzień zakładu 'RRRR-MM-DD' — rodzaje codziennie, dni_tygodnia
+     (co_tygodni od „od”), miesiecznie (dzień albo n-ty dzień tygodnia; 5 = ostatni), co_dni (od „od”), daty; od/do,
+     pomin, bez_swiat. Bliźniak: dzien_harmonogramu w hala.py. */
+  function dzienHarmonogramu(h, data) {
+    h = h || {};
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data || '');
+    if (!m) return false;
+    const [r, mi, dz] = [+m[1], +m[2], +m[3]];
+    const ms = Date.UTC(r, mi - 1, dz);
+    const dt = (new Date(ms).getUTCDay() + 6) % 7 + 1;                           // poniedziałek = 1
+    const msDaty = s => { const x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return x ? Date.UTC(+x[1], +x[2] - 1, +x[3]) : NaN; };
+    if (typeof h.od === 'string' && data < h.od) return false;
+    if (typeof h.do === 'string' && data > h.do) return false;
+    if ((h.pomin || []).includes(data)) return false;
+    if (h.bez_swiat === true && swietaPL(r)[data]) return false;
+    if (h.rodzaj === 'codziennie') return true;
+    if (h.rodzaj === 'daty') return (h.daty || []).includes(data);
+    if (h.rodzaj === 'co_dni') {
+      const od = msDaty(h.od), co = parseInt(h.co, 10) || 1;
+      return !isNaN(od) && (Math.round((ms - od) / 86400000) % co) === 0;
+    }
+    if (h.rodzaj === 'dni_tygodnia') {
+      if (!(h.dni || []).includes(dt)) return false;
+      if (Number.isInteger(h.co_tygodni) && h.co_tygodni > 1 && typeof h.od === 'string') {
+        const od = msDaty(h.od);
+        if (isNaN(od)) return false;
+        const pnOd = od - ((new Date(od).getUTCDay() + 6) % 7) * 86400000, pn = ms - (dt - 1) * 86400000;
+        return Math.round((pn - pnOd) / 604800000) % h.co_tygodni === 0;
+      }
+      return true;
+    }
+    if (h.rodzaj === 'miesiecznie') {
+      const ostatni = new Date(Date.UTC(r, mi, 0)).getUTCDate();
+      if (h.tydzien !== undefined && h.tydzien !== null) {
+        if (dt !== h.dzien_tygodnia) return false;
+        return h.tydzien === 5 ? dz + 7 > ostatni : Math.floor((dz - 1) / 7) + 1 === h.tydzien;
+      }
+      return dz === Math.min(parseInt(h.dzien_miesiaca, 10) || 1, ostatni);
+    }
+    return false;                                                                  // „reczny” — tylko „Zleć teraz”
+  }
+
+  /* D71: adresaci jednego wystąpienia [{dzial, osoba|null, sufiks}] — Panel liczy z tego „trafi do N”. dzialyKontraktu =
+     kontrakt.stale.dzialy, ludzie = lista pracowników. Bliźniak: cele_stalego w hala.py. */
+  function celeStalego(s, dzialyKontraktu, ludzie, slowniki, data) {
+    s = s || {};
+    const roleDz = new Map((dzialyKontraktu || []).map(d => [d.kod, d.role || []]));
+    const lista = (Array.isArray(s.dzialy) ? s.dzialy.filter(d => typeof d === 'string') : []);
+    if (!lista.length) lista.push(s.dzial);
+    const wiele = lista.length > 1;
+    const linia = s.linia && s.linia !== '*' ? s.linia : null;
+    const poId = new Map((ludzie || []).map(p => [p.id, p]));
+    const moze = id => { const p = poId.get(id); return !!p && p.aktywny !== false && !naUrlopie(slowniki, id, data); };
+    const wDziale = (d, p) => (roleDz.get(d) || []).some(r => (p.role || []).includes(r));
+    const wynik = [];
+    if (s.kazdy === true) {
+      const ids = [...poId.keys()].sort();
+      for (const d of lista) for (const id of ids) {
+        const p = poId.get(id);
+        if (!wDziale(d, p) || !moze(id)) continue;
+        if (linia && (p.linie || []).length && !p.linie.includes(linia)) continue;
+        wynik.push({ dzial: d, osoba: id, sufiks: `${wiele ? `|d=${d}` : ''}|o=${id}` });
+      }
+    } else if (Array.isArray(s.wykonawcy) && s.wykonawcy.length) {
+      for (const id of s.wykonawcy) {
+        if (typeof id !== 'string' || !moze(id)) continue;
+        wynik.push({ dzial: lista.find(d => wDziale(d, poId.get(id))) || lista[0], osoba: id, sufiks: `|o=${id}` });
+      }
+    } else {
+      const osoba = s.wykonawca || null;
+      if (osoba && naUrlopie(slowniki, osoba, data)) return [];
+      for (const d of lista) wynik.push({ dzial: d, osoba, sufiks: wiele ? `|d=${d}` : '' });
+    }
+    return wynik.slice(0, 200);
+  }
+
   /* D55: czy osoba ma urlop w dniu zakładu 'RRRR-MM-DD' (słownik urlopy: {osoba, od, do} — do włącznie).
      Bliźniak: na_urlopie w hala.py. */
   function naUrlopie(slowniki, osoba, data) {
@@ -656,13 +759,7 @@
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data || '');
     if (!m) return [];
     const [r, mi, dz] = [+m[1], +m[2], +m[3]];
-    const dzienTygodnia = (new Date(Date.UTC(r, mi - 1, dz)).getUTCDay() + 6) % 7 + 1;      // poniedziałek = 1
-    const ostatni = new Date(Date.UTC(r, mi, 0)).getUTCDate();
-    let pasuje = false;
-    if (h.rodzaj === 'codziennie') pasuje = true;
-    else if (h.rodzaj === 'dni_tygodnia') pasuje = (h.dni || []).includes(dzienTygodnia);
-    else if (h.rodzaj === 'miesiecznie') pasuje = dz === Math.min(parseInt(h.dzien_miesiaca, 10) || 1, ostatni);
-    if (!pasuje) return [];
+    if (!dzienHarmonogramu(h, data)) return [];
     const lista = Object.entries(zmiany && Object.keys(zmiany).length ? zmiany : ZMIANY_DOMYSLNE)
       .map(([nr, z]) => [nr, hhmm(z && z.od), hhmm(z && z.do)]).filter(x => x[1] && x[2])
       .sort((a, b) => (a[1][0] * 60 + a[1][1]) - (b[1][0] * 60 + b[1][1]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
@@ -1789,7 +1886,7 @@
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
-    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, opisTerminu, jestKonflikt, UWAGA_CZASU,
+    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
   };
   global.Hala = Hala;

@@ -4,8 +4,9 @@
    Checklista = zapisane zlecenie z pozycjami (słownik zlecenia_stale). Hub robi z niej na każdą wybraną zmianę JEDNO
    zlecenie z pozycjami do odhaczenia (godziny tej zmiany) — dział odhacza je w Zleceniach, lider także na ekranie Zmiana.
    Okno ma tylko to, co potrzebne: nazwa, kto (dział, linia, osoba), kiedy (codziennie / w wybrane dni / ręcznie, zmiany)
-   i pozycje: godzina od startu zmiany i co zrobić. Czynność (obsada, obchód, próba, BHP, przekazanie, przegląd), maszyna
-   i wymagania (📷 📝 ▣) są pod „⋯” przy pozycji — większość pozycji ich nie potrzebuje.
+   i pozycje: godzina od startu zmiany i co zrobić. D72: bez typów czynności — „Co zrobić” podpowiada gotowe czynności
+   (raport obsady, obchód BHP…) z domyślnymi wymaganiami, kierownik je zmienia; maszyna i wymagania (📷 📝 ▣) pod „⋯”.
+   Stara pozycja z czynnością (D67) zachowuje ją (data-czynnosc) — dalej zalicza się formularzem w GK Lider.
    Zapis: slownik.zapisany zlecenia_stale/<kod>. Logika formularza: widok.js → checklistaZFormularza (testowana). */
 
 (() => {
@@ -24,19 +25,18 @@
 
   function wierszPozycji(p) {
     const maszyny = P.maszynyLinii(f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value);
-    return `<div class="pozycja-checklisty" data-id="${esc(p.id || '')}">
+    return `<div class="pozycja-checklisty" data-id="${esc(p.id || '')}" data-czynnosc="${esc(p.czynnosc || '')}">
       <div class="pozycja-glowna">
         <input class="godzina" value="${esc(p.godzina || '')}" placeholder="0:30" inputmode="numeric" aria-label="Godzina od startu zmiany (g:mm)">
         <span class="godz slaby" aria-hidden="true"></span>
-        <input class="nazwa" value="${esc(p.nazwa || '')}" maxlength="200" placeholder="Co zrobić" aria-label="Co zrobić">
+        <input class="nazwa" value="${esc(p.nazwa || '')}" maxlength="200" placeholder="Co zrobić (np. Obchód BHP)" aria-label="Co zrobić" list="podpowiedzi-czynnosci">
         <span class="ikony" aria-hidden="true"></span>
-        <button type="button" class="maly" data-szczegoly aria-expanded="false" title="Czynność, maszyna, zdjęcie, notatka, skan">⋯</button>
+        <button type="button" class="maly" data-szczegoly aria-expanded="false" title="Maszyna, zdjęcie, notatka, skan">⋯</button>
         <button type="button" class="maly" data-ruch="-1" aria-label="W górę">↑</button>
         <button type="button" class="maly" data-ruch="1" aria-label="W dół">↓</button>
         <button type="button" class="maly" data-usun aria-label="Usuń pozycję">✕</button>
       </div>
       <div class="pozycja-szczegoly" hidden>${/* zawsze zwinięte — w wierszu widać ikony (👥 ▣ 📷 📝) */ ''}
-        <label>Czynność<select class="czynnosc">${W.CZYNNOSCI_POZYCJI.map(([k, n]) => `<option value="${esc(k)}" ${p.czynnosc === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
         <label>Maszyna<select class="maszyna">${P.opcje(maszyny, '— bez maszyny —')}</select></label>
         <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> 📷 zdjęcie</label>
         <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> 📝 notatka</label>
@@ -47,8 +47,20 @@
 
   const pozycjeZOkna = () => [...f.querySelectorAll('.pozycja-checklisty')].map(w => {
     const v = c => w.querySelector('.' + c);
-    return { id: w.dataset.id || null, godzina: v('godzina').value, nazwa: v('nazwa').value, czynnosc: v('czynnosc').value,
+    return { id: w.dataset.id || null, godzina: v('godzina').value, nazwa: v('nazwa').value, czynnosc: w.dataset.czynnosc || '',
              maszyna: v('maszyna').value, zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked };
+  });
+
+  /* D72: wybrana gotowa czynność ustawia swoje domyślne wymagania — tylko gdy w wierszu nic jeszcze nie zaznaczono. */
+  f.addEventListener('change', ev => {
+    const pole = ev.target.closest('.pozycja-checklisty .nazwa');
+    if (!pole) return;
+    const c = W.gotowaCzynnosc(pole.value, hala.slowniki);
+    const w = pole.closest('.pozycja-checklisty');
+    if (!c || ['zdjecie', 'notatka', 'skan'].some(k => w.querySelector('.' + k).checked)) return;
+    w.querySelector('.zdjecie').checked = !!c.zdjecie;
+    w.querySelector('.notatka').checked = !!c.notatka;
+    odswiez();
   });
 
   function rysujPozycje(pozycje) {
@@ -71,7 +83,7 @@
     for (const w of f.querySelectorAll('.pozycja-checklisty')) {
       const min = W.minutyZTekstu(w.querySelector('.godzina').value);
       w.querySelector('.godz').textContent = w.querySelector('.godzina').value.trim() ? `= ${W.godzinaPozycji(od, min)}` : '';
-      const cz = w.querySelector('.czynnosc').value;
+      const cz = w.dataset.czynnosc;
       w.querySelector('.ikony').textContent = [cz ? (W.CZYNNOSCI_POZYCJI.find(([k]) => k === cz) || ['', ''])[1].split(' ')[0] : '',
         w.querySelector('.zdjecie').checked ? '📷' : '', w.querySelector('.notatka').checked ? '📝' : '', w.querySelector('.skan').checked ? '▣' : ''].join('');
     }
@@ -101,6 +113,7 @@
 
   /* kod = istniejąca checklista; kopia — nowa z jej treścią. */
   function otworz(kod, kopia) {
+    P.podpowiedziCzynnosci();
     const s = kod ? ((hala.slowniki || {}).zlecenia_stale || {})[kod] : null;
     const zm = Object.keys(zmianySlownik());
     const w = s ? W.checklistaDoFormularza(s)

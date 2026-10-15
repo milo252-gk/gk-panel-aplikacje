@@ -607,10 +607,15 @@
     // dwa tryby — Zadania (jedna lista wszystkich rodzajów, znacznik + filtr „Rodzaj”) i Zapisane (wszystkie wzory, także
     // checklisty lidera, wcześniej w Administracji). Zgłoszenia, narzędzia i BHP — wiersze z zgloszenia.js.
     const ZG = Panel.widoki.zgloszenia;
-    for (const t of ['biezace', 'stale']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
+    for (const t of ['biezace', 'stale', 'kalendarz']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
+    // D71: 📅 Kalendarz — miesiąc zleceń stałych i zaplanowanych (kalendarz.js).
+    if (trybZlecen === 'kalendarz') {
+      if (Panel.widoki.kalendarz) Panel.widoki.kalendarz.rysuj(d, lista);
+      return;
+    }
     if (trybZlecen === 'stale') {
       if (Panel.widoki.checklisty) Panel.widoki.checklisty.rysuj();
       if (Panel.widoki.stale) Panel.widoki.stale.rysuj(d);
@@ -879,6 +884,8 @@
     rysujOsobyZlecenia(w.wykonawca ? [w.wykonawca] : []);
     rysujMaszynyZlecenia(Array.isArray(w.maszyny) && w.maszyny.length ? w.maszyny : (w.maszyna ? [w.maszyna] : []));
     fz.czynnosc.value = w.czynnosc || '';
+    $('zlecenie-czynnosc').hidden = !w.czynnosc;          // D72: typ czynności tylko, gdy przyszedł z zapisanego
+    Panel.podpowiedziCzynnosci();
     $('zlecenie-maszyny').hidden = !!edycja;
     rysujZmianyZlecenia(edycja ? '' : (w.zmiana || ''));
     $('zlecenie-kto').hidden = !edycja;
@@ -924,7 +931,14 @@
   Panel.maszynyLinii = maszynyLinii;
   Panel.pokazPolaLinii = pokazPolaLinii;
   Panel.osobyDzialu = osobyDzialu;
+  /* D72: jedna lista podpowiedzi „Co zrobić” (gotowe czynności + zapisane) dla wszystkich okien zleceń. */
+  Panel.podpowiedziCzynnosci = () => {
+    $('podpowiedzi-czynnosci').innerHTML = W.podpowiedziCzynnosci(hala.slowniki)
+      .map(c => `<option value="${esc(c.nazwa)}">${esc([c.zdjecie ? '📷' : '', c.notatka ? '📝' : ''].join(''))}</option>`).join('');
+  };
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
+  // D72: podpowiedź z zapisanych uzupełnia pusty opis — kierownik opisuje po swojemu, jeśli chce inaczej.
+  fz.tytul.addEventListener('change', () => { const c = W.gotowaCzynnosc(fz.tytul.value, hala.slowniki); if (c && c.opis && !fz.opis.value.trim()) fz.opis.value = c.opis; });
   // Każde zamknięcie okna zdejmuje blokadę pól edycji — następne „Nowe zlecenie” zaczyna od zwykłego formularza.
   $('okno-zlecenia').addEventListener('close', () => { for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = false; });
   fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); rysujOsobyZlecenia([]); });

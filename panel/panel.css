@@ -484,3 +484,58 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 /* D56: postęp zlecenia na żywo i próby jakościowe w Raportach. */
 .postep-zlecenia { margin-top: 4px; font-weight: 700; color: var(--niebieski); }
 .sekcja-prob { margin-top: 22px; }
+
+/* ------------------------------------------------------------ D71: kalendarz zleceń i „dla kogo” (2026-10-15) */
+.kal-nawigacja { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.kal-nawigacja h3, .kal-nawigacja b { margin: 0; min-width: 11em; text-align: center; text-transform: capitalize; font-size: 1.05em; }
+.kal-siatka { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.kal-naglowek { text-align: center; font-size: 12px; font-weight: 700; color: var(--tekst-slaby); text-transform: uppercase; padding: 2px 0; }
+.kal-komorka { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-height: 86px; padding: 6px; text-align: left;
+  border: 1px solid var(--ramka); border-radius: 10px; background: var(--karta); color: var(--tekst); font: inherit; cursor: pointer; overflow: hidden; }
+.kal-komorka.weekend { background: var(--tlo-neutralne); }
+.kal-komorka.poza { opacity: .45; }
+.kal-komorka.przeszly .kal-wpisy { opacity: .6; }
+.kal-komorka.swieto .kal-nr { color: var(--czerwony); }
+.kal-komorka.dzis { border-color: var(--akcent); box-shadow: inset 0 0 0 1px var(--akcent); }
+.kal-komorka.wybrany { border-color: var(--granat); box-shadow: inset 0 0 0 2px var(--granat); }
+.kal-nr { font-weight: 700; display: flex; justify-content: space-between; }
+.kal-licznik { align-self: flex-start; min-width: 22px; padding: 0 6px; border-radius: 999px; background: var(--granat); color: var(--na-marce);
+  font-size: 12px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.kal-wpisy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kal-wpis { font-size: 12px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid var(--akcent); padding-left: 4px; }
+.kal-wpis.plan { border-left-color: var(--niebieski); }
+.kal-wiecej { font-size: 12px; color: var(--tekst-slaby); }
+.kal-dzien { margin-top: 14px; display: grid; gap: 8px; }
+.kal-dzien h3 { margin: 0 0 4px; }
+.kal-pozycja { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px;
+  border: 1px solid var(--ramka); border-left: 4px solid var(--akcent); border-radius: var(--promien); background: var(--karta); }
+.kal-pozycja.pominieta { border-left-color: var(--szary); opacity: .75; }
+.kal-pozycja .akcje { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 600px) {
+  .kal-komorka { min-height: 52px; padding: 4px; align-items: center; }
+  .kal-wpisy { display: none; }
+  .kal-nr { justify-content: center; }
+  .kal-pozycja { grid-template-columns: minmax(0, 1fr); }
+  .kal-pozycja .akcje { justify-content: flex-start; }
+}
+/* Mini-kalendarz w oknie zlecenia stałego */
+.mini-kalendarz { margin-top: 10px; padding: 10px; border: 1px solid var(--ramka); border-radius: var(--promien); background: var(--tlo); }
+.mini-kalendarz.wylaczony { opacity: .5; }
+.kal-siatka.mala { gap: 3px; }
+.kal-dzien-m { min-height: var(--dotyk); padding: 0; border: 1px solid transparent; border-radius: 8px; background: var(--karta); color: var(--tekst);
+  font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; position: relative; }
+.kal-dzien-m.poza { opacity: .4; }
+.kal-dzien-m.przeszly { color: var(--tekst-slaby); }
+.kal-dzien-m.swieto { color: var(--czerwony); }
+.kal-dzien-m.dzis { border-color: var(--akcent); }
+.kal-dzien-m.jest { background: var(--granat); color: var(--na-marce); font-weight: 700; }
+.kal-dzien-m.pominiety { text-decoration: line-through; border-color: var(--ramka-mocna); border-style: dashed; color: var(--tekst-slaby); }
+.najblizsze { font-weight: 600; margin: 8px 0 0; }
+.dla-dzialy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.osoby-stalego { max-height: 180px; overflow: auto; }
+.mies-tryb select { width: auto; min-height: var(--dotyk); display: inline-block; }
+.mies-tryb label.zaznacz { flex-wrap: wrap; }
+dialog.okno .mies-tryb, dialog.okno .kto { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.presety .chip.maly { min-height: var(--dotyk); padding: 0 12px; }
+.blad-tekst { color: var(--czerwony); }
+@media (max-width: 600px) { .dla-dzialy { grid-template-columns: minmax(0, 1fr); } }
