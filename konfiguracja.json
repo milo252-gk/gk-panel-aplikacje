@@ -1,11 +1,14 @@
 {
   "hub": "https://chronic-asylum-queue-neither.trycloudflare.com",
-  "zmieniono": "2026-10-15T08:58:22.064Z",
+  "zmieniono": "2026-10-15T08:58:41.366Z",
   "wersje": {
     "wspolne": "wspolne-7bd85b30519b",
     "panel": "panel-a0c958f8e3d7",
     "lider": "lider-31e43a11779e",
     "ur": "ur-1264c8e92bc3",
     "kj": "kj-3171b2b1999b"
+  },
+  "programy": {
+    "wycena": "https://rebecca-smilies-possess-intend.trycloudflare.com"
   }
 }
