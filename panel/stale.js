@@ -247,7 +247,11 @@
 
   f.addEventListener('input', odswiez);
   f.addEventListener('change', ev => {
-    if (ev.target === f.tytul) { const c = W.gotowaCzynnosc(f.tytul.value, hala.slowniki); if (c && c.opis && !f.opis.value.trim()) f.opis.value = c.opis; }
+    if (ev.target === f.tytul) {
+      // D72: podpowiedź wstawia opis (gdy pusty) i swoje domyślne wymagania — kierownik zmienia je, jak chce.
+      const c = W.gotowaCzynnosc(f.tytul.value, hala.slowniki);
+      if (c) { if (c.opis && !f.opis.value.trim()) f.opis.value = c.opis; f.wymagaj_zdjecia.checked = !!c.zdjecie; f.wymagaj_notatki.checked = !!c.notatka; }
+    }
     if (ev.target.name === 'dzialy') rysujOsoby(wybrane('osoby'));
     if (ev.target === f.linia) f.maszyna.innerHTML = f.linia.value === W.LINIA_KAZDA ? P.opcje([], '— żadna —') : P.opcje(P.maszynyLinii(f.linia.value), '— żadna —');
     if (ev.target === f.rodzaj && f.rodzaj.value === 'daty') ustawMiesiac(kal.daty.filter(d => d >= dzis())[0]);
@@ -258,6 +262,9 @@
     const blad = f.querySelector('.blad');
     const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
+    // „Zmień” nie może zgubić tego, czego okno nie pokazuje (stara czynność, kilka maszyn — D56, D72; audyt 2026-10-16).
+    const dawny = edytowanyKod && ((hala.slowniki || {}).zlecenia_stale || {})[edytowanyKod];
+    if (dawny) for (const pole of ['czynnosc', 'maszyny']) if (dawny[pole] !== undefined && w.wartosc[pole] === undefined) w.wartosc[pole] = dawny[pole];
     try {
       await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
       if (poZapisie) { const fn = poZapisie; poZapisie = null; await fn(w.kod); }
@@ -286,7 +293,18 @@
         if (lista) P.widoki.checklisty.otworz(kod, true);
         else otworz(Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` }), null, 'Nowe zapisane (kopia)');
       }
-      if (b.dataset.akcja === 'zlec' && lista) {
+      if (b.dataset.akcja === 'zlec' && W.wieluAdresatow(s)) {
+        // D71: wiele adresatów — każdy dostaje własne zlecenie od razu (jak w harmonogramie), po potwierdzeniu liczby.
+        const cele = Hala.celeStalego(s, (hala.kontrakt.stale || {}).dzialy || [], hala.pracownicy || [], hala.slowniki || {}, dzis());
+        if (!cele.length) { P.komunikat('Nikt nie dostanie tego zlecenia — zaznacz osoby albo sprawdź urlopy.', 'blad'); return; }
+        const n = cele.length;
+        if (!(await P.potwierdz('Zlecić teraz?', `„${s.tytul}” — ${n} ${n === 1 ? 'zlecenie' : n < 5 ? 'zlecenia' : 'zleceń'}, każdy adresat dostaje własne.`, 'Zleć'))) return;
+        const zmiana = hala.zmianaTeraz(), teraz = hala.teraz();
+        for (const dane of W.zleceniaTeraz(kod, s, cele, zmiana, teraz, W.terminTeraz(s, zmiana, teraz))) {
+          await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
+        }
+        P.komunikat(`Zlecone: ${s.tytul} — ${n} ${n === 1 ? 'zlecenie' : n < 5 ? 'zlecenia' : 'zleceń'}`, 'ok');
+      } else if (b.dataset.akcja === 'zlec' && lista) {
         // Zlecenie z pozycjami od razu — okno „Nowe zlecenie” nie ma pozycji.
         const dane = W.checklistaTeraz(kod, s, hala.zmianaTeraz(), hala.teraz(), W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz()));
         await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);

@@ -1,6 +1,6 @@
 /* Hala — wspólne działania wszystkich aplikacji hali (D55, prośby właściciela 2026-10-13). Dla Lidera, UR, KJ i Panelu.
 
-     HalaDzwieki.zagraj('awaria' | 'pilne')            // dwa RÓŻNE dźwięki: awaria (syrena) i pilne zadanie (gong)
+     HalaDzwieki.zagraj('awaria' | 'pilne', mocno?)    // dwa RÓŻNE dźwięki (GKDzwieki z gk-dzwieki.js — ładowany wcześniej)
      HalaDzwieki.sledz(hala, { awarie: true, zlecenia: () => ({ dzial, linia? }), wlaczony: () => bool })
      HalaDzialania.historia(hala, 'zlecenie', id)      // okno: kto, kiedy, notatki i zdjęcia — cała droga zlecenia
      HalaDzialania.zglos(hala, { maszyna?, dzial })     // zgłoszenie nieprawidłowości do kierownika zakładu
@@ -19,48 +19,22 @@
 
   // ================================================================ dźwięki
 
-  /* Dwa sygnały, które da się rozróżnić bez patrzenia (właściciel: „wszyscy mają słyszeć pilne zadania i awarie —
-     to mają być 2 osobne dźwięki”): AWARIA — ostra syrena (prostokąt, wysoko–nisko, przy zatrzymaniu trzy serie),
-     PILNE ZADANIE — miękki gong w górę (sinus, trzy dźwięki). Przeglądarka gra dopiero po pierwszym dotknięciu
-     strony — kontekst odblokowujemy przy każdym dotknięciu i klawiszu. */
-  const WZORY = {
-    awaria: [[1320, 0, 180, 'square'], [990, 220, 180, 'square'], [1320, 440, 220, 'square']],
-    pilne: [[659, 0, 220, 'sine'], [880, 240, 220, 'sine'], [1175, 480, 420, 'sine']],
-  };
-  const WIBRACJE = { awaria: [400, 150, 400, 150, 400], pilne: [150, 100, 150] };
-  let audio = null;
-  function kontekst() {
-    if (!audio) { const K = global.AudioContext || global.webkitAudioContext; if (!K) return null; try { audio = new K(); } catch (e) { return null; } }
-    return audio;
-  }
-  function odblokuj() { const a = kontekst(); if (a && a.state === 'suspended') a.resume().catch(() => {}); }
-  if (global.document) for (const zd of ['pointerdown', 'keydown']) global.document.addEventListener(zd, odblokuj, { capture: true, passive: true });
+  /* Dźwięki gra wspólny GKDzwieki (gk-dzwieki.js — miękkie dzwonki jak powiadomienia w telefonie, właściciel 2026-10-16:
+     „mniej jak 8-bitowe gry, a faktyczne powiadomienia”). Dwa sygnały da się rozróżnić bez patrzenia (D55: „to mają
+     być 2 osobne dźwięki”): AWARIA — szybki dzwonek alarmowy (zatrzymanie — gęściej, trzy serie), PILNE ZADANIE —
+     „ding-dong” jak dzwonek do drzwi. Tu zostaje tylko zgodność wstecz: zagraj('awaria', mocno). */
+  const G = () => global.GKDzwieki;
+  const kontekst = () => (G() ? G().kontekst() : null);
+  function odblokuj() { if (G()) G().odblokuj(); }
 
-  function ton(a, hz, odMs, dlMs, typ, glosnosc) {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = typ; o.frequency.value = hz;
-    const t0 = a.currentTime + 0.02 + odMs / 1000;
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(glosnosc, t0 + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dlMs / 1000);
-    o.connect(g).connect(a.destination);
-    o.start(t0); o.stop(t0 + dlMs / 1000 + 0.05);
-  }
-
-  /* rodzaj: 'awaria' | 'pilne'; mocno = zatrzymanie (trzy serie syreny). Zwraca, czy zagrało (false = brak dźwięku
-     w przeglądarce albo jeszcze nie odblokowany — aplikacja pokazuje wtedy pasek „Dotknij, żeby włączyć dźwięk”). */
+  /* rodzaj: 'awaria' | 'pilne' (albo inny rodzaj GKDzwieki: info, sukces, blad, zatrzymanie); mocno = zatrzymanie.
+     Zwraca, czy zagrało (false = brak dźwięku albo jeszcze nie odblokowany — aplikacja pokazuje pasek „dotknij”). */
   function zagraj(rodzaj, mocno) {
-    const wzor = WZORY[rodzaj];
-    if (!wzor) return false;
-    try { global.navigator && global.navigator.vibrate && global.navigator.vibrate(WIBRACJE[rodzaj]); } catch (e) { /* bez wibracji */ }
-    const a = kontekst();
-    if (!a) return false;
-    if (a.state !== 'running') { a.resume().catch(() => {}); return false; }
-    const serie = rodzaj === 'awaria' && mocno ? 3 : 1;
-    for (let s = 0; s < serie; s++) for (const [hz, od, dl, typ] of wzor) ton(a, hz, s * 700 + od, dl, typ, rodzaj === 'awaria' ? 0.35 : 0.3);
-    return true;
+    if (!G()) return false;
+    return G().zagraj(rodzaj === 'awaria' && mocno ? 'zatrzymanie' : rodzaj);
   }
-  const gotowy = () => { const a = kontekst(); return !!a && a.state === 'running'; };
+  const gotowy = () => !!G() && G().gotowy();
+  const WZORY = { get awaria() { return G() && G().RODZAJE.awaria; }, get pilne() { return G() && G().RODZAJE.pilne; } };
 
   /* Słucha hali: NOWA awaria (zgłoszona, nie przeze mnie) → syrena; NOWE pilne zlecenie dla mnie albo mojego działu
      → gong. Przy starcie i po zalogowaniu nic nie gra (to, co już było, człowiek widzi na liście). opcje.zlecenia() —
@@ -133,7 +107,14 @@
     pokaz();
   }
 
-  global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY, bhpPilne, pasek };
+  /* „Sprawdź dźwięki” (Moje konto → Powiadomienia, we wszystkich aplikacjach hali): kolejno info, pilne, awaria — człowiek
+     słyszy cały zestaw i wie, jak brzmi każdy sygnał. */
+  function sprawdz() {
+    odblokuj();
+    [['info', 150], ['pilne', 1400], ['awaria', 3500]].forEach(([r, ms]) => setTimeout(() => zagraj(r), ms));
+  }
+
+  global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY, bhpPilne, pasek, sprawdz };
 
   // ================================================================ okno (wspólne)
 
@@ -226,7 +207,7 @@
     const { d } = okno(`<form method="dialog"><h2>${esc(tytul)}</h2>
       <p class="hala-okno-opis">${esc(obiekt.numer || '')}${obiekt.etykieta ? ` · ${esc(obiekt.etykieta)}` : ''}</p>
       <div class="hala-historia" data-lista><p class="hala-okno-opis">Wczytuję historię…</p></div>
-      <div class="hala-okno-przyciski"><button type="button" class="glowny" data-zamknij>Zamknij</button></div></form>`);
+      <div class="hala-okno-przyciski"><button type="button" data-zamknij>Zamknij</button></div></form>`);
     const lista = d.querySelector('[data-lista]');
     try {
       const wiersze = wierszeHistorii(await hala.historia(typ, id), { pracownicy: hala.pracownicy, H: H() });

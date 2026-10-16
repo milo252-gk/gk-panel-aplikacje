@@ -255,7 +255,7 @@
                 ${u.resetPinu ? '<button type="button" data-a="pin">Resetuj PIN</button>' : ''}
                 ${u.wyloguj ? '<button type="button" data-a="wyloguj">Wyloguj wszędzie</button>' : ''}
               </div></fieldset>`
-            : `<p class="hala-konto-drobne">Hasło startowe: ${HASLO_STARTOWE}. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.</p>`}
+            : `<p class="hala-konto-drobne">Hasło startowe: ${HASLO_STARTOWE}. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.</p>`}
           <p class="hala-okno-blad" role="alert" hidden></p>
           <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zapisz</button></div>
         </form>`;

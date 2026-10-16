@@ -53,7 +53,7 @@
     // leżał pod zasłoną okna. Jak UR.komunikat (hala.css → .komunikaty, popover="manual" w index.html).
     if (pudlo.showPopover) { try { pudlo.hidePopover(); } catch (e) { /* nie był otwarty */ } try { pudlo.showPopover(); } catch (e) { /* stara przeglądarka */ } }
     while (pudlo.children.length > MAKS_KOMUNIKATOW) pudlo.firstElementChild.remove();
-    setTimeout(() => el.classList.add('znika'), rodzaj === 'blad' ? 7000 : 3500);
+    setTimeout(() => el.classList.add('znika'), rodzaj === 'blad' ? 7000 : 4000);   // jak w każdej aplikacji GK
     setTimeout(() => el.remove(), rodzaj === 'blad' ? 7600 : 4100);
   };
 
@@ -269,7 +269,11 @@
      o.adres (np. '#zlecenia') — ekran, który otworzy dotknięcie, tak samo jak push z huba (sw.js → 'otworz'). */
   Lider.powiadom = async (tytul, tresc, opcje) => {
     const o = opcje || {};
-    try { if (navigator.vibrate) navigator.vibrate(o.wibracja || [200, 100, 200]); } catch (e) { /* bez wibracji */ }
+    // Dźwięk ze wspólnego zestawu GK (gk-dzwieki.js): o.dzwiek = 'info' (domyślnie) albo 'pilne' (alert jakości) —
+    // wcześniej Lider tylko wibrował, a Panel grał osobny trzeci sygnał. GKDzwieki sam dokłada swoją wibrację.
+    const gd = window.GKDzwieki;
+    if (gd && o.dzwiek !== false) gd.zagraj(o.dzwiek || 'info');
+    else try { if (navigator.vibrate) navigator.vibrate(o.wibracja || [200, 100, 200]); } catch (e) { /* bez wibracji */ }
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (document.visibilityState === 'visible' && !o.zawsze) return;       // na ekranie i tak widać
     const op = { body: tresc, tag: o.tag, icon: 'ikona-192.png', renotify: !!o.tag, data: { adres: o.adres || '' } };
@@ -388,7 +392,7 @@
       blad.textContent = e && (e.ustawione || (e.kod === 403 && e.powod)) ? e.message : Lider.poLudzku(e);
       blad.hidden = false;
       $('pin').value = '';
-      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 12 h minęło albo 5 złych PIN-ów
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 16 h minęło albo 5 złych PIN-ów
       $('pin').focus();
     } finally {
       przyciski.forEach(b => { b.disabled = false; });
@@ -397,7 +401,7 @@
 
   /* Identyfikator + hasło albo PIN (D24, D43). Enter z czytnika w polu identyfikatora przenosi do drugiego pola,
      zamiast wysyłać pusty sekret. Osoba z ważnym znacznikiem na tym telefonie → „PIN (4 cyfry)” i klawiatura cyfr
-     (rękawice); inaczej „Hasło (raz na 12 godzin…)” — zwykłe pole z pełną klawiaturą, klawiatura cyfr schowana.
+     (rękawice); inaczej „Hasło (raz na 16 godzin…)” — zwykłe pole z pełną klawiaturą, klawiatura cyfr schowana.
      „abc” przełącza na hasło (zapomniany PIN), „123” — z powrotem na PIN (konto.js → poleLogowania). */
   const poleSekretu = HalaKonto.poleLogowania({
     hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'), przelacz: $('przelacz-sekret'),
@@ -587,8 +591,10 @@
 
   Lider.pokazEkran = nazwa => {
     Lider.stan.ekran = nazwa;
+    // Ekrany schowane w „☰ Więcej” (D74) podświetlają w menu „Więcej”.
+    const wMenu = nazwa === 'koniec' ? 'wiecej' : nazwa;
     for (const b of document.querySelectorAll('.dolny [data-ekran]')) {
-      if (b.dataset.ekran === nazwa) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      if (b.dataset.ekran === wMenu) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
     window.scrollTo(0, 0);
     Lider.narysuj();
@@ -607,6 +613,21 @@
   };
   Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji }, Lider.dzialZlecen());
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.opcjeZlecen()) };
+  /* D74 „☰ Więcej” — jak w UR i KJ: rzadziej używane rzeczy Lidera; ustawienia, linia i zespół są w Moim koncie. */
+  Lider.ekrany.wiecej = {
+    rysuj(el) {
+      const k = Lider.stan.kolejka || {};
+      el.innerHTML = `<h1>Więcej</h1>
+        <nav class="menu-wiecej">
+          <button type="button" class="glowny" data-a="koniec">🏁 Koniec zmiany — raport</button>
+          <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>
+        </nav>
+        <p class="slaby">Linia, Mój zespół, powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
+      el.querySelector('[data-a=koniec]').addEventListener('click', () => Lider.pokazEkran('koniec'));
+      el.querySelector('[data-a=niewyslane]').addEventListener('click', () => pokazOdrzucone());
+    },
+  };
+  Lider.poRysowaniu.push(() => Lider.plakietka('wiecej', (Lider.stan.kolejka || {}).odrzucone || 0));
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (window.HalaDzialania) HalaDzialania.przyciskSkanu(hala, { zlecenia: Lider.dzialZlecen, otworzZlecenia: () => Lider.pokazEkran('zlecenia'),

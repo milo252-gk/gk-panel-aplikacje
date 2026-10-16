@@ -229,8 +229,8 @@
     $('osoba-resetuj-pin').hidden = ekran || !u.resetPinu;
     $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jeden PIN — bez hasła i bez PIN-u osoby.'
       : edytowany ? 'Hasło zmienia sama osoba (Moje konto). „Ustaw hasło startowe” niżej — gdy zapomniała hasła.'
-        : u.haslo ? 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.'
-          : 'Hasło startowe: haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 12 godzin na urządzeniu) i PIN.';
+        : u.haslo ? 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.'
+          : 'Hasło startowe: haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.';
   }
   $('osoba-role').addEventListener('change', polePinu);
 
@@ -437,11 +437,13 @@
   // ------------------------------------------------------------ ustawienia
 
   /* UI etap 2 (właściciel 2026-10-12): bez pól „Sesja na telefonie (godziny)” i „Sesja monitora w biurze (dni)” — nikt
-     ich nie zmienia, a od D43 o logowaniu i tak decyduje hasło raz na 12 godzin na urządzeniu. Hub trzyma swoje wartości
+     ich nie zmienia, a od D43 o logowaniu i tak decyduje hasło raz na 16 godzin na urządzeniu. Hub trzyma swoje wartości
      (zapisane albo domyślne 14 h / 90 dni) — formularz ich nie wysyła, więc niczego nie nadpisze. */
   const USTAWIENIA = [
     ['prog_zolty_min', 'Kafelek żółknie tyle minut przed terminem pozycji checklisty', 30],
     ['alarm_potwierdzenia_min', 'Alarm, gdy lider nie potwierdza naprawy dłużej niż (min)', 30],
+    // P3 z tabeli „Domyślne” w DECYZJE — wskazane jako ustawienie, a pola w Panelu nie było (audyt 2026-10-16).
+    ['prog_brakow_proc', 'Podpowiedź partii brakowej od tylu % braków w próbie', 5],
   ];
 
   function rysujUstawienia(el) {
@@ -868,7 +870,7 @@
             <button type="button" class="maly" data-akcja="kopiuj-klucz">Kopiuj</button></div>` : ''}
         </section>`;
       }).join('')}
-      <p class="slaby">GK Foto (Marketing) loguje się kontem GK z listy Pracownicy — imię i nazwisko, hasło raz na 12 godzin, na co dzień PIN.
+      <p class="slaby">GK Foto (Marketing) loguje się kontem GK z listy Pracownicy — imię i nazwisko, hasło raz na 16 godzin, na co dzień PIN.
         Klucza nie potrzebuje. Osobie, która pracuje tylko w nim, nadaj rolę „Marketing”. GK Czytnik od wersji 3.13
         działa bez logowania — konta nie potrzebuje.</p>
       <div class="admin-pasek"><button type="button" data-akcja="odswiez-polaczenia">Odśwież stan</button></div>`;

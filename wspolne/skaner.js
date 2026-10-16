@@ -216,7 +216,8 @@
         if (poprzedniFokus && poprzedniFokus.focus && d.contains(poprzedniFokus)) { try { poprzedniFokus.focus({ preventScroll: true }); } catch (e) { /* trudno */ } }
         if (zastapione) przejmijWpis = wpisHistorii;
         else if (wpisHistorii && global.history.state && global.history.state.halaSkaner) cofnijHistorie();
-        if (tekst !== null && global.navigator.vibrate) global.navigator.vibrate(60);
+        // Dobry skan: krótkie „tik-tik” ze wspólnego zestawu GK (z wibracją); bez niego — sama wibracja jak dawniej.
+        if (tekst !== null) { if (global.GKDzwieki) global.GKDzwieki.zagraj('sukces'); else if (global.navigator.vibrate) global.navigator.vibrate(60); }
         rozwiaz(tekst === null ? null : String(tekst).trim() || null);
       }
       otwarte = zakoncz;

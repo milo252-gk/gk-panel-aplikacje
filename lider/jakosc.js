@@ -33,7 +33,7 @@
       if (!widziane.has(x.id)) {
         widziane.add(x.id);
         L.powiadom('Alert jakości: ' + ((x.dane || {}).tytul || ''), 'Potwierdź zapoznanie się' + naLinii,
-                   { tag: 'alert-' + x.id, wibracja: [300, 100, 300, 100, 300], adres: '#jakosc' });
+                   { tag: 'alert-' + x.id, wibracja: [300, 100, 300, 100, 300], adres: '#jakosc', dzwiek: 'pilne' });
       }
     }
     if (pokazany === a.id && !el.hidden) return;         // nie przerysowujemy w trakcie pisania uwag

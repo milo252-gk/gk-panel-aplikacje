@@ -36,7 +36,8 @@
   .zakladki > button.menu-akcja .ikona { color: var(--pomarancz); }
 }
 
-.hala-polaczenie { font-size: .95em; padding: 6px 10px; font-weight: 600; }
+/* Przyklejony u góry jak w Liderze, UR i KJ (wcześniej przewijał się ze stroną, a menu komputera zasłaniało jego początek). */
+.hala-polaczenie { position: sticky; top: 0; z-index: 50; width: 100%; font-size: .95em; padding: 6px 10px; font-weight: 600; }
 .hala-polaczenie.odrzucone { cursor: pointer; text-decoration: underline; }   /* dotknięcie otwiera konto z listą odrzuconych */
 
 /* ---------------------------------------------------------------- układ „Na żywo” */
@@ -539,3 +540,12 @@ dialog.okno .mies-tryb, dialog.okno .kto { grid-template-columns: repeat(auto-fi
 .presety .chip.maly { min-height: var(--dotyk); padding: 0 12px; }
 .blad-tekst { color: var(--czerwony); }
 @media (max-width: 600px) { .dla-dzialy { grid-template-columns: minmax(0, 1fr); } }
+
+/* D74 „☰ Więcej”: na telefonie Wskaźniki, Raporty i Administracja tylko w Więcej — dolny pasek: Na żywo, Zlecenia, Awaria, Więcej. */
+@media (max-width: 820px) {
+  .zakladki > button.w-wiecej { display: none; }
+  /* otwarty widok schowany w Więcej — podświetlone Więcej (jak wybrana pozycja w hala.css) */
+  .hala-uklad > .hala-menu.zakladki:has(> button.w-wiecej[aria-selected="true"]) > button[data-widok="wiecej"] { color: var(--granat-tekst); }
+}
+.menu-wiecej { display: grid; gap: 10px; margin: 12px 0; max-width: 520px; }
+.menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }

@@ -39,7 +39,7 @@
           <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator">📷</button>
         </span>
       </label>
-      <label><span id="pin-etykieta">Hasło (raz na 12 godzin na tym urządzeniu)</span>
+      <label><span id="pin-etykieta">Hasło (raz na 16 godzin na tym urządzeniu)</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
       <!-- D43: „abc” — hasło z pełnej klawiatury (zapomniany PIN), „123” — z powrotem PIN z klawiatury cyfr. -->
@@ -74,6 +74,7 @@
     <section id="ekran-awarie" class="ekran" aria-label="Awaria" hidden></section>
     <section id="ekran-jakosc" class="ekran" aria-label="Jakość" hidden></section>
     <section id="ekran-koniec" class="ekran" aria-label="Koniec zmiany" hidden></section>
+    <section id="ekran-wiecej" class="ekran" aria-label="Więcej" hidden></section>
     <section id="ekran-zlecenia" class="ekran" aria-label="Zlecenia od kierownika" hidden></section>
   </main>
 
@@ -90,7 +91,8 @@
          UI etap 2: jedna czerwona zakładka zamiast przycisku AWARIA i zakładki „Awarie” — zgłoszenie na górze, pod nim lista. -->
     <button type="button" data-ekran="awarie" class="awaria"><span class="ikona">⚠️</span>Awaria<span class="plakietka" data-plakietka="awarie" hidden></span></button>
     <button type="button" data-ekran="zlecenia"><span class="ikona">📋</span>Zlecenia<span class="plakietka" data-plakietka="zlecenia" hidden></span></button>
-    <button type="button" data-ekran="koniec"><span class="ikona">🏁</span>Koniec</button>
+    <!-- D74 (właściciel 2026-10-16): menu kończy się „📋 Zlecenia” i „☰ Więcej”, jak w UR i KJ (D64) — „Koniec zmiany” jest w Więcej. -->
+    <button type="button" data-ekran="wiecej"><span class="ikona" aria-hidden="true">☰</span>Więcej<span class="plakietka" data-plakietka="wiecej" hidden></span></button>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 </div>
@@ -113,6 +115,7 @@
 <script src="../wspolne/aktualizacja.js"></script>
 <script src="../wspolne/konto.js"></script>
 <script src="../wspolne/zespol.js"></script>
+<script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="../wspolne/skaner.js"></script>

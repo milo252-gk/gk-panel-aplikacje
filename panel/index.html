@@ -32,7 +32,7 @@
       <label>Imię i nazwisko
         <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Jan Kowalski">
       </label>
-      <label><span id="pin-etykieta">Hasło (raz na 12 godzin na tym urządzeniu)</span>
+      <label><span id="pin-etykieta">Hasło (raz na 16 godzin na tym urządzeniu)</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
       <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>Zaloguj hasłem</button>
@@ -53,10 +53,13 @@
     </div>
     <button type="button" role="tab" data-widok="na-zywo" aria-selected="true"><span class="ikona" aria-hidden="true">📊</span><span>Na żywo</span></button>
     <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" aria-hidden="true">📋</span><span>Zlecenia</span><span id="plakietka-zlecen" class="plakietka" hidden></span></button>
-    <button type="button" role="tab" data-widok="wskazniki" aria-selected="false"><span class="ikona" aria-hidden="true">📈</span><span>Wskaźniki</span></button>
-    <button type="button" role="tab" data-widok="raporty" aria-selected="false"><span class="ikona" aria-hidden="true">🧾</span><span>Raporty</span></button>
-    <button type="button" role="tab" data-widok="administracja" id="menu-administracja" aria-selected="false" hidden><span class="ikona" aria-hidden="true">⚙️</span><span>Administracja</span></button>
+    <button type="button" role="tab" data-widok="wskazniki" class="w-wiecej" aria-selected="false"><span class="ikona" aria-hidden="true">📈</span><span>Wskaźniki</span></button>
+    <button type="button" role="tab" data-widok="raporty" class="w-wiecej" aria-selected="false"><span class="ikona" aria-hidden="true">🧾</span><span>Raporty</span></button>
+    <button type="button" role="tab" data-widok="administracja" id="menu-administracja" class="w-wiecej" aria-selected="false" hidden><span class="ikona" aria-hidden="true">⚙️</span><span>Administracja</span></button>
     <button type="button" id="menu-awaria" class="menu-akcja" title="Zgłoś awarię" hidden><span class="ikona" aria-hidden="true">⚠️</span><span class="tylko-komputer">Zgłoś awarię</span><span class="tylko-telefon">Awaria</span></button>
+    <!-- D74 (właściciel 2026-10-16): menu kończy się „☰ Więcej”, jak w UR, KJ i Liderze (D64). Na telefonie Wskaźniki, Raporty
+         i Administracja są tylko w Więcej (.w-wiecej), na komputerze także w menu. -->
+    <button type="button" role="tab" data-widok="wiecej" aria-selected="false"><span class="ikona" aria-hidden="true">☰</span><span>Więcej</span><span id="plakietka-wiecej" class="plakietka" hidden></span></button>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 
@@ -164,6 +167,19 @@
         </form>
         <div id="tabela-osob"></div>
       </section>
+    </section>
+  </div>
+
+  <div id="wiecej" hidden>
+    <section aria-labelledby="t-wiecej">
+      <h2 id="t-wiecej">Więcej</h2>
+      <nav class="menu-wiecej" aria-label="Więcej">
+        <button type="button" data-idz="wskazniki">📈 Wskaźniki</button>
+        <button type="button" data-idz="raporty">🧾 Raporty</button>
+        <button type="button" data-idz="administracja" id="wiecej-administracja" hidden>⚙️ Administracja</button>
+        <button type="button" data-idz="niewyslane" id="wiecej-niewyslane">Nie wysłane</button>
+      </nav>
+      <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>
     </section>
   </div>
 
@@ -471,7 +487,7 @@
     <fieldset class="pole-linii"><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div>
       <!-- D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie; pokazywane, gdy zaznaczona rola mistrza. -->
       <p class="slaby konto-drobne" id="osoba-linie-mistrz" hidden>Mistrz widzi tylko zaznaczone linie; bez zaznaczenia — wszystkie.</p></fieldset>
-    <!-- D43: hasło (raz na 12 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
+    <!-- D43: hasło (raz na 16 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
          tutaj) i przy pierwszym logowaniu ustawia własne hasło i PIN. Konto samego ekranu — jeden PIN 4–8 cyfr. -->
     <div class="dwie" id="osoba-sekrety">
       <label id="osoba-haslo"><span>Hasło startowe (nieobowiązkowe)</span><input name="haslo" type="password" maxlength="128" autocomplete="new-password" placeholder="puste — haslo123"></label>
@@ -562,6 +578,7 @@
 <script src="../wspolne/zespol.js"></script>
 <!-- Skaner QR (przegląd 2026-10-14): zadanie kierownika z „▣ Wymagaj skanu QR maszyny” — bez skanera nie dało się go zamknąć. -->
 <script src="../wspolne/skaner.js"></script>
+<script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="widok.js"></script>

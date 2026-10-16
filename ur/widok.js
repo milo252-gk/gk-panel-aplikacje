@@ -392,15 +392,16 @@
                pilna: !!pr.zatrzymuje, obiekt: z.obiekt };
     }
     if (z.typ === 'awaria.przypisana' && d.mechanik === ja) {
-      return { tytul: 'Przekazano Ci awarię', tresc: '', pilna: false, obiekt: z.obiekt };
+      return { tytul: 'Przekazano Ci awarię', tresc: '', pilna: false, dzwiek: 'pilne', obiekt: z.obiekt };
     }
     if (z.typ === 'awaria.potwierdzenie_odrzucone') {
       // Alarm (trzy serie tonów) tylko u mechanika, który prowadzi awarię — dzwonił u wszystkich i nie mówił, która
       // maszyna (audyt 2026-10-12). awaria = obiekt z telefonu (ur.js); bez niego albo bez mechanika — u każdego.
       const ad = (awaria && awaria.dane) || {};
       if (ad.mechanik && ad.mechanik !== ja) return null;
+      // Pilne (czerwony komunikat), ale dźwięk zwykłej awarii — bez trzech serii zatrzymania, linia nie musi stać.
       return { tytul: `Lider: naprawa nie pomogła${ad.maszyna ? ' — ' + nazwaMaszyny(slowniki, ad.maszyna) : ''}`, tresc: d.powod || '',
-               pilna: true, obiekt: z.obiekt };
+               pilna: true, dzwiek: 'awaria', obiekt: z.obiekt };
     }
     return null;
   }

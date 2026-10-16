@@ -1,11 +1,11 @@
 /* GK Panel Kierownika — wspólne okna konta: „Zmień hasło”, „Zmień PIN”, „Ustaw hasło i PIN” po pierwszym logowaniu
-   i pole sekretu na ekranie logowania (D32: jedno konto we wszystkich aplikacjach GK; D43: hasło raz na 12 godzin na
+   i pole sekretu na ekranie logowania (D32: jedno konto we wszystkich aplikacjach GK; D43: hasło raz na 16 godzin na
    urządzeniu, na co dzień PIN 4 cyfry).
 
    Jedno okno dla Panelu, Lidera, UR i KJ (wszędzie z „Moje konto” — ikona osoby w nagłówku, niżej mojeKonto) — ten sam wygląd i te same
    słowa, jak Wygląd (motyw.js). Aplikacja woła:
        HalaKonto.zaloguj(hala, { identyfikator, pin }, { komunikat })   // jak hala.zaloguj; hasło startowe → okno „Ustaw hasło i PIN”
-       HalaKonto.poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane })   // „Hasło (raz na 12 godzin…)” / „PIN (4 cyfry)”
+       HalaKonto.poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane })   // „Hasło (raz na 16 godzin…)” / „PIN (4 cyfry)”
        HalaKonto.zmienHaslo(hala, { komunikat }) / HalaKonto.zmienPin(hala, { komunikat })   // true = zmienione, false = anulowano
    albo dorysowuje przyciski:  HalaKonto.przycisk(el, hala, { komunikat })   // „Zmień hasło” i „Zmień PIN”
 
@@ -110,7 +110,7 @@
     d.innerHTML = `
       <form method="dialog" autocomplete="off">
         <h2 id="hala-okno-hasla-tytul">Zmień hasło</h2>
-        <p class="hala-okno-opis">${esc(p.nazwa || '')} · To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 12 godzin
+        <p class="hala-okno-opis">${esc(p.nazwa || '')} · To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 16 godzin
           na urządzeniu, na co dzień — PIN. Min. 8 znaków. Inne urządzenia poproszą o nowe hasło.</p>
         <label>Obecne hasło<input name="stare" type="password" autocomplete="current-password" maxlength="128"></label>
         <label>Nowe hasło (min. 8 znaków)<input name="nowe" type="password" autocomplete="new-password" maxlength="128"></label>
@@ -136,7 +136,7 @@
       <form method="dialog" autocomplete="off">
         <h2 id="hala-okno-pinu-tytul">Zmień PIN</h2>
         <p class="hala-okno-opis">${esc(p.nazwa || '')} · Ten PIN działa we wszystkich aplikacjach GK — na urządzeniu, na którym
-          w ciągu 12 godzin wpisano hasło. PIN to 4 cyfry. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
+          w ciągu 16 godzin wpisano hasło. PIN to 4 cyfry. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
         <label>Obecne hasło albo PIN<input name="stary" type="password" autocomplete="current-password" maxlength="128"></label>
         <label>Nowy PIN (4 cyfry)<input name="nowy" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
         <label>Powtórz nowy PIN<input name="powtorz" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
@@ -159,7 +159,7 @@
     return `<form method="dialog" autocomplete="off">
         <h2 id="hala-okno-ustaw-tytul">${tytul}</h2>
         <p class="hala-okno-opis">${esc(nazwa || '')} · ${haslo ? 'Hasło startowe działa tylko przy pierwszym logowaniu. ' : ''}Hasło
-          wpiszesz raz na 12 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich aplikacjach GK.</p>
+          wpiszesz raz na 16 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich aplikacjach GK.</p>
         ${haslo ? `<label>Nowe hasło (min. 8 znaków)<input name="haslo" type="password" autocomplete="new-password" maxlength="128"></label>
         <label>Powtórz nowe hasło<input name="haslo2" type="password" autocomplete="new-password" maxlength="128"></label>` : ''}
         ${pin ? `<label>PIN (4 cyfry)<input name="pin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
@@ -216,11 +216,11 @@
   }
 
   /* Pole sekretu na ekranie logowania (D43, STYL-GK §2): osoba z ważnym znacznikiem na tym urządzeniu → „PIN (4 cyfry)”
-     z klawiaturą cyfr, inaczej „Hasło (raz na 12 godzin na tym urządzeniu)” z pełną klawiaturą. Tryb liczy się przy
+     z klawiaturą cyfr, inaczej „Hasło (raz na 16 godzin na tym urządzeniu)” z pełną klawiaturą. Tryb liczy się przy
      każdej zmianie pola identyfikatora; przycisk przelacz (opcjonalny) zmienia go ręcznie („Zaloguj hasłem” — zapomniany
      PIN; „Zaloguj PIN-em” tylko, gdy znacznik jest). naZmiane(tryb) — np. Lider chowa klawiaturę cyfr przy haśle.
      Zwraca { tryb(), odswiez(), haslo() } — odswiez() po błędzie „wymagane_haslo” (znacznik już zapomniany). */
-  const ETYKIETY = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 12 godzin na tym urządzeniu)' };
+  const ETYKIETY = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)' };
   function poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane, slowaPrzelacznika }) {
     const slowa = Object.assign({ pin: 'Zaloguj hasłem', haslo: 'Zaloguj PIN-em' }, slowaPrzelacznika || {});
     let reczny = null, ostatni = null;
@@ -472,7 +472,7 @@
         i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
       <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>
       <div class="hala-okno-przyciski"><button type="button" data-drukuj-wszystkie hidden>🖨 Drukuj wszystkie</button>
-        <button type="button" class="glowny" data-zamknij>Zamknij</button></div></form>`;
+        <button type="button" data-zamknij>Zamknij</button></div></form>`;   /* Zamknij zawsze obrysowany (STYL-GK §3) */
     d.querySelector('[data-zamknij]').addEventListener('click', () => d.close());
     d.showModal();
     const el = d.querySelector('[data-lista]');
@@ -536,9 +536,15 @@
     if (!el) return;
     const o = Object.assign({ opis: '', lokalne: false, komunikat: null }, opcje || {});
     const powiedz = (t, r) => { if (o.komunikat) o.komunikat(t, r); };
+    // „Sprawdź dźwięki” (2026-10-16, jeden zestaw dźwięków GK): w tym samym miejscu w każdej aplikacji — Moje konto →
+    // Powiadomienia. Gra kolejno info, pilne i awarię (HalaDzwieki.sprawdz), więc człowiek wie, jak brzmi każdy sygnał.
+    const dzwieki = o.dzwieki !== false && !!(global.HalaDzwieki && global.HalaDzwieki.sprawdz);
     el.innerHTML = `<fieldset class="hala-konto-push"><legend>Powiadomienia</legend>
-        ${o.opis ? `<p class="hala-konto-drobne">${esc(o.opis)}</p>` : ''}<div data-push-stan></div></fieldset>`;
+        ${o.opis ? `<p class="hala-konto-drobne">${esc(o.opis)}</p>` : ''}<div data-push-stan></div>
+        ${dzwieki ? '<button type="button" data-test-dzwieku>🔊 Sprawdź dźwięki</button>' : ''}</fieldset>`;
     const miejsce = el.querySelector('[data-push-stan]');
+    const test = el.querySelector('[data-test-dzwieku]');
+    if (test) test.addEventListener('click', () => global.HalaDzwieki.sprawdz());
     const rysuj = async () => {
       let stan = 'niedostepne';
       try { stan = await hala.push.stan(); } catch (e) { /* stara przeglądarka — jak niedostępne */ }

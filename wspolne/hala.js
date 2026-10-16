@@ -692,7 +692,7 @@
       }
     } else {
       const osoba = s.wykonawca || null;
-      if (osoba && naUrlopie(slowniki, osoba, data)) return [];
+      if (osoba && !moze(osoba)) return [];                    // urlop albo wyłączone konto — jak hub (cele_stalego)
       for (const d of lista) wynik.push({ dzial: d, osoba, sufiks: wiele ? `|d=${d}` : '' });
     }
     return wynik.slice(0, 200);
@@ -1155,7 +1155,7 @@
       return r;
     };
     /* Zmiana własnego hasła (D43 §4): obecne hasło + nowe. Hub kończy inne sesje i zaufanie WSZYSTKICH urządzeń osoby,
-       a to urządzenie dostaje nowy znacznik (12 h) — zapisujemy go od razu. */
+       a to urządzenie dostaje nowy znacznik (16 h) — zapisujemy go od razu. */
     h.zmienHaslo = async (stare, nowe) => {
       const r = await api('POST', '/api/v1/zmien-haslo', { stare: String(stare || ''), nowe: String(nowe || '') });
       if (r && r.znacznik && h.pracownik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
@@ -1566,8 +1566,8 @@
       strumienAktywny = false;
     }
 
-    // --- znaczniki urządzenia (D43 §2): hasło raz na 12 godzin na tym urządzeniu, na co dzień PIN 4 cyfry
-    /* Hub po dobrym haśle wydaje znacznik (losowy, 12 h). Trzymamy go per osoba — na wspólnym telefonie lidera loguje
+    // --- znaczniki urządzenia (D43 §2): hasło raz na 16 godzin na tym urządzeniu, na co dzień PIN 4 cyfry
+    /* Hub po dobrym haśle wydaje znacznik (losowy, 16 h). Trzymamy go per osoba — na wspólnym telefonie lidera loguje
        się kilka osób — w localStorage TEJ aplikacji (klucz hala.<app>.znaczniki; na Pages wszystkie aplikacje dzielą
        źródło, więc przedrostek aplikacji, D33). Mapa: login (imię i nazwisko, karta, id — po loginZNazwy) → {znacznik, do}.
        Wylogowanie go nie kasuje — po to jest: następne logowanie tej osoby PIN-em. */
@@ -1617,7 +1617,7 @@
     let ustawienie = null;           // sesja „tylko do ustawienia hasła i PIN-u” (D43 §3a) — tylko w pamięci
     /* dane: { identyfikator, pin } (D24; identyfikator = kod z karty albo login; „pin” to sekret — hasło albo PIN).
        D43: dokładamy znacznik urządzenia tej osoby (null, gdy go nie ma — hub wie wtedy, że klient zna D43).
-       Błąd 401 „wymagane_haslo” — znacznik nieważny (12 h minęło, 5 złych PIN-ów): zapominamy go, aplikacja
+       Błąd 401 „wymagane_haslo” — znacznik nieważny (16 h minęło, 5 złych PIN-ów): zapominamy go, aplikacja
        przełącza pole na hasło (HalaKonto.poleLogowania). Hasło startowe / brak PIN-u: hub daje sesję tylko do okna
        „Ustaw hasło i PIN” — rzucamy błąd z kod 'do_ustawienia' (HalaKonto.zaloguj otwiera okno i woła ustawKonto). */
     h.zaloguj = async dane => {

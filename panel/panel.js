@@ -39,7 +39,7 @@
     pudlo.appendChild(el);
     while (pudlo.children.length > MAKS_KOMUNIKATOW) pudlo.firstElementChild.remove();
     if (pudlo.showPopover) { try { pudlo.hidePopover(); } catch (e) { /* nie był otwarty */ } try { pudlo.showPopover(); } catch (e) { /* stara przeglądarka */ } }
-    const dlugo = rodzaj === 'blad' ? 7000 : 3500;
+    const dlugo = rodzaj === 'blad' ? 7000 : 4000;   // jak w każdej aplikacji GK: 4 s, błąd 7 s
     setTimeout(() => el.classList.add('znika'), dlugo);
     setTimeout(() => el.remove(), dlugo + 300);
   };
@@ -111,7 +111,7 @@
 
   /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (czytnik „pisze” go jak
      klawiatura i kończy Enterem) albo login — konto monitora w biurze nie ma karty. Enter z czytnika
-     przenosi do drugiego pola, zamiast wysyłać pusty sekret. Drugie pole: „Hasło (raz na 12 godzin na tym
+     przenosi do drugiego pola, zamiast wysyłać pusty sekret. Drugie pole: „Hasło (raz na 16 godzin na tym
      urządzeniu)” albo „PIN (4 cyfry)” — zależnie od tego, czy ta osoba ma na tym urządzeniu ważny znacznik (konto.js). */
   const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
                                                 przelacz: $('przelacz-sekret') });
@@ -139,7 +139,7 @@
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
-      // D43: 12 h minęło albo 5 złych PIN-ów — hala.js zapomniał znacznik, pole wraca do hasła.
+      // D43: 16 h minęło albo 5 złych PIN-ów — hala.js zapomniał znacznik, pole wraca do hasła.
       if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();
       $('pin').focus();
     } finally {
@@ -242,7 +242,7 @@
              szablony: role.some(r => zapisSzablonow.includes(r)), urlopy: role.some(r => zapisUrlopow.includes(r)) };
   };
 
-  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja'];
+  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja', 'wiecej'];
   for (const b of document.querySelectorAll('.zakladki button[data-widok]')) {
     b.addEventListener('click', () => {
       widokAktywny = b.dataset.widok;
@@ -250,6 +250,22 @@
       for (const w of WIDOKI) $(w).hidden = widokAktywny !== w;
       narysuj();
     });
+  }
+
+  // D74 „☰ Więcej”: przejście do widoku (klik w jego zakładkę — także schowaną na telefonie) albo „Nie wysłane”.
+  for (const b of document.querySelectorAll('#wiecej [data-idz]')) {
+    b.addEventListener('click', () => {
+      if (b.dataset.idz === 'niewyslane') { pokazOdrzucone(); return; }
+      const z = document.querySelector(`.zakladki [data-widok="${b.dataset.idz}"]`);
+      if (z) z.click();
+    });
+  }
+  function rysujWiecej() {
+    $('wiecej-administracja').hidden = $('menu-administracja').hidden;
+    const n = (kolejka && kolejka.odrzucone) || 0;
+    $('wiecej-niewyslane').textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
+    $('plakietka-wiecej').hidden = !n;
+    $('plakietka-wiecej').textContent = n ? String(n) : '';
   }
 
   function mozeWyslac(typ) {
@@ -387,7 +403,7 @@
     $('bez-raportu').innerHTML = !brak.length ? '' : `
       ${otw.length ? `<h3>Zmiany bez raportu <span class="znacznik uwaga">${otw.length}</span></h3>
         <ul class="lista-bez-raportu">${otw.map(wiersz).join('')}</ul>` : ''}
-      ${nieotw.length ? `<details class="nieotwarte" ${nieotwarteRozwiniete ? 'open' : ''}><summary>Nieotwarte (z szablonem checklisty): ${nieotw.length}</summary>
+      ${nieotw.length ? `<details class="nieotwarte" ${nieotwarteRozwiniete ? 'open' : ''}><summary>Nieotwarte (z checklistą): ${nieotw.length}</summary>
         <ul class="lista-bez-raportu">${nieotw.map(wiersz).join('')}</ul></details>` : ''}`;
     const lista = W.raporty({ zmianyLinii: hala.obiekty('zmiana_linii'), slowniki: d.slowniki, pracownicy: d.pracownicy });
     $('lista-raportow').innerHTML = lista.map(r => `
@@ -430,6 +446,7 @@
 
   let zaplanowane = false;
   function narysuj() {
+    try { rysujWiecej(); } catch (e) { /* kolejka jeszcze nieznana przy pierwszym rysowaniu */ }
     if (document.hidden) sygnalWTle();
     // Strumień potrafi przynieść kilkadziesiąt zdarzeń naraz (np. po powrocie sieci) — rysujemy raz na klatkę.
     if (zaplanowane) return;
@@ -938,7 +955,14 @@
   };
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
   // D72: podpowiedź z zapisanych uzupełnia pusty opis — kierownik opisuje po swojemu, jeśli chce inaczej.
-  fz.tytul.addEventListener('change', () => { const c = W.gotowaCzynnosc(fz.tytul.value, hala.slowniki); if (c && c.opis && !fz.opis.value.trim()) fz.opis.value = c.opis; });
+  // Właściciel 2026-10-15: „opisuję (jeśli chcę inaczej niż jak są zapisane) i wybieram, co wymagam” — podpowiedź ustawia
+  // swoje domyślne wymagania (📷 📝), kierownik je potem zmienia; tak samo w checkliście i w „Nowe zapisane”.
+  fz.tytul.addEventListener('change', () => {
+    const c = W.gotowaCzynnosc(fz.tytul.value, hala.slowniki);
+    if (!c) return;
+    if (c.opis && !fz.opis.value.trim()) fz.opis.value = c.opis;
+    fz.wymagaj_zdjecia.checked = !!c.zdjecie; fz.wymagaj_notatki.checked = !!c.notatka;
+  });
   // Każde zamknięcie okna zdejmuje blokadę pól edycji — następne „Nowe zlecenie” zaczyna od zwykłego formularza.
   $('okno-zlecenia').addEventListener('close', () => { for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = false; });
   fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); rysujOsobyZlecenia([]); });
@@ -1088,20 +1112,23 @@
   let znaneAlarmy = null;
   const swiezeDo = new Map();
   const swieze = klucz => (swiezeDo.get(klucz) || 0) > Date.now();
-  let dzwiekKontekst = null;
+  const GD = () => window.GKDzwieki;
+  const dzwiekGotowy = () => !!GD() && GD().gotowy();
 
   function dzwiekWlaczony() {
     const zapis = pamiec.czytaj(KLUCZ_DZWIEKU);
     // D55 (właściciel 2026-10-13: „wszyscy mają słyszeć pilne zadania i awarie”) — domyślnie włączony; wyłącza 🔕.
     return zapis === null ? true : zapis === '1';
   }
+  // Wspólny zestaw dźwięków (gk-dzwieki.js) słucha przełącznika Panelu — 🔕 wycisza wszystko, także wibrację.
+  if (GD()) GD().wlaczony(dzwiekWlaczony);
 
   function odblokujDzwiek() {
-    try {
-      const K = window.AudioContext || window.webkitAudioContext;
-      if (!dzwiekKontekst && K) dzwiekKontekst = new K();
-      if (dzwiekKontekst && dzwiekKontekst.state === 'suspended') dzwiekKontekst.resume().then(rysujDzwiek, () => {});
-    } catch (e) { /* bez WebAudio zostaje samo miganie */ }
+    if (GD()) {
+      GD().odblokuj();
+      const k = GD().kontekst();
+      if (k && !k.panelRysuje) { k.panelRysuje = true; k.addEventListener('statechange', rysujDzwiek); }
+    }
     rysujDzwiek();
   }
   for (const zd of ['pointerdown', 'keydown']) document.addEventListener(zd, odblokujDzwiek, { passive: true });
@@ -1109,38 +1136,22 @@
   function rysujDzwiek() {
     const b = $('dzwiek');
     const wl = dzwiekWlaczony();
-    const czeka = wl && (!dzwiekKontekst || dzwiekKontekst.state !== 'running');
+    const czeka = wl && !dzwiekGotowy();
     b.textContent = wl ? (czeka ? '🔔 Kliknij' : '🔔') : '🔕';
     const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
     b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zadaniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
+    b.setAttribute('aria-label', b.title);
     b.setAttribute('aria-pressed', String(wl));
     b.classList.toggle('czeka', czeka);
   }
 
   $('dzwiek').addEventListener('click', () => {
     // Kliknięcie w „Kliknij” tylko odblokowuje dźwięk; kolejne przełącza.
-    if (dzwiekWlaczony() && dzwiekKontekst && dzwiekKontekst.state === 'running') pamiec.zapisz(KLUCZ_DZWIEKU, '0');
+    if (dzwiekWlaczony() && dzwiekGotowy()) pamiec.zapisz(KLUCZ_DZWIEKU, '0');
     else pamiec.zapisz(KLUCZ_DZWIEKU, '1');
     odblokujDzwiek();
-    if (dzwiekWlaczony()) zagraj('alert');
+    if (dzwiekWlaczony()) setTimeout(() => { if (GD()) GD().zagraj('pilne'); rysujDzwiek(); }, 150);
   });
-
-  function zagraj(rodzaj) {
-    if (!dzwiekWlaczony() || !dzwiekKontekst || dzwiekKontekst.state !== 'running') return;
-    // Zatrzymanie: trzy wysokie, alert jakości: dwa niższe — da się rozróżnić bez patrzenia.
-    const tony = rodzaj === 'zatrzymanie' ? [880, 880, 880] : [660, 660];
-    const t0 = dzwiekKontekst.currentTime;
-    tony.forEach((hz, i) => {
-      const osc = dzwiekKontekst.createOscillator(), g = dzwiekKontekst.createGain();
-      osc.frequency.value = hz;
-      g.gain.setValueAtTime(0.0001, t0 + i * 0.3);
-      g.gain.exponentialRampToValueAtTime(0.3, t0 + i * 0.3 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.3 + 0.2);
-      osc.connect(g).connect(dzwiekKontekst.destination);
-      osc.start(t0 + i * 0.3);
-      osc.stop(t0 + i * 0.3 + 0.22);
-    });
-  }
 
   // D55: awarie (każda, zatrzymanie — mocniej) i pilne zadania kierownika — dwa różne dźwięki ze wspólnego dzialania.js.
   // D59: także incydent i sytuacja potencjalnie wypadkowa (BHP) — gong jak pilne zadanie.
@@ -1151,8 +1162,8 @@
     znaneAlarmy = a.znane;
     if (!a.nowe.length) return;
     for (const n of a.nowe) swiezeDo.set((n.rodzaj === 'alert' ? 'alert|' : 'awaria|') + n.id, Date.now() + MIGANIE_MS);
-    // Zatrzymanie gra wspólny moduł (syrena awarii); tu zostaje tylko sygnał alertu jakości.
-    if (a.nowe.some(n => n.rodzaj === 'alert') && !(window.HalaDzwieki && a.nowe.some(n => n.rodzaj === 'zatrzymanie'))) zagraj('alert');
+    // Alert jakości: „pilne” ze wspólnego zestawu (dawny osobny sygnał 2 × 660 Hz był trzecim dźwiękiem spoza D55).
+    if (a.nowe.some(n => n.rodzaj === 'alert') && !a.nowe.some(n => n.rodzaj === 'zatrzymanie') && GD()) GD().zagraj('pilne');
     setTimeout(narysuj, MIGANIE_MS + 100);            // zdjąć miganie, gdy nic innego nie przerysuje
   }
 
@@ -1248,7 +1259,7 @@
   hala.na('sesja', pokazSesje);
   hala.na('polaczenie', rysujPasek);
   hala.na('kolejka', k => {
-    kolejka = k; rysujPasek(hala.polaczenie);
+    kolejka = k; rysujPasek(hala.polaczenie); rysujWiecej();
     const konto = document.getElementById('hala-okno-konta');
     if (konto && konto.open) otworzKonto();          // „Czeka na wysłanie” i „Odrzucone” na bieżąco
     if ($('okno-odrzucone').open) rysujOdrzucone();

@@ -47,7 +47,7 @@
     if (pudlo.showPopover) { try { pudlo.hidePopover(); } catch (e) { /* nie był otwarty */ } try { pudlo.showPopover(); } catch (e) { /* stara przeglądarka */ } }
     clearTimeout(komunikatZegar);
     // D64: błąd wisi 7 s jak w Panelu i Liderze — także „blad” z konto.js (wcześniej znikał po 3,5 s).
-    komunikatZegar = setTimeout(() => { k.hidden = true; }, rodzaj === 'alarm' || rodzaj === 'blad' ? 7000 : 3500);
+    komunikatZegar = setTimeout(() => { k.hidden = true; }, rodzaj === 'alarm' || rodzaj === 'blad' ? 7000 : 4000);
   };
 
   /* Okno z pytaniem. przyciski: [{tekst, wartosc, glowny?, alarm?}]. Zwraca wartość
@@ -284,7 +284,7 @@
 
   /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43). Identyfikator = kod z karty (aparat, czytnik „piszący”
      jak klawiatura) albo login. Skan tylko WPISUJE kod w pole — sekret i tak trzeba podać. Enter z czytnika
-     w polu identyfikatora przenosi do drugiego pola. Drugie pole: hasło (raz na 12 godzin na tym urządzeniu)
+     w polu identyfikatora przenosi do drugiego pola. Drugie pole: hasło (raz na 16 godzin na tym urządzeniu)
      albo PIN (4 cyfry) — konto.js → poleLogowania. */
   const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
                                                 przelacz: $('przelacz-sekret') });
@@ -311,7 +311,7 @@
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
-      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 12 h minęło albo 5 złych PIN-ów
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 16 h minęło albo 5 złych PIN-ów
       $('pin').focus();
     } finally {
       for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = false;

@@ -18,6 +18,7 @@
     zmiany: { nazwa: 'Zmiany i checklisty', role: ['kierownik'] },
     proby: { nazwa: 'Próby KJ', role: ['kierownik', 'kierownik_kj'] },
     partie: { nazwa: 'Partie brakowe', role: ['kierownik', 'kierownik_kj'] },
+    bhp: { nazwa: 'Zgłoszenia BHP', role: ['kierownik'] },      // D59 — hub miał ten rodzaj, pasek „Do Excela” go nie pokazywał
   };
 
   function dlaRol(role, rodzaje) {

@@ -49,7 +49,7 @@
     if (pudlo.showPopover) { try { pudlo.hidePopover(); } catch (e) { /* nie był otwarty */ } try { pudlo.showPopover(); } catch (e) { /* stara przeglądarka */ } }
     clearTimeout(komunikatZegar);
     // D64: błąd wisi 7 s jak w Panelu i Liderze — także „blad” z konto.js (wcześniej znikał po 3,5 s).
-    komunikatZegar = setTimeout(() => { k.hidden = true; }, rodzaj === 'alarm' || rodzaj === 'blad' ? 7000 : 3500);
+    komunikatZegar = setTimeout(() => { k.hidden = true; }, rodzaj === 'alarm' || rodzaj === 'blad' ? 7000 : 4000);
   };
 
   /* Okno z pytaniem. przyciski: [{tekst, wartosc, glowny?, alarm?, sprawdz?(FormData)}]. Zwraca
@@ -209,41 +209,22 @@
   // ------------------------------------------------------------ powiadomienia (przy otwartej aplikacji)
 
   /* Mechanik ma telefon w kieszeni i hałas wokół: dźwięk + wibracja + powiadomienie systemowe.
-     Przy ZAMKNIĘTEJ aplikacji potrzebny jest Web Push (DECYZJE O4) — właściciel: później.
-     Dźwięk z WebAudio (bez pliku): przeglądarka gra dopiero po pierwszym dotknięciu strony,
+     Przy ZAMKNIĘTEJ aplikacji — Web Push (D28, Moje konto → Powiadomienia).
+     Dźwięki ze wspólnego zestawu GK (gk-dzwieki.js): przeglądarka gra dopiero po pierwszym dotknięciu strony,
      dlatego pasek „Dotknij, żeby włączyć dźwięk”.                                          */
-  let audio = null;
-  function kontekstAudio() {
-    if (!audio) { const K = global.AudioContext || global.webkitAudioContext; if (!K) return null; audio = new K(); }
-    return audio;
-  }
-  function ton(czestotliwosc, odMs, dlugoscMs, glosnosc) {
-    const a = kontekstAudio();
-    if (!a || a.state !== 'running') return;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'square'; o.frequency.value = czestotliwosc;
-    const t0 = a.currentTime + odMs / 1000;
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(glosnosc, t0 + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dlugoscMs / 1000);
-    o.connect(g).connect(a.destination);
-    o.start(t0); o.stop(t0 + dlugoscMs / 1000 + 0.05);
-  }
+  // Jeden zestaw dźwięków GK (gk-dzwieki.js, 2026-10-16) — dawny brzęczyk z falą prostokątną brzmiał jak gra 8-bitowa.
+  const GD = () => global.GKDzwieki;
+  const kontekstAudio = () => (GD() ? GD().kontekst() : null);
   UR.brzeczyk = {
-    awaria(pilna) {
-      // D55: jeden dźwięk awarii we wszystkich aplikacjach (wspólny dzialania.js); bez niego — dawny brzęczyk.
-      if (global.HalaDzwieki) { global.HalaDzwieki.zagraj('awaria', pilna); return; }
-      // Zatrzymanie linii: trzy serie wysokich tonów; reszta — dwa tony. Słychać w hałasie hali.
-      const serie = pilna ? 3 : 1;
-      for (let s = 0; s < serie; s++) { ton(1320, s * 700, 180, 0.35); ton(990, s * 700 + 220, 180, 0.35); ton(1320, s * 700 + 440, 220, 0.35); }
-      try { navigator.vibrate && navigator.vibrate(pilna ? [400, 150, 400, 150, 400, 150, 800] : [300, 120, 300]); } catch (e) { /* bez wibracji */ }
-    },
-    blad() { ton(220, 0, 300, 0.25); try { navigator.vibrate && navigator.vibrate([80, 60, 80]); } catch (e) { /* – */ } },
-    ok() { ton(880, 0, 90, 0.15); try { navigator.vibrate && navigator.vibrate(40); } catch (e) { /* – */ } },
+    // Awaria: dzwonek alarmowy; zatrzymanie (pilna) — gęściej, trzy serie (D55, wspólny dzialania.js).
+    awaria(pilna) { if (global.HalaDzwieki) global.HalaDzwieki.zagraj('awaria', pilna); else if (GD()) GD().zagraj(pilna ? 'zatrzymanie' : 'awaria'); },
+    // „Przekazano Ci awarię” to informacja dla mnie, nie nowy alarm na hali — „ding-dong” jak pilne zadanie.
+    pilne() { if (GD()) GD().zagraj('pilne'); },
+    blad() { if (GD()) GD().zagraj('blad'); },
+    ok() { if (GD()) GD().zagraj('sukces'); },
   };
   function odblokujDzwiek() {
-    const a = kontekstAudio();
-    if (a && a.state !== 'running') a.resume().catch(() => {});
+    if (GD()) GD().odblokuj();
     setTimeout(pokazDzwonek, 300);
   }
   /* UI etap 3: duży pasek 🔇 nad treścią (przyklejony pod nagłówkiem), aż do dotknięcia — mechanik bez dźwięku nie
@@ -252,11 +233,11 @@
   function pokazDzwonek() {
     const a = kontekstAudio();
     $('dzwonek').hidden = !W.dzwiekWylaczony(hala.zalogowany(), a && a.state);
-    if (a && !a.onstatechange) a.onstatechange = pokazDzwonek;
+    if (a && !a.urPasek) { a.urPasek = true; a.addEventListener('statechange', pokazDzwonek); }
   }
   document.addEventListener('pointerdown', odblokujDzwiek, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pokazDzwonek(); });
-  $('dzwonek').addEventListener('click', () => { odblokujDzwiek(); UR.brzeczyk.ok(); });
+  $('dzwonek').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.ok(), 150); });
 
   UR.powiadomienia = {
     dostepne: () => 'Notification' in global,
@@ -298,7 +279,9 @@
     paczkaZegar = setTimeout(() => {
       const lista = paczkaPowiadomien; paczkaPowiadomien = [];
       const pilna = lista.some(x => x.pilna);
-      UR.brzeczyk.awaria(pilna);
+      // Rodzaj dźwięku z powiadomienia (widok.js): nowa awaria / zatrzymanie — alarm, przekazanie — „ding-dong”.
+      const alarm = lista.filter(x => x.dzwiek !== 'pilne');
+      if (alarm.length) UR.brzeczyk.awaria(alarm.some(x => x.pilna && !x.dzwiek)); else UR.brzeczyk.pilne();
       if (lista.length === 1) { UR.powiadomienia.pokaz(lista[0]); UR.komunikat(lista[0].tytul, pilna ? 'alarm' : 'uwaga'); }
       else {
         UR.powiadomienia.pokaz({ tytul: `Nowe awarie: ${lista.length}`, tresc: lista.map(x => x.tytul).join(' · '), pilna, obiekt: '' });
@@ -431,7 +414,7 @@
 
   /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (aparat albo czytnik
      „piszący” jak klawiatura i kończący Enterem) albo login. Enter z czytnika przenosi do drugiego pola, zamiast
-     wysyłać pusty sekret. Drugie pole: hasło (raz na 12 godzin na tym urządzeniu) albo PIN (4 cyfry) — konto.js. */
+     wysyłać pusty sekret. Drugie pole: hasło (raz na 16 godzin na tym urządzeniu) albo PIN (4 cyfry) — konto.js. */
   const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
                                                 przelacz: $('przelacz-sekret') });
   async function zaloguj() {
@@ -455,7 +438,7 @@
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
-      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 12 h minęło albo 5 złych PIN-ów
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 16 h minęło albo 5 złych PIN-ów
       $('pin').focus();
     } finally {
       for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = false;
@@ -485,11 +468,11 @@
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
     aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone'),
     dodatki: el => {
-      el.innerHTML = '<div data-powiadomienia></div><button type="button" data-test-dzwieku>Sprawdź dźwięk</button>';
+      // „Sprawdź dźwięki” jest teraz we wspólnej sekcji Powiadomienia (konto.js) — ten sam przycisk w każdej aplikacji.
+      el.innerHTML = '<div data-powiadomienia></div>';
       global.HalaKonto.powiadomienia(el.querySelector('[data-powiadomienia]'), hala, {
-        opis: 'Awarie (syrena) i zlecenia od kierownika — dźwięk i wibracja także przy aplikacji w tle.', lokalne: true,
+        opis: 'Awarie (dzwonek alarmowy) i zlecenia od kierownika — dźwięk i wibracja także przy aplikacji w tle.', lokalne: true,
         komunikat: (t, r) => UR.komunikat(t, r) });
-      el.querySelector('[data-test-dzwieku]').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.awaria(true), 150); });
     } }));
 
   function pokazSesje() {

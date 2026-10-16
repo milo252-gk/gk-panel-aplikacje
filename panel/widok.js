@@ -1026,9 +1026,39 @@
 
   function zlecenieZeStalego(kod, s, terminMs) {
     // „Każda linia osobno” robi hub; ręczne „Zleć teraz” to jedno zlecenie — dla wszystkich liderów (P8).
+    // D72 (audyt 2026-10-16): stara czynność i kilka maszyn jadą dalej — okno „Nowe zlecenie” je pokazuje.
     return { tytul: s.tytul || '', opis: s.opis || '', dzial: s.dzial, linia: s.linia === LINIA_KAZDA ? '' : s.linia || '', maszyna: s.maszyna || '',
              wykonawca: s.wykonawca || '', pilne: s.priorytet === 'pilne', wymagaj_zdjecia: s.wymagaj_zdjecia === true,
-             wymagaj_notatki: s.wymagaj_notatki === true, wymagaj_skanu: s.wymagaj_skanu === true && !!s.maszyna, stale: kod, termin: terminMs };
+             wymagaj_notatki: s.wymagaj_notatki === true, wymagaj_skanu: s.wymagaj_skanu === true && !!s.maszyna, stale: kod, termin: terminMs,
+             ...(s.czynnosc ? { czynnosc: s.czynnosc } : {}), ...(Array.isArray(s.maszyny) && s.maszyny.length > 1 ? { maszyny: s.maszyny.slice() } : {}) };
+  }
+
+  /* D71 „Zleć teraz” przy zapisanym z wieloma adresatami (wszystkie działy, każdy osobno, wybrane osoby): gotowe dane
+     zlecenie.utworzone — po jednym na adresata, jak robi hub w harmonogramie (audyt 2026-10-16: dawniej jedno zlecenie dla
+     pierwszego działu). cele = Hala.celeStalego(…); null → wystarczy zwykłe okno „Nowe zlecenie” (jeden adresat). */
+  function wieluAdresatow(s) {
+    s = s || {};
+    return s.kazdy === true || (Array.isArray(s.wykonawcy) && s.wykonawcy.length > 0) || (Array.isArray(s.dzialy) && s.dzialy.length > 1);
+  }
+  function zleceniaTeraz(kod, s, cele, zmiana, teraz, terminMs) {
+    const lista = Array.isArray(s.pozycje) && s.pozycje.length > 0;
+    return (cele || []).map(c => {
+      const dane = lista ? checklistaTeraz(kod, s, zmiana, teraz, terminMs) : {
+        tytul: s.tytul || '', dzial: s.dzial, priorytet: s.priorytet === 'pilne' ? 'pilne' : 'normalny', stale: kod,
+        wymagaj_zdjecia: s.wymagaj_zdjecia === true, wymagaj_notatki: s.wymagaj_notatki === true,
+        wymagaj_skanu: s.wymagaj_skanu === true && !!s.maszyna };
+      if (!lista) {
+        if (!isNaN(terminMs) && terminMs) dane.termin = new Date(terminMs).toISOString();
+        if (s.opis) dane.opis = s.opis;
+        if (s.linia && s.linia !== LINIA_KAZDA) dane.linia = s.linia;
+        if (s.maszyna) dane.maszyna = s.maszyna;
+        if (Array.isArray(s.maszyny) && s.maszyny.length > 1) dane.maszyny = s.maszyny.slice();
+        if (s.czynnosc) dane.czynnosc = s.czynnosc;
+      }
+      dane.dzial = c.dzial;
+      if (c.osoba) dane.wykonawca = c.osoba; else delete dane.wykonawca;
+      return dane;
+    });
   }
 
   /* Czas zakładu dla pola datetime-local („2026-10-01T14:00”). */
@@ -2088,7 +2118,7 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
