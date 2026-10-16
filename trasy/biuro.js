@@ -914,7 +914,7 @@ function naglowekPunktu(t, p) {
 /* Oś czasu zdarzeń. Wiersz powstaje TYLKO wtedy, gdy dane naprawdę są —
    lista pustych myślników niczego nie mówi, a zajmuje pół ekranu. */
 function osCzasuPunktu(t, p, d) {
-  const kiedy = x => String(x || '').slice(0, 16).replace('T', ' ');
+  const kiedy = x => czasNaEkran(x);
   const godz = x => String(x || '').slice(11, 16);
   const zdarzenia = [];
   const zrodlo = d || {};
@@ -976,7 +976,7 @@ function panelPostepu(t, p, d) {
       poz.zrodlo === 'lokalizator' ? ' (lokalizator)' : ''}`);
   }
   if (d.ostatni_zapis) {
-    wiersze.push(`📲 Ostatni zapis z telefonu: ${escHtml(String(d.ostatni_zapis).slice(0, 16))}`);
+    wiersze.push(`📲 Ostatni zapis z telefonu: ${escHtml(czasNaEkran(d.ostatni_zapis))}`);
   }
   if (d.gdzie_potwierdzil) {
     wiersze.push('📍 Potwierdzenie zapisane z lokalizacji kierowcy');
@@ -2155,7 +2155,7 @@ function opisBlokadyZInternetu(s) {
   let wynik = '';
   if (s.blokada === 'zablokowane') {
     wynik = `<br><span class="plakietka p-nieudane">zablokowane z internetu</span>
-      <span class="male slaby">do odblokowania (najpóźniej ${escHtml(String(s.do || '').slice(0, 16))})</span>`;
+      <span class="male slaby">do odblokowania (najpóźniej ${escHtml(czasNaEkran(s.do))})</span>`;
   } else if (s.blokada === 'czeka') {
     wynik = `<br><span class="plakietka p-oczekuje">z internetu czeka do ${escHtml(godzina)}</span>`;
   }
@@ -2440,7 +2440,7 @@ function rozmiarCzytelnie(bajty) {
 function kartaKopii(u) {
   const k = u.kopie || {};
   const l = k.lokalne || {};
-  const kiedy = t => escHtml(String(t || '').slice(0, 16));
+  const kiedy = t => escHtml(czasNaEkran(t));
   const plakietka = !k.folder ? '<span class="plakietka p-oczekuje">tylko na tym dysku</span>'
     : (k.blad ? '<span class="plakietka p-nieudane">✕ błąd</span>'
       : k.ostatnia_udana ? '<span class="plakietka p-dostarczone">✓ działa</span>'
@@ -2619,7 +2619,7 @@ function kartaPages(u) {
         : !p.opublikowano ? '<span class="plakietka p-oczekuje">nie wysłano</span>'
           : p.starsza ? '<span class="plakietka p-w_toku">wysyła nową wersję</span>'
             : '<span class="plakietka p-dostarczone">✓ aktualna</span>';
-  const kiedy = t => escHtml(String(t || '').slice(0, 16));
+  const kiedy = t => escHtml(czasNaEkran(t));
   return zwin('Adres dla telefonów (GitHub Pages)', plakietka, `
     <p class="male slaby">Stały adres aplikacji dla telefonów — ten sam po każdym restarcie
       komputera w biurze. <b>Adres dla telefonów publikuje Panel Kierownika</b> na tym
@@ -2839,11 +2839,11 @@ function kartaFlotexu(u) {
       <div class="male slaby">${wynik.pusta && !konta.blad
         ? 'Nie ma jeszcze kont kierowców — nie ma czego wysyłać.'
         : konta.kiedy && !konta.blad
-        ? `Ostatnio wysłane ${escHtml(konta.kiedy)}: ${wynik.wyslano || 0}
+        ? `Ostatnio wysłane ${escHtml(czasNaEkran(konta.kiedy))}: ${wynik.wyslano || 0}
            ${odmiana(wynik.wyslano || 0, 'konto', 'konta', 'kont')}`
           + ` (nowe ${wynik.dodane || 0}, zmienione ${wynik.zmienione || 0},
            wyłączone ${wynik.wylaczone || 0}, przejęte ${wynik.przejete || 0}).`
-        : konta.kiedy ? `Ostatnia próba ${escHtml(konta.kiedy)}.`
+        : konta.kiedy ? `Ostatnia próba ${escHtml(czasNaEkran(konta.kiedy))}.`
         : 'Jeszcze nie wysłane — pójdą za chwilę.'} Wysyłają się same po każdej zmianie
         konta kierowcy i co 10 minut.</div>
       ${(wynik.konflikty || []).length ? `<div class="wstega uwaga" style="margin-top:8px">
@@ -2934,11 +2934,11 @@ function kartaKontGK(u) {
       ${s.uwaga ? `<div class="wstega blad" style="margin-top:12px">${escHtml(s.uwaga)}</div>`
         : s.blad ? `<div class="wstega uwaga" style="margin-top:12px">${escHtml(s.blad)}</div>` : ''}
       <div class="male" style="margin-top:10px">${s.kiedy && !s.blad
-        ? `Ostatnio pobrane ${escHtml(s.kiedy)}: ${w.konta || 0}
+        ? `Ostatnio pobrane ${escHtml(czasNaEkran(s.kiedy))}: ${w.konta || 0}
            ${odmiana(w.konta || 0, 'osoba', 'osoby', 'osób')} z rolą GK Trasy
            (nowe ${w.dodane || 0}, połączone ${w.polaczone || 0}, zmienione ${w.zmienione || 0},
            wyłączone ${w.wylaczone || 0}).`
-        : s.kiedy ? `Ostatnia próba ${escHtml(s.kiedy)}.` : 'Jeszcze nie pobrane — pójdą za chwilę.'}
+        : s.kiedy ? `Ostatnia próba ${escHtml(czasNaEkran(s.kiedy))}.` : 'Jeszcze nie pobrane — pójdą za chwilę.'}
         Kont z Panelu tutaj: <b>${s.z_panelu || 0}</b> · tutejszych czynnych: ${s.tutejsze || 0}.</div>
       <div class="male" style="margin-top:6px">${adm.z_panelu
         ? `Login <b>admin</b> = konto z Panelu <b>${escHtml(adm.z_panelu)}</b> — tutejszy awaryjny „admin” teraz nie wpuszcza.`
@@ -2957,7 +2957,7 @@ function kartaKontGK(u) {
         popraw w kontach <b>pełne imię i nazwisko</b> — to w Panelu jest login. Konto awaryjne
         „admin” zostaje tutaj. Powtórne przeniesienie niczego nie dubluje.</p>
       <button id="u-hub-przenies">Przenieś konta do Panelu</button>
-      ${imp ? `<div class="male" style="margin-top:8px">Przeniesiono ${escHtml(imp.kiedy || '')}:
+      ${imp ? `<div class="male" style="margin-top:8px">Przeniesiono ${escHtml(czasNaEkran(imp.kiedy))}:
         nowe ${imp.dodane || 0}, połączone ${imp.polaczone || 0},
         konflikty ${(imp.konflikty || []).length}.</div>
         ${(imp.konflikty || []).length ? `<div class="wstega uwaga" style="margin-top:8px">

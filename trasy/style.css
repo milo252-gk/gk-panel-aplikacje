@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-8f52ed164a45';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-37d6a26cfeda';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -52,7 +52,7 @@
   --marka-tlo:var(--grafit); --pole-tlo:#ffffff;
   --tlo-neutralne:#eef1f5; --info-tlo:#e7eefb; --nasze-tlo:#FDF2E3;
   --karta-ok:#fbfefc; --karta-nie:#fffbfb;
-  --toast-tlo:#16232f; --toast-tekst:#ffffff;
+  --toast-tlo:#3B3B3B; --toast-tekst:#ffffff;   /* grafit, nie granat — jak hala.css (2026-10-16) */
   --hover-tlo:rgba(9,20,32,.035); --hover-jasnosc:.97;
   /* Zaciemnienie pod oknem: neutralna czerń jak w aplikacjach hali (STYL-GK §3),
      nie granat — granatowa mgła nad grafitowym programem wyglądała na obcą. */
@@ -341,7 +341,7 @@ main{padding:16px; max-width:1180px; margin:0 auto; padding-bottom:calc(var(--do
   display:block; width:100%; min-height:0; padding:4px 12px; border:0; border-radius:0; font-size:13px;
   font-weight:600; text-align:center; color:var(--na-marce); background:var(--grafit-jasny)}
 .pasek-polaczenia.offline{background:var(--grafit)}
-.pasek-polaczenia.odrzucone{background:var(--strefa)}
+.pasek-polaczenia.odrzucone,.pasek-polaczenia.brak-serwera{background:var(--strefa)}
 .pasek-polaczenia[hidden]{display:none}
 /* D65: „📱 Kody QR aplikacji” w Moim koncie i okno z kodami (hala: .hala-aplikacja). */
 .konto-aplikacje{width:100%; font-weight:700}
@@ -505,6 +505,13 @@ tbody tr:hover{background:var(--hover-tlo)}
                               flex:0 1 auto; padding-left:14px; padding-right:14px}
 .okno-stopka button.niszczacy:hover{background:var(--czerwony-tlo)}
 .okno-stopka:empty{display:none}
+/* Niszczący i zarazem główny (potwierdz({groznie}), „Odrzuć przegląd”) — wypełniony
+   czerwony z napisem --na-barwie, jak button.czerwony. Dawniej .niszczacy dawał czerwony
+   napis na grafitowej plamie .glowny (kontrast ~1,3:1 — napisu nie było widać). */
+button.glowny.niszczacy,
+.okno-stopka button.glowny.niszczacy,
+.okno-stopka button.glowny.niszczacy:hover{background:var(--czerwony); border-color:var(--czerwony);
+                                           color:var(--na-barwie)}
 
 /* ------------------------------------------ okno „Moje konto” (STYL-GK §3)
    Ten sam wygląd co okno konta aplikacji hali (wspolne/klient/konto.js →
@@ -627,12 +634,16 @@ body.okno-otwarte .mapa{visibility:hidden}
                        border-radius:6px}
 
 /* ----------------------------------------------------------- komunikaty */
-.komunikaty{position:fixed; z-index:1120; left:12px; right:12px; bottom:calc(var(--dol-wys) + 14px);
+/* Jak hala.css → .komunikaty (2026-10-16): nad dolnym paskiem i nad paskiem gestów
+   iPhone'a (safe-area), cień --cien-mocny, rodzaje ok / uwaga / blad. */
+.komunikaty{position:fixed; z-index:1120; left:12px; right:12px;
+            bottom:calc(var(--dol-wys) + 14px + env(safe-area-inset-bottom, 0px));
             display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
 .komunikat{background:var(--toast-tlo); color:var(--toast-tekst); padding:12px 17px; border-radius:11px; font-size:14px;
-           box-shadow:0 8px 26px rgba(0,0,0,.3); max-width:480px; animation:wjazd .18s}
+           box-shadow:var(--cien-mocny); max-width:480px; animation:wjazd .18s}
 .komunikat.blad{background:var(--czerwony); color:var(--na-barwie)}
 .komunikat.ok{background:var(--zielony); color:var(--na-barwie)}
+.komunikat.uwaga{background:var(--zolty); color:var(--na-barwie)}
 @keyframes wjazd{from{opacity:0; transform:translateY(10px)}}
 
 .zajetosc{position:fixed; inset:0; z-index:1130; background:var(--zaslona-czekanie);
@@ -681,9 +692,15 @@ body.okno-otwarte .mapa{visibility:hidden}
      własne wymiary, więc ich to nie dotyczy. */
   :root{--dotyk:52px; --dol-wys:64px}
   .rola-kierowca main button:not(.przystanek):not(.tekstowy),
-  .rola-kierowca .okno-tresc button:not(.tekstowy),
-  .rola-kierowca .okno-stopka button,
-  .rola-kierowca .chip{min-height:var(--dotyk)}
+  .rola-kierowca .okno-tresc button:not(.tekstowy){min-height:var(--dotyk)}
+  /* Przyciski okien i stopek, chipy, przycisk konta w nagłówku, pigułki „Wygląd”
+     i stopka „Moje konto” — 52 px dla KAŻDEJ roli, jak w hali i GK Flota (2026-10-16). */
+  .okno-stopka button,
+  .okno-konta .okno-stopka button,
+  .chip,
+  button.ikona-btn,
+  .wybor-wygladu button{min-height:var(--dotyk)}
+  button.ikona-btn{min-width:var(--dotyk)}
   .rola-kierowca .okno-tresc .miniatura button{min-height:36px}
   /* Adres punktu w kolorze tekstu, nie szarym — to po nim kierowca jedzie. */
   .rola-kierowca .przystanek .adres{color:var(--tekst)}
