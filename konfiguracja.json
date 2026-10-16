@@ -1,11 +1,15 @@
 {
   "hub": "https://jail-been-meets-inflation.trycloudflare.com",
-  "zmieniono": "2026-10-16T18:46:24.626Z",
+  "zmieniono": "2026-10-16T18:47:21.104Z",
   "wersje": {
     "wspolne": "wspolne-c21c3d5885d6",
     "panel": "panel-3deb487ac23b",
     "lider": "lider-de921178d27a",
     "ur": "ur-16ba1ec72993",
     "kj": "kj-516cb7ec2259"
+  },
+  "programy": {
+    "szkolenia": "https://infrared-army-ellen-fig.trycloudflare.com",
+    "wycena": "https://allocation-lounge-bras-radius.trycloudflare.com"
   }
 }
