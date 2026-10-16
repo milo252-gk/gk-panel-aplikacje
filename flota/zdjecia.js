@@ -181,7 +181,7 @@ const Zdjecia = (() => {
       tytul: tytul || 'Zdjęcie',
       szerokie: true,
       tresc: `<div class="dowod"><img src="${dataURL}" alt="${escHtml(tytul || 'Zdjęcie')}"></div>`,
-      przyciski: [{ napis: 'Zamknij', klasa: 'glowny', klik: z => z() }],
+      przyciski: [{ napis: 'Zamknij', klik: z => z() }],
     });
   }
 

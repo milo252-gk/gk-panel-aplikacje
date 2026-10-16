@@ -7,7 +7,7 @@
    nie siega, a zasieg komorkowy bywa jednokreskowy. Program ma sie tam otworzyc
    i przyjac komplet zdjec.                                                   */
 
-const WERSJA = 'flotex-88c3b1cebea2';
+const WERSJA = 'flotex-6f97ae788730';
 
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
@@ -22,7 +22,7 @@ const WERSJA = 'flotex-88c3b1cebea2';
 const ZASOBY = [
   './style.css', './app.js', './kolejka.js', './zdjecia.js', './podpis.js',
   './skrot.js', './pojazdy.js', './przeglady.js', './kierowca.js', './awaria.js', './zaproszenie.js',
-  './ustawienia.js', './konta.js',
+  './ustawienia.js', './konta.js', './gk-dzwieki.js',
   './ikona.svg', './logo-gkf.png', './manifest.webmanifest',
   './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
 ];
@@ -89,6 +89,14 @@ self.addEventListener('push', e => {
         body: JSON.stringify({ endpoint: sub ? sub.endpoint : '' }) });
       if (odp.ok) wiadomosci = (await odp.json()).wiadomosci || [];
     } catch (err) { /* program nieosiągalny — i tak coś pokażemy, żeby zajrzeć do aplikacji */ }
+    // Aplikacja GK Flota jest na ekranie — sama pyta o zdarzenia (app.js → sprawdzZdarzenia)
+    // i gra dźwięk; drugie, systemowe powiadomienie tylko by dublowało (jak GK Trasy,
+    // 2026-10-16). Liczy się WYŁĄCZNIE okno tej aplikacji (zakres workera): na GitHub
+    // Pages wszystkie aplikacje GK mają jedno źródło, a otwarta GK Trasy nie usłyszy
+    // zdarzenia floty — wtedy powiadomienie musi wyjść jak dotąd.
+    const zakres = new URL(self.registration.scope).pathname;
+    const okna = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (okna.some(o => o.visibilityState === 'visible' && new URL(o.url).pathname.startsWith(zakres))) return;
     // Przeglądarka wymaga powiadomienia po każdym pushu (inaczej pokaże własne,
     // po angielsku) — gdy treści nie ma, mówimy chociaż, gdzie zajrzeć.
     if (!wiadomosci.length) {

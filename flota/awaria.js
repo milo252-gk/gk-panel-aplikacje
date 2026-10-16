@@ -56,7 +56,7 @@ function rysujAwarie(pole, lista, biuro) {
       i otwiera się także bez zasięgu.</div>` : ''}
 
     ${biuro ? `<div class="pasek-narzedzi">
-      <button class="glowny" id="aw-nowy">Dodaj punkt</button>
+      <button class="glowny" id="aw-nowy">+ Dodaj punkt</button>
       <span class="slaby male">Kolejność ustala liczba przy punkcie —
         mniejsza jest wyżej.</span>
     </div>` : ''}

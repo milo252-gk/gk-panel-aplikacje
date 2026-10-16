@@ -144,11 +144,11 @@ function kafelekNaStart(kaf) {
       <li><b>Dodaj auta</b> — sam numer rejestracyjny wystarczy, resztę dopiszesz później.</li>
       <li><b>Wpisz terminy</b> (badanie techniczne, OC) w menu <b>📅 Terminy</b> — program
         przypomni, zanim miną.</li>
-      <li><b>Zaproś kierowców</b> — <b>📱 Zaproś kierowcę</b> (kod QR do telefonu), potem
+      <li><b>Zaproś kierowców</b> — <b>📲 Zaproś kierowcę</b> (kod QR do telefonu), potem
         w karcie auta „Przypisz” kierowcę.</li>
       <li><b>Uzupełnij 🆘 Instrukcję w razie awarii</b> — kierowca otworzy ją także bez zasięgu.</li>
     </ol>
-    <button class="glowny" id="p-start-auto">Dodaj pierwsze auto</button>
+    <button class="glowny" id="p-start-auto">+ Dodaj pierwsze auto</button>
   </div>`;
 }
 
@@ -266,7 +266,7 @@ EKRANY.pojazdy = {
         </select></label>
         <label class="male"><input type="checkbox" id="p-wszystkie"${
           f.wszystkie ? ' checked' : ''}> pokaż wycofane</label>
-        <button class="glowny" id="p-nowy">Dodaj auto</button>` : ''}
+        <button class="glowny" id="p-nowy">+ Dodaj auto</button>` : ''}
       </div>
       ${lista.length ? tabelaFloty(lista, biuro) : `<div class="pusto">
         <span class="duza-ikona">🚗</span>
@@ -442,7 +442,7 @@ function terminyPojazdu(t, biuro) {
   const podpowiedz = biuro && brakuje.length
     ? `<p class="slaby male">${brakuje.length === 2 ? 'Badania technicznego i OC'
         : (brakuje[0] === 'badanie' ? 'Badania technicznego' : 'OC')} jeszcze nie wpisano —
-        dopisuje się je w <b>Terminach</b> („Otwórz w Terminach” → „Dodaj termin”).</p>` : '';
+        dopisuje się je w <b>Terminach</b> („Otwórz w Terminach” → „+ Dodaj termin”).</p>` : '';
   if (!lista.length) return '<p class="slaby">Nie wpisano żadnej pilnowanej daty.</p>' + podpowiedz;
   return lista.map(w => `
     <div class="brak">
@@ -690,7 +690,7 @@ EKRANY.terminy = {
           <button class="chip${f.widok === 'kalendarz' ? ' wybrany' : ''}"
                   data-widok="kalendarz">Kalendarz</button>
         </div>
-        <button class="glowny" id="t-nowy">Dodaj termin</button>
+        <button class="glowny" id="t-nowy">+ Dodaj termin</button>
       </div>
       <h3>${escHtml(nazwaWidoku)} <span class="slaby male">— ${lista.length}
         ${odmiana(lista.length, 'pozycja', 'pozycje', 'pozycji')}</span></h3>

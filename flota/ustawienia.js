@@ -503,7 +503,7 @@ function podepnijKontaGk(pole) {
           8 znaków, a program zna jego długość dopiero po jednym logowaniu tej osoby w tej
           wersji — niech się zaloguje (albo ustaw hasło w Panelu) i przenieś jeszcze raz.
           Nic się nie zdubluje.</div>` : ''}`,
-      przyciski: [{ napis: 'Zamknij', klasa: 'glowny', klik: z => { z(); odswiezEkran(); } }],
+      przyciski: [{ napis: 'Zamknij', klik: z => { z(); odswiezEkran(); } }],
     });
   };
   we('u-hub-odlacz').onclick = async () => {

@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-88c3b1cebea2';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-6f97ae788730';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -131,6 +131,7 @@ const stan = {
   obceWKolejce: 0,          // zapisy poprzedniej osoby z tego telefonu
   odrzucone: 0,             // zapisy, ktorych serwer nie przyjal
   bezPamieci: false,        // IndexedDB nie odpowiada — tryb offline nie dziala
+  bezSerwera: false,        // siec jest, a program w biurze nie odpowiada (pasek polaczenia)
   synchronizuje: false,
   // D43: konta z Panelu maja haslo + PIN (z /api/zyje; zapamietane na start bez sieci).
   trybD43: przypomnijSobie('d43') === '1',
@@ -172,7 +173,7 @@ function poLudzku(e) {
       + 'albo spróbuj za chwilę.';
   }
   if (/indexeddb|object stores|database|transaction/i.test(tekst)) {
-    return 'Pamięć telefonu nie odpowiada. Zamknij i otwórz aplikację jeszcze raz.';
+    return `Pamięć ${slowoUrzadzenia('dopelniacz')} nie odpowiada. Zamknij i otwórz aplikację jeszcze raz.`;
   }
   if (/insecure/i.test(tekst)) {
     return 'Przeglądarka w trybie prywatnym nie pozwala nic zapisać. Otwórz aplikację '
@@ -235,18 +236,38 @@ const Motyw = {
   },
 };
 
-/* Toast: '' neutralny · 'ok' zielony · 'blad' czerwony i dłużej na ekranie,
-   bo błąd czyta się na placu, a nie przy biurku.                            */
+/* Dymek — jeden wzór wszystkich aplikacji GK (2026-10-16, jak hala.css → .komunikat):
+   '' informacja (grafit) · 'ok' zielony · 'uwaga' żółty · 'blad' czerwony. 4 s, błąd 7 s:
+   błąd czyta się na placu, a nie przy biurku (do 2026-10-16 2,8 s i 5,2 s — inaczej
+   niż w pozostałych aplikacjach GK). Te same czasy w GK Trasy. */
+const CZAS_KOMUNIKATU_MS = 4000;
+const CZAS_BLEDU_MS = 7000;
 function komunikat(tresc, rodzaj) {
   const pole = document.getElementById('komunikaty');
   if (!pole) return;
   const e = document.createElement('div');
   e.className = 'komunikat ' + (rodzaj || '');
-  e.textContent = tresc;                  // textContent — w toast nie da się wstrzyknąć HTML
+  e.textContent = tresc;                  // textContent — w dymek nie da się wstrzyknąć HTML
   pole.appendChild(e);
   setTimeout(() => { e.style.opacity = '0'; setTimeout(() => e.remove(), 250); },
-    rodzaj === 'blad' ? 5200 : 2800);
+    rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
 }
+
+/* ---------------------------------------------- dźwięki (GKDzwieki, 2026-10-16)
+   Jeden zestaw dźwięków wszystkich aplikacji GK — web/gk-dzwieki.js to kopia 1:1
+   pliku huba (Produkcja/GK Panel Kierownika/wspolne/klient/gk-dzwieki.js), pilnuje
+   .github/spojnosc.py; nie poprawiać tutaj. Miękkie dzwonki zamiast „8-bitowych”
+   piknięć (właściciel 2026-10-16). Przełącznik w Moim koncie → Powiadomienia
+   dotyczy TEGO urządzenia (klucz 'dzwiek': '0' = wyłączony, brak = włączony, jak
+   domyślnie w hali). Brak pliku (stara kopia w pamięci) = cisza, nie błąd. */
+const Dzwiek = {
+  wlaczony() { return przypomnijSobie('dzwiek') !== '0'; },
+  ustaw(wlacz) { if (wlacz) zapomnijKlucz('dzwiek'); else pamietaj('dzwiek', '0'); },
+  zagraj(rodzaj) {
+    try { return !!(window.GKDzwieki && window.GKDzwieki.zagraj(rodzaj)); } catch (e) { return false; }
+  },
+};
+if (window.GKDzwieki) window.GKDzwieki.wlaczony(() => Dzwiek.wlaczony());
 
 /* LICZNIK, nie flaga. Wysyłka zdjęć i odświeżenie listy potrafią chodzić
    równolegle; przy fladze ta, która skończy pierwsza, gasi kółko drugiej
@@ -450,7 +471,7 @@ let czekaNaPrzeladowanie = false;
 function przeladujGdyWolno() {
   if (!czekaNaPrzeladowanie || !moznaPrzeladowacTeraz(biezacaChwila())) return;
   czekaNaPrzeladowanie = false;
-  komunikat('Nowa wersja programu — odświeżam', 'ok');
+  komunikat('Nowa wersja — odświeżam', 'ok');
   setTimeout(() => {
     // Przez te 400 ms ktoś mógł otworzyć okno — wtedy czekamy dalej.
     if (moznaPrzeladowacTeraz(biezacaChwila())) location.reload();
@@ -628,15 +649,34 @@ async function zapytajProgram(sciezka, opcje) {
   await adresDanychGotowy();
   let odp;
   try {
-    odp = await fetch(API_BAZA + sciezka, opcje);
+    try {
+      odp = await fetch(API_BAZA + sciezka, opcje);
+    } catch (e) {
+      if (!await sprawdzAdresPonownie()) throw e;
+      odp = await fetch(API_BAZA + sciezka, opcje);
+    }
+    if (toBladAdresu(odp) && await sprawdzAdresPonownie()) {
+      odp = await fetch(API_BAZA + sciezka, opcje);
+    }
   } catch (e) {
-    if (await sprawdzAdresPonownie()) return fetch(API_BAZA + sciezka, opcje);
+    oznaczSerwer(false);
     throw e;
   }
-  if (toBladAdresu(odp) && await sprawdzAdresPonownie()) {
-    return fetch(API_BAZA + sciezka, opcje);
-  }
+  // 502/503/504/530 — te same kody co KODY_BEZ_PROGRAMU (program albo tunel nie stoi).
+  oznaczSerwer([502, 503, 504, 530].indexOf(odp.status) < 0);
   return odp;
+}
+
+/* B2 (2026-10-16, jak hala.js → Hala.pasekPolaczenia i GK Trasy): telefon ma sieć,
+   a program w biurze (albo tunel) nie odpowiada — pasek mówi „Brak połączenia
+   z serwerem”, a nie milczy. Dawniej pasek patrzył tylko na navigator.onLine. */
+function oznaczSerwer(odpowiada) {
+  // Bardzo wczesny start (i wycinki app.js w testach) nie ma jeszcze stanu ani paska.
+  if (typeof stan === 'undefined' || typeof odswiezPasekPolaczenia !== 'function') return;
+  const brak = !odpowiada && navigator.onLine;
+  if (stan.bezSerwera === brak) return;
+  stan.bezSerwera = brak;
+  odswiezPasekPolaczenia();
 }
 
 /* ----------------------------------------------- praca bez programu w biurze
@@ -662,7 +702,7 @@ async function zapytajProgram(sciezka, opcje) {
 const PAMIEC_ODPOWIEDZI = 'odp:';
 const MAKS_ODPOWIEDZI = 2 * 1024 * 1024;        // znaków JSON-a
 const MAKS_ODPOWIEDZI_OSOBY = 300;
-const BEZ_PAMIECI = /^\/api\/(zyje|push\/|zaproszenie|pages\/|kopia|blokady|gk\/|eksport)/;
+const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|blokady|gk\/|eksport)/;
 const KODY_BEZ_PROGRAMU = [502, 503, 504, 530];
 const ODSTEP_PROBY_PROGRAMU_MS = 30 * 1000;
 
@@ -1013,7 +1053,11 @@ const API = {
       if (kopia) { pracaBezProgramu(kopia.czas); return kopia.dane; }
     }
     if (odp.status === 401) {
-      wyloguj(true);
+      // B1 (2026-10-16): jak GK Trasy — znika sam token, profil, kartoteka i kolejka
+      // zostają, ekran tylko do odczytu z „Zaloguj się ponownie” (sesjaWygasla).
+      // Dawniej wyloguj(true): kierowca z kontem D43 (sesja do końca zaufania
+      // urządzenia, 16 h) codziennie lądował na pustym logowaniu bez kartoteki.
+      sesjaWygasla();
       throw new Error('Sesja wygasła — zaloguj się ponownie');
     }
     let wynik = null;
@@ -1046,6 +1090,7 @@ async function sprobuj(praca, komunikatSukcesu) {
     return w;
   } catch (e) {
     komunikat(poLudzku(e), 'blad');
+    Dzwiek.zagraj('blad');                 // odmowa akcji człowieka — cichy, niski dźwięk
     return null;
   } finally {
     zajety(false);
@@ -1055,6 +1100,13 @@ async function sprobuj(praca, komunikatSukcesu) {
 /* --------------------------------------------------------- kolejka offline */
 
 async function doKolejki(op, komunikatSukcesu) {
+  // Po odrzuconej sesji ekran jest tylko do odczytu: nowe zapisy dopiero po
+  // ponownym zalogowaniu (sesjaWygasla) — jak GK Trasy.
+  if (stan.sesjaWygasla) {
+    komunikat('Sesja wygasła — zaloguj się ponownie. Nic nie zginęło.', 'blad');
+    oknoPonownegoLogowania();
+    throw new Error('Sesja wygasła — zaloguj się ponownie');
+  }
   // Kto to zapisał. Bez tego kolejka po wylogowaniu przechodzi na następną
   // osobę, która zaloguje się na tym telefonie — serwer odrzuci cudze zdjęcia,
   // a telefon by je skasował. Czyli utrata pracy kierowcy.
@@ -1065,12 +1117,16 @@ async function doKolejki(op, komunikatSukcesu) {
     // Cicha porażka w tym miejscu jest najgorsza z możliwych: kierowca widzi
     // ptaszka, a zdjęć nie ma nigdzie. Mówimy wprost i przerywamy.
     komunikat('NIE ZAPISANO. ' + poLudzku(e), 'blad');
+    Dzwiek.zagraj('blad');
     throw e;
   }
   await odswiezStanSieci();
   if (komunikatSukcesu) {
     komunikat(stan.online ? komunikatSukcesu
       : komunikatSukcesu + ' (wyślę, gdy wróci zasięg)', 'ok');
+    // Kluczowy zapis kierowcy (przegląd przyjęty, usterka zgłoszona) — krótki
+    // dźwięk potwierdzenia, jak w hali i GK Trasy.
+    Dzwiek.zagraj('sukces');
   }
   synchronizuj();
   return op;
@@ -1169,7 +1225,7 @@ async function odswiezStanSieci() {
     stan.wKolejce = 0; stan.obceWKolejce = 0; stan.odrzucone = 0;
     if (!stan.bezPamieci) {
       stan.bezPamieci = true;
-      komunikat('Pamięć telefonu nie odpowiada — bez zasięgu nie zapiszę zdjęć. '
+      komunikat(`Pamięć ${slowoUrzadzenia('dopelniacz')} nie odpowiada — bez zasięgu nie zapiszę zdjęć. `
         + 'Zamknij i otwórz aplikację jeszcze raz.', 'blad');
     }
   }
@@ -1177,17 +1233,8 @@ async function odswiezStanSieci() {
   if (!kropka) return;
   kropka.className = 'stan-sieci' + ((stan.odrzucone || stan.bezPamieci) ? ' odrzucone'
     : (!stan.online ? ' offline' : (stan.wKolejce ? ' czeka' : '')));
-  const ileZapisow = `${stan.wKolejce} ${odmiana(stan.wKolejce, 'zapis', 'zapisy', 'zapisów')}`;
-  kropka.title = stan.bezPamieci
-    ? 'Pamięć telefonu nie odpowiada — dotknij ikony konta'
-    : stan.odrzucone
-      ? `${stan.odrzucone} ${odmiana(stan.odrzucone, 'zapis nie przeszedł', 'zapisy nie przeszły',
-          'zapisów nie przeszło')} — dotknij ikony konta`
-      : !stan.online
-        ? (stan.wKolejce ? `Brak sieci — ${ileZapisow} ${
-             odmiana(stan.wKolejce, 'czeka', 'czekają', 'czeka')} na wysłanie`
-                         : 'Brak sieci — zapisy zostają w telefonie')
-        : (stan.wKolejce ? `${ileZapisow} w wysyłce` : 'Połączono');
+  kropka.title = tytulKropkiSieci({ online: stan.online, wKolejce: stan.wKolejce, odrzucone: stan.odrzucone,
+    bezPamieci: stan.bezPamieci, komputer: naKomputerze() });
   const znacznik = document.getElementById('znacznik-kolejki');
   if (znacznik) znacznik.textContent = stan.wKolejce ? `⏳ ${stan.wKolejce}` : '';
   odswiezPasekPolaczenia();
@@ -1213,7 +1260,7 @@ function loginZNazwy(t) {
 }
 
 /* Znaczniki urządzenia (D43, GK-KONTA.md §7.2). Po dobrym haśle program daje
-   temu urządzeniu znacznik ważny 12 godzin — z nim wystarcza PIN. Trzymamy go
+   temu urządzeniu znacznik ważny 16 godzin — z nim wystarcza PIN. Trzymamy go
    PER OSOBA (na wspólnym telefonie loguje się kilka osób): mapa login → {z, do}
    pod kluczem 'znaczniki' (przedrostek gk-flota.). Klucze po loginZNazwy:
    wpisane imię i nazwisko, login i imię z konta. Wylogowanie znacznika NIE
@@ -1248,12 +1295,12 @@ const Znaczniki = {
 };
 
 /* Pole sekretu (D43, STYL-GK §2): osoba ze znacznikiem tego urządzenia → „PIN
-   (4 cyfry)” z klawiaturą cyfr; inaczej „Hasło (raz na 12 godzin na tym
+   (4 cyfry)” z klawiaturą cyfr; inaczej „Hasło (raz na 16 godzin na tym
    urządzeniu)” z pełną klawiaturą. Program bez kont D43 (konta tutejsze,
    z GK Trasy, Panel sprzed D43) — „PIN / hasło” jak dawniej (stan.trybD43
    z /api/zyje). Link pod polem: „Zaloguj hasłem” (zapomniany PIN), przy haśle
    ze znacznikiem — „Zaloguj PIN-em”; bez znacznika linku nie ma. */
-const ETYKIETY_SEKRETU = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 12 godzin na tym urządzeniu)',
+const ETYKIETY_SEKRETU = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)',
                            stary: 'PIN / hasło' };
 function poleSekretu({ ident, sekret, etykieta, przelacz }) {
   let reczny = null;
@@ -1371,10 +1418,21 @@ async function przyjmijLogowanie(odpowiedz, wpisany) {
   const wynik = Object.assign({}, odpowiedz);
   if (wynik.znacznik) Znaczniki.zapamietaj([wpisany, wynik.login, wynik.imie], wynik.znacznik, wynik.znacznik_do);
   delete wynik.znacznik;                     // znacznik nie idzie do profilu w IndexedDB
+  // Kto był tu ostatnio. Po wygasłej sesji (sesjaWygasla) jego profil i kartoteka
+  // celowo zostały w telefonie — przy tej samej osobie to one pozwalają wrócić bez
+  // utraty czegokolwiek. INNA osoba nie może jednak dostać cudzej kartoteki (jak
+  // przy wylogowaniu). Kolejki nie ruszamy: cudze zapisy czekają na właściciela.
+  let poprzedni = stan.uz;
+  if (!poprzedni) poprzedni = await Kolejka.przypomnij('profil').catch(() => null);
+  if (poprzedni && poprzedni.id !== wynik.id) {
+    await Kolejka.zapomnij('slowniki').catch(() => { /* zaraz i tak nadpisze */ });
+    stan.pojazdy = []; stan.kierowcy = []; stan.ustawienia = {};
+  }
   stan.token = wynik.token;
   // Zapis tokenu ZAWSZE w try/catch — tryb prywatny nie może zablokować wejścia.
   pamietaj('token', wynik.token);
   stan.uz = wynik;
+  zakonczTrybDoOdczytu();
   await zapomnijOdpowiedzi(wynik.id).catch(() => { /* wejście ważniejsze */ });
   // Bez zapamiętanego profilu kierowca nie wejdzie jutro rano na placu bez
   // zasięgu: nie ma z czego odtworzyć roli i ekran zostaje pusty.
@@ -1446,7 +1504,7 @@ async function wyloguj(cicho) {
     if (czeka && !await potwierdz(
       `W kolejce ${odmiana(czeka, 'czeka', 'czekają', 'czeka')} ${czeka} ${
         odmiana(czeka, 'zapis', 'zapisy', 'zapisów')}`,
-      'Zostaną w tym telefonie i wyślą się, gdy zalogujesz się ponownie. '
+      `Zostaną w ${slowoUrzadzenia('miejscownik')} i wyślą się, gdy zalogujesz się ponownie. `
       + 'Nikt inny ich nie wyśle ani nie skasuje. Wylogować?')) return;
     // Razem z końcem sesji program wypisuje ten telefon z powiadomień TEJ osoby —
     // na wspólnym telefonie następna osoba nie może dostawać cudzych spraw.
@@ -1456,6 +1514,7 @@ async function wyloguj(cicho) {
   }
   stan.token = ''; stan.uz = null;
   zapomnijKlucz('token');
+  zakonczTrybDoOdczytu();
   // Adres powrotu należy do tej sesji — następna osoba na tym telefonie
   // nie ma dostać przycisku do cudzej instalacji GK Trasy.
   zapomnijKlucz('gk_powrot');
@@ -1472,6 +1531,104 @@ async function wyloguj(cicho) {
   stan.pojazdy = []; stan.kierowcy = []; stan.ustawienia = {};
   zapomnijStanOsoby();
   pokazLogowanie();
+}
+
+/* ------------------------------------------- B1: sesja wygasła (jak GK Trasy)
+
+   Dawniej 401 w trakcie pracy wołało wyloguj(true): znikał profil, kartoteka floty
+   i zapamiętane odpowiedzi, a kierowca z kontem D43 (sesja do końca zaufania
+   urządzenia, 16 h) codziennie rano lądował na pustym logowaniu.
+   Teraz: token znika (i tak nie działa), ale profil, kartoteka i KOLEJKA ZOSTAJĄ.
+   Ekran zostaje — tylko do odczytu, z wstęgą „Zaloguj się ponownie”. Ta sama osoba
+   loguje się w okienku i wraca tam, gdzie była; czekające zapisy wysyłają się same.
+   Inna osoba — jak zwykłe logowanie (przyjmijLogowanie): cudza kartoteka znika. */
+function sesjaWygasla() {
+  stan.token = '';
+  zapomnijKlucz('token');
+  // Bez profilu nie ma czego pokazywać do odczytu (np. sam start aplikacji) —
+  // tam uruchom() pokaże zwykły ekran logowania.
+  if (!stan.uz || stan.sesjaWygasla) return;
+  stan.sesjaWygasla = true;
+  document.body.classList.add('sesja-wygasla');
+  let wstega = document.getElementById('wstega-sesji');
+  const tresc = document.getElementById('tresc');
+  if (!wstega && tresc && tresc.parentNode) {
+    wstega = document.createElement('div');
+    wstega.id = 'wstega-sesji';
+    wstega.className = 'wstega uwaga wstega-sesji';
+    tresc.parentNode.insertBefore(wstega, tresc);
+  }
+  if (wstega) {
+    wstega.innerHTML = `Sesja wygasła — zapisy czekają w ${slowoUrzadzenia('miejscownik')}. `
+      + '<button class="glowny maly" id="btn-zaloguj-ponownie">Zaloguj się ponownie</button>';
+    wstega.querySelector('#btn-zaloguj-ponownie').onclick = oknoPonownegoLogowania;
+  }
+}
+
+function zakonczTrybDoOdczytu() {
+  stan.sesjaWygasla = false;
+  document.body.classList.remove('sesja-wygasla');
+  const wstega = document.getElementById('wstega-sesji');
+  if (wstega && wstega.remove) wstega.remove();
+}
+
+/* Logowanie w okienku nad ekranem tylko do odczytu — nic pod spodem nie znika. */
+function oknoPonownegoLogowania() {
+  const login = (stan.uz && stan.uz.login) || '';
+  okno({
+    tytul: 'Zaloguj się ponownie',
+    tresc: `<p class="male">Nic nie zginęło — zapisy z ${slowoUrzadzenia('dopelniacz')} wyślą się po zalogowaniu.</p>
+      <label>Imię i nazwisko
+        <input id="pl-login" autocomplete="username" autocapitalize="none" autocorrect="off"
+               spellcheck="false" value="${escHtml(login)}"></label>
+      <label><span id="pl-etykieta">PIN / hasło</span>
+        <input id="pl-pin" type="password" autocomplete="current-password"></label>
+      <button type="button" class="link-sekretu" id="pl-przelacz" hidden>Zaloguj hasłem</button>
+      <div class="blad-logowania" id="pl-blad"></div>`,
+    poOtwarciu: pole => {
+      stan.polePonownego = poleSekretu({ ident: pole.querySelector('#pl-login'), sekret: pole.querySelector('#pl-pin'),
+                                         etykieta: pole.querySelector('#pl-etykieta'),
+                                         przelacz: pole.querySelector('#pl-przelacz') });
+    },
+    przyciski: [
+      { napis: 'Później', klik: z => z() },
+      { napis: 'Zaloguj', klasa: 'glowny', klik: async z => {
+        const blad = document.getElementById('pl-blad');
+        blad.textContent = '';
+        const poprzedni = stan.uz ? stan.uz.id : null;
+        const ekran = stan.ekran;
+        zajety(true);
+        try {
+          await zaloguj(document.getElementById('pl-login').value.trim(),
+            document.getElementById('pl-pin').value);
+          z();
+          await poZalogowaniuPonownie(poprzedni, ekran);
+        } catch (e) {
+          if (e && e.kodBledu === 'do_ustawienia') {
+            oknoUstawieniaKonta(e.ustawienie, () => poZalogowaniuPonownie(poprzedni, ekran));
+            return;
+          }
+          blad.textContent = poLudzku(e);
+          if (e && e.kodBledu === 'wymagane_haslo') {
+            document.getElementById('pl-pin').value = '';
+            if (stan.polePonownego) stan.polePonownego.odswiez();
+          }
+        } finally {
+          zajety(false);
+        }
+      } },
+    ],
+  });
+}
+
+async function poZalogowaniuPonownie(poprzedni, ekran) {
+  if (stan.uz.id !== poprzedni) {
+    await wejdzDoAplikacji();                  // inna osoba: od zera, jak zwykłe logowanie
+    return;
+  }
+  await odswiezStanSieci();
+  synchronizuj(false);
+  if (ekran) pokazEkran(ekran);                // świeże dane w tym samym miejscu
 }
 
 function pokazLogowanie() {
@@ -1494,7 +1651,7 @@ async function pokazInfoKont() {
     const w = odp.ok ? await odp.json() : {};
     if (linia) linia.hidden = !(w && w.konta_z_panelu);
     // Ta sama odpowiedź mówi, czy konta są już w D43 (hasło + PIN) — wtedy pole
-    // sekretu pisze „Hasło (raz na 12 godzin…)” zamiast „PIN / hasło”.
+    // sekretu pisze „Hasło (raz na 16 godzin…)” zamiast „PIN / hasło”.
     stan.trybD43 = !!(w && w.d43);
     pamietaj('d43', stan.trybD43 ? '1' : '');
   } catch (e) { if (linia) linia.hidden = true; }
@@ -1513,7 +1670,7 @@ function oknoUstawieniaKonta(u, dalej, bladNaStart) {
     tresc: `
       <p class="konto-kto"><b>${escHtml(u.imie)}</b></p>
       <p class="konto-drobne">${haslo ? 'Hasło startowe działa tylko przy pierwszym logowaniu. ' : ''}Hasło
-        wpiszesz raz na 12 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich
+        wpiszesz raz na 16 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich
         aplikacjach GK.</p>
       ${haslo ? `<label>Nowe hasło (min. 8 znaków)<input id="us-haslo" type="password"
           autocomplete="new-password" maxlength="128"></label>
@@ -1774,7 +1931,8 @@ function wersjaDlaLudzi(w) {
    wtedy, gdy przeglądarka ma mieszankę wersji (z przyciskiem „Odśwież”). */
 function stopkaWersji() {
   const skrypt = (typeof WERSJA_SKRYPTU === 'string') ? WERSJA_SKRYPTU : stan.uz.wersja;
-  return `<p class="konto-drobne wersja-stopka">wersja ${escHtml(wersjaDlaLudzi(skrypt))}</p>`;
+  // Pełna wersja techniczna w podpowiedzi (title) — dla serwisu, jak w hali (aktualizacja.js → wpiszWersje).
+  return `<p class="konto-drobne wersja-stopka" title="${escHtml(`program ${stan.uz.wersja || '?'} · aplikacja ${skrypt}`)}">wersja ${escHtml(wersjaDlaLudzi(skrypt))}</p>`;
 }
 
 function stempelWersji() {
@@ -1930,14 +2088,16 @@ async function odswiezProgram() {
    dałoby się wpisać. */
 function opisNowegoPinu() {
   if (jestBiuro()) return 'min. 8 znaków';
-  return stan.uz && stan.uz.pin_w_panelu ? '4–8 cyfr' : 'min. 4 znaki';
+  return '4 cyfry';
 }
 
 /* Klawiatura jak w aplikacjach hali (konto.js): biuro — zwykła (hasło z liter),
    kierowca z kontem z Panelu — cyfrowa (PIN to 4–8 cyfr). Tutejszy kierowca
    mógł kiedyś dostać PIN z literami — dla niego też zwykła. */
 function trybKlawiaturyPinu() {
-  return !jestBiuro() && stan.uz && stan.uz.pin_w_panelu ? 'numeric' : 'text';
+  // Nowy PIN kierowcy to dokładnie 4 cyfry (D46; 2026-10-16 także konta tutejsze,
+  // jak serwer → sprawdz_dlugosc_pinu i GK Trasy) — klawiatura cyfrowa.
+  return !jestBiuro() ? 'numeric' : 'text';
 }
 
 /* Wygląd w oknie konta: pigułki jak w aplikacjach hali (STYL-GK §3), nie natywne
@@ -1971,7 +2131,7 @@ function pokazKolejkeWKoncie(pole) {
    GK-KONTA.md §3.6) przez program — tylko konto z Panelu (zrodlo 'gk'). Kody
    rysuje serwer programu (qr_svg), więc okno działa bez biblioteki QR.     */
 function naKomputerze() {
-  return typeof matchMedia === 'function' && matchMedia('(min-width:821px)').matches;
+  return typeof window.matchMedia === 'function' && window.matchMedia('(min-width:821px)').matches;
 }
 function napisKodowQR() {
   return naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon — kody QR';
@@ -2029,9 +2189,11 @@ function oknoKodowAplikacji() {
         głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN);
         inne logowanie jest opisane przy aplikacji.</p>
       <div class="kody-aplikacji" id="kody-aplikacji"><p class="konto-drobne">Wczytuję…</p></div>`,
+    // Jak w każdym oknie GK (2026-10-16): drugorzędny „Zamknij” obrysowany po lewej,
+    // główne działanie (grafit) po prawej — „Zamknij” nigdy nie jest wypełnione.
     przyciski: [
-      { napis: '🖨 Drukuj wszystkie', klasa: 'ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
-      { napis: 'Zamknij', klasa: 'glowny', klik: z => z() },
+      { napis: 'Zamknij', klik: z => z() },
+      { napis: '🖨 Drukuj wszystkie', klasa: 'glowny ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
     ],
     poOtwarciu: async pole => {
       const el = pole.querySelector('#kody-aplikacji');
@@ -2066,14 +2228,43 @@ function oknoKodowAplikacji() {
    niewidoczna. Pod nagłówkiem pasek z tekstem — te same słowa i odmiana co
    w aplikacjach hali (hala.js → Hala.pasekPolaczenia). Przy „wszystko
    wysłane” go nie ma. Dotknięcie → Moje konto (lista „Nie wysłane”).      */
-function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer }) {
+/* „telefonie” / „urządzeniu” — STYL-GK §6: na komputerze nie piszemy „telefon”.
+   Jedno miejsce dla paska, kropki, dymków i pytań (2026-10-16, jak GK Trasy). */
+function slowoUrzadzenia(przypadek, komputer) {
+  const k = komputer === undefined ? naKomputerze() : komputer;
+  if (przypadek === 'dopelniacz') return k ? 'tego urządzenia' : 'telefonu';
+  if (przypadek === 'miejscownik') return k ? 'tym urządzeniu' : 'tym telefonie';
+  return k ? 'urządzeniu' : 'telefonie';
+}
+
+/* Podpowiedź kropki w nagłówku — te same słowa i odmiana co pasek (R5 2026-10-16;
+   dawniej „telefon” także na komputerze). Ta sama funkcja w GK Trasy. */
+function tytulKropkiSieci({ online, wKolejce, odrzucone, bezPamieci, komputer }) {
+  const n = wKolejce || 0;
+  if (bezPamieci) return `Pamięć ${slowoUrzadzenia('dopelniacz', komputer)} nie odpowiada — dotknij ikony konta`;
+  if (odrzucone) {
+    return `${odrzucone} ${odmiana(odrzucone, 'zapis nie przeszedł', 'zapisy nie przeszły',
+      'zapisów nie przeszło')} — dotknij ikony konta`;
+  }
+  if (!online) {
+    return n ? `Brak sieci — ${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`
+      : `Brak sieci — zapisy zostają w ${slowoUrzadzenia('', komputer)}`;
+  }
+  return n ? `${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')} w wysyłce` : 'Połączono';
+}
+
+function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer }) {
   const n = wKolejce || 0;
   const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
   const czesci = [];
   let klasa = 'ok';
   if (!online) {
     klasa = 'offline';
-    czesci.push(`Brak sieci — ${n ? czeka : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`);
+    czesci.push(`Brak sieci — ${n ? czeka : `zapisy zostają w ${slowoUrzadzenia('', komputer)}`}`);
+  } else if (serwer === false) {
+    // Sieć jest, programu w biurze nie ma (restart komputera, tunel) — jak hala „brak-huba”.
+    klasa = 'brak-serwera';
+    czesci.push(`Brak połączenia z serwerem${n ? ` — ${czeka}` : ''}`);
   } else if (n) {
     klasa = 'kolejka';
     czesci.push(`Wysyłanie: ${n}`);
@@ -2085,7 +2276,7 @@ function odswiezPasekPolaczenia() {
   const el = document.getElementById('pasek-polaczenia');
   if (!el) return;
   const p = tekstPaskaPolaczenia({ online: stan.online, wKolejce: stan.wKolejce,
-    odrzucone: stan.odrzucone, komputer: naKomputerze() });
+    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera });
   el.className = 'pasek-polaczenia ' + p.klasa;
   el.textContent = p.tekst;
   el.hidden = !p.tekst;
@@ -2134,6 +2325,7 @@ function oknoKonta() {
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${escHtml(opisPowiadomien())}</p>
         <div id="push-konto" class="konto-push"><p class="konto-drobne">Sprawdzam…</p></div>
+        ${poleDzwieku()}
       </fieldset>
       <fieldset><legend>Dane w tym urządzeniu</legend>
         <p class="konto-drobne">Czeka na wysłanie: <span id="ile-w-kolejce">…</span></p>
@@ -2197,6 +2389,7 @@ function oknoKonta() {
       const kodyQR = pole.querySelector('#btn-kody-qr');
       if (kodyQR) kodyQR.onclick = oknoKodowAplikacji;
       rysujPowiadomienia(pole.querySelector('#push-konto'));
+      podepnijDzwiek(pole);
       rysujOdrzucone(pole.querySelector('#odrzucone-zapisy'));
       pole.querySelector('#btn-wyslij-teraz').onclick = async () => {
         await synchronizuj(false);
@@ -2208,6 +2401,36 @@ function oknoKonta() {
   });
 }
 
+/* Dźwięk w Moim koncie → Powiadomienia (2026-10-16, ten sam układ w GK Trasy):
+   zdanie, przełącznik „Dźwięk powiadomień: włączony/wyłączony” (aria-pressed)
+   i „Sprawdź dźwięki” — info → pilne → awaria, żeby człowiek usłyszał, czym
+   różni się zwykła wiadomość od pilnej, zanim zadzwoni naprawdę. */
+function poleDzwieku() {
+  return `<p class="konto-drobne">Przy otwartej aplikacji nowa sprawa daje dźwięk — w tym urządzeniu.</p>
+    <div class="przyciski-konta">
+      <button type="button" id="btn-dzwiek" aria-pressed="${Dzwiek.wlaczony()}">${napisDzwieku()}</button>
+      <button type="button" id="btn-sprawdz-dzwieki">Sprawdź dźwięki</button>
+    </div>`;
+}
+function napisDzwieku() {
+  return Dzwiek.wlaczony() ? '🔔 Dźwięk powiadomień: włączony' : '🔕 Dźwięk powiadomień: wyłączony';
+}
+const PROBA_DZWIEKOW = [['info', 0], ['pilne', 1100], ['awaria', 3200]];
+function podepnijDzwiek(pole) {
+  const przelacz = pole.querySelector('#btn-dzwiek');
+  const sprawdz = pole.querySelector('#btn-sprawdz-dzwieki');
+  if (przelacz) przelacz.onclick = () => {
+    Dzwiek.ustaw(!Dzwiek.wlaczony());
+    przelacz.textContent = napisDzwieku();
+    przelacz.setAttribute('aria-pressed', String(Dzwiek.wlaczony()));
+    if (Dzwiek.wlaczony()) Dzwiek.zagraj('info');
+  };
+  if (sprawdz) sprawdz.onclick = () => {
+    if (!Dzwiek.wlaczony()) { komunikat('Dźwięk powiadomień jest wyłączony — włącz go obok', 'uwaga'); return; }
+    PROBA_DZWIEKOW.forEach(([rodzaj, po]) => setTimeout(() => Dzwiek.zagraj(rodzaj), po));
+  };
+}
+
 /* Moje konto, konto z Panelu w D43 (hasło + PIN, GK-KONTA.md §7, STYL-GK §3):
    dwa przyciski „Zmień hasło” i „Zmień PIN”, każdy rozwija swój formularz. */
 function trescZmianD43() {
@@ -2216,7 +2439,7 @@ function trescZmianD43() {
         <button type="button" id="btn-pokaz-pin">Zmień PIN</button>
       </div>
       <fieldset id="zmiana-hasla" class="ukryty"><legend>Zmień hasło</legend>
-        <p class="konto-drobne">To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 12 godzin
+        <p class="konto-drobne">To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 16 godzin
           na urządzeniu, na co dzień — PIN. Inne urządzenia poproszą o nowe hasło.</p>
         <label>Obecne hasło<input id="zh-stare" type="password" autocomplete="current-password" maxlength="128"></label>
         <label>Nowe hasło (min. 8 znaków)<input id="zh-nowe" type="password" autocomplete="new-password" maxlength="128"></label>
@@ -2229,7 +2452,7 @@ function trescZmianD43() {
       </fieldset>
       <fieldset id="zmiana-pinu-d43" class="ukryty"><legend>Zmień PIN</legend>
         <p class="konto-drobne">Ten PIN działa we wszystkich aplikacjach GK — na urządzeniu, na którym w ciągu
-          12 godzin wpisano hasło. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
+          16 godzin wpisano hasło. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
         <label>Obecne hasło albo PIN<input id="zp-stary" type="password" autocomplete="current-password" maxlength="128"></label>
         <label>Nowy PIN (4 cyfry)<input id="zp-nowy" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
         <label>Powtórz nowy PIN<input id="zp-powtorz" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
@@ -2468,7 +2691,7 @@ async function rysujOdrzucone(pole) {
   });
   pole.querySelectorAll('[data-porzuc]').forEach(b => b.onclick = async () => {
     if (!await potwierdz('Porzucić ten zapis?',
-      'Zniknie z telefonu na dobre. Jeśli były w nim zdjęcia — nie da się ich odzyskać, '
+      `Zniknie z ${slowoUrzadzenia('dopelniacz')} na dobre. Jeśli były w nim zdjęcia — nie da się ich odzyskać, `
       + 'bo aparat w aplikacji nie zapisuje ich w galerii.', { groznie: true, tak: 'Porzuć' })) return;
     await Kolejka.zapomnijOdrzucona(b.dataset.porzuc);
     await odswiezStanSieci();
@@ -2476,25 +2699,25 @@ async function rysujOdrzucone(pole) {
   });
 }
 
-/* Słaby PIN na koncie, przy adresie dostępnym z internetu, to najprostsza
-   droga do tego, żeby ktoś obcy zobaczył całą flotę. Serwer zna listę
-   najczęściej zgadywanych i melduje ją polem haslo_startowe — pytamy przy
-   każdym wejściu, dopóki PIN nie zostanie zmieniony.                        */
+/* Konto biura albo administratora z hasłem krótszym niż 8 znaków (w praktyce
+   fabryczne „1234” konta admin) — serwer melduje to polem haslo_startowe.
+   To JEDYNA reguła, o którą tu pytamy: hasło biura ma min. 8 znaków (D46).
+   Od D74 (właściciel 2026-10-16: „nie mają [ograniczeń], jakie hasła i jakie
+   piny chcą”) nie ma już okna „zmień PIN, bo łatwy”: kierowca z PIN-em
+   1234 czy 0000 nie dostaje żadnego ostrzeżenia.                              */
 function oknoStartowegoHasla() {
-  const nazwa = (NAZWA_ROLI[stan.uz.rola] || 'konto').toLowerCase();
+  if (!jestBiuro()) return;                 // kierowca: PIN dowolny, bez okna
   okno({
-    tytul: jestBiuro() ? 'Zmień hasło — to da się zgadnąć' : 'Zmień PIN — ten da się zgadnąć',
-    tresc: `<div class="wstega uwaga">Konto „${escHtml(stan.uz.imie || stan.uz.login)}” (${escHtml(nazwa)})
-        ma ${jestBiuro() ? 'hasło' : 'PIN'} z listy najczęściej zgadywanych.</div>
-      <p class="male">Jeśli program jest dostępny z internetu, dostanie się tu każdy,
-         kto zgadnie adres. Konto biura widzi całą flotę — numery VIN, polisy i koszty.</p>
-      <label>${jestBiuro() ? 'Obecne hasło' : 'Obecny PIN'}<input id="sh-stary" type="password"
-             inputmode="${trybKlawiaturyPinu()}" autocomplete="current-password" maxlength="128"></label>
-      <label>${jestBiuro() ? 'Nowe hasło' : 'Nowy PIN'} <span class="slaby">(${escHtml(opisNowegoPinu())})</span>
-        <input id="sh-nowy" type="password" inputmode="${trybKlawiaturyPinu()}"
+    tytul: 'Ustaw nowe hasło',
+    tresc: `<div class="wstega uwaga">Hasło konta „${escHtml(stan.uz.imie || stan.uz.login)}” ma mniej
+        niż 8 znaków (np. fabryczne <b>1234</b>). Hasło konta biura ma mieć co najmniej 8 znaków.</div>
+      <label>Obecne hasło<input id="sh-stary" type="password"
+             inputmode="text" autocomplete="current-password" maxlength="128"></label>
+      <label>Nowe hasło <span class="slaby">(${escHtml(opisNowegoPinu())})</span>
+        <input id="sh-nowy" type="password" inputmode="text"
                autocomplete="new-password" maxlength="128"></label>
-      <label>${jestBiuro() ? 'Powtórz nowe hasło' : 'Powtórz nowy PIN'}
-        <input id="sh-powtorz" type="password" inputmode="${trybKlawiaturyPinu()}"
+      <label>Powtórz nowe hasło
+        <input id="sh-powtorz" type="password" inputmode="text"
                autocomplete="new-password" maxlength="128"></label>`,
     przyciski: [
       { napis: 'Później', klik: z => z() },
@@ -2502,12 +2725,9 @@ function oknoStartowegoHasla() {
         const stary = document.getElementById('sh-stary').value;
         const nowy = document.getElementById('sh-nowy').value;
         if (nowy !== document.getElementById('sh-powtorz').value) {
-          // Biuro loguje się hasłem — komunikat o „PIN-ach” brzmiał jak pomyłka okna.
-          return komunikat(jestBiuro() ? 'Nowe hasła się nie zgadzają' : 'Nowe PIN-y się nie zgadzają',
-                           'blad');
+          return komunikat('Nowe hasła się nie zgadzają', 'blad');
         }
-        const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }),
-                                jestBiuro() ? 'Hasło zmienione' : 'PIN zmieniony');
+        const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }), 'Hasło zmienione');
         if (!w) return;
         if (w.token) { stan.token = w.token; pamietaj('token', w.token); }
         stan.uz.haslo_startowe = false;
@@ -2588,9 +2808,9 @@ async function uruchom() {
 
   window.addEventListener('online', () => { odswiezStanSieci(); synchronizuj(); });
   window.addEventListener('offline', odswiezStanSieci);
-  setInterval(() => { if (navigator.onLine) synchronizuj(); }, 25000);
+  setInterval(() => { if (navigator.onLine) { synchronizuj(); sprawdzZdarzenia(); } }, 25000);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && navigator.onLine) synchronizuj();
+    if (!document.hidden && navigator.onLine) { synchronizuj(); sprawdzZdarzenia(); }
   });
 
   if ('serviceWorker' in navigator) {
@@ -2602,18 +2822,22 @@ async function uruchom() {
     let przeladowano = false;
     // Przy PIERWSZEJ instalacji też pada controllerchange, choć nic się nie
     // zmieniło w plikach — przeładowanie byłoby wtedy tylko mignięciem ekranu.
-    const bylJuzWorker = !!navigator.serviceWorker.controller;
+    // NIE stała z chwili startu (jak hala, aktualizacja.js → prowadzona): karta
+    // otwarta bez workera (pierwsze wejście, Ctrl+Shift+R) dostaje go przy
+    // pierwszym controllerchange i od tej chwili każda następna zmiana to już
+    // nowa wersja. Dawniej taka karta nie brała żadnej poprawki do ręcznego odświeżenia.
+    let prowadzona = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (przeladowano || !bylJuzWorker) return;
+      if (!prowadzona) { prowadzona = true; return; }
+      if (przeladowano) return;
       przeladowano = true;
       czekaNaPrzeladowanie = true;
       const chwila = biezacaChwila();
       if (moznaPrzeladowacTeraz(chwila)) { przeladujGdyWolno(); return; }
       // Otwarte okno albo zaczęty przegląd: nie zabieramy nikomu pracy.
       // Przeładowanie zrobi oznaczOtwarteOkno() / pokazEkran(), gdy skończy.
-      komunikat(chwila.oknoOtwarte || chwila.pytanieOtwarte
-        ? 'Jest nowa wersja — odświeży się po zamknięciu okna'
-        : 'Jest nowa wersja — odświeży się po wyjściu z tego ekranu');
+      // Te same słowa co hala (aktualizacja.js) i GK Trasy.
+      komunikat('Jest nowa wersja — odświeży się, gdy skończysz (zamkniesz okno albo wyślesz formularz)');
     });
     // Dotknięte powiadomienie przy otwartej aplikacji: sw.js prosi o ekran.
     navigator.serviceWorker.addEventListener('message', e => {
@@ -2626,6 +2850,10 @@ async function uruchom() {
         // który potrafi zostać otwarty przez cały dzień w busie.
         rejestracja.update().catch(() => {});
         setInterval(() => rejestracja.update().catch(() => {}), 3600 * 1000);
+        // I po powrocie na kartę (telefon wyjęty z kieszeni) — jak w hali.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') rejestracja.update().catch(() => {});
+        });
       })
       .catch(() => { /* działa też bez tego, tylko bez trybu offline */ });
   }
@@ -2673,7 +2901,7 @@ async function uruchom() {
       if (stan.token && profil) {
         stan.uz = profil;
         await wejdzDoAplikacji();
-        komunikat(bladWejscia || 'Brak połączenia — pracujesz na danych z telefonu',
+        komunikat(bladWejscia || `Brak połączenia — pracujesz na danych z ${slowoUrzadzenia('dopelniacz')}`,
           bladWejscia ? 'blad' : '');
         return;
       }
@@ -2682,6 +2910,49 @@ async function uruchom() {
   pokazLogowanie();
   // Po pokazLogowanie(), bo ono czyści pole błędu.
   if (bladWejscia) document.getElementById('blad-logowania').textContent = bladWejscia;
+}
+
+/* ------------------------------------------- R9: dźwięk przy OTWARTEJ aplikacji
+
+   Push (sw.js) dzwoni przy zamkniętej aplikacji; przy otwartej program w biurze
+   odkłada te same zdarzenia na 10 minut (flotex.py → a_zdarzenia), a my pytamy
+   o nie co 25 s (razem z wysyłką kolejki) i po powrocie na kartę — jak GK Trasy.
+   Pierwsze pytanie po wejściu tylko ustawia numer — start aplikacji niczego nie gra;
+   własnych ruchów program nie oddaje (procz). Kilka naraz → jeden dźwięk,
+   najpoważniejszy. GK Flota: „STOI” → 'zatrzymanie', poważna usterka → 'awaria',
+   przegląd do zatwierdzenia / odrzucony → 'pilne', terminy → 'info' (rodzaj
+   wybiera program, pole „dzwiek”). */
+const WAGA_DZWIEKU = { info: 1, pilne: 2, awaria: 3, zatrzymanie: 4 };
+const stanZdarzen = { od: null, wDrodze: false };
+
+function najwazniejszeZdarzenie(lista) {
+  return (lista || []).reduce((a, b) =>
+    (WAGA_DZWIEKU[b.dzwiek] || 1) > (WAGA_DZWIEKU[a && a.dzwiek] || 0) ? b : a, null);
+}
+
+async function sprawdzZdarzenia() {
+  if (stanZdarzen.wDrodze || !stan.uz || !stan.token || stan.sesjaWygasla || !navigator.onLine
+      || document.hidden) return;
+  stanZdarzen.wDrodze = true;
+  try {
+    const pierwsze = stanZdarzen.od == null;
+    const odp = await API.get('/api/zdarzenia' + (pierwsze ? '' : '?od=' + encodeURIComponent(stanZdarzen.od)));
+    if (!odp || odp.od == null) return;
+    stanZdarzen.od = odp.od;
+    const nowe = pierwsze ? [] : (odp.zdarzenia || []);
+    const glowne = najwazniejszeZdarzenie(nowe);
+    if (!glowne) return;
+    Dzwiek.zagraj(WAGA_DZWIEKU[glowne.dzwiek] ? glowne.dzwiek : 'info');
+    komunikat((glowne.tytul || 'Nowa sprawa') + (nowe.length > 1 ? ` (+${nowe.length - 1})` : ''),
+      glowne.dzwiek === 'info' ? '' : (glowne.dzwiek === 'pilne' ? 'uwaga' : 'blad'));
+    // Bieżący ekran ze świeżymi danymi — ale nie spod palca (otwarte okno, pisanie).
+    const ekran = EKRANY[stan.ekran];
+    if (ekran && ekran.poSynchronizacji && moznaPrzeladowacTeraz(biezacaChwila())) ekran.poSynchronizacji();
+  } catch (e) {
+    /* bez programu — następna próba za 25 s */
+  } finally {
+    stanZdarzen.wDrodze = false;
+  }
 }
 
 async function wejdzDoAplikacji() {
@@ -2697,17 +2968,16 @@ async function wejdzDoAplikacji() {
   await wczytajSlowniki();
   synchronizuj();
   wyslijZapisyBiura();
+  // Zdarzenia od tej chwili — pierwsze pytanie tylko ustawia numer (start nic nie gra).
+  stanZdarzen.od = null;
+  sprawdzZdarzenia();
   // Aplikacja otwarta dotknięciem powiadomienia startuje na jego ekranie.
   const zPowiadomienia = ekranZAdresu();
   pokazEkran(ekranDozwolony(zPowiadomienia) ? zPowiadomienia : (jestBiuro() ? 'pulpit' : 'moj'));
   Powiadomienia.odnow();
-  // Konto z GK Trasy zmienia PIN w GK Trasy — okno zmiany skończyłoby się tu
-  // odmową, więc mówimy od razu, gdzie to zrobić.
-  if (stan.uz.haslo_startowe && stan.uz.zrodlo === 'trasex') {
-    komunikat('Twój PIN jest łatwy do zgadnięcia — zmień go w programie GK Trasy', 'blad');
-  } else if (stan.uz.haslo_startowe) {
-    oknoStartowegoHasla();
-  }
+  // Tylko konto biura z hasłem krótszym niż 8 znaków (D46). Konta z GK Trasy to
+  // kierowcy — ich PIN może być dowolny (D74), więc żadnego ostrzeżenia.
+  if (stan.uz.haslo_startowe && jestBiuro() && stan.uz.zrodlo !== 'trasex') oknoStartowegoHasla();
 }
 
 /* Trwała pamięć: bez niej iOS i Android mogą po cichu wyczyścić IndexedDB

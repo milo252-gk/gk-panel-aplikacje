@@ -42,7 +42,7 @@ function oknoKontaZPanelu(u) {
       </div>
       <p class="slaby male">Konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
-    przyciski: [{ napis: 'Zamknij', klasa: 'glowny', klik: z => z() }],
+    przyciski: [{ napis: 'Zamknij', klik: z => z() }],
   });
 }
 
@@ -65,7 +65,7 @@ function oknoKontaZTrasexu(u) {
       </div>
       <p class="slaby male">Konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
-    przyciski: [{ napis: 'Zamknij', klasa: 'glowny', klik: z => z() }],
+    przyciski: [{ napis: 'Zamknij', klik: z => z() }],
   });
 }
 
@@ -108,7 +108,7 @@ EKRANY.konta = {
       <div class="pasek-narzedzi">
         ${stan.zespolGk ? '<button class="glowny" id="k-zespol">+ Dodaj konto</button>' : ''}
         <button class="${stan.zespolGk ? '' : 'glowny'}${nowyUkryty ? ' ukryty' : ''}" id="k-nowy">${
-          stan.kontaZPanelu ? 'Awaryjny administrator' : 'Nowe konto'}</button>
+          stan.kontaZPanelu ? 'Awaryjny administrator' : '+ Nowe konto'}</button>
         <span class="slaby male">${czynnych.length} ${odmiana(czynnych.length,
           'czynne konto', 'czynne konta', 'czynnych kont')} · ${adminow} ${odmiana(adminow,
           'administrator', 'administratorów', 'administratorów')}</span>
