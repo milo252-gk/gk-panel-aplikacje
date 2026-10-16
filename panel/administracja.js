@@ -729,8 +729,8 @@
     const link = a => (a ? `<a href="${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>` : '');
     el.innerHTML = `
       <p class="slaby opis-widoku">Telefony otwierają aplikacje ze stałych adresów na jednej stronie GitHub Pages (sam wygląd, bez danych):
-        cztery aplikacje hali oraz GK Trasy i GK Flota. Dane idą tunelem do serwera i do programów w biurze. Pokaż kod QR albo
-        wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
+        cztery aplikacje hali, GK Trasy, GK Flota, GK Szkolenia i GK Wycena. Dane idą tunelem do serwera i do programów w biurze.
+        Pokaż kod QR albo wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
       <section class="admin-linia">
         <h3><span>Logowanie z internetu <span class="znacznik ${lz.licznik.kolor}">${esc(String((dostepStan.logowanie || {}).zle_proby_godzina || 0))}</span></span></h3>
         <p class="slaby">${esc(lz.licznik.tekst)}. Konto po 10 złych PIN-ach z internetu czeka 15 minut, po trzech takich seriach
@@ -756,7 +756,7 @@
         <div class="dostep-aplikacje">${s.aplikacje.filter(a => a.adres).map(a => `
           <figure class="dostep-qr">
             <div class="dostep-kod" data-qr="${esc(a.adres)}" role="img" aria-label="Kod QR: ${esc(a.nazwa)}"></div>
-            <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}</figcaption>
+            <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}${a.opis ? `<span class="slaby">${esc(a.opis)}</span>` : ''}</figcaption>
           </figure>`).join('')}</div>
         <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj kody wszystkich aplikacji GK</button></div>
       </section>
