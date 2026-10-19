@@ -7,7 +7,7 @@
    nie siega, a zasieg komorkowy bywa jednokreskowy. Program ma sie tam otworzyc
    i przyjac komplet zdjec.                                                   */
 
-const WERSJA = 'flotex-e371e1203394';
+const WERSJA = 'flotex-943f526341b9';
 
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
@@ -22,7 +22,7 @@ const WERSJA = 'flotex-e371e1203394';
 const ZASOBY = [
   './style.css', './app.js', './kolejka.js', './zdjecia.js', './podpis.js',
   './skrot.js', './pojazdy.js', './przeglady.js', './kierowca.js', './awaria.js', './zaproszenie.js',
-  './ustawienia.js', './konta.js', './gk-dzwieki.js',
+  './ustawienia.js', './konta.js', './gk-dzwieki.js', './gk-offline.js',
   './ikona.svg', './logo-gkf.png', './manifest.webmanifest',
   './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
 ];
@@ -109,6 +109,39 @@ self.addEventListener('push', e => {
       body: w.tresc || '', tag: w.tag || 'gk-flota', renotify: true, requireInteraction: !!w.pilne,
       icon: ikona, badge: ikona, vibrate: w.pilne ? [300, 150, 300, 150, 300] : [200],
       data: { ekran: w.ekran || '' } })));
+  })());
+});
+
+/* D78: powrót sieci przy ZAMKNIĘTEJ aplikacji (Background Sync — Android/Chromium; iPhone tego nie ma).
+   Zapisy kierowcy czekają w IndexedDB (kolejka.js), ale token sesji leży w localStorage, którego worker nie czyta —
+   a wysyłka cudzym albo żadnym tokenem nie wchodzi w grę. Dlatego worker NIE wysyła, tylko przypomina: „N zapisów
+   czeka — otwórz aplikację” (tylko przy zgodzie na powiadomienia). Aplikacja na ekranie wysyła sama. Jak GK Trasy. */
+self.addEventListener('sync', e => {
+  if (e.tag !== 'gk-kolejka') return;
+  e.waitUntil((async () => {
+    const zakres = new URL(self.registration.scope).pathname;
+    const okna = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (okna.some(o => o.visibilityState === 'visible' && new URL(o.url).pathname.startsWith(zakres))) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const ile = await new Promise(ok => {
+      let z;
+      try { z = indexedDB.open('flotex-offline'); } catch (err) { ok(0); return; }
+      z.onupgradeneeded = () => { try { z.transaction.abort(); } catch (err) { /* i tak 0 */ } };
+      z.onerror = () => ok(0);
+      z.onsuccess = () => {
+        const db = z.result;
+        if (!db.objectStoreNames.contains('kolejka')) { db.close(); ok(0); return; }
+        const t = db.transaction('kolejka', 'readonly');
+        const r = t.objectStore('kolejka').count();
+        r.onsuccess = () => { db.close(); ok(r.result || 0); };
+        r.onerror = () => { db.close(); ok(0); };
+      };
+    });
+    if (!ile) return;
+    const slowo = ile === 1 ? 'zapis czeka' : (ile % 10 >= 2 && ile % 10 <= 4 && !(ile % 100 >= 12 && ile % 100 <= 14)) ? 'zapisy czekają' : 'zapisów czeka';
+    const ikona = new URL('./ikona-192.png', self.registration.scope).href;
+    await self.registration.showNotification('GK Flota', { body: `${ile} ${slowo} — otwórz aplikację, żeby je wysłać.`,
+      tag: 'gk-flota-kolejka', icon: ikona, badge: ikona, data: { ekran: '' } });
   })());
 });
 
