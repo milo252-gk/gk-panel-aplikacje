@@ -1,11 +1,15 @@
 {
   "hub": "https://timothy-potter-helena-lauren.trycloudflare.com",
-  "zmieniono": "2026-10-19T15:39:45.720Z",
+  "zmieniono": "2026-10-19T15:40:48.768Z",
   "wersje": {
     "wspolne": "wspolne-81e2b05a3cf3",
     "panel": "panel-f0851fadd5d8",
     "lider": "lider-777fa89f282d",
     "ur": "ur-2cc02ffc4961",
     "kj": "kj-e8aa086091c2"
+  },
+  "programy": {
+    "szkolenia": "https://developers-immune-figured-management.trycloudflare.com",
+    "wycena": "https://processes-snow-inspector-larger.trycloudflare.com"
   }
 }
