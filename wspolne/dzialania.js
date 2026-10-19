@@ -63,7 +63,10 @@
       if (typ === 'zlecenie' && obiekt.status === 'nowe' && d.priorytet === 'pilne' && o.zlecenia) {
         const z = o.zlecenia();
         const ja = hala.pracownik && hala.pracownik.id;
-        if (z && (d.wykonawca === ja || (d.dzial === z.dzial && (!d.wykonawca || d.wykonawca === ja)))) zagraj('pilne');
+        // D76: zlecenie „do kierownika działu” słyszy tylko kierownik — reszta działu go nie widzi.
+        const kierownik = ((hala.pracownik && hala.pracownik.role) || []).some(r => ['kierownik', 'kierownik_ur', 'kierownik_kj', 'admin'].includes(r));
+        const tylkoKierownik = d.do_kierownika === true && !d.wykonawca && !kierownik;
+        if (z && !tylkoKierownik && (d.wykonawca === ja || (d.dzial === z.dzial && (!d.wykonawca || d.wykonawca === ja)))) zagraj('pilne');
       }
       if (typ === 'bhp_zgloszenie' && o.bhp && obiekt.status === 'otwarte' && d.zglosil !== (hala.pracownik && hala.pracownik.id)
           && bhpPilne(hala.kontrakt, d.rodzaj)) zagraj('pilne');
@@ -107,11 +110,13 @@
     pokaz();
   }
 
-  /* „Sprawdź dźwięki” (Moje konto → Powiadomienia, we wszystkich aplikacjach hali): kolejno info, pilne, awaria — człowiek
-     słyszy cały zestaw i wie, jak brzmi każdy sygnał. */
+  /* „Sprawdź dźwięki” (Moje konto → Powiadomienia, we wszystkich aplikacjach hali): kolejno cały zestaw — człowiek
+     słyszy każdy sygnał i wie, jak brzmi (STYL-GK §6a). */
   function sprawdz() {
     odblokuj();
-    [['info', 150], ['pilne', 1400], ['awaria', 3500]].forEach(([r, ms]) => setTimeout(() => zagraj(r), ms));
+    // 2026-10-19: cały zestaw po kolei (także „reakcja” kierownika, D77) — każdy rodzaj brzmi inaczej, awaria najwyraźniej.
+    [['info', 150], ['sukces', 1150], ['reakcja', 2150], ['blad', 3250], ['pilne', 4250], ['awaria', 6100], ['zatrzymanie', 8800]]
+      .forEach(([r, ms]) => setTimeout(() => zagraj(r), ms));
   }
 
   global.HalaDzwieki = { zagraj, sledz, odblokuj, gotowy, WZORY, bhpPilne, pasek, sprawdz };
@@ -176,6 +181,7 @@
     'narzedzia.odlozone': 'Odłożone do odbioru', 'narzedzia.odebrane': 'Odebrane',
     // Test właściciela 2026-10-13: krok wykonania (D56) pokazywał się w historii jako surowe „postep”.
     'zlecenie.postep': 'Krok wykonania',
+    'zlecenie.przekazane': 'Przekazane', 'zlecenie.rozdzielone': 'Rozdzielone',       // D76
     'bhp.zgloszenie': 'Zgłoszone', 'bhp.zamkniete': 'Zamknięte przez kierownika',
   };
 
@@ -192,6 +198,9 @@
         if (typeof d[pole] === 'string' && d[pole].trim() && !(pole === 'tytul' && z.typ !== 'zgloszenie.utworzone')) teksty.push(etykieta + d[pole].trim());
       }
       if (d.skan) teksty.push(`Zeskanowano QR maszyny ${d.skan}`);
+      // D76: komu kierownik działu przekazał albo rozdzielił zlecenie.
+      if (z.typ === 'zlecenie.przekazane' && d.wykonawca) teksty.unshift(`Dla: ${nazwa(d.wykonawca)}`);
+      if (z.typ === 'zlecenie.rozdzielone' && Array.isArray(d.wykonawcy)) teksty.unshift(`Dla: ${d.wykonawcy.map(nazwa).join(', ')}`);
       let spoznienie = null;
       const czas = Date.parse(z.czas);
       if (z.typ === 'zlecenie.wykonane' && termin && !isNaN(czas) && czas > termin && Hh && Hh.formatCzasu) spoznienie = `spóźnione o ${Hh.formatCzasu(czas - termin)}`;
@@ -272,6 +281,101 @@
           zamknij();
           if (o.gotowe) o.gotowe('Zgłoszone — kierownik dostał powiadomienie');
         } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się wysłać.'); b.disabled = false; }
+      });
+    });
+  }
+
+  // ================================================================ D76: kierownik działu przekazuje i rozdziela
+  // Właściciel 2026-10-19: „Kierownicy innych działów rozdzielają je [zadania od kierownika zakładu] między siebie i swoich
+  // podwładnych.” Te same okna w GK Utrzymanie Ruchu, GK Kontrola Jakości (ekran Zleceń) i w Panelu (kierownik UR/KJ).
+
+  /* Osoby działu zlecenia (aktywne, z rolą działu): kierownicy działu na górze — „między siebie” — potem reszta, alfabetycznie. */
+  function osobyDzialu(hala, kodDzialu) {
+    const dz = ((hala.kontrakt && hala.kontrakt.stale && hala.kontrakt.stale.dzialy) || []).find(x => x && x.kod === kodDzialu) || {};
+    const l = H() && H().lokalny ? H().lokalny(hala.teraz()) : null, dd = n => String(n).padStart(2, '0');
+    const dzien = l ? `${l.rok}-${dd(l.miesiac)}-${dd(l.dzien)}` : null;
+    return (hala.pracownicy || []).filter(p => p && p.aktywny !== false && (p.role || []).some(r => (dz.role || []).includes(r)))
+      .map(p => ({ id: p.id, nazwa: p.nazwa || p.id, kierownik: !!dz.rola_kierownika && (p.role || []).includes(dz.rola_kierownika),
+                   urlop: !!(dzien && H().naUrlopie && H().naUrlopie(hala.slowniki, p.id, dzien)) }))
+      .sort((a, b) => (b.kierownik - a.kierownik) || String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
+  }
+  const cssEsc = v => (global.CSS && global.CSS.escape ? global.CSS.escape(v) : String(v));
+  const dopiskiOsoby = o => [o.kierownik ? 'kierownik' : '', o.urlop ? 'urlop' : ''].filter(Boolean).join(', ');
+
+  function przekaz(hala, id, opcje) {
+    const o = opcje || {};
+    const z = hala.obiekt('zlecenie', id);
+    if (!z) return;
+    const d = z.dane || {};
+    const osoby = osobyDzialu(hala, d.dzial).filter(x => x.id !== d.wykonawca);
+    okno(`<form method="dialog"><h2>Przekaż zlecenie</h2>
+      <p class="hala-okno-opis">${esc(d.tytul || '')}${d.wykonawca ? ` · teraz: ${esc(nazwaOsoby(hala, d.wykonawca))}` : ''}</p>
+      <fieldset><legend>Komu</legend>${osoby.map(x => `<label class="hala-zespol-zaznacz"><input type="radio" name="osoba" value="${esc(x.id)}" required>
+        ${esc(x.nazwa)}${dopiskiOsoby(x) ? ` <span class="slaby">(${esc(dopiskiOsoby(x))})</span>` : ''}</label>`).join('') || '<p class="hala-okno-opis">Nikt inny w dziale nie ma konta.</p>'}</fieldset>
+      <label>Uwagi (opcjonalnie)<textarea name="uwagi" rows="2" maxlength="2000"></textarea></label>
+      <p class="hala-okno-blad" hidden></p>
+      <div class="hala-okno-przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="glowny">Przekaż</button></div></form>`,
+    (dlg, zamknij) => {
+      const f = dlg.querySelector('form');
+      f.addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const b = f.querySelector('[type="submit"]');
+        if (b.disabled) return;
+        const osoba = (f.querySelector('input[name="osoba"]:checked') || {}).value;
+        if (!osoba) { bladOkna(dlg, 'Wybierz osobę.'); return; }
+        b.disabled = true;
+        try {
+          const dane = { wykonawca: osoba };
+          if (f.uwagi.value.trim()) dane.uwagi = f.uwagi.value.trim();
+          await hala.zapisz('zlecenie.przekazane', id, dane);
+          zamknij();
+          if (o.gotowe) o.gotowe(`Przekazane: ${nazwaOsoby(hala, osoba)} dostał(a) powiadomienie`);
+        } catch (e) { bladOkna(dlg, (e && e.message) || 'Nie udało się zapisać.'); b.disabled = false; }
+      });
+    });
+  }
+
+  function rozdziel(hala, id, opcje) {
+    const o = opcje || {};
+    const z = hala.obiekt('zlecenie', id);
+    if (!z) return;
+    const d = z.dane || {};
+    const juz = new Set(((H() && H().postepRozdzialu && H().postepRozdzialu(z, hala.obiekty('zlecenie'))) || { czesci: [] }).czesci.map(c => c.wykonawca));
+    const osoby = osobyDzialu(hala, d.dzial);
+    okno(`<form method="dialog"><h2>Rozdziel zlecenie</h2>
+      <p class="hala-okno-opis">${esc(d.tytul || '')} — każda zaznaczona osoba dostaje swoją część. Całość będzie zrobiona, gdy zrobią wszyscy.</p>
+      <fieldset><legend>Komu</legend>${osoby.map(x => `<label class="hala-zespol-zaznacz"><input type="checkbox" name="osoby" value="${esc(x.id)}" ${juz.has(x.id) ? 'disabled' : ''}>
+        ${esc(x.nazwa)}${dopiskiOsoby(x) || juz.has(x.id) ? ` <span class="slaby">(${esc([dopiskiOsoby(x), juz.has(x.id) ? 'już ma część' : ''].filter(Boolean).join(', '))})</span>` : ''}</label>
+        <input name="czesc-${esc(x.id)}" maxlength="500" placeholder="Jego część (opcjonalnie), np. hala A" aria-label="Część: ${esc(x.nazwa)}" hidden>`).join('')
+        || '<p class="hala-okno-opis">Nikt w dziale nie ma konta.</p>'}</fieldset>
+      <p class="hala-okno-blad" hidden></p>
+      <div class="hala-okno-przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="glowny">Rozdziel</button></div></form>`,
+    (dlg, zamknij) => {
+      const f = dlg.querySelector('form');
+      // Pole „część” pokazuje się przy zaznaczonej osobie — bez tego okno dla 10 osób to 10 pustych pól.
+      f.addEventListener('change', ev => {
+        if (ev.target.name !== 'osoby') return;
+        const pole = f.querySelector(`input[name="czesc-${cssEsc(ev.target.value)}"]`);
+        if (pole) { pole.hidden = !ev.target.checked; if (ev.target.checked) pole.focus(); }
+      });
+      f.addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const b = f.querySelector('[type="submit"]');
+        if (b.disabled) return;
+        const wybrani = [...f.querySelectorAll('input[name="osoby"]:checked')].map(x => x.value);
+        if (!wybrani.length) { bladOkna(dlg, 'Zaznacz osoby.'); return; }
+        if (wybrani.length === 1 && !juz.size) { bladOkna(dlg, 'Jedna osoba — użyj „Przekaż”.'); return; }
+        const czesci = {};
+        for (const os of wybrani) { const p = f.querySelector(`input[name="czesc-${cssEsc(os)}"]`); if (p) czesci[os] = p.value; }
+        b.disabled = true;
+        try {
+          const r = global.HalaZlecenia.daneRozdzialu(z, wybrani, czesci, () => hala.nowyId());
+          // Najpierw części, potem „rozdzielone” — hub sprawdza, że każda część już jest (kolejka wysyła po kolei).
+          for (const c of r.czesci) await hala.zapisz('zlecenie.utworzone', c.id, c.dane);
+          await hala.zapisz('zlecenie.rozdzielone', id, r.rozdzielone);
+          zamknij();
+          if (o.gotowe) o.gotowe(`Rozdzielone na ${r.czesci.length} ${r.czesci.length < 5 ? 'osoby' : 'osób'} — każda dostała powiadomienie`);
+        } catch (e) { bladOkna(dlg, (e && e.message) || 'Nie udało się zapisać.'); b.disabled = false; }
       });
     });
   }
@@ -465,6 +569,6 @@
   }
 
   global.HalaDzialania = { przyciskSkanu, historia, wierszeHistorii, zglos, odlozNarzedzia, odbierzNarzedzia, zglosAwarie, menuMaszyny,
-                           zadaniaMaszyny, skanujMaszyne, dzialOsoby, OPISY_ZDARZEN };
+                           zadaniaMaszyny, skanujMaszyne, dzialOsoby, OPISY_ZDARZEN, przekaz, rozdziel, osobyDzialu };
   if (typeof module !== 'undefined' && module.exports) module.exports = { HalaDzwieki: global.HalaDzwieki, HalaDzialania: global.HalaDzialania };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -257,6 +257,8 @@
       <summary>Więcej opcji</summary>
       <div class="wiecej-opcji-tresc">
         <label>Szczegóły<textarea name="opis" rows="3" maxlength="4000"></textarea></label>
+        <!-- D76: jedno zadanie kilku działom naraz — każdy dział dostaje swoje (jak „kilka działów” w zapisanych, D71). -->
+        <fieldset id="zlecenie-tez" hidden><legend>Też dla działów (każdy dostaje swoje)</legend><div class="zaznaczenia" data-tez></div></fieldset>
         <div class="dwie">
           <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
           <label hidden>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
@@ -579,6 +581,7 @@
 <!-- Skaner QR (przegląd 2026-10-14): zadanie kierownika z „▣ Wymagaj skanu QR maszyny” — bez skanera nie dało się go zamknąć. -->
 <script src="../wspolne/skaner.js"></script>
 <script src="../wspolne/gk-dzwieki.js"></script>
+<script src="../wspolne/reakcje.js"></script>
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="widok.js"></script>

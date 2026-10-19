@@ -124,9 +124,11 @@
     $('t-okno-checklisty').textContent = edytowanyKod ? `Checklista: ${w.nazwa}` : kopia ? 'Nowa checklista (kopia)' : 'Nowa checklista';
     f.querySelector('.blad').hidden = true;
     f.nazwa.value = w.nazwa;
-    f.dzial.innerHTML = P.opcje(((hala.kontrakt.stale || {}).dzialy || []).filter(d => d.kod !== 'kierownik').map(d => [d.kod, d.nazwa]));
-    f.dzial.value = w.dzial;
-    linieDzialu(w.dzial);
+    // D76: kierownik UR/KJ — tylko swój dział (zapis słownika i tak przechodzi przez hub: dzialy_kierownika).
+    const dzialy = P.dzialyZlecajacego().filter(d => d.kod !== 'kierownik');
+    f.dzial.innerHTML = P.opcje(dzialy.map(d => [d.kod, d.nazwa]));
+    f.dzial.value = dzialy.some(d => d.kod === w.dzial) ? w.dzial : ((dzialy[0] || {}).kod || '');
+    linieDzialu(f.dzial.value);
     P.pokazPolaLinii(f);
     f.linia.value = w.linia || '';
     f.wykonawca.innerHTML = P.opcje(P.osobyDzialu(f.dzial.value), '— cały dział —');

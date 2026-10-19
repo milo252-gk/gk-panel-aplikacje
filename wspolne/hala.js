@@ -30,12 +30,14 @@
      kpiAwarii           <-> kpi_awarii   (etap 3: jedne liczby awarii; MTBF klasyczne — D44)
      wskaznikiOkresu     <-> wskazniki_okresu (D47: Panel → Wskaźniki, „Zakres” liczy hub)
      alertAktywny        <-> alert_aktywny
-     moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)                  */
+     moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)
+     dzialyKierownika    <-> dzialy_kierownika (D76: zakres kierownika działu)
+     postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia) */
 
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.26.0';
+  const WERSJA_KLIENTA = '0.27.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -587,6 +589,62 @@
     const osoba = (pracownicy || []).find(p => p && p.id === zlecil);
     const zZakladu = role => (role || []).some(r => ROLE_ZAKLADU.includes(r));
     return !zZakladu(osoba && osoba.role) || zZakladu(pracownik && pracownik.role);
+  }
+
+  /* D76 (właściciel 2026-10-19): „Kierownik zakładu wyznacza zadania (…) kierownikom innych działów. Kierownicy innych
+     działów rozdzielają je między siebie i swoich podwładnych.” Kierownik działu = stale.dzialy[].rola_kierownika.
+     dzialyKierownika — działy, którym osoba zleca i w których przekazuje / rozdziela: null = wszystkie (kierownik zakładu,
+     admin), kierownik UR → ['ur']… Bliźniak: dzialy_kierownika w hala.py (hub odrzuca resztę, 403). */
+  function dzialyKierownika(role, dzialyKontraktu) {
+    const r = [].concat(role || []);
+    if (r.some(x => ROLE_ZAKLADU.includes(x))) return null;
+    return (dzialyKontraktu || []).filter(d => d && d.rola_kierownika && r.includes(d.rola_kierownika)).map(d => d.kod);
+  }
+
+  /* Id części rozdzielonego zlecenia (lista `rozdzial` — każde „Rozdziel” dopisuje osoby), bez powtórzeń. */
+  function czesciRozdzialu(d) {
+    const ids = [];
+    for (const w of ((d && d.rozdzial) || [])) for (const x of ((w && w.podrzedne) || [])) if (typeof x === 'string' && !ids.includes(x)) ids.push(x);
+    return ids;
+  }
+
+  /* Postęp rozdzielonego zlecenia: { wszystkie, zrobione, gotowe, czesci: [{id, wykonawca, status}] } albo null (nie było
+     rozdzielone). zlecenia — lista obiektów (albo mapa id → obiekt). Anulowana część się nie liczy, brakująca — jako
+     niezrobiona. Bliźniak: postep_rozdzialu w hala.py (wektory „rozdzial”); gotowe → hub sam zgłasza wykonanie. */
+  const ZROBIONE_CZESCI = ['wykonane', 'zamkniete'];
+  function postepRozdzialu(rodzic, zlecenia) {
+    const ids = czesciRozdzialu((rodzic && rodzic.dane) || {});
+    if (!ids.length) return null;
+    const mapa = Array.isArray(zlecenia) ? new Map(zlecenia.filter(Boolean).map(z => [z.id, z])) : new Map(Object.entries(zlecenia || {}));
+    const czesci = [];
+    for (const id of ids) {
+      const z = mapa.get(id) || {};
+      if (z.status === 'anulowane') continue;
+      const w = (z.dane || {}).wykonawca;
+      czesci.push({ id, wykonawca: w === undefined ? null : w, status: z.status === undefined ? null : z.status });
+    }
+    const zrobione = czesci.filter(c => ZROBIONE_CZESCI.includes(c.status)).length;
+    return { wszystkie: czesci.length, zrobione, gotowe: czesci.length > 0 && zrobione === czesci.length, czesci };
+  }
+
+  /* Czy ta osoba może przy tym zleceniu dać „Przekaż” / „Rozdziel” (ekran — hub i tak sprawdza): kierownik działu
+     zlecenia (albo kierownik zakładu, admin), zlecenie do zrobienia albo już rozdzielone; części zlecenia i checklisty
+     nie rozdziela się dalej (przekazać — można). { przekaz, rozdziel } */
+  function mozeRozdzielic(zlecenie, pracownik, dzialyKontraktu) {
+    const z = zlecenie || {}, d = z.dane || {};
+    const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
+    const moj = !!pracownik && (zakres === null ? (dzialyKontraktu || []).some(x => x && x.kod === d.dzial && x.rola_kierownika) : zakres.includes(d.dzial));
+    const otwarte = ['nowe', 'przyjete'].includes(z.status);
+    const dzieli = !d.nadrzedne && !(Array.isArray(d.pozycje) && d.pozycje.length);
+    return { przekaz: moj && otwarte, rozdziel: moj && dzieli && (otwarte || z.status === 'rozdzielone') };
+  }
+
+  /* Nowe zlecenie: czy idzie „do kierownika działu” (pole do_kierownika). Tylko kierownik zakładu (i admin), dział
+     z kierownikiem (UR, KJ), bez wybranej osoby. Kierownik UR dla swojego działu zleca wprost — jest tym kierownikiem. */
+  function doKierownika(dane, rolaAutora, dzialyKontraktu) {
+    const d = dane || {};
+    if (d.wykonawca || dzialyKierownika(rolaAutora, dzialyKontraktu) !== null) return false;
+    return (dzialyKontraktu || []).some(x => x && x.kod === d.dzial && x.rola_kierownika);
   }
 
   /* D55: awarię anuluje tylko UR (mechanik, kierownik UR), administrator albo osoba, która ją zgłosiła (pomyłka).
@@ -1888,6 +1946,7 @@
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
+    dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

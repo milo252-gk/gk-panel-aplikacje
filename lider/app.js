@@ -450,7 +450,8 @@
       aplikacja: 'lider', komunikat: Lider.komunikat, wyloguj, odrzucone: pokazOdrzucone,
       dodatki: el => {
         const ost = hala.polaczenie.ostatniaSynchronizacja;
-        // D49: mistrz (i kierownik zakładu) prowadzi tu konta swoich liderów — Panelu mistrz nie otwiera (wspolne/zespol.js).
+        // D49: kierownik zakładu prowadzi tu konta swoich ludzi (wspolne/zespol.js). D76: mistrz nie jest przełożonym lidera —
+        // nie ma zespołu (stale.zespoly), więc „Mój zespół” go nie dotyczy (HalaZespol.rolaZespolu).
         const zespol = HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale);
         // Jedna linia (D51): bez „Zmień linię” i bez „przypisz linie” — nie ma czego zmieniać ani przypisywać.
         const wiele = W.wieleLinii(hala.slowniki);

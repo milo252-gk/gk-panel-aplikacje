@@ -270,8 +270,27 @@
 
   // ------------------------------------------------------------ zlecenia od kierownika (2026-09-28)
 
-  const OTWARTE = new Set(['nowe', 'przyjete']);
+  // D76: „rozdzielone” — kierownik działu dał części kilku osobom; dla kierownika zakładu to dalej robota w toku.
+  const OTWARTE = new Set(['nowe', 'przyjete', 'rozdzielone']);
   const DO_ZAMKNIECIA = new Set(['wykonane', 'odrzucone']);
+
+  /* D76: część rozdzielonego zlecenia stoi pod całością (osoby i znaki stanu na karcie całości), a nie jako osobny wiersz —
+     inaczej jedno zadanie kierownika zakładu liczyłoby się na chipach i kafelkach kilka razy. Wyjątek: część, przy której
+     ktoś powiedział „Nie mogę” — czeka na decyzję kierownika działu (Zamknij / Zwróć). Całości nie ma na liście (starsza
+     niż dwie doby w pamięci) — część jest zwykłym wierszem. */
+  function bezCzesci(lista) {
+    const l = (lista || []).filter(Boolean);
+    const ids = new Set(l.map(z => z.id));
+    return l.filter(z => !((z.dane || {}).nadrzedne && ids.has(z.dane.nadrzedne) && z.status !== 'odrzucone'));
+  }
+  const ZNAK_CZESCI = { wykonane: '✓', zamkniete: '✓', odrzucone: '✗', przepadlo: '✗', przyjete: '▶' };
+  /* Postęp rozdziału na karcie Panelu: „2/3 zrobione” i osoby ze znakiem (Hala.postepRozdzialu — bliźniak huba). */
+  function rozdzialZlecenia(z, lista, pracownicy) {
+    const p = H().postepRozdzialu ? H().postepRozdzialu(z, lista) : null;
+    if (!p) return null;
+    return { wszystkie: p.wszystkie, zrobione: p.zrobione, gotowe: p.gotowe, tekst: `${p.zrobione}/${p.wszystkie} zrobione`,
+             osoby: p.czesci.map(c => ({ kto: nazwaPracownika(pracownicy, c.wykonawca) || '—', znak: ZNAK_CZESCI[c.status] || '○', status: c.status })) };
+  }
 
   const poTerminie = (z, teraz) => {
     const t = Date.parse((z.dane || {}).termin);
@@ -294,7 +313,10 @@
       : filtr === 'do-zamkniecia' ? DO_ZAMKNIECIA.has(z.status)
       : filtr === 'zamkniete' ? !z.aktywny : true;
     const zZakladu = ((ja && ja.role) || []).some(r => r === 'kierownik' || r === 'admin');
-    return (lista || []).filter(z => z && pasuje(z)).map(z => {
+    const wszystkie = (lista || []).filter(Boolean);
+    const zakresKier = H().dzialyKierownika ? H().dzialyKierownika(ja && ja.role, (stale && stale.dzialy) || []) : null;
+    const kierDzialu = !!zakresKier && zakresKier.length > 0;
+    return bezCzesci(wszystkie).filter(z => pasuje(z)).map(z => {
       const d = z.dane || {};
       const termin = d.termin ? Date.parse(d.termin) : NaN;
       const kto = d.wykonal || d.odrzucil || d.przyjal || d.wykonawca || null;
@@ -353,6 +375,14 @@
         terminPlanu: zaplanowane ? opisTerminuPlanu(d) : null,
         moznaZmienic: zaplanowane && zZakladu,
         czas: d.czas_zlecenia || d.czas_zaplanowania || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
+        // D76: do kierownika działu, rozdział (komu i ile zrobione), „Przekaż” / „Rozdziel” dla kierownika działu,
+        // kto zlecił (filtr „Mój dział i moje” kierownika UR/KJ).
+        doKierownika: d.do_kierownika === true && !d.wykonawca && (z.status === 'nowe' || z.status === 'przyjete'),
+        rozdzielone: z.status === 'rozdzielone',
+        rozdzial: rozdzialZlecenia(z, wszystkie, pracownicy), czesc: !!d.nadrzedne, zlecilId: d.zlecil || null,
+        // Przyciski w Panelu tylko u kierownika działu (UR, KJ) — kierownik zakładu wybiera osobę już przy zleceniu,
+        // a dwa przyciski więcej przy każdym zleceniu UR/KJ tylko by mu przeszkadzały (hub i tak by mu pozwolił).
+        dzialania: kierDzialu ? H().mozeRozdzielic(z, ja, (stale && stale.dzialy) || []) : { przekaz: false, rozdziel: false },
       };
     }).sort((a, b) => (a.zaplanowane - b.zaplanowane)
       || (a.zaplanowane && b.zaplanowane ? (a.zaplanowaneMs || 0) - (b.zaplanowaneMs || 0) : 0)
@@ -365,7 +395,7 @@
      własne czerwone chipy, zostaje sygnałem na chipie swojej listy — „W toku · 5 · ⏰ 2” (po terminie) i „Zamknięte ·
      przepadło 1” (D35, dwie ostatnie doby) na czerwono (alarm), żeby egzekwowanie nie zniknęło razem z filtrami. */
   function chipyZlecen(lista, teraz, inne) {
-    const l = (lista || []).filter(Boolean);
+    const l = bezCzesci(lista);
     const wToku = l.filter(z => OTWARTE.has(z.status) || z.status === 'zaplanowane').length;
     const po = l.filter(z => poTerminie(z, teraz)).length;
     // D60: „Do przyjęcia” = wszystko, co czeka na kierownika — także zgłoszenia, narzędzia i BHP (inne.czeka);
@@ -460,7 +490,8 @@
   }
 
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
-  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: lista, teraz, bezRaportu, slowniki, bhp }) {
+  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: wszystkieZlecenia, teraz, bezRaportu, slowniki, bhp }) {
+    const lista = bezCzesci(wszystkieZlecenia);           // D76: rozdzielone zlecenie to jedno zadanie, nie N
     // „Stoi linii” liczy LINIE (etap 3): dwie zatrzymane maszyny na jednej linii to jedna stojąca linia.
     // D51: zakład z jedną linią (slowniki podane, linia jedna) — liczą się MASZYNY, a kafelek mówi „Maszyna stoi”.
     const naMaszyny = slowniki !== undefined && !wieleLinii(slowniki);
@@ -1784,9 +1815,52 @@
 
   /* Filtry list zleceń („Dodaj filtry do wykonanych zleceń”): dział, osoba (zlecona, przyjęła, zrobiła albo odmówiła)
      i „tylko spóźnione” (po terminie, wykonane po terminie, przepadłe). Puste pole = bez filtra. */
-  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione, rodzaj } = {}) {
-    return (wiersze || []).filter(z => (!dzial || z.dzial === dzial) && (!osoba || (z.osoby || []).includes(osoba))
+  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione, rodzaj, mojeDzialy, ja } = {}) {
+    // D76: dzial === MOJE_DZIALY — kierownik UR/KJ: zlecenia jego działu(ów) i to, co sam zlecił albo robi (domyślny filtr,
+    // nie blokada — „wszystkie” pokazuje resztę zakładu jak dotąd).
+    const moje = z => (mojeDzialy || []).includes(z.dzial) || (!!ja && (z.zlecilId === ja || (z.osoby || []).includes(ja)));
+    return (wiersze || []).filter(z => (!dzial || (dzial === MOJE_DZIALY ? moje(z) : z.dzial === dzial)) && (!osoba || (z.osoby || []).includes(osoba))
       && (!spoznione || z.spoznione) && (!rodzaj || z.rodzaj === rodzaj));
+  }
+  const MOJE_DZIALY = 'moje';
+
+  /* D76: działy, którym ta osoba zleca (okno „Nowe zlecenie”, zapisane): kierownik zakładu i admin — wszystkie, kierownik
+     UR/KJ — tylko swój (hub i tak odrzuca resztę, 403). [{kod, nazwa, …}] w kolejności kontraktu. */
+  function dzialyDoZlecania(stale, role) {
+    const dz = (stale && stale.dzialy) || [];
+    const zakres = H().dzialyKierownika(role, dz);
+    return zakres === null ? dz.slice() : dz.filter(d => zakres.includes(d.kod));
+  }
+
+  /* D76: „Nowe zlecenie” → dane zleceń do zapisu (po jednym na adresata). Pierwszy dział: każda zaznaczona osoba osobno
+     (D55); bez osób — jedno zlecenie, a od kierownika zakładu dla działu z kierownikiem (UR, KJ) — „do kierownika działu”
+     (do_kierownika: on je przekaże albo rozdzieli). „Też dla” — każdy kolejny dział dostaje swoje, bez osób (osoby wybiera
+     się w jednym dziale). Działy spoza zakresu kierownika UR/KJ pomijamy (hub i tak odrzuca, 403). */
+  function zleceniaDzialow(dane, { dzialy, osoby, role, stale }) {
+    const dozwolone = new Set(dzialyDoZlecania(stale, role).map(d => d.kod));
+    const lista = [...new Set([].concat(dzialy || []).filter(d => dozwolone.has(d)))];
+    const wynik = [];
+    lista.forEach((dzial, i) => {
+      for (const osoba of (i === 0 && (osoby || []).length ? osoby : [null])) {
+        const d = Object.assign({}, dane, { dzial });
+        delete d.wykonawca;
+        delete d.do_kierownika;
+        if (osoba) d.wykonawca = osoba;
+        else if (H().doKierownika(d, role, (stale && stale.dzialy) || [])) d.do_kierownika = true;
+        wynik.push(d);
+      }
+    });
+    return wynik;
+  }
+
+  /* D76: co znaczy „nikt nie zaznaczony” w „Dla kogo” — przy zleceniu kierownika zakładu dla UR/KJ: kierownik działu
+     rozdzieli; inaczej cały dział jak dotąd. */
+  function opisDlaKogo(dzial, stale, role) {
+    const d = ((stale && stale.dzialy) || []).find(x => x.kod === dzial) || {};
+    const kierownik = H().doKierownika({ dzial }, role, (stale && stale.dzialy) || [])
+      ? (((stale && stale.role) || {})[d.rola_kierownika] || 'kierownik działu') : null;
+    return kierownik ? `Dla kogo (nic = ${kierownik} rozdzieli; każda osoba dostaje osobne zlecenie)`
+      : 'Dla kogo (nic = cały dział; każda osoba dostaje osobne zlecenie)';
   }
 
   /* D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):
@@ -2126,7 +2200,8 @@
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
-                       brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI };
+                       brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
+                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

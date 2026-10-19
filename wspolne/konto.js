@@ -537,7 +537,8 @@
     const o = Object.assign({ opis: '', lokalne: false, komunikat: null }, opcje || {});
     const powiedz = (t, r) => { if (o.komunikat) o.komunikat(t, r); };
     // „Sprawdź dźwięki” (2026-10-16, jeden zestaw dźwięków GK): w tym samym miejscu w każdej aplikacji — Moje konto →
-    // Powiadomienia. Gra kolejno info, pilne i awarię (HalaDzwieki.sprawdz), więc człowiek wie, jak brzmi każdy sygnał.
+    // Powiadomienia. Gra kolejno cały zestaw — od 2026-10-19 także „reakcja” kierownika (HalaDzwieki.sprawdz), więc człowiek
+    // wie, jak brzmi każdy sygnał.
     const dzwieki = o.dzwieki !== false && !!(global.HalaDzwieki && global.HalaDzwieki.sprawdz);
     el.innerHTML = `<fieldset class="hala-konto-push"><legend>Powiadomienia</legend>
         ${o.opis ? `<p class="hala-konto-drobne">${esc(o.opis)}</p>` : ''}<div data-push-stan></div>

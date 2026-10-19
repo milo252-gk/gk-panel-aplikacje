@@ -47,6 +47,9 @@
   /* D55: zlecenie dla konkretnej osoby widzi ona i kierownicy (widziWszystkie); reszta działu — tylko gdy ta osoba
      ma dziś urlop (jej zadania przechodzą wtedy na cały dział). Bez `ja` (testy, Panel) — widać wszystko. */
   function widoczneDla(d, o) {
+    // D76: zlecenie kierownika zakładu dla działu „do kierownika działu” — dopóki go nie przekaże albo nie rozdzieli,
+    // widzą je tylko kierownicy (mechanik czy kontroler dostanie swoją część, a nie całość do wyrywania sobie).
+    if (d.do_kierownika === true && !d.wykonawca) return !o.ja || !!o.widziWszystkie;
     if (!d.wykonawca || !o.ja || d.wykonawca === o.ja || o.widziWszystkie) return true;
     return !!(o.dzien && o.H && o.H.naUrlopie && o.H.naUrlopie(o.slowniki, d.wykonawca, o.dzien));
   }
@@ -66,15 +69,21 @@
      linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich.
      D47: zlecenie ZAPLANOWANE przez kierownika zakładu na później (status „zaplanowane”) dział widzi dopiero, gdy hub je
      zleci (zlecenie.aktywowane → „nowe”) — wcześniej nie ma go ani na liście, ani na plakietce, ani w zaległych. */
-  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien, tylko }) {
+  function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien, tylko,
+                            pracownik, dzialyKontraktu }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms)) return null; const l = H.lokalny(ms);
       return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
+    // D76: część rozdzielonego zlecenia, którego całość jest na liście, stoi pod całością (postęp z osobami) — kierownik
+    // działu nie dostaje drugi raz tych samych zadań jako osobnych kart. Własna część zawsze jest osobną kartą.
+    const poId = new Map((lista || []).filter(Boolean).map(z => [z.id, z]));
+    const podCaloscia = d => !!d.nadrzedne && poId.has(d.nadrzedne) && (!ja || d.wykonawca !== ja)
+      && widoczneDla((poId.get(d.nadrzedne).dane || {}), { ja, widziWszystkie, slowniki, dzien, H });
     return (lista || [])
       .filter(z => z && z.status !== 'zaplanowane' && (z.aktywny || z.status === 'przepadlo')
         && (!przepadlo(z, teraz) || z.id === zostaw || poCzasieDoZrobienia(z, teraz)))
       .filter(z => (z.dane || {}).dzial === dzial && naLinii(z.dane || {}, { linia, linie })
-        && widoczneDla(z.dane || {}, { ja, widziWszystkie, slowniki, dzien, H }))
+        && widoczneDla(z.dane || {}, { ja, widziWszystkie, slowniki, dzien, H }) && (z.id === tylko || !podCaloscia(z.dane || {})))
       .filter(z => !moje || (z.dane || {}).wykonawca === moje || (z.dane || {}).przyjal === moje)
       .filter(z => !tylko || z.id === tylko)          // D60: Panel „▶ Wykonaj” — ekran wykonania jednego zlecenia
       .map(z => {
@@ -106,12 +115,46 @@
           pozycje: pozycjeWiersza(d, teraz, H), postepPozycji: H && H.postepPozycji ? H.postepPozycji(d) : null,
           uwagiZwrotu: d.uwagi_zwrotu || null, czas: d.czas_zlecenia || '',
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
+          // D76: „do kierownika działu”, rozdział (postęp z osobami), część całości, „Przekaż” / „Rozdziel” dla kierownika działu.
+          doKierownika: d.do_kierownika === true && !d.wykonawca && DO_ZROBIENIA.has(z.status), rozdzielone: z.status === 'rozdzielone',
+          rozdzial: rozdzialWiersza(z, lista, nazwa, H), czesc: !!d.nadrzedne, uwagiPrzekazania: d.uwagi_przekazania || null,
+          dzialania: H && H.mozeRozdzielic ? H.mozeRozdzielic(z, pracownik, dzialyKontraktu) : { przekaz: false, rozdziel: false },
         };
       })
       .sort((a, b) => (b.doZrobienia - a.doZrobienia) || (b.zalegle - a.zalegle)
         || (a.zalegle && b.zalegle ? a.zalegleOd - b.zalegleOd : 0) || (b.pilne - a.pilne)
         || ((a.terminMs === null) - (b.terminMs === null)) || ((a.terminMs || 0) - (b.terminMs || 0))
         || String(a.czas).localeCompare(String(b.czas)));
+  }
+
+  /* D76: postęp rozdzielonego zlecenia do karty — „2/3 zrobione” i osoby ze znakiem stanu ich części (Hala.postepRozdzialu,
+     bliźniak huba: gotowe = hub sam zgłasza wykonanie całości). null — zlecenie nie było rozdzielone. Panel ma swoją kopię
+     w widok.js (te same znaki). */
+  const ZNAK_CZESCI = { wykonane: '✓', zamkniete: '✓', odrzucone: '✗', przepadlo: '✗', przyjete: '▶' };
+  function rozdzialWiersza(z, lista, nazwa, H) {
+    const p = H && H.postepRozdzialu ? H.postepRozdzialu(z, lista) : null;
+    if (!p) return null;
+    return { wszystkie: p.wszystkie, zrobione: p.zrobione, gotowe: p.gotowe, tekst: `${p.zrobione}/${p.wszystkie} zrobione`,
+             osoby: p.czesci.map(c => ({ id: c.id, kto: nazwa(c.wykonawca) || '—', status: c.status, znak: ZNAK_CZESCI[c.status] || '○' })) };
+  }
+
+  /* D76: „Rozdziel” — z całości (rodzic) dla każdej wybranej osoby zlecenie podrzędne (te same pola, osoba, nadrzedne;
+     opcjonalnie dopisana jej część w opisie) i zdarzenie zlecenie.rozdzielone. Czysta funkcja (testy: reduktor-testy.js);
+     zapis: najpierw części, potem rozdzielone — hub sprawdza, że części już są. nowyId() — hala.nowyId. */
+  const POLA_CZESCI = ['tytul', 'opis', 'dzial', 'priorytet', 'linia', 'maszyna', 'maszyny', 'termin', 'wazne_do', 'zmiana', 'zdjecia',
+                       'wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu', 'czynnosc', 'stale', 'zgloszenie'];
+  function daneRozdzialu(rodzic, osoby, czesciTekst, nowyId, uwagi) {
+    const d = (rodzic && rodzic.dane) || {};
+    const czesci = [].concat(osoby || []).filter(Boolean).map(osoba => {
+      const dane = {};
+      for (const p of POLA_CZESCI) if (d[p] !== undefined && d[p] !== null && d[p] !== '') dane[p] = Array.isArray(d[p]) ? d[p].slice() : d[p];
+      const dopisek = String(((czesciTekst || {})[osoba]) || '').trim();
+      if (dopisek) dane.opis = `${dane.opis ? `${dane.opis}\n` : ''}Twoja część: ${dopisek}`.slice(0, 4000);
+      return { id: nowyId(), dane: Object.assign(dane, { wykonawca: osoba, nadrzedne: rodzic.id }) };
+    });
+    const rozdzielone = { podrzedne: czesci.map(c => c.id), wykonawcy: czesci.map(c => c.dane.wykonawca) };
+    if (String(uwagi || '').trim()) rozdzielone.uwagi = String(uwagi).trim().slice(0, 2000);
+    return { czesci, rozdzielone };
   }
 
   /* D67: pozycje checklisty do karty — stan (wykonana / pominięta / po terminie / czeka), godzina, wymagania, wpis
@@ -197,7 +240,8 @@
   const kontekst = (hala, opcje) => Object.assign({ H: global.Hala, teraz: hala.teraz(), pracownicy: hala.pracownicy,
                                                     poczatekZmiany: poczatekZmiany(hala, global.Hala),
                                                     ja: hala.pracownik && hala.pracownik.id, slowniki: hala.slowniki,
-                                                    dzien: dzisiaj(global.Hala, hala.teraz()),
+                                                    dzien: dzisiaj(global.Hala, hala.teraz()), pracownik: hala.pracownik,
+                                                    dzialyKontraktu: (((hala.kontrakt || {}).stale) || {}).dzialy || [],
                                                     widziWszystkie: ((hala.pracownik && hala.pracownik.role) || []).some(r => ROLE_WIDZA_WSZYSTKO.includes(r)) }, opcje);
 
   /* Wiersze ekranu dla aplikacji (menu po skanie QR maszyny — HalaDzialania.menuMaszyny). */
@@ -322,14 +366,19 @@
           ${/* D56: wymagania (📷 📝 ▣) stoją niżej jako lista odhaczana na żywo — bez drugiego rzędu znaczków. */ ''}
           ${z.maszyny.length && !(z.doZrobienia && z.wymagajSkanu) ? `<span>${z.maszyny.map(m => `${esc((maszyny[m] || {}).nazwa || m)} (${esc(m)})`).join(', ')}</span>` : ''}
           ${z.dlaKogo ? `<span>dla: ${esc(z.dlaKogo)}</span>` : ''}
+          ${z.doKierownika ? '<span class="znacznik uwaga">Do rozdzielenia</span>' : ''}
         </div>
         ${z.opis ? `<p class="hala-zlecenie-opis">${esc(z.opis)}</p>` : ''}
         ${z.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjecia)}</div>` : ''}
         ${z.uwagiZwrotu && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Kierownik: ${esc(z.uwagiZwrotu)}</p>` : ''}
+        ${z.uwagiPrzekazania && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Od kierownika: ${esc(z.uwagiPrzekazania)}</p>` : ''}
+        ${z.rozdzial ? `<p class="hala-zlecenie-skan" aria-label="Postęp części"><b>${esc(z.rozdzial.tekst)}</b> ${z.rozdzial.osoby.map(o =>
+          `<span class="hala-krok-wymogu ${o.znak === '✓' ? 'ok' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(' ')}</p>` : ''}
         ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">⏰ ${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
         ${z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
+          ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
           <button type="button" data-akcja="nie-moge">Nie mogę</button></div>`)
         : z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-postep-akcje">
@@ -343,14 +392,20 @@
           <div class="hala-zlecenie-akcje"><button type="button" data-akcja="postep-notatka-anuluj">Anuluj</button>
             <button type="button" class="glowny" data-akcja="postep-notatka-zapisz">Zapisz notatkę</button></div></div>` : ''}
         <div class="hala-zlecenie-akcje">
+          ${/* D76: kierownik działu — „Przekaż” (jedna osoba) i „Rozdziel” (kilka); przy zleceniu „do rozdzielenia” to jego
+               następny krok, więc wyróżniony zamiast „Biorę”. */
+            z.dzialania.przekaz ? `<button type="button" ${z.doKierownika ? 'class="glowny" ' : ''}data-akcja="przekaz">Przekaż</button>` : ''}
+          ${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}
           ${/* UI etap 4: wyróżniony jest NASTĘPNY krok — przy nowym zleceniu „Biorę”, potem „Zrobione”. */
-            z.status === 'nowe' && !z.poCzasie ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
+            z.status === 'nowe' && !z.poCzasie ? `<button type="button" ${z.doKierownika && z.dzialania.przekaz ? '' : 'class="glowny" '}data-akcja="przyjmij">Biorę</button>` : ''}
           <button type="button" ${z.status === 'nowe' && !z.poCzasie ? '' : 'class="zielony" '}data-akcja="wykonane">Zrobione</button>
           <button type="button" data-akcja="nie-moge">Nie mogę</button>
-        </div>`) : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
+        </div>`) : z.rozdzielone ? `<div class="hala-zlecenie-akcje">${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}</div>`
+        : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
       </article>`;
     // Zaległe osobno i z numerami 1, 2, 3… — kolejność roboty, a nie tylko kolor (jak „Zaległe dostawy” w GK Trasy).
     const zal = lista.filter(z => z.zalegle), doZ = lista.filter(z => z.doZrobienia && !z.zalegle), wys = lista.filter(z => z.wyslane);
+    const roz = lista.filter(z => z.rozdzielone);              // D76: całość rozdzielona — postęp części, „Rozdziel” dokłada osoby
     const pusto = s.moje ? 'Nie masz przypisanych zleceń' : 'Nie ma zleceń do zrobienia';
     // Kursor w polu tekstowym — przerysowanie nie może go zabrać (tekst i tak jest w stanie).
     const wPolu = document.activeElement && el.contains(document.activeElement) && document.activeElement.matches('[data-pole], [data-postep-pole], [data-pozycja-pole]');
@@ -373,6 +428,7 @@
       ${zal.length ? `<h3 class="hala-zlecenia-zalegle">Zaległe — zrób najpierw <span class="hala-zlecenia-ile">${zal.length}</span></h3>
         ${zal.map((z, i) => wiersz(z, i + 1)).join('')}${doZ.length ? '<h3>Pozostałe do zrobienia</h3>' : ''}` : ''}
       ${doZ.map(z => wiersz(z)).join('') || (zal.length ? '' : `<p class="hala-zlecenia-pusto">${pusto}</p>`)}
+      ${roz.length ? `<h3>Rozdzielone</h3>${roz.map(z => wiersz(z)).join('')}` : ''}
       ${wys.length ? `<h3>Czeka na kierownika</h3>${wys.map(z => wiersz(z)).join('')}` : ''}
       ${moje.length && !opcje.tylko ? `<h3>Moje zgłoszenia i narzędzia</h3>${moje.map(g => `<div class="hala-zgloszenie ${esc(g.klasa)}" data-typ="${esc(g.typ)}" data-id="${esc(g.id)}">
           <button type="button" class="hala-zlecenie-tytul" data-historia>${esc(g.tytul)}</button>
@@ -450,12 +506,16 @@
     try {
       if (b.dataset.akcja === 'historia' && DZ) return DZ.historia(hala, 'zlecenie', id);
       if (b.dataset.akcja.startsWith('pozycja')) return akcjaPozycji(b, el, hala, o, id);
+      // D76: okna „Przekaż” i „Rozdziel” są wspólne z Panelem (dzialania.js).
+      if (b.dataset.akcja === 'przekaz' && DZ) return DZ.przekaz(hala, id, { gotowe: info });
+      if (b.dataset.akcja === 'rozdziel' && DZ) return DZ.rozdziel(hala, id, { gotowe: info });
       if (b.dataset.akcja === 'przyjmij') await hala.zapisz('zlecenie.przyjete', id, {});
       if (b.dataset.akcja === 'wykonane') {
         // D56: wszystko już zrobione krok po kroku — „Zrobione” wysyła od razu, bez formularza robionego „na raz”.
         const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, o, { moje: null, zostaw: id })))[0];
         if (z && (z.wymagajZdjecia || z.wymagajNotatki || z.wymagajSkanu) && !brakuje(wymaganiaZ(z, hala), { rodzaj: 'wykonane' }).length) {
           await hala.zapisz('zlecenie.wykonane', id, {});
+          reakcja(hala, id);
           s.info = 'Wysłane do kierownika — wymagania były już spełnione';
           return rysuj(el, hala, o);
         }
@@ -523,6 +583,7 @@
           for (const m of skany.slice(0, -1)) await dopiszPostep(hala, id, { skan: m });
           if (skany.length) dane.skan = skany[skany.length - 1];
           await hala.zapisz('zlecenie.wykonane', id, dane);
+          reakcja(hala, id);
         }
         zwolnij(f);
         s.formularz = null;
@@ -664,7 +725,13 @@
     if (!z || !H || !H.postepPozycji || !(DO_ZROBIENIA.has(z.status) || z.status === 'przepadlo')) return false;
     if (!H.postepPozycji(z.dane || {}).pelne) return false;
     await hala.zapisz('zlecenie.wykonane', id, {});
+    reakcja(hala, id);
     return true;
+  }
+
+  /* D77: reakcja kierownika po „Zrobione” tej osoby — 👍 „Dobra robota!” albo 🙄 „No, w końcu!” (reakcje.js). */
+  function reakcja(hala, id) {
+    try { if (global.HalaReakcje) global.HalaReakcje.poZrobieniu(hala, id); } catch (e) { /* reakcja nie może zepsuć zapisu */ }
   }
 
   /* Karta zlecenia z otwartą pozycją — GK Lider otwiera tak pozycję z wymaganym zdjęciem albo notatką z ekranu Zmiana. */
@@ -787,21 +854,31 @@
     // D55: dwa dźwięki (awaria i pilne zadanie) w każdej aplikacji działu. UR gra awarie sam (pasek dźwięku, paczki
     // powiadomień) — przekazuje { awarie: false }.
     if (global.HalaDzwieki) global.HalaDzwieki.sledz(hala, Object.assign({ awarie: true, zlecenia: opcje }, dzwieki));
-    const znane = new Map();                           // id → czas_zwrotu, który już widzieliśmy (null — bez zwrotu)
-    const zwrot = z => ((z && z.dane) || {}).czas_zwrotu || null;
+    // D77: reakcje kierownika (zwrot, niewykonane) — każda aplikacja działu śledzi zlecenia tędy, więc i reakcje.
+    if (global.HalaReakcje) global.HalaReakcje.sledz(hala);
+    // id → { zwrot: czas_zwrotu, przekazanie: czas_przekazania }, które już widzieliśmy. D76: przekazanie przez kierownika
+    // działu to dla nowej osoby nowe zadanie — mówimy o nim jak o zwrocie (obiekt znany, zmienił się jeden znacznik).
+    const znane = new Map();
+    const znacznik = z => { const d = (z && z.dane) || {}; return { zwrot: d.czas_zwrotu || null, przekazanie: d.czas_przekazania || null }; };
     // Zaplanowanego (D47) nie zapamiętujemy jako znanego: gdy hub je zleci, dział ma dostać „Nowe zlecenie” jak przy każdym nowym.
-    const dopisz = () => { for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.set(z.id, zwrot(z)); };
+    const dopisz = () => { for (const z of hala.obiekty('zlecenie')) if (z.status !== 'zaplanowane') znane.set(z.id, znacznik(z)); };
     const zapamietaj = () => { znane.clear(); dopisz(); };
     hala.na('sesja', zapamietaj);
     hala.na('zmiana', ({ typ, id, obiekt }) => {
       if (typ === '*') { dopisz(); return; }
       if (typ !== 'zlecenie' || !obiekt || obiekt.status === 'zaplanowane') return;
-      const znany = znane.has(id), cz = zwrot(obiekt);
-      if (znany && (!cz || cz === znane.get(id))) return;
-      znane.set(id, cz);
+      const byl = znane.get(id), teraz = znacznik(obiekt);
+      const zwrocone = !!byl && !!teraz.zwrot && teraz.zwrot !== byl.zwrot;
+      const przekazane = !!byl && !!teraz.przekazanie && teraz.przekazanie !== byl.przekazanie;
+      if (byl && !zwrocone && !przekazane) return;
+      znane.set(id, teraz);
       const o = opcje(), d = obiekt.dane || {};
+      if (przekazane && !zwrocone && d.wykonawca !== (hala.pracownik && hala.pracownik.id)) return;   // komuś innemu
       if (obiekt.status === 'nowe' && !obiekt._oczekuje && !przepadlo(obiekt, hala.teraz()) && d.dzial === o.dzial
-          && naLinii(d, o) && widoczneDla(d, kontekst(hala, {}))) fn(obiekt, znany ? { zwrot: true, uwagi: d.uwagi_zwrotu || '' } : { zwrot: false });
+          && naLinii(d, o) && widoczneDla(d, kontekst(hala, {}))) {
+        fn(obiekt, zwrocone ? { zwrot: true, uwagi: d.uwagi_zwrotu || '' }
+          : przekazane ? { zwrot: false, przekazane: true, uwagi: d.uwagi_przekazania || '' } : { zwrot: false });
+      }
     });
     zapamietaj();
   }
@@ -810,13 +887,14 @@
      „nowe” — dział ma wiedzieć, że wróciło, i dostać uwagę kierownika. */
   function opisPowiadomienia(z, o) {
     const tytul = ((z && z.dane) || {}).tytul || '';
+    if (o && o.przekazane) return `Przekazano Ci zlecenie: ${tytul}` + (o.uwagi ? ` — ${o.uwagi}` : '');
     if (!(o && o.zwrot)) return `Nowe zlecenie od kierownika: ${tytul}`;
     return `Zlecenie wróciło od kierownika: ${tytul}` + (o.uwagi ? ` — ${o.uwagi}` : '');
   }
 
   const HalaZlecenia = { maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
                          brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
-                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI };
+                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

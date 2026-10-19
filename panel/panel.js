@@ -593,12 +593,20 @@
     const jest = new Set(lista.map(z => z.id));
     return lista.concat(starsze.lista.filter(z => !jest.has(z.id) && Date.parse(z.zmieniono || (z.dane || {}).czas_zlecenia) >= od));
   }
+  /* D76: kierownik UR/KJ widzi domyślnie zlecenia swojego działu i to, co sam zlecił („Mój dział i moje”); „wszystkie”
+     działa jak dotąd — to filtr, nie blokada. Domyślny ustawiamy raz na zalogowaną osobę. */
+  const mojeDzialy = () => { const z = Hala.dzialyKierownika(roleJa(), (hala.kontrakt.stale || {}).dzialy || []); return z && z.length ? z : null; };
   function rysujFiltry(d) {
     const f = $('filtry-zlecen');
     const dz = (d.stale && d.stale.dzialy) || [];
-    const nowe = '<option value="">wszystkie</option>' + dz.map(x => `<option value="${esc(x.kod)}">${esc(x.nazwa)}</option>`).join('');
-    if (f.dzial.dataset.html !== nowe) { f.dzial.innerHTML = nowe; f.dzial.dataset.html = nowe; f.dzial.value = filtry.dzial; }
-    const rolaDzialu = filtry.dzial ? ((dz.find(x => x.kod === filtry.dzial) || {}).role || []) : null;
+    const moje = mojeDzialy(), ja = hala.pracownik && hala.pracownik.id;
+    if (filtry.dlaOsoby !== ja) { filtry.dlaOsoby = ja; filtry.dzial = moje ? W.MOJE_DZIALY : ''; }
+    const nowe = (moje ? `<option value="${W.MOJE_DZIALY}">mój dział i moje</option>` : '') + '<option value="">wszystkie</option>'
+      + dz.map(x => `<option value="${esc(x.kod)}">${esc(x.nazwa)}</option>`).join('');
+    if (f.dzial.dataset.html !== nowe) { f.dzial.innerHTML = nowe; f.dzial.dataset.html = nowe; }
+    if (f.dzial.value !== filtry.dzial) f.dzial.value = filtry.dzial;
+    const rolaDzialu = filtry.dzial === W.MOJE_DZIALY ? dz.filter(x => (moje || []).includes(x.kod)).flatMap(x => x.role || [])
+      : filtry.dzial ? ((dz.find(x => x.kod === filtry.dzial) || {}).role || []) : null;
     const osoby = (d.pracownicy || []).filter(p => p.aktywny !== false && (!rolaDzialu || (p.role || []).some(r => rolaDzialu.includes(r))))
       .filter(p => (p.role || []).some(r => dz.some(x => (x.role || []).includes(r))));
     const noweO = '<option value="">wszyscy</option>' + osoby.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('');
@@ -642,7 +650,8 @@
     const zlecenia = W.zlecenia({ zlecenia: listaZOkresem(lista), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
                                   teraz: d.teraz, filtr: filtrZlecen, ja: hala.pracownik }).map(z => Object.assign(z, { html: wierszZlecenia(z) }));
     const inne = ZG ? ZG.wiersze(d, filtrZlecen) : [];
-    const wiersze = W.polaczZadania(W.filtrujZlecenia(zlecenia, filtry), W.filtrujZlecenia(inne, filtry));
+    const fm = Object.assign({}, filtry, { mojeDzialy: mojeDzialy() || [], ja: hala.pracownik && hala.pracownik.id });
+    const wiersze = W.polaczZadania(W.filtrujZlecenia(zlecenia, fm), W.filtrujZlecenia(inne, fm));
     // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego (także
     // zgłoszenia, narzędzia i BHP). Po terminie, przepadłe (D35) i pilne BHP — chip na czerwono.
     for (const c of W.chipyZlecen(lista, d.teraz, ZG ? ZG.liczby() : null)) {
@@ -687,10 +696,14 @@
             <span class="znacznik neutral">${esc(z.dzialNazwa)}</span>
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
+            ${z.doKierownika ? '<span class="znacznik uwaga" title="Kierownik działu je przekaże albo rozdzieli">Do rozdzielenia</span>' : ''}
             ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">📷${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">📝${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
           ${pozycje}
+          ${/* D76: komu kierownik działu rozdzielił zlecenie i ile już zrobione (✓ zrobione, ▶ w robocie, ✗ nie może, ○ czeka). */
+            z.rozdzial ? `<div class="postep-zlecenia">Rozdzielone: <b>${esc(z.rozdzial.tekst)}</b> — ${z.rozdzial.osoby.map(o =>
+              `<span class="${o.znak === '✓' ? 'tekst-ok' : o.znak === '✗' ? 'tekst-alarm' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(', ')}</div>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
           ${z.notatka ? `<div class="odpowiedz">📝 ${esc(z.notatka)}</div>` : ''}
           ${z.uwagiZwrotu && z.otwarte ? `<div class="slaby">Zwrócone: ${esc(z.uwagiZwrotu)}</div>` : ''}
@@ -700,6 +713,9 @@
           : `<div class="numer slaby">${esc(z.zleconoDzien)} ${esc(z.zlecono)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}${z.termin ? `<br><span class="${z.poTerminie ? 'tekst-alarm' : ''}">termin ${esc(z.termin)}</span>` : ''}</div>`}
         <div class="akcje">
           ${zrob ? '<button type="button" class="maly glowny" data-akcja="wykonaj">▶ Wykonaj</button>' : ''}
+          ${/* D76: kierownik działu (UR, KJ) w Panelu — te same okna co w aplikacji działu (dzialania.js). */
+            z.dzialania.przekaz ? `<button type="button" class="maly${z.doKierownika ? ' glowny' : ''}" data-akcja="przekaz">Przekaż</button>` : ''}
+          ${z.dzialania.rozdziel ? '<button type="button" class="maly" data-akcja="rozdziel">Rozdziel</button>' : ''}
           ${z.moznaZmienic ? `<button type="button" class="maly" data-akcja="zmien-plan">Zmień</button>
             <button type="button" class="maly glowny" data-akcja="zlec-teraz" title="Zleć od razu — dział dostanie powiadomienie">Zleć teraz</button>` : ''}
           ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
@@ -755,6 +771,10 @@
     try {
       if (b.dataset.akcja === 'wykonaj') { Panel.widoki.zgloszenia.wykonaj(id); return; }
       if (b.dataset.akcja === 'historia') { if (window.HalaDzialania) window.HalaDzialania.historia(hala, 'zlecenie', id); return; }
+      if ((b.dataset.akcja === 'przekaz' || b.dataset.akcja === 'rozdziel') && window.HalaDzialania) {
+        window.HalaDzialania[b.dataset.akcja](hala, id, { gotowe: t => komunikat(t, 'ok') });
+        return;
+      }
       if (b.dataset.akcja === 'zamknij') {
         await hala.zapisz('zlecenie.zamkniete', id, {});
         komunikat(b.textContent.trim() === 'Przyjmij' ? 'Przyjęte — zlecenie zamknięte' : 'Zamknięte', 'ok');
@@ -859,7 +879,17 @@
     fz.maszyna.value = pierwsza;
     pokazSkan(fz);
   }
+  /* D76: działy, którym zalogowana osoba zleca (kierownik UR/KJ — tylko swój), i „Też dla działów” (kilka naraz). */
+  const roleJa = () => (hala.pracownik && hala.pracownik.role) || [];
+  const dzialyZlecajacego = () => W.dzialyDoZlecania(hala.kontrakt.stale || {}, roleJa());
+  Panel.dzialyZlecajacego = dzialyZlecajacego;
+  function rysujTezDzialy(zaznaczone) {
+    const inne = dzialyZlecajacego().filter(d => d.kod !== fz.dzial.value && d.kod !== 'kierownik');
+    $('zlecenie-tez').hidden = !inne.length || !!fz.edycja.value;
+    $('zlecenie-tez').querySelector('[data-tez]').innerHTML = inne.map(d => `<label class="zaznacz"><input type="checkbox" name="tez_dzialy" value="${esc(d.kod)}" ${(zaznaczone || []).includes(d.kod) ? 'checked' : ''}> ${esc(d.nazwa)}</label>`).join('');
+  }
   function rysujOsobyZlecenia(zaznaczone) {
+    $('zlecenie-osoby').querySelector('legend').textContent = W.opisDlaKogo(fz.dzial.value, hala.kontrakt.stale || {}, roleJa());
     const el = document.querySelector('#zlecenie-osoby [data-osoby]');
     const osoby = osobyDzialu(fz.dzial.value);
     el.innerHTML = osoby.map(([id, n]) => `<label class="zaznacz"><input type="checkbox" name="osoby" value="${esc(id)}" ${(zaznaczone || []).includes(id) ? 'checked' : ''}> ${esc(n)}${
@@ -889,7 +919,9 @@
     wstepneZgloszenie = (!edycja && wstepne && wstepne.zgloszenie) || null;
     const w = edycja ? Object.assign({}, edycja.dane, { pilne: (edycja.dane || {}).priorytet === 'pilne' }) : (wstepne || {});
     fz.reset();
-    fz.dzial.innerHTML = opcje(((hala.kontrakt.stale || {}).dzialy || []).map(d => [d.kod, d.nazwa]));
+    // D76: kierownik UR/KJ zleca tylko swojemu działowi; zmiana zaplanowanego pokazuje dział zlecenia (pole i tak zablokowane).
+    const dzialyOkna = edycja ? ((hala.kontrakt.stale || {}).dzialy || []) : dzialyZlecajacego();
+    fz.dzial.innerHTML = opcje(dzialyOkna.map(d => [d.kod, d.nazwa]));
     if (w.dzial) fz.dzial.value = w.dzial;
     pokazPolaLinii(fz);
     fz.linia.innerHTML = opcje(linieLista(), '— każda —');
@@ -898,7 +930,9 @@
     fz.maszyna.value = w.maszyna || '';
     fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —');
     fz.wykonawca.value = w.wykonawca || '';
+    fz.edycja.value = edycja ? edycja.id : '';
     rysujOsobyZlecenia(w.wykonawca ? [w.wykonawca] : []);
+    rysujTezDzialy([]);
     rysujMaszynyZlecenia(Array.isArray(w.maszyny) && w.maszyny.length ? w.maszyny : (w.maszyna ? [w.maszyna] : []));
     fz.czynnosc.value = w.czynnosc || '';
     $('zlecenie-czynnosc').hidden = !w.czynnosc;          // D72: typ czynności tylko, gdy przyszedł z zapisanego
@@ -965,7 +999,11 @@
   });
   // Każde zamknięcie okna zdejmuje blokadę pól edycji — następne „Nowe zlecenie” zaczyna od zwykłego formularza.
   $('okno-zlecenia').addEventListener('close', () => { for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = false; });
-  fz.dzial.addEventListener('change', () => { fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —'); rysujOsobyZlecenia([]); });
+  fz.dzial.addEventListener('change', () => {
+    fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —');
+    rysujOsobyZlecenia([]);
+    rysujTezDzialy([...fz.querySelectorAll('input[name="tez_dzialy"]:checked')].map(x => x.value));
+  });
   fz.na_zmiane.addEventListener('change', opisZmianyZlecenia);
   $('okno-zlecenia').addEventListener('close', () => { poZapisieZlecenia = null; });
   fz.linia.addEventListener('change', () => { fz.maszyna.innerHTML = opcje(maszynyLinii(fz.linia.value), '— żadna —'); rysujMaszynyZlecenia([]); });
@@ -1012,8 +1050,11 @@
       if (wstepneZgloszenie) dane.zgloszenie = wstepneZgloszenie;
       if (zm && !zm.biezaca && !mozeWyslac('zlecenie.zaplanowane')) { blad('Na późniejszą zmianę zleca tylko kierownik — wybierz „teraz”.'); return; }
       const ids = [];
-      for (const osoba of (osoby.length ? osoby : [null])) {
-        const d1 = Object.assign({}, dane, osoba ? { wykonawca: osoba } : {});
+      // D76: „Też dla działów” — każdy dział swoje; zlecenie kierownika zakładu dla UR/KJ bez osoby — do kierownika działu.
+      const tez = [...fz.querySelectorAll('input[name="tez_dzialy"]:checked')].map(x => x.value);
+      const doZapisu = W.zleceniaDzialow(dane, { dzialy: [dane.dzial, ...tez], osoby, role: roleJa(), stale: hala.kontrakt.stale || {} });
+      if (!doZapisu.length) { blad('Ten dział zleca kierownik zakładu — wybierz swój dział.'); return; }
+      for (const d1 of doZapisu) {
         const id = hala.nowyId();
         if (zm && !zm.biezaca) {
           d1.zaplanowane_na = new Date(zm.start).toISOString();
@@ -1036,7 +1077,9 @@
         }
       }
       $('okno-zlecenia').close();
-      komunikat(`${ids.length > 1 ? `Zlecone ${ids.length} osobom` : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : 'Zlecone'}${zapisane ? ' i zapisane w „💾 Zapisane”' : ''}`, 'ok');
+      const doKier = doZapisu.some(d => d.do_kierownika);
+      komunikat(`${ids.length > 1 ? (tez.length ? `Zlecone ${ids.length} — każdy dział ma swoje` : `Zlecone ${ids.length} osobom`)
+        : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : doKier ? 'Zlecone — kierownik działu je rozdzieli' : 'Zlecone'}${zapisane ? ' i zapisane w „💾 Zapisane”' : ''}`, 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
     } catch (e) { blad(komunikatBledu(e)); }
   }));
@@ -1156,6 +1199,8 @@
   // D55: awarie (każda, zatrzymanie — mocniej) i pilne zadania kierownika — dwa różne dźwięki ze wspólnego dzialania.js.
   // D59: także incydent i sytuacja potencjalnie wypadkowa (BHP) — gong jak pilne zadanie.
   if (window.HalaDzwieki) window.HalaDzwieki.sledz(hala, { awarie: true, bhp: true, zlecenia: () => ({ dzial: 'kierownik' }), wlaczony: dzwiekWlaczony });
+  // D77: reakcje kierownika przy zadaniach, które ta osoba robi w Panelu („▶ Wykonaj”); konto ekranu — bez (reakcje.js).
+  if (window.HalaReakcje) window.HalaReakcje.sledz(hala);
 
   function sprawdzAlarmy(wiersze, incydenty) {
     const a = W.noweAlarmy(znaneAlarmy, wiersze, incydenty);

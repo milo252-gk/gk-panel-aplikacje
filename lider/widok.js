@@ -93,10 +93,11 @@
     return (role.includes('mistrz') && !lm) || !wieleLinii(slowniki) ? lista.map(l => Object.assign(l, { moja: true })) : lista;
   }
 
-  /* Czyje zlecenia pokazuje aplikacja (D34): mistrz — dział „mistrz”, bez zawężenia do wybranej linii (przełożony
-     liderów), ale tylko swoich linii, gdy ma je zaznaczone (`linie`, 2026-10-07); lider i każdy inny — „produkcja”
-     na wybranej linii. Osoba z obiema rolami jest mistrzem: jego zadań nikt inny nie zrobi, a zlecenia linii mają
-     swojego lidera. */
+  /* Czyje zlecenia pokazuje aplikacja (D34): mistrz — dział „mistrz”, bez zawężenia do wybranej linii (pracuje na całej
+     hali), ale tylko swoich linii, gdy ma je zaznaczone (`linie`, 2026-10-07); lider i każdy inny — „produkcja”
+     na wybranej linii. D76 (właściciel 2026-10-19): mistrz NIE jest przełożonym lidera — obaj są na zmianie po jednym,
+     każdy ze swoimi zadaniami od kierownika zakładu; zadania lidera mistrzowi się nie mieszają i odwrotnie. Osoba z obiema
+     rolami jest mistrzem: jego zadań nikt inny nie zrobi, a zlecenia linii mają swojego lidera. */
   function dzialZlecen(pracownik, linia, slowniki) {
     const role = (pracownik && pracownik.role) || [];
     if (!role.includes('mistrz')) return { dzial: 'produkcja', linia };

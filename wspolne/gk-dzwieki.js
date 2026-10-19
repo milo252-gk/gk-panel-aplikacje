@@ -1,7 +1,7 @@
 /* GK Dźwięki — jeden zestaw dźwięków powiadomień dla wszystkich aplikacji GK (właściciel 2026-10-16: „dźwięki niech
    będą mniej jak 8-bitowe gry, a faktyczne powiadomienia”, „dźwięki, szata graficzna też spójne”).
 
-     GKDzwieki.zagraj('info' | 'sukces' | 'blad' | 'pilne' | 'awaria' | 'zatrzymanie')   // → true, gdy zagrało
+     GKDzwieki.zagraj('info' | 'sukces' | 'reakcja' | 'blad' | 'pilne' | 'awaria' | 'zatrzymanie')   // → true, gdy zagrało
      GKDzwieki.odblokuj()       // przy geście użytkownika (robi się samo: pointerdown, keydown, touchend)
      GKDzwieki.gotowy()         // czy przeglądarka już pozwala grać (false → pasek „🔇 … dotknij”)
      GKDzwieki.kontekst()       // wspólny AudioContext strony (jeden na stronę — pasek i dźwięki patrzą na ten sam)
@@ -11,8 +11,7 @@
    Brzmienie: miękkie dzwonki jak powiadomienia w telefonie — każde „uderzenie” to sinus z kilkoma alikwotami (dwa
    niezharmonizowane, jak w metalofonie), atak 6 ms bez trzasku i naturalne wybrzmienie; całość przez łagodny kompresor
    i filtr. ŻADNEJ fali prostokątnej ani piłokształtnej (test: wspolne/testy/t_dzwieki.py). Pilność rośnie wysokością,
-   tempem i liczbą powtórzeń, nie ostrością barwy: info — jedno uderzenie, pilne — „ding-dong” jak dzwonek do drzwi,
-   awaria — szybki dzwonek alarmowy, zatrzymanie — ten sam gęściej, trzy serie (D55).
+   tempem i liczbą powtórzeń, nie ostrością barwy (opis każdego rodzaju — przy RODZAJE niżej i w STYL-GK §6a).
 
    Ten plik jest wspólny i kopiowany 1:1 do programów spoza hali (GK Trasy, GK Flota — web/gk-dzwieki.js);
    .github/spojnosc.py pilnuje, że kopie są identyczne. Bez zależności od hala.js. */
@@ -24,19 +23,28 @@
     [4.16, 0.08, 0.12, true], [5.43, 0.04, 0.07, true]];
 
   // Uderzenia: [Hz, start s, szczyt, tau s, jasność]. Serie: [liczba, odstęp s].
-  const C6 = 1046.5, G6 = 1568.0, G4 = 392.0, DIS4 = 311.1, H5 = 987.8, G5 = 784.0, D6 = 1174.7;
-  const alarm = (odstep, szczyt, tau) => [0, 1, 2, 3].map(i => [i % 2 ? D6 : G6, i * odstep, szczyt, tau, 1.0]);
+  // 2026-10-19 (właściciel: „Dźwięki reakcji mogą być jednakowe, ale inne mają się różnić. Awaria ma być najwyraźniejsza.”):
+  // każdy rodzaj ma inną wysokość, liczbę uderzeń i rytm — da się je rozróżnić bez patrzenia:
+  //   info        — jedno miękkie E6 (krótka wiadomość, nic pilnego);
+  //   sukces      — szybkie C6 → G6 w górę (zapisane, zrobione);
+  //   reakcja     — „ta-ta-DAM”: dwa razy F5 i skok na C6, lżej i wolniej niż sukces (reakcja kierownika, D77 — jedna dla czterech);
+  //   blad        — niskie G4 → Dis4 w dół, krótko (coś nie wyszło);
+  //   pilne       — „ding-dong” H5 → G5, długie wybrzmienie (pilne zadanie, alert jakości);
+  //   awaria      — NAJWYRAŹNIEJSZY: wznoszący dwuton G5 → D6, najgłośniejszy w zestawie, trzy razy (ok. 2 s);
+  //   zatrzymanie — blisko awarii, ale z niskim C5 na początku: C5 → G5 → D6, trzy razy szybciej (maszyna stoi).
+  const C5 = 523.3, F5 = 698.5, G5 = 784.0, H5 = 987.8, C6 = 1046.5, D6 = 1174.7, E6 = 1318.5, G6 = 1568.0, G4 = 392.0, DIS4 = 311.1;
   const RODZAJE = {
-    info: { uderzenia: [[C6, 0, 0.2, 0.55, 0.6]], serie: [1, 0] },
-    sukces: { uderzenia: [[C6, 0, 0.13, 0.12, 0.5], [G6, 0.075, 0.13, 0.18, 0.5]], serie: [1, 0] },
-    blad: { uderzenia: [[G4, 0, 0.2, 0.1, 0.3], [DIS4, 0.11, 0.2, 0.14, 0.3]], serie: [1, 0] },
+    info: { uderzenia: [[E6, 0, 0.18, 0.4, 0.5]], serie: [1, 0] },
+    sukces: { uderzenia: [[C6, 0, 0.14, 0.12, 0.5], [G6, 0.075, 0.14, 0.2, 0.5]], serie: [1, 0] },
+    reakcja: { uderzenia: [[F5, 0, 0.16, 0.09, 0.6], [F5, 0.11, 0.16, 0.09, 0.6], [C6, 0.24, 0.2, 0.35, 0.7]], serie: [1, 0] },
+    blad: { uderzenia: [[G4, 0, 0.22, 0.1, 0.3], [DIS4, 0.11, 0.22, 0.14, 0.3]], serie: [1, 0] },
     pilne: { uderzenia: [[H5, 0, 0.3, 0.8, 0.8], [G5, 0.28, 0.3, 1.1, 0.8]], serie: [1, 0] },
-    awaria: { uderzenia: alarm(0.14, 0.36, 0.22), serie: [2, 0.75] },
-    zatrzymanie: { uderzenia: alarm(0.12, 0.42, 0.2), serie: [3, 0.7] },
+    awaria: { uderzenia: [[G5, 0, 0.5, 0.3, 1.0], [D6, 0.17, 0.5, 0.36, 1.0]], serie: [3, 0.5] },
+    zatrzymanie: { uderzenia: [[C5, 0, 0.44, 0.16, 0.9], [G5, 0.11, 0.44, 0.16, 0.9], [D6, 0.22, 0.44, 0.24, 1.0]], serie: [3, 0.36] },
   };
   const WIBRACJE = {
-    info: [60], sukces: [30], blad: [80, 60, 80], pilne: [150, 100, 150],
-    awaria: [400, 150, 400, 150, 400], zatrzymanie: [400, 150, 400, 150, 400, 150, 800],
+    info: [60], sukces: [30], reakcja: [40, 50, 90], blad: [80, 60, 80], pilne: [150, 100, 150],
+    awaria: [500, 150, 500, 150, 500], zatrzymanie: [250, 80, 250, 80, 250, 150, 800],
   };
 
   let audio = null, wyjscie = null, wlaczonyFn = null;

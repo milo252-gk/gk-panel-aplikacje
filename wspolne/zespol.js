@@ -1,14 +1,15 @@
 /* GK Panel Kierownika — „Mój zespół” (D49, właściciel 2026-10-08: „Pozwól adminom GK Trasy, Lidera, UR itp. tworzyć konta
-   dla swoich pracowników”). Kierownik zakładu, mistrz, kierownik UR i kierownik KJ zakładają i zmieniają konta SWOICH ludzi:
-   mistrz — liderów (i ich linie, gdy sam ma linie), kierownik UR — mechaników, kierownik KJ — kontrolerów, kierownik
-   zakładu — mistrzów, kierowników UR/KJ, liderów, mechaników, kontrolerów i Marketing. Kto kogo — jedna reguła w hubie
+   dla swoich pracowników”). Kierownik zakładu, kierownik UR i kierownik KJ zakładają i zmieniają konta SWOICH ludzi:
+   kierownik UR — mechaników, kierownik KJ — kontrolerów, kierownik zakładu — mistrzów, kierowników UR/KJ, liderów,
+   mechaników i kontrolerów. D76 (2026-10-19): mistrz nie jest przełożonym lidera — od tej decyzji nie ma zespołu
+   (wcześniej: liderzy jego linii). Kto kogo — jedna reguła w hubie
    (hala.py → ZESPOLY, blad_uprawnienia_konta; kopia w kontrakcie stale.zespoly); hub przy każdym zapisie sprawdza sam
    i odpowiada 403 z tekstem po polsku. Tu tylko rysujemy to, na co hub pozwoli (GET /api/v1/admin/pracownicy → zakres).
 
    Dwa miejsca:
      - Panel → Administracja → Pracownicy (administracja.js) — pełny ekran administratora; zarządzający widzi tam tylko swój
        zespół (te same czyste funkcje: zarzadzaKontami, uprawnieniaOsoby, opisZespolu);
-     - GK Lider → Moje konto → „Mój zespół” (mistrz nie otwiera Panelu): okno z listą i formularzem osoby —
+     - GK Lider → Moje konto → „Mój zespół” (kierownik zakładu na telefonie): okno z listą i formularzem osoby —
        HalaZespol.otworz(hala, { komunikat }).
    Zarządzający nie wpisuje nikomu hasła, PIN-u ani karty („nikt nie zna niczyjego PIN-u”, D46) — tylko „Ustaw hasło
    startowe” (haslo123), „Resetuj PIN” (1234), „Wyloguj wszędzie”, „Odblokuj”. Usuwa osobę administrator; tu — wyłączenie.

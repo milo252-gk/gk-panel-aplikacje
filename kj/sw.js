@@ -10,7 +10,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                    */
 
-const WERSJA = 'kj-516cb7ec2259';
+const WERSJA = 'kj-9198655940f3';
 
 self.HALA_PUSH_OBSLUZ_KLIK = true;   // KJ nie ma własnej obsługi dotknięcia powiadomienia
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.
@@ -20,7 +20,7 @@ const ZASOBY = [
   './', './index.html', './kj.css', './kj.js', './widok.js',
   './alerty.js', './proba.js', './reklamacje.js', './analiza.js', './katalog.js',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
-  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/hala-push-sw.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/dzialania.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png', '../wspolne/skaner.js',
+  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/hala-push-sw.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png', '../wspolne/skaner.js',
   '../wspolne/skaner-zxing.js',          // zapasowy dekoder (iPhone) — bez sieci też musi czytać kody
 ];
 

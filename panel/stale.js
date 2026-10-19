@@ -73,7 +73,8 @@
   };
   const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
   const dzis = () => W.dzienZakladu(hala.teraz());
-  const dzialyKontraktu = () => ((hala.kontrakt.stale || {}).dzialy || []);
+  // D76: kierownik UR/KJ zapisuje zlecenia tylko dla swojego działu (hub odrzuca resztę) — okno pokazuje tylko jego.
+  const dzialyKontraktu = () => P.dzialyZlecajacego();
   const pola = () => ({
     tytul: f.tytul.value, opis: f.opis.value, dzialy: wybrane('dzialy'), kto: (f.querySelector('input[name="kto"]:checked') || {}).value || 'dzial',
     wykonawcy: wybrane('osoby'), linia: f.linia.value, maszyna: f.maszyna.value,
@@ -159,7 +160,7 @@
     f.reset();
     f.querySelector('.blad').hidden = true;
     $('t-okno-stalego').textContent = tytulOkna || (edytowanyKod ? `Zapisane zlecenie: ${wartosci.tytul}` : 'Nowe zapisane zlecenie');
-    const dz = (wartosci.dzialy && wartosci.dzialy.length ? wartosci.dzialy : [wartosci.dzial || 'produkcja']);
+    const dz = (wartosci.dzialy && wartosci.dzialy.length ? wartosci.dzialy : [wartosci.dzial || (dzialyKontraktu()[0] || {}).kod || 'produkcja']);
     $('stale-dzialy').innerHTML = dzialyKontraktu().map(d => `<label class="zaznacz"><input type="checkbox" name="dzialy" value="${esc(d.kod)}" ${dz.includes(d.kod) ? 'checked' : ''}> ${esc(d.nazwa)}</label>`).join('');
     const kto = wartosci.kto || (wartosci.wykonawca ? 'osoby' : 'dzial');
     for (const x of f.querySelectorAll('input[name="kto"]')) x.checked = x.value === kto;
@@ -275,7 +276,7 @@
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  $('nowe-stale').addEventListener('click', () => otworz({ dzial: 'produkcja', rodzaj: 'reczny', dni: [1, 2, 3, 4, 5], zmiany: [],
+  $('nowe-stale').addEventListener('click', () => otworz({ dzial: (dzialyKontraktu()[0] || {}).kod || 'produkcja', rodzaj: 'reczny', dni: [1, 2, 3, 4, 5], zmiany: [],
                                                            termin_rodzaj: 'koniec_zmiany', wymagaj_zdjecia: true, wymagaj_notatki: true,
                                                            bez_swiat: true, aktywny: true }));
 
@@ -301,6 +302,8 @@
         if (!(await P.potwierdz('Zlecić teraz?', `„${s.tytul}” — ${n} ${n === 1 ? 'zlecenie' : n < 5 ? 'zlecenia' : 'zleceń'}, każdy adresat dostaje własne.`, 'Zleć'))) return;
         const zmiana = hala.zmianaTeraz(), teraz = hala.teraz();
         for (const dane of W.zleceniaTeraz(kod, s, cele, zmiana, teraz, W.terminTeraz(s, zmiana, teraz))) {
+          // D76: „Zleć teraz” kierownika zakładu dla UR/KJ bez osoby — jak „Nowe zlecenie”: do kierownika działu.
+          if (Hala.doKierownika(dane, hala.pracownik.role, (hala.kontrakt.stale || {}).dzialy || [])) dane.do_kierownika = true;
           await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
         }
         P.komunikat(`Zlecone: ${s.tytul} — ${n} ${n === 1 ? 'zlecenie' : n < 5 ? 'zlecenia' : 'zleceń'}`, 'ok');

@@ -10,6 +10,7 @@
 
 .slaby { color: var(--tekst-slaby); }
 .tekst-alarm { color: var(--czerwony); font-weight: 700; }
+.tekst-ok { color: var(--zielony); }
 
 /* Logowanie: wspólna karta GK (.hala-logowanie w hala.css). */
 
