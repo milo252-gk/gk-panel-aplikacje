@@ -117,7 +117,8 @@
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
           // D76: „do kierownika działu”, rozdział (postęp z osobami), część całości, „Przekaż” / „Rozdziel” dla kierownika działu.
           doKierownika: d.do_kierownika === true && !d.wykonawca && DO_ZROBIENIA.has(z.status), rozdzielone: z.status === 'rozdzielone',
-          rozdzial: rozdzialWiersza(z, lista, nazwa, H), czesc: !!d.nadrzedne, uwagiPrzekazania: d.uwagi_przekazania || null,
+          rozdzial: rozdzialWiersza(z, lista, nazwa, H, H && H.widziRozdzial ? H.widziRozdzial(z, pracownik, dzialyKontraktu) : false, godz),
+          czesc: !!d.nadrzedne, uwagiPrzekazania: d.uwagi_przekazania || null,
           dzialania: H && H.mozeRozdzielic ? H.mozeRozdzielic(z, pracownik, dzialyKontraktu) : { przekaz: false, rozdziel: false },
         };
       })
@@ -129,13 +130,20 @@
 
   /* D76: postęp rozdzielonego zlecenia do karty — „2/3 zrobione” i osoby ze znakiem stanu ich części (Hala.postepRozdzialu,
      bliźniak huba: gotowe = hub sam zgłasza wykonanie całości). null — zlecenie nie było rozdzielone. Panel ma swoją kopię
-     w widok.js (te same znaki). */
+     w widok.js (te same znaki). D76 (właściciel 2026-10-19: wgląd w postęp dla upoważnionych): widzi = Hala.widziRozdzial
+     (kierownik działu, kto zlecił, kto rozdzielił, kierownik zakładu, admin) — wtedy też `czesci`: stan, kiedy zrobione,
+     notatki, zdjęcia, powód „Nie mogę” każdej części. Wykonawca części widzi swoją kartę, cudzych notatek i zdjęć nie. */
   const ZNAK_CZESCI = { wykonane: '✓', zamkniete: '✓', odrzucone: '✗', przepadlo: '✗', przyjete: '▶' };
-  function rozdzialWiersza(z, lista, nazwa, H) {
+  const STAN_CZESCI = { wykonane: 'zrobione', zamkniete: 'zrobione', odrzucone: 'nie może', przepadlo: 'przepadło', przyjete: 'w robocie' };
+  function rozdzialWiersza(z, lista, nazwa, H, widzi, godz) {
     const p = H && H.postepRozdzialu ? H.postepRozdzialu(z, lista) : null;
     if (!p) return null;
     return { wszystkie: p.wszystkie, zrobione: p.zrobione, gotowe: p.gotowe, tekst: `${p.zrobione}/${p.wszystkie} zrobione`,
-             osoby: p.czesci.map(c => ({ id: c.id, kto: nazwa(c.wykonawca) || '—', status: c.status, znak: ZNAK_CZESCI[c.status] || '○' })) };
+             osoby: p.czesci.map(c => ({ id: c.id, kto: nazwa(c.wykonawca) || '—', status: c.status, znak: ZNAK_CZESCI[c.status] || '○' })),
+             czesci: widzi && H.szczegolyRozdzialu ? H.szczegolyRozdzialu(z, lista).map(c => ({
+               id: c.id, kto: nazwa(c.wykonawca) || '—', znak: ZNAK_CZESCI[c.status] || '○', stan: STAN_CZESCI[c.status] || 'czeka',
+               kiedy: c.czasWykonania && godz ? godz(c.czasWykonania) : null, notatka: c.notatki.join(' · ') || null,
+               zdjecia: c.zdjecia, powod: c.powod })) : null };
   }
 
   /* D76: „Rozdziel” — z całości (rodzic) dla każdej wybranej osoby zlecenie podrzędne (te same pola, osoba, nadrzedne;
@@ -374,6 +382,8 @@
         ${z.uwagiPrzekazania && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Od kierownika: ${esc(z.uwagiPrzekazania)}</p>` : ''}
         ${z.rozdzial ? `<p class="hala-zlecenie-skan" aria-label="Postęp części"><b>${esc(z.rozdzial.tekst)}</b> ${z.rozdzial.osoby.map(o =>
           `<span class="hala-krok-wymogu ${o.znak === '✓' ? 'ok' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(' ')}</p>` : ''}
+        ${z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="hala-zlecenie-czesci"><summary>Części — szczegóły</summary><ul>${z.rozdzial.czesci.map(c =>
+          `<li><b>${esc(c.znak)} ${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? `<p class="hala-zlecenie-zwrot">Nie może: ${esc(c.powod)}</p>` : ''}${c.notatka ? `<p class="hala-zlecenie-opis">📝 ${esc(c.notatka)}</p>` : ''}${c.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(c.zdjecia)}</div>` : ''}</li>`).join('')}</ul></details>` : ''}
         ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">⏰ ${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>

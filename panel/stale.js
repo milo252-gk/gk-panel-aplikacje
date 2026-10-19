@@ -310,8 +310,11 @@
       } else if (b.dataset.akcja === 'zlec' && lista) {
         // Zlecenie z pozycjami od razu — okno „Nowe zlecenie” nie ma pozycji.
         const dane = W.checklistaTeraz(kod, s, hala.zmianaTeraz(), hala.teraz(), W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz()));
+        // D76 / P18: checklista od kierownika zakładu dla UR/KJ bez osoby — jak harmonogram huba: do kierownika działu.
+        const doKier = Hala.doKierownika(dane, hala.pracownik.role, (hala.kontrakt.stale || {}).dzialy || []);
+        if (doKier) dane.do_kierownika = true;
         await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
-        P.komunikat(`Zlecone: ${s.tytul} — dział dostał checklistę`, 'ok');
+        P.komunikat(`Zlecone: ${s.tytul} — ${doKier ? 'kierownik działu dostał checklistę' : 'dział dostał checklistę'}`, 'ok');
       } else if (b.dataset.akcja === 'zlec') {
         P.noweZlecenie(W.zlecenieZeStalego(kod, s, W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz())));
       }

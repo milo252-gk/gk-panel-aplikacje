@@ -37,7 +37,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.27.0';
+  const WERSJA_KLIENTA = '0.28.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -523,7 +523,9 @@
        * zlecenia — zlecone w oknie (`czas_zlecenia`; zaplanowane, jeszcze nie zlecone — D47 — go nie mają): liczba,
          wykonane (wykonane + zamknięte), terminowość z tych, które mają termin: w terminie = wykonane do terminu; po terminie
          = wykonane później, otwarte po minionym terminie albo przepadłe (D35); otwarte przed terminem, anulowane i „nie może”
-         się nie liczą. Ogółem, na dział i na wskazaną osobę (`wykonawca`), listy po kodzie.
+         się nie liczą. Ogółem, na dział i na wskazaną osobę (`wykonawca`), listy po kodzie. D76 (właściciel 2026-10-19:
+         „licz tylko całość”): części rozdzielonego zlecenia (`nadrzedne`) nie liczą się nigdzie — liczy się całość, a całość
+         „rozdzielona” po terminie jest po terminie jak otwarta.
      Nazwy (linie, działy, osoby) i procenty dokłada ekran.                                                              */
   const liczbaPola = v => (typeof v === 'number' && isFinite(v) ? v : 0);
   const poKodzie = (a, b) => (a.kod < b.kod ? -1 : a.kod > b.kod ? 1 : 0);
@@ -542,7 +544,7 @@
       proby++; sprawdzone += liczbaPola(d.sprawdzone); braki += liczbaPola(d.braki);
       for (const x of d.wady || []) if (x && x.kod) wady.set(x.kod, (wady.get(x.kod) || 0) + (liczbaPola(x.ilosc) || 1));
     }
-    const zl = (d0.zlecenia || []).filter(z => z && wOknie((z.dane || {}).czas_zlecenia));
+    const zl = (d0.zlecenia || []).filter(z => z && !(z.dane || {}).nadrzedne && wOknie((z.dane || {}).czas_zlecenia));
     const ogolem = { wTerminie: 0, poTerminie: 0 }, dzialy = new Map(), osoby = new Map();
     const dolicz = (mapa, kod, wynik) => {
       if (kod === null || kod === undefined || kod === '') return;
@@ -554,7 +556,7 @@
       if (t === null || isNaN(t)) continue;
       let wynik = null;
       if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) wynik = wyk <= t;
-      else if ((z.status === 'nowe' || z.status === 'przyjete') && t < teraz) wynik = false;
+      else if ((z.status === 'nowe' || z.status === 'przyjete' || z.status === 'rozdzielone') && t < teraz) wynik = false;
       else if (z.status === 'przepadlo') wynik = false;
       if (wynik === null) continue;
       if (wynik) ogolem.wTerminie++; else ogolem.poTerminie++;
@@ -627,6 +629,37 @@
     return { wszystkie: czesci.length, zrobione, gotowe: czesci.length > 0 && zrobione === czesci.length, czesci };
   }
 
+  /* D76 (właściciel 2026-10-19: „pokazuj wszystkim upoważnionym wgląd do postępów (np. kier. zakł. to widzi)”): kto widzi
+     szczegóły części rozdzielonego zlecenia (kto, ✓/○, kiedy zrobione, notatki i zdjęcia): kierownik zakładu i admin, ten,
+     kto zlecił całość, ten, kto rozdzielił, i kierownik działu zlecenia (stale.dzialy[].rola_kierownika). Wykonawca części
+     widzi swoją kartę — cudzych notatek i zdjęć nie. Konto ekranu — nie (to monitor, nie osoba). */
+  function widziRozdzial(zlecenie, pracownik, dzialyKontraktu) {
+    if (!pracownik) return false;
+    const d = (zlecenie && zlecenie.dane) || {}, role = [].concat(pracownik.role || []);
+    if (role.some(r => ROLE_ZAKLADU.includes(r))) return true;
+    if (pracownik.id && (d.zlecil === pracownik.id || d.rozdzielil === pracownik.id)) return true;
+    const dz = (dzialyKontraktu || []).find(x => x && x.kod === d.dzial);
+    return !!(dz && dz.rola_kierownika && role.includes(dz.rola_kierownika));
+  }
+
+  /* Szczegóły części rozdzielonego zlecenia (do wglądu — widziRozdzial): [{id, wykonawca, status, czasWykonania,
+     notatki: [tekst], zdjecia: [id], powod}] w kolejności rozdziału, bez anulowanych (jak postepRozdzialu). Notatki
+     i zdjęcia z kroków (zlecenie.postep) i z „Zrobione”; powod — „Nie mogę”. */
+  function szczegolyRozdzialu(rodzic, zlecenia) {
+    const p = postepRozdzialu(rodzic, zlecenia);
+    if (!p) return null;
+    const mapa = Array.isArray(zlecenia) ? new Map(zlecenia.filter(Boolean).map(z => [z.id, z])) : new Map(Object.entries(zlecenia || {}));
+    return p.czesci.map(c => {
+      const d = (mapa.get(c.id) || {}).dane || {};
+      const kroki = [].concat(d.postep || []).filter(e => e && typeof e === 'object');
+      const tekst = v => String(v === null || v === undefined ? '' : v).trim();
+      return { id: c.id, wykonawca: c.wykonawca, status: c.status, czasWykonania: d.czas_wykonania || null,
+               notatki: kroki.map(e => tekst(e.uwagi)).concat(tekst(d.uwagi_wykonania)).filter(Boolean),
+               zdjecia: [...new Set(kroki.reduce((l, e) => l.concat(e.zdjecia || []), []).concat(d.zdjecia_wykonania || []).filter(x => typeof x === 'string'))],
+               powod: tekst(d.powod_odrzucenia) || null };
+    });
+  }
+
   /* Czy ta osoba może przy tym zleceniu dać „Przekaż” / „Rozdziel” (ekran — hub i tak sprawdza): kierownik działu
      zlecenia (albo kierownik zakładu, admin), zlecenie do zrobienia albo już rozdzielone; części zlecenia i checklisty
      nie rozdziela się dalej (przekazać — można). { przekaz, rozdziel } */
@@ -640,7 +673,8 @@
   }
 
   /* Nowe zlecenie: czy idzie „do kierownika działu” (pole do_kierownika). Tylko kierownik zakładu (i admin), dział
-     z kierownikiem (UR, KJ), bez wybranej osoby. Kierownik UR dla swojego działu zleca wprost — jest tym kierownikiem. */
+     z kierownikiem (UR, KJ), bez wybranej osoby. Kierownik UR dla swojego działu zleca wprost — jest tym kierownikiem.
+     Bliźniak: do_kierownika w hala.py — ta sama reguła dla wystąpień zapisanych z harmonogramu (P18, 2026-10-19). */
   function doKierownika(dane, rolaAutora, dzialyKontraktu) {
     const d = dane || {};
     if (d.wykonawca || dzialyKierownika(rolaAutora, dzialyKontraktu) !== null) return false;
@@ -1946,7 +1980,7 @@
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
-    dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika,
+    dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

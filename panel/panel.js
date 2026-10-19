@@ -704,6 +704,10 @@
           ${/* D76: komu kierownik działu rozdzielił zlecenie i ile już zrobione (✓ zrobione, ▶ w robocie, ✗ nie może, ○ czeka). */
             z.rozdzial ? `<div class="postep-zlecenia">Rozdzielone: <b>${esc(z.rozdzial.tekst)}</b> — ${z.rozdzial.osoby.map(o =>
               `<span class="${o.znak === '✓' ? 'tekst-ok' : o.znak === '✗' ? 'tekst-alarm' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(', ')}</div>` : ''}
+          ${/* D76 (właściciel 2026-10-19): wgląd w postęp dla upoważnionych (W.rozdzialZlecenia → czesci) — każda część: stan,
+               kiedy zrobiona, notatka, zdjęcia, powód „Nie mogę”. Zwinięte, rozwinięte przy „Do przyjęcia”. */
+            z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="pozycje-zlecenia czesci-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Części — szczegóły</summary>
+            <ul>${z.rozdzial.czesci.map(c => `<li class="stan-${c.znak === '✓' ? 'wykonana' : 'czeka'}"><span aria-hidden="true">${esc(c.znak)}</span> <b>${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? ` <span class="tekst-alarm">— ${esc(c.powod)}</span>` : ''}${c.notatka ? `<div class="slaby">📝 ${esc(c.notatka)}</div>` : ''}${zdjecia(c.zdjecia, '', [z.tytul, c.kto, c.notatka].filter(Boolean).join(' · '))}</li>`).join('')}</ul></details>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
           ${z.notatka ? `<div class="odpowiedz">📝 ${esc(z.notatka)}</div>` : ''}
           ${z.uwagiZwrotu && z.otwarte ? `<div class="slaby">Zwrócone: ${esc(z.uwagiZwrotu)}</div>` : ''}

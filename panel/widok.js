@@ -284,12 +284,22 @@
     return l.filter(z => !((z.dane || {}).nadrzedne && ids.has(z.dane.nadrzedne) && z.status !== 'odrzucone'));
   }
   const ZNAK_CZESCI = { wykonane: '✓', zamkniete: '✓', odrzucone: '✗', przepadlo: '✗', przyjete: '▶' };
-  /* Postęp rozdziału na karcie Panelu: „2/3 zrobione” i osoby ze znakiem (Hala.postepRozdzialu — bliźniak huba). */
-  function rozdzialZlecenia(z, lista, pracownicy) {
+  const STAN_CZESCI = { wykonane: 'zrobione', zamkniete: 'zrobione', odrzucone: 'nie może', przepadlo: 'przepadło', przyjete: 'w robocie' };
+  /* Postęp rozdziału na karcie Panelu: „2/3 zrobione” i osoby ze znakiem (Hala.postepRozdzialu — bliźniak huba).
+     D76 (właściciel 2026-10-19: „pokazuj wszystkim upoważnionym wgląd do postępów”): upoważnionemu (Hala.widziRozdzial —
+     kierownik zakładu, admin, kto zlecił, kto rozdzielił, kierownik działu; opcje = { ja, dzialy }) także `czesci`:
+     każda część ze stanem, chwilą zrobienia, notatkami, zdjęciami i powodem „Nie mogę” — bez szukania części po liście. */
+  function rozdzialZlecenia(z, lista, pracownicy, opcje) {
     const p = H().postepRozdzialu ? H().postepRozdzialu(z, lista) : null;
     if (!p) return null;
+    const o = opcje || {};
+    const widzi = !!(H().widziRozdzial && H().widziRozdzial(z, o.ja, o.dzialy || []));
     return { wszystkie: p.wszystkie, zrobione: p.zrobione, gotowe: p.gotowe, tekst: `${p.zrobione}/${p.wszystkie} zrobione`,
-             osoby: p.czesci.map(c => ({ kto: nazwaPracownika(pracownicy, c.wykonawca) || '—', znak: ZNAK_CZESCI[c.status] || '○', status: c.status })) };
+             osoby: p.czesci.map(c => ({ kto: nazwaPracownika(pracownicy, c.wykonawca) || '—', znak: ZNAK_CZESCI[c.status] || '○', status: c.status })),
+             czesci: widzi ? H().szczegolyRozdzialu(z, lista).map(c => ({
+               id: c.id, kto: nazwaPracownika(pracownicy, c.wykonawca) || '—', znak: ZNAK_CZESCI[c.status] || '○',
+               stan: STAN_CZESCI[c.status] || 'czeka', kiedy: c.czasWykonania ? `${dataKrotka(c.czasWykonania)} ${godzina(c.czasWykonania)}` : null,
+               notatka: c.notatki.join(' · ') || null, zdjecia: c.zdjecia, powod: c.powod })) : null };
   }
 
   const poTerminie = (z, teraz) => {
@@ -379,7 +389,7 @@
         // kto zlecił (filtr „Mój dział i moje” kierownika UR/KJ).
         doKierownika: d.do_kierownika === true && !d.wykonawca && (z.status === 'nowe' || z.status === 'przyjete'),
         rozdzielone: z.status === 'rozdzielone',
-        rozdzial: rozdzialZlecenia(z, wszystkie, pracownicy), czesc: !!d.nadrzedne, zlecilId: d.zlecil || null,
+        rozdzial: rozdzialZlecenia(z, wszystkie, pracownicy, { ja, dzialy: (stale && stale.dzialy) || [] }), czesc: !!d.nadrzedne, zlecilId: d.zlecil || null,
         // Przyciski w Panelu tylko u kierownika działu (UR, KJ) — kierownik zakładu wybiera osobę już przy zleceniu,
         // a dwa przyciski więcej przy każdym zleceniu UR/KJ tylko by mu przeszkadzały (hub i tak by mu pozwolił).
         dzialania: kierDzialu ? H().mozeRozdzielic(z, ja, (stale && stale.dzialy) || []) : { przekaz: false, rozdziel: false },
@@ -619,9 +629,30 @@
     return cz.join(', ') || null;
   }
 
+  /* D76 / P18 (właściciel 2026-10-19: „Tak, stałe też przez kierownika”): działy zapisanego, w których hub da wystąpienie
+     kierownikowi działu (do_kierownika) — autor (s.autor: kierownik zakładu albo admin), tryb „dział” bez osoby, dział
+     z kierownikiem (UR, KJ). Ta sama reguła co hub (do_kierownika w _zlec_wystapienie ↔ Hala.doKierownika).
+     [{ kod, nazwa, kierownik }] — kierownik = nazwa roli („Kierownik UR”). */
+  function kierownicyStalego(s, stale, pracownicy) {
+    const x = s || {};
+    if (x.kazdy === true || x.wykonawca || (Array.isArray(x.wykonawcy) && x.wykonawcy.length)) return [];
+    const autor = (pracownicy || []).find(p => p && p.id === x.autor);
+    const dz = (stale && stale.dzialy) || [];
+    const lista = Array.isArray(x.dzialy) && x.dzialy.length ? x.dzialy : [x.dzial];
+    return lista.filter(kod => H().doKierownika({ dzial: kod }, autor ? autor.role : [], dz)).map(kod => {
+      const d = dz.find(y => y.kod === kod) || {};
+      return { kod, nazwa: d.nazwa || kod, kierownik: (((stale && stale.role) || {})[d.rola_kierownika]) || 'kierownik działu' };
+    });
+  }
+
   /* „Dla kogo” jednym zdaniem: „Wszystkie działy · każdy osobno”, „UR, KJ · po jednym zleceniu na dział”,
-     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”. */
+     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”, D76: „Utrzymanie Ruchu → Kierownik UR”. */
   function dlaKogoPoLudzku(s, stale, pracownicy) {
+    const zwykle = dlaKogoBezKierownika(s, stale, pracownicy);
+    const k = kierownicyStalego(s, stale, pracownicy);
+    return k.length ? `${zwykle} → ${k.map(x => x.kierownik).join(', ')}` : zwykle;
+  }
+  function dlaKogoBezKierownika(s, stale, pracownicy) {
     const wszystkie = ((stale && stale.dzialy) || []);
     const nazwy = new Map(wszystkie.map(d => [d.kod, d.nazwa]));
     const lista = Array.isArray(s.dzialy) && s.dzialy.length ? s.dzialy : [s.dzial];
@@ -646,7 +677,12 @@
     if (!n) return { liczba: 0, tekst: 'Nikt nie dostanie tego zlecenia — zaznacz osoby albo sprawdź urlopy.', alarm: true };
     if (s.kazdy === true || (Array.isArray(s.wykonawcy) && s.wykonawcy.length))
       return { liczba: n, tekst: `Trafi do ${n} ${odmiana(n, 'osoby', 'osób', 'osób')} — każda dostaje własne zlecenie${linie > 1 ? ' na każdej linii' : ''}.` };
-    if (n > 1) return { liczba: n, tekst: `${n} ${odmiana(n, 'zlecenie', 'zlecenia', 'zleceń')} za każdym razem — ${linie > 1 ? 'po jednym na linię' : 'po jednym na dział'}; zrobi je jedna osoba z działu.` };
+    // D76 / P18: od kierownika zakładu (admina) dla UR/KJ bez osoby — do kierownika działu, on przekaże albo rozdzieli.
+    const k = kierownicyStalego(s, stale, pracownicy);
+    const doKier = k.length === 1 ? `Dział ${k[0].nazwa} — ${n === 1 ? 'trafi' : 'trafiają'} do: ${k[0].kierownik} (przekaże albo rozdzieli w dziale).`
+      : k.length ? `${k.map(x => x.nazwa).join(', ')} — trafiają do: ${k.map(x => x.kierownik).join(', ')} (każdy przekaże albo rozdzieli w swoim dziale).` : '';
+    if (n > 1) return { liczba: n, tekst: `${n} ${odmiana(n, 'zlecenie', 'zlecenia', 'zleceń')} za każdym razem — ${linie > 1 ? 'po jednym na linię' : 'po jednym na dział'}; ${k.length ? doKier : 'zrobi je jedna osoba z działu.'}` };
+    if (k.length) return { liczba: 1, tekst: doKier, kierownik: true };
     return { liczba: 1, tekst: s.wykonawca ? 'Jedno zlecenie dla wybranej osoby.' : 'Jedno zlecenie dla działu — zrobi je pierwsza osoba, która je weźmie.' };
   }
 
@@ -2195,7 +2231,7 @@
   const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
-                       dlaKogoPoLudzku, adresaciPoLudzku, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
+                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,

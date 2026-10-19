@@ -385,6 +385,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-zlecenia-filtr button { min-height: var(--dotyk); border-radius: 999px; padding: 0 14px; font-size: 14px; }   /* jak .chip w GK Trasy */
 .hala-zlecenia-filtr button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
 .hala-zlecenie-zdjecia { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+/* D76: szczegóły części rozdzielonego zlecenia (upoważnieni: kierownik działu, kto zlecił, kto rozdzielił). */
+.hala-zlecenie-czesci { margin-top: 8px; }
+.hala-zlecenie-czesci summary { min-height: var(--dotyk); line-height: var(--dotyk); font-weight: 700; cursor: pointer; }   /* znacznik ▸ zostaje — widać, że się rozwija */
+.hala-zlecenie-czesci ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hala-zlecenie-czesci p { margin: 4px 0 0; }
 .hala-zlecenie-foto { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); background: var(--tlo); }
 .hala-zlecenie-formularz { display: grid; gap: 8px; margin-top: 10px; }
 .hala-zlecenie-zdjecie { display: flex; align-items: center; justify-content: center; min-height: var(--dotyk); border: 1px dashed var(--ramka-mocna);
