@@ -37,7 +37,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.28.0';
+  const WERSJA_KLIENTA = '0.29.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -74,6 +74,55 @@
     // Próbny odczyt klucza „hala.*”: na GitHub Pages wszystkie programy GK dzielą jedno źródło i jeden localStorage (D33)
     // — hala nie dotyka kluczy bez swojego przedrostka (pilnuje tego t_dostep.py → WspolneZrodlo).
     try { const s = global.localStorage; s.getItem('hala.urzadzenie'); return s; } catch (e) { return null; }
+  }
+
+  /* Pamięć trwała (offline 2026-10-19, jak GK Trasy i GK Flota): bez niej przeglądarka przy braku miejsca może po cichu
+     skasować IndexedDB strony — razem z kolejką zapisów, które czekają na sieć (awaria zgłoszona bez zasięgu, zdjęcia).
+     Prosimy przy starcie i po logowaniu (Chrome chętniej się zgadza, gdy strona jest „używana”, np. po logowaniu albo
+     z ekranu początkowego). Odmowa niczego nie psuje — dlatego bez komunikatu. Zwraca obietnicę (testy). */
+  function poprosOTrwalaPamiec() {
+    try {
+      const p = typeof navigator !== 'undefined' ? navigator.storage : null;
+      if (!p || typeof p.persist !== 'function') return Promise.resolve(false);
+      const juz = typeof p.persisted === 'function' ? p.persisted() : Promise.resolve(false);
+      return Promise.resolve(juz).then(t => t || p.persist()).catch(() => false);
+    } catch (e) { return Promise.resolve(false); }
+  }
+
+  /* ---------------------------------------------------------------- D78: logowanie PIN-em bez sieci
+
+     Hub (hala.py → weryfikator_offline) daje po logowaniu sól PIN-u i weryfikator = HMAC-SHA256(klucz = PBKDF2(PIN, sól,
+     200 000), „gk-offline-1|<id osoby>|<znacznik urządzenia>”). Telefon trzyma tylko to — nigdy PIN ani skrót z huba. Bez
+     sieci wpisany PIN liczymy tak samo i porównujemy. Ten sam wzór w GK Trasy i GK Flota (app.js → offlinePin). Potrzebne
+     crypto.subtle (https albo localhost) — bez niego logowania bez sieci po prostu nie ma. */
+  const WERSJA_OFFLINE = 'gk-offline-1';
+  const subtle = () => (global.crypto && global.crypto.subtle) || null;
+  const hex = bufor => Array.from(new Uint8Array(bufor), b => b.toString(16).padStart(2, '0')).join('');
+  async function liczWeryfikator(pin, sol, iteracje, pracownikId, znacznik) {
+    const s = subtle(), tekst = new TextEncoder();
+    const klucz = await s.importKey('raw', tekst.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+    const bity = await s.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: tekst.encode(String(sol)), iterations: iteracje }, klucz, 256);
+    const hmac = await s.importKey('raw', bity, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return hex(await s.sign('HMAC', hmac, tekst.encode(`${WERSJA_OFFLINE}|${pracownikId}|${znacznik}`)));
+  }
+  /* Porównanie bez wczesnego wyjścia — czas nie zdradza, ile znaków się zgadza. */
+  function rowneTeksty(a, b) {
+    a = String(a); b = String(b);
+    let r = a.length ^ b.length;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) r |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+    return r === 0;
+  }
+
+  /* D78: kto może wysłać zapisy innej osoby zostawione na tym telefonie (kierownik zakładu i administrator — każdego,
+     kierownik UR/KJ — swojego zespołu, kontrakt stale.zespoly). Tylko podpowiedź dla ekranu — decyduje hub
+     (bliźniak: hala.py → blad_przekazania). */
+  function mozePrzekazac(rolePrzekazujacego, roleAutora, zespoly) {
+    const rp = [].concat(rolePrzekazujacego || []), ra = [].concat(roleAutora || []);
+    if (!ra.length || (ra.length === 1 && ra[0] === 'ekran')) return false;
+    if (rp.some(r => ROLE_ZAKLADU.includes(r))) return true;
+    const zakres = new Set();
+    for (const r of rp) for (const x of ((zespoly || {})[r] || [])) zakres.add(x);
+    return zakres.size > 0 && ra.every(r => zakres.has(r));
   }
 
   // ---------------------------------------------------------------- czas zakładu
@@ -185,7 +234,9 @@
      więc sama uwaga o czasie to dokładnie UWAGA_CZASU. Powiadomienia (UR, push w hubie) milkną tylko przy konflikcie.
      Bliźniak: hala.py → jest_konflikt. */
   const UWAGA_CZASU = 'czas telefonu niewiarygodny — przyjęto czas huba';
-  const jestKonflikt = uwaga => !!uwaga && uwaga !== UWAGA_CZASU;
+  // D78: zapis z kolejki po długiej przerwie przyjęty z czasem z telefonu (telefon znał przesunięcie zegara) — też nie konflikt.
+  const UWAGA_PO_PRZERWIE = 'zapis z telefonu po długiej przerwie — czas z telefonu';
+  const jestKonflikt = uwaga => !!uwaga && uwaga !== UWAGA_CZASU && uwaga !== UWAGA_PO_PRZERWIE;
 
   function zastosuj(kontrakt, stan, zd) {
     const spec = kontrakt.zdarzenia[zd.typ];
@@ -557,7 +608,8 @@
       let wynik = null;
       if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) wynik = wyk <= t;
       else if ((z.status === 'nowe' || z.status === 'przyjete' || z.status === 'rozdzielone') && t < teraz) wynik = false;
-      else if (z.status === 'przepadlo') wynik = false;
+      // D78: przepadłe „z braku łączności” (hub albo tunel nie działał w czasie zadania) nie obniża terminowości.
+      else if (z.status === 'przepadlo' && d.bez_lacznosci !== true) wynik = false;
       if (wynik === null) continue;
       if (wynik) ogolem.wTerminie++; else ogolem.poTerminie++;
       dolicz(dzialy, d.dzial, wynik);
@@ -935,7 +987,12 @@
     let klasa = 'ok';
     // Dociąganie (sieć buforuje strumień, np. szybki tunel) to NIE brak połączenia — zmiany przychodzą co kilka sekund.
     const dociaga = !p.strumien && p.dociaganie && !p.blad;
-    if (!p.online) {
+    if (p.trybOffline) {
+      // D78: zalogowano PIN-em bez sieci — wyraźna wstęga: nic nie idzie do serwera, zapisy czekają w urządzeniu.
+      klasa = 'offline';
+      czesci.push(`Tryb bez połączenia — ${n ? czekaNaWyslanie(n) : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`
+                  + ' · wyślą się po powrocie sieci');
+    } else if (!p.online) {
       klasa = 'offline';
       czesci.push(`Brak sieci — ${n ? czekaNaWyslanie(n) : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`);
     } else if (dociaga) {
@@ -1135,8 +1192,9 @@
         if (!nowy || nowy === hub) return false;
         const stary = hub;
         hub = nowy; zrodloHuba = 'konfiguracja'; bledySieci = 0;
-        await pamiec.zapisz('hub', nowy);
+        // Sygnał razem ze zmianą adresu (bez await pomiędzy): kto zobaczy nowy adres, widzi też zdarzenie „hub”.
         emituj('hub', { stary, nowy });
+        await pamiec.zapisz('hub', nowy);
         przerwijBiezacyStrumien();                     // strumień do starego adresu — od nowa pod nowym, bez czekania
         // Trwająca wysyłka idzie jeszcze pod stary adres i padnie — kolejka rusza pod nowy zaraz po niej, nie za 20 s.
         if (synchronizuje) synchronizujPonownie = true; else h.synchronizuj();
@@ -1166,7 +1224,7 @@
       let dane = null;
       try { dane = await r.json(); } catch (e) { dane = null; }
       if (toNieHub(r.status, dane)) bladSieci(); else bledySieci = 0;
-      if (dane && dane.czas_serwera) przesuniecieZegara = Date.parse(dane.czas_serwera) - (t0 + Date.now()) / 2;
+      if (dane && dane.czas_serwera) ustawZegar(Date.parse(dane.czas_serwera) - (t0 + Date.now()) / 2);
       // 401 dotyczy sesji, z którą zapytanie wyszło. Spóźniona odpowiedź na zapytanie osoby,
       // która już wyszła, nie może wylogować następnej osoby na tym samym telefonie.
       if (r.status === 401 && tokenZapytania && token === tokenZapytania && !(extra && extra.bezSesji)) { await utracSesje(); }
@@ -1242,15 +1300,20 @@
        z siecią. Zły obecny sekret to 403 (nie 401 — sesja trwa), błąd ma tekst po polsku do pokazania wprost. */
     h.zmienPin = async (stary, nowy) => {
       const z = h.pracownik ? znacznikDla(h.pracownik.nazwa) : null;
-      const r = await api('POST', '/api/v1/zmien-pin', { stary: String(stary || ''), nowy: String(nowy || ''), znacznik: z ? z.znacznik : null });
+      const r = await api('POST', '/api/v1/zmien-pin', { stary: String(stary || ''), nowy: String(nowy || ''), znacznik: z ? z.znacznik : null,
+                                                         offline: offlineMozliwy() });
       if (r && r.znacznik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
+      // D78: nowy PIN — nowy weryfikator (albo żaden): stary PIN bez sieci nie może dalej otwierać aplikacji.
+      if (r && h.pracownik) await zapamietajOffline(Object.assign({ pracownik: h.pracownik }, r), [h.pracownik.nazwa, h.pracownik.id]);
       return r;
     };
     /* Zmiana własnego hasła (D43 §4): obecne hasło + nowe. Hub kończy inne sesje i zaufanie WSZYSTKICH urządzeń osoby,
        a to urządzenie dostaje nowy znacznik (16 h) — zapisujemy go od razu. */
     h.zmienHaslo = async (stare, nowe) => {
-      const r = await api('POST', '/api/v1/zmien-haslo', { stare: String(stare || ''), nowe: String(nowe || '') });
+      const r = await api('POST', '/api/v1/zmien-haslo', { stare: String(stare || ''), nowe: String(nowe || ''), offline: offlineMozliwy() });
       if (r && r.znacznik && h.pracownik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
+      // D78: nowy znacznik urządzenia — weryfikator PIN-u bez sieci liczony z nim (stary już nie pasuje).
+      if (r && h.pracownik) await zapamietajOffline(Object.assign({ pracownik: h.pracownik }, r), [h.pracownik.nazwa, h.pracownik.id]);
       return r;
     };
     /* Zestawienie CSV z huba (GET /api/v1/eksport/<rodzaj>.csv?od=&do=) jako plik w urządzeniu. Plik idzie z tokenem
@@ -1402,10 +1465,13 @@
       // potrafi poleżeć w kolejce, a zegar w tym czasie przestawić się (ręcznie, po restarcie) — korekta z „wyslano”
       // w chwili wysyłki liczyłaby wtedy przesunięcie z innego zegara niż ten, który podał czas zdarzenia.
       const zd = { id: uuid(), typ, obiekt, czas: iso((opcjeZapisu && opcjeZapisu.czas) || h.teraz()), dane: dane || {} };
+      // D78: telefon zna przesunięcie swojego zegara — hub po długiej przerwie przyjmie ten czas zamiast swojego.
+      if (zegarZnany) zd.czas_pewny = true;
       await dzialanie(db, 'kolejka', 'readwrite', s => s.add({ zd, autor: h.pracownik.id, proby: 0, dodano: iso(Date.now()) }));
       await odswiezKolejke();
       const spec = h.kontrakt && h.kontrakt.zdarzenia[typ];
       if (spec) emituj('zmiana', { typ: spec.obiekt, id: obiekt, obiekt: h.obiekt(spec.obiekt, obiekt) });
+      if (!h.polaczenie.online || trybOffline) zarejestrujSync();     // D78: bez sieci — wyśle worker, gdy wróci
       h.synchronizuj();
       return zd;
     };
@@ -1453,7 +1519,77 @@
     h.stanKolejki = () => ({ oczekuje: kolejkaCache.length, moje: mojeWKolejce(), pozycje: kolejkaCache.map(w => w.zd) });
 
     // --- synchronizacja: najpierw pliki, potem zdarzenia, potem to, co nowego w hubie
+    /* Pliki (zdjęcia) osoby `autor` — tym tokenem, który jest teraz. Zwraca błąd plików (czekają) albo null.
+       tylkoAutora: przy przekazaniu (D78) tylko pliki tej osoby (bez starych plików bez autora). */
+    async function wyslijPliki(autor, innaOsoba, tylkoAutora) {
+      const pliki = await dzialanie(db, 'pliki', 'readonly', s => s.getAll());
+      let bladPlikow = null;
+      for (const p of pliki.filter(p => !p.wyslany && !p.odrzucony && (tylkoAutora ? p.autor === autor : (!p.autor || p.autor === autor)))) {
+        if (innaOsoba()) break;
+        try {
+          await api('PUT', `/api/v1/pliki/${encodeURIComponent(p.id)}`, p.blob, { naglowki: { 'Content-Type': p.mime || 'image/jpeg' } });
+          p.wyslany = true; p.wyslanyKiedy = Date.now();
+        } catch (e) {
+          if (e.kod === 401) throw e;                  // sesja skończona — nic dalej nie pójdzie
+          // Kłopot huba albo drogi, a nie pliku: 5xx (507 = pełny dysk, dobowy limit), brak odpowiedzi, 4xx bez JSON-a
+          // (strona błędu Cloudflare, bramy) — plik czeka w telefonie i pójdzie później. Przerywamy tylko PLIKI:
+          // zdarzenia (np. zgłoszenie awarii) idą dalej — zdjęcie dojdzie, gdy hub znowu je przyjmie (etap 1).
+          if (!e.kod || e.kod >= 500 || !e.odHuba) { bladPlikow = e; break; }
+          // Hub świadomie nie przyjął pliku (typ, rozmiar): plik zostaje w telefonie z powodem.
+          p.odrzucony = e.message;
+          emituj('odrzucone', { plik: p.id, powod: e.message });
+        }
+        await dzialanie(db, 'pliki', 'readwrite', s => s.put(p));
+      }
+      return bladPlikow;
+    }
+
+    /* Zapisy osoby `autor` z kolejki. przekaz (D78): wysyła je ktoś inny (kierownik, administrator) — w paczce pole
+       `autor`, hub sprawdza uprawnienie i zapisuje „przekazał”. Zwraca { wyslane, odrzucone }. */
+    async function wyslijZdarzenia(autor, innaOsoba, przekaz) {
+      let lista = kolejkaCache.filter(w => w.autor === autor);
+      let rozmiar = PACZKA, wyslane = 0, odrzucone = 0;
+      while (lista.length && !innaOsoba()) {
+        const paczka = lista.slice(0, rozmiar);
+        let r;
+        try {
+          // „wyslano” w tej samej skali co czas zdarzeń (h.teraz) — hub dorzuca tylko różnicę, której telefon jeszcze nie znał.
+          r = await api('POST', '/api/v1/zdarzenia', Object.assign({ wyslano: iso(h.teraz()), zdarzenia: paczka.map(w => w.zd) },
+                                                                   przekaz ? { autor } : {}));
+        } catch (e) {
+          if (e.kod === 413 && rozmiar > 1) { rozmiar = Math.ceil(rozmiar / 2); continue; }   // za duża paczka — dzielimy
+          throw e;
+        }
+        const wyniki = new Map(r.wyniki.map(w => [w.id, w]));
+        await new Promise((ok, zle) => {
+          const t = db.transaction(['kolejka', 'odrzucone'], 'readwrite');
+          for (const w of paczka) {
+            const wynik = wyniki.get(w.zd.id);
+            if (!wynik) continue;
+            if (wynik.status === 'odrzucone') t.objectStore('odrzucone').put({ id: w.zd.id, zd: w.zd, autor: w.autor, powod: wynik.powod, kiedy: iso(Date.now()) });
+            t.objectStore('kolejka').delete(w.nr);
+            // Konflikt (stan się nie zmienił) aplikacje pokazują jako „ktoś zmienił to wcześniej”; sam poprawiony czas
+            // telefonu (etap 1) to nie konflikt — osobny sygnał 'uwaga', żeby nie straszyć człowieka nieprawdą.
+            if (wynik.uwaga) emituj(jestKonflikt(wynik.uwaga) ? 'konflikt' : 'uwaga', { zdarzenie: w.zd, uwaga: wynik.uwaga });
+          }
+          t.oncomplete = ok; t.onerror = () => zle(t.error);
+          t.onabort = () => zle(t.error || new Error('Zapis w telefonie przerwany (brak miejsca?)'));
+        });
+        for (const w of paczka) {
+          const x = wyniki.get(w.zd.id);
+          if (!x) continue;
+          if (x.status === 'odrzucone') { odrzucone++; emituj('odrzucone', { zdarzenie: w.zd, powod: x.powod }); } else wyslane++;
+        }
+        await odswiezKolejke();
+        lista = kolejkaCache.filter(w => w.autor === autor);
+        if (paczka.every(w => !wyniki.has(w.zd.id))) break;       // hub nic nie rozpoznał — nie kręcimy się w kółko
+      }
+      return { wyslane, odrzucone };
+    }
+
     h.synchronizuj = async () => {
+      // D78: tryb bez sieci nie ma tokenu — tylko sprawdzamy, czy hub wrócił (i logujemy tę osobę jej PIN-em).
+      if (trybOffline) { await sprobujWrocic(); return; }
       if (!token || !db) return;
       // Trwa wysyłka: ten zapis mógł przyjść już po wyliczeniu paczki (np. w czasie dociągania) — bez ponowienia czekałby
       // na następny cykl co 20 s, a to bywa zgłoszenie awarii. Jedno ponowienie zaraz po bieżącej wysyłce.
@@ -1464,65 +1600,18 @@
       const mojToken = token, ja = h.pracownik.id;
       const innaOsoba = () => token !== mojToken;
       try {
-        const pliki = await dzialanie(db, 'pliki', 'readonly', s => s.getAll());
-        let bladPlikow = null;
-        for (const p of pliki.filter(p => !p.wyslany && !p.odrzucony && (!p.autor || p.autor === ja))) {
-          if (innaOsoba()) break;
-          try {
-            await api('PUT', `/api/v1/pliki/${encodeURIComponent(p.id)}`, p.blob, { naglowki: { 'Content-Type': p.mime || 'image/jpeg' } });
-            p.wyslany = true; p.wyslanyKiedy = Date.now();
-          } catch (e) {
-            if (e.kod === 401) throw e;                  // sesja skończona — nic dalej nie pójdzie
-            // Kłopot huba albo drogi, a nie pliku: 5xx (507 = pełny dysk, dobowy limit), brak odpowiedzi, 4xx bez JSON-a
-            // (strona błędu Cloudflare, bramy) — plik czeka w telefonie i pójdzie później. Przerywamy tylko PLIKI:
-            // zdarzenia (np. zgłoszenie awarii) idą dalej — zdjęcie dojdzie, gdy hub znowu je przyjmie (etap 1).
-            if (!e.kod || e.kod >= 500 || !e.odHuba) { bladPlikow = e; break; }
-            // Hub świadomie nie przyjął pliku (typ, rozmiar): plik zostaje w telefonie z powodem.
-            p.odrzucony = e.message;
-            emituj('odrzucone', { plik: p.id, powod: e.message });
-          }
-          await dzialanie(db, 'pliki', 'readwrite', s => s.put(p));
-        }
-        let moje = kolejkaCache.filter(w => w.autor === ja);
-        let rozmiar = PACZKA;
-        while (moje.length && !innaOsoba()) {
-          const paczka = moje.slice(0, rozmiar);
-          let r;
-          try {
-            // „wyslano” w tej samej skali co czas zdarzeń (h.teraz) — hub dorzuca tylko różnicę, której telefon jeszcze nie znał.
-            r = await api('POST', '/api/v1/zdarzenia', { wyslano: iso(h.teraz()), zdarzenia: paczka.map(w => w.zd) });
-          } catch (e) {
-            if (e.kod === 413 && rozmiar > 1) { rozmiar = Math.ceil(rozmiar / 2); continue; }   // za duża paczka — dzielimy
-            throw e;
-          }
-          const wyniki = new Map(r.wyniki.map(w => [w.id, w]));
-          await new Promise((ok, zle) => {
-            const t = db.transaction(['kolejka', 'odrzucone'], 'readwrite');
-            for (const w of paczka) {
-              const wynik = wyniki.get(w.zd.id);
-              if (!wynik) continue;
-              if (wynik.status === 'odrzucone') t.objectStore('odrzucone').put({ id: w.zd.id, zd: w.zd, autor: w.autor, powod: wynik.powod, kiedy: iso(Date.now()) });
-              t.objectStore('kolejka').delete(w.nr);
-              // Konflikt (stan się nie zmienił) aplikacje pokazują jako „ktoś zmienił to wcześniej”; sam poprawiony czas
-              // telefonu (etap 1) to nie konflikt — osobny sygnał 'uwaga', żeby nie straszyć człowieka nieprawdą.
-              if (wynik.uwaga) emituj(jestKonflikt(wynik.uwaga) ? 'konflikt' : 'uwaga', { zdarzenie: w.zd, uwaga: wynik.uwaga });
-            }
-            t.oncomplete = ok; t.onerror = () => zle(t.error);
-            t.onabort = () => zle(t.error || new Error('Zapis w telefonie przerwany (brak miejsca?)'));
-          });
-          for (const w of paczka) { const x = wyniki.get(w.zd.id); if (x && x.status === 'odrzucone') emituj('odrzucone', { zdarzenie: w.zd, powod: x.powod }); }
-          await odswiezKolejke();
-          moje = kolejkaCache.filter(w => w.autor === ja);
-          if (paczka.every(w => !wyniki.has(w.zd.id))) break;       // hub nic nie rozpoznał — nie kręcimy się w kółko
-        }
+        const bladPlikow = await wyslijPliki(ja, innaOsoba, false);
+        await wyslijZdarzenia(ja, innaOsoba, false);
         await dociagnij();
         h.polaczenie.ostatniaSynchronizacja = iso(Date.now());
         h.polaczenie.blad = null;
         // Zdarzenia doszły, zdjęcia czekają — osobne pole, bo `blad` aplikacje czytają jako „brak połączenia z hubem”.
         // Kolejna synchronizacja (co 20 s) ponowi pliki.
         h.polaczenie.bladPlikow = bladPlikow ? bladPlikow.message : null;
+        if (!innaOsoba()) zglosKolejke(false).catch(() => {});
       } catch (e) {
         h.polaczenie.blad = e.message;
+        zarejestrujSync();                       // D78: wyśle worker, gdy wróci sieć (Android/Chromium)
       } finally {
         synchronizuje = false;
         if (innaOsoba()) synchronizujPonownie = true;
@@ -1530,6 +1619,76 @@
         if (synchronizujPonownie) { synchronizujPonownie = false; setTimeout(() => h.synchronizuj(), 0); }
       }
     };
+
+    /* D78: zapisy innych osób na tym urządzeniu (wspólny telefon): [{ autor, nazwa, ile, najstarszy, mozna }] — mozna:
+       zalogowana osoba może je wysłać w imieniu autora (Hala.mozePrzekazac; decyduje hub). */
+    h.cudzeZapisy = () => {
+      const ja = h.pracownik && h.pracownik.id;
+      const grupy = new Map();
+      for (const w of kolejkaCache) {
+        if (!w.autor || w.autor === ja) continue;
+        const g = grupy.get(w.autor) || { autor: w.autor, ile: 0, najstarszy: null };
+        g.ile++;
+        const c = w.zd && w.zd.czas;
+        if (c && (!g.najstarszy || c < g.najstarszy)) g.najstarszy = c;
+        grupy.set(w.autor, g);
+      }
+      const zespoly = ((h.kontrakt && h.kontrakt.stale) || {}).zespoly || {};
+      return Array.from(grupy.values()).map(g => {
+        const p = (h.pracownicy || []).find(x => x && x.id === g.autor);
+        return Object.assign(g, { nazwa: (p && p.nazwa) || g.autor,
+                                  mozna: !!token && !!h.pracownik && !!p && mozePrzekazac(h.pracownik.role, p.role, zespoly) });
+      }).sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa)));
+    };
+    /* D78: wyślij zapisy osoby `autor` (wspólny telefon, ta osoba się nie loguje) tokenem zalogowanego kierownika albo
+       administratora — hub przyjmuje je jako zapisy autora z „przekazał: <ja>”. Tylko z siecią i zwykłą sesją. Błąd huba
+       (403 — brak uprawnienia) rzuca dalej, tekst po polsku. → { wyslane, odrzucone } */
+    h.wyslijCudze = async autor => {
+      if (!token || !h.pracownik) { const e = new Error('Zaloguj się przy sieci, żeby wysłać zapisy innej osoby.'); e.kod = 401; throw e; }
+      if (!autor || autor === h.pracownik.id) { await h.synchronizuj(); return { wyslane: 0, odrzucone: 0 }; }
+      for (let i = 0; synchronizuje && i < 300; i++) await new Promise(ok => setTimeout(ok, 100));
+      synchronizuje = true;
+      const mojToken = token;
+      const innaOsoba = () => token !== mojToken;
+      try {
+        await wyslijPliki(autor, innaOsoba, true);
+        const wynik = await wyslijZdarzenia(autor, innaOsoba, true);
+        zglosKolejke(true).catch(() => {});
+        return wynik;
+      } finally {
+        synchronizuje = false;
+        await odswiezKolejke();
+      }
+    };
+
+    /* D78: hub dowiaduje się, ile zapisów czeka na tym urządzeniu i czyich (same liczby) — Panel → „Urządzenia
+       z niewysłanymi zapisami”. Tylko przy zmianie (albo raz na 15 min), żeby nie pytać huba co 20 s. Pierwsza pusta
+       kolejka w tej karcie też idzie raz — kasuje stary wpis tego urządzenia w hubie. */
+    let ostatnieZgloszenie = null, zgloszonoKiedy = 0;
+    async function zglosKolejke(wymus) {
+      if (!token) return;
+      const osoby = {};
+      let najstarszy = null;
+      for (const w of kolejkaCache) {
+        if (!w.autor) continue;
+        osoby[w.autor] = (osoby[w.autor] || 0) + 1;
+        const c = w.zd && w.zd.czas;
+        if (c && (!najstarszy || c < najstarszy)) najstarszy = c;
+      }
+      const podpis = JSON.stringify(osoby);
+      if (!wymus && podpis === ostatnieZgloszenie && Date.now() - zgloszonoKiedy < 900000) return;
+      ostatnieZgloszenie = podpis; zgloszonoKiedy = Date.now();
+      await api('POST', '/api/v1/urzadzenie/kolejka', { osoby, najstarszy });
+    }
+
+    /* D78: Background Sync (Android/Chromium) — worker (../wspolne/hala-sync-sw.js) wyśle kolejkę zalogowanej osoby, gdy
+       wróci sieć, nawet przy zamkniętej aplikacji. iPhone tego nie ma — tam kolejka idzie przy otwarciu (jak dotąd). */
+    function zarejestrujSync() {
+      try {
+        if (typeof navigator === 'undefined' || !navigator.serviceWorker || !kolejkaCache.length) return;
+        navigator.serviceWorker.ready.then(r => (r && r.sync ? r.sync.register('hala-kolejka') : null)).catch(() => {});
+      } catch (e) { /* stara przeglądarka — wyśle się przy otwarciu */ }
+    }
 
     async function dociagnij() {
       for (let i = 0; i < 50; i++) {
@@ -1610,7 +1769,7 @@
               else if (nazwa === 'witaj') {
                 witaj = true; clearTimeout(zegarWitaj);
                 const w = JSON.parse(dane);
-                if (w.czas_serwera) przesuniecieZegara = Date.parse(w.czas_serwera) - Date.now();
+                if (w.czas_serwera) ustawZegar(Date.parse(w.czas_serwera) - Date.now());
                 // Baza przywrócona między dociągnięciem a otwarciem strumienia: wszystko od nowa, potem strumień od nowa
                 // z nowym kursorem (ten był otwarty ze starym seq i pominąłby zdarzenia o „znanych” numerach).
                 if (innaEpoka(w.epoka)) { await wczytajWszystko(); odNowa = true; dalej = false; break; }
@@ -1704,8 +1863,133 @@
     h.trybLogowania = ident => (znacznikDla(ident) ? 'pin' : 'haslo');
     h.loginZNazwy = loginZNazwy;
 
+    // --- D78: praca bez połączenia — logowanie PIN-em bez sieci
+    /* Właściciel 2026-10-19: „Tracąc internet nic nie przerywasz, działasz dalej, a po jego odzyskaniu dane trafiają
+       w docelowe miejsca.” Osoba, która na TYM urządzeniu ma ważny znacznik (hasło w ciągu 16 h, D43), loguje się bez
+       sieci swoim PIN-em. Bezpieczeństwo:
+         * w telefonie tylko weryfikator z huba (liczWeryfikator) — związany ze znacznikiem urządzenia i ważny najdłużej
+           do jego końca; nigdy PIN ani skrót PIN-u z huba;
+         * 5 złych PIN-ów bez sieci (jak w hubie, D43) — weryfikator i znacznik przepadają, dalej tylko hasło przy sieci;
+         * tryb bez sieci NIE ma tokenu: nic nie idzie do huba. Zapisy czekają w kolejce z autorem = ta osoba i wyjdą
+           dopiero JEJ sesją (po powrocie sieci klient sam loguje ją PIN-em trzymanym tylko w pamięci strony, a gdy strona
+           była przeładowana — prosi o zwykłe logowanie). Cudzym tokenem — nigdy (synchronizuj wysyła tylko zapisy osoby
+           z tokenu);
+         * zegar cofnięty przed chwilę zapisu weryfikatora — odmowa (ktoś przestawia czas, żeby przedłużyć 16 h).
+       Rekordy: pamiec 'offline-konta' = { <id osoby>: { pracownik, klucze, sol, iteracje, weryfikator, do, zle, zapisano } }. */
+    const ZLE_PINY_OFFLINE = 5;
+    let trybOffline = null, pinOffline = null, podpowiedz = '';
+    const offlineMozliwy = () => !!subtle() && typeof TextEncoder !== 'undefined';
+    async function kontaOffline() { const m = await pamiec.czytaj('offline-konta'); return m && typeof m === 'object' ? m : {}; }
+    async function zapamietajOffline(r, klucze) {
+      const p = r && r.pracownik;
+      if (!p || !p.id) return;
+      const m = await kontaOffline();
+      for (const [k, w] of Object.entries(m)) if (!w || !(Date.parse(w.do) > h.teraz())) delete m[k];   // wygasłe
+      const o = r.offline;
+      if (o && o.wersja === WERSJA_OFFLINE && typeof o.weryfikator === 'string' && typeof o.sol === 'string') {
+        const stare = m[p.id] || {};
+        m[p.id] = { pracownik: p, klucze: [...new Set([...(stare.klucze || []), ...klucze.map(loginZNazwy).filter(Boolean)])],
+                    sol: o.sol, iteracje: o.iteracje || 200000, weryfikator: o.weryfikator, do: o.do || r.znacznik_do,
+                    zle: 0, zapisano: Date.now() };
+      } else delete m[p.id];          // brak weryfikatora (np. PIN do zmiany) — stary PIN bez sieci już nie wpuści
+      await pamiec.zapisz('offline-konta', m);
+    }
+    async function zapomnijOffline(id) {
+      const m = await kontaOffline();
+      if (id in m) { delete m[id]; await pamiec.zapisz('offline-konta', m); }
+    }
+    /* Błąd, przy którym próbujemy bez sieci: brak odpowiedzi albo odpowiedź nie od huba (bramka Cloudflare 530/502). */
+    const bladSieciLogowania = e => !!e && (!e.kod || !e.odHuba) && e.kod !== 'do_ustawienia';
+    function bladLogowania(tekst, kod, powod) { const e = new Error(tekst); e.kod = kod; e.powod = powod; e.bezSieci = true; return e; }
+
+    async function zalogujBezSieci(ident, pin, z) {
+      if (!offlineMozliwy() || !/^\d{4}$/.test(pin) || !z) return null;
+      const m = await kontaOffline();
+      const klucz = loginZNazwy(ident);
+      const id = Object.keys(m).find(k => m[k] && (k === ident || (m[k].klucze || []).includes(klucz)));
+      const w = id ? m[id] : null;
+      if (!w) return null;
+      const teraz = h.teraz();
+      if (!(Date.parse(w.do) > teraz) || !(Date.parse(z.do) > teraz) || Date.now() < (w.zapisano || 0) - 300000) {
+        await zapomnijOffline(id);
+        throw bladLogowania('Bez sieci logowanie PIN-em działa do 16 godzin od hasła na tym urządzeniu — ten czas minął. Zaloguj się przy sieci.', 401, 'wymagane_haslo');
+      }
+      const ok = rowneTeksty(await liczWeryfikator(pin, w.sol, w.iteracje, id, z.znacznik), w.weryfikator);
+      if (!ok) {
+        w.zle = (w.zle || 0) + 1;
+        if (w.zle >= ZLE_PINY_OFFLINE) {
+          delete m[id]; await pamiec.zapisz('offline-konta', m);
+          zapomnijZnacznik(z.znacznik);         // jak w hubie (D43): po 5 złych PIN-ach — znowu hasło
+          throw bladLogowania('5 złych PIN-ów — wpisz hasło (potrzebna sieć).', 401, 'wymagane_haslo');
+        }
+        await pamiec.zapisz('offline-konta', m);
+        throw bladLogowania('Zły PIN', 401, 'zly_pin');
+      }
+      if (w.zle) { w.zle = 0; await pamiec.zapisz('offline-konta', m); }
+      h.pracownik = w.pracownik;
+      token = null;
+      trybOffline = { id, ident, do: [w.do, z.do].sort()[0] };
+      pinOffline = pin;                         // tylko w pamięci strony — do cichego logowania po powrocie sieci
+      przerwijBiezacyStrumien();
+      await pamiec.usun('token');               // żaden stary token nie może wysłać zapisów tej osoby (ani jej — cudzych)
+      await pamiec.zapisz('pracownik', h.pracownik);
+      await pamiec.zapisz('sesja-offline', trybOffline);
+      h.polaczenie.trybOffline = true;
+      await odswiezKolejke();
+      emituj('sesja', { zalogowany: true, pracownik: h.pracownik, offline: true });
+      emituj('polaczenie', Object.assign({}, h.polaczenie));
+      return h.pracownik;
+    }
+    /* Koniec trybu bez sieci: powrot = 'polaczenie_wrocilo' (hub odpowiada, a PIN-u w pamięci nie ma — trzeba się
+       zalogować, żeby wysłać zapisy), 'koniec_zaufania' (minęło 16 h od hasła), 'wyloguj', 'zalogowany' (zwykła sesja). */
+    async function zakonczOffline(powod) {
+      if (!trybOffline) return;
+      if (powod === 'polaczenie_wrocilo' || powod === 'koniec_zaufania') podpowiedz = trybOffline.ident || '';
+      trybOffline = null; pinOffline = null;
+      h.polaczenie.trybOffline = false;
+      await pamiec.usun('sesja-offline').catch(() => {});
+      if (powod !== 'zalogowany') {
+        emituj('sesja', { zalogowany: false, pracownik: h.pracownik, powod });
+        emituj('polaczenie', Object.assign({}, h.polaczenie));
+      }
+    }
+    /* Co 20 s (synchronizuj) i po „online”: czy hub już odpowiada. PIN w pamięci — zwykłe logowanie tej osoby (D43:
+       PIN + znacznik), jej kolejka rusza jej tokenem. Bez PIN-u (strona przeładowana) — koniec trybu i ekran logowania. */
+    let wracam = false;
+    async function sprobujWrocic() {
+      if (!trybOffline || wracam) return;
+      if (h.teraz() > Date.parse(trybOffline.do)) { await zakonczOffline('koniec_zaufania'); return; }
+      wracam = true;
+      try {
+        if (pinOffline) {
+          const z = znacznikDla(trybOffline.ident) || znacznikDla(trybOffline.id);
+          let r;
+          try {
+            r = await api('POST', '/api/v1/logowanie', { aplikacja: o.aplikacja, identyfikator: trybOffline.ident, pin: pinOffline,
+                                                         znacznik: z ? z.znacznik : null, offline: offlineMozliwy() }, { bezSesji: true });
+          } catch (e) {
+            if (e && e.odHuba) await zakonczOffline('polaczenie_wrocilo');   // hub odpowiedział „nie” — człowiek zaloguje się sam
+            return;                                                          // dalej bez sieci
+          }
+          if (r.do_ustawienia && r.do_ustawienia.length) { await zakonczOffline('polaczenie_wrocilo'); return; }
+          const ident = trybOffline.ident;
+          await zakonczOffline('zalogowany');
+          await zapamietajOffline(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
+          await zakonczLogowanie(r);
+          return;
+        }
+        // Hub odpowiedział (nawet błędem z JSON-em) — jest łączność; brak odpowiedzi / bramka Cloudflare — dalej bez sieci.
+        try { await api('GET', '/api/v1/info', undefined, { bezSesji: true }); } catch (e) { if (!(e && e.odHuba)) return; }
+        await zakonczOffline('polaczenie_wrocilo');
+      } finally { wracam = false; }
+    }
+    h.trybOffline = () => !!trybOffline;
+    h.offlineMozliwy = offlineMozliwy;
+    /* Identyfikator osoby, której tryb bez sieci właśnie się skończył — ekran logowania wpisuje go sam (konto.js). */
+    h.podpowiedzLoginu = () => { const p = podpowiedz; podpowiedz = ''; return p; };
+
     // --- sesja
-    h.zalogowany = () => !!token;
+    h.zalogowany = () => !!token || !!trybOffline;
     let ustawienie = null;           // sesja „tylko do ustawienia hasła i PIN-u” (D43 §3a) — tylko w pamięci
     /* dane: { identyfikator, pin } (D24; identyfikator = kod z karty albo login; „pin” to sekret — hasło albo PIN).
        D43: dokładamy znacznik urządzenia tej osoby (null, gdy go nie ma — hub wie wtedy, że klient zna D43).
@@ -1717,13 +2001,20 @@
       const z = znacznikDla(ident);
       let r;
       try {
-        r = await api('POST', '/api/v1/logowanie', Object.assign({ aplikacja: o.aplikacja, znacznik: z ? z.znacznik : null }, dane),
+        r = await api('POST', '/api/v1/logowanie', Object.assign({ aplikacja: o.aplikacja, znacznik: z ? z.znacznik : null,
+                                                                   offline: offlineMozliwy() }, dane),
                       { bezSesji: true });
       } catch (e) {
-        if (e && e.powod === 'wymagane_haslo' && z) zapomnijZnacznik(z.znacznik);
+        if (e && e.powod === 'wymagane_haslo' && z) { zapomnijZnacznik(z.znacznik); }
+        // D78: hub nieosiągalny (brak sieci, tunel padł) — PIN-em bez sieci, gdy ta osoba ma na urządzeniu ważny znacznik.
+        if (bladSieciLogowania(e)) {
+          const p = await zalogujBezSieci(ident, String((dane && dane.pin) || '').trim(), z);
+          if (p) return p;
+        }
         throw e;
       }
       if (r.znacznik) przepiszZnacznik(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
+      if (!(r.do_ustawienia && r.do_ustawienia.length)) await zapamietajOffline(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
       if (r.do_ustawienia && r.do_ustawienia.length) {
         ustawienie = { token: r.token, pracownik: r.pracownik, doUstawienia: r.do_ustawienia.slice(), ident };
         const e = new Error('Ustaw nowe hasło i PIN.');
@@ -1739,10 +2030,12 @@
     h.ustawKonto = async dane => {
       if (!ustawienie) { const e = new Error('Zaloguj się ponownie'); e.kod = 401; throw e; }
       const u = ustawienie;
-      const r = await api('POST', '/api/v1/ustaw-konto', { haslo: String((dane && dane.haslo) || ''), pin: String((dane && dane.pin) || '') },
+      const r = await api('POST', '/api/v1/ustaw-konto', { haslo: String((dane && dane.haslo) || ''), pin: String((dane && dane.pin) || ''),
+                                                          offline: offlineMozliwy() },
                           { bezSesji: true, naglowki: { Authorization: 'Bearer ' + u.token } });
       ustawienie = null;
       if (r.znacznik) przepiszZnacznik(r, [u.ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
+      if (r.token) await zapamietajOffline(r, [u.ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
       if (!r.token) { const e = new Error(r.brak_dostepu || 'Brak dostępu do tej aplikacji'); e.kod = 403; e.ustawione = true; throw e; }
       return zakonczLogowanie(r);
     };
@@ -1750,6 +2043,7 @@
     async function zakonczLogowanie(r) {
       // Osoba i token RAZEM, bez await pomiędzy: synchronizacja, która wpadła między nie (co 20 s, zmiana osoby bez
       // „Wyjdź”), wysyłała zapisy nowej osoby tokenem poprzedniej — hub przypisywał je nie temu człowiekowi.
+      if (trybOffline) await zakonczOffline('zalogowany');   // D78: zwykła sesja zastępuje tryb bez sieci
       h.pracownik = r.pracownik;
       token = r.token;
       przerwijBiezacyStrumien();                         // zmiana osoby bez „Wyjdź”: strumień poprzedniej sesji
@@ -1764,12 +2058,14 @@
         emituj('sesja', { zalogowany: true, pracownik: h.pracownik });
         h.synchronizuj(); strumien();
         odnowPush();
+        poprosOTrwalaPamiec();
       }
       return h.pracownik;
     }
     h.wyloguj = async () => {
       const stary = token;
       token = null;
+      if (trybOffline) { trybOffline = null; pinOffline = null; h.polaczenie.trybOffline = false; await pamiec.usun('sesja-offline'); }
       przerwijBiezacyStrumien();
       await pamiec.usun('token');
       // Kolejka ZOSTAJE: zapisy tej osoby poczekają, aż zaloguje się ponownie.
@@ -1919,7 +2215,23 @@
     };
 
     // --- czas
+    /* D78: przesunięcie zegara względem huba pamiętamy w telefonie (pamiec 'zegar'): aplikacja otwarta bez sieci (rano,
+       hub wyłączony) zna je dalej, a zapis dostaje `czas_pewny` — hub przyjmie wtedy jego czas także po przerwie dłuższej
+       niż tydzień (UWAGA_PO_PRZERWIE), zamiast podmieniać go na czas odbioru. Zapamiętane starsze niż tydzień nie liczy
+       się jako znane (zegar telefonu mógł się w tym czasie przestawić). */
+    const ZEGAR_WAZNY_MS = 7 * 86400000;
+    let zegarZnany = false, zegarZapisany = null;
+    function ustawZegar(p) {
+      if (typeof p !== 'number' || !isFinite(p)) return;
+      przesuniecieZegara = p; zegarZnany = true;
+      const t = Date.now();
+      if (db && (!zegarZapisany || Math.abs(zegarZapisany.p - p) > 1000 || t - zegarZapisany.kiedy > 600000)) {
+        zegarZapisany = { p, kiedy: t };
+        pamiec.zapisz('zegar', zegarZapisany).catch(() => {});
+      }
+    }
     h.teraz = () => Date.now() + przesuniecieZegara;
+    h.zegarZnany = () => zegarZnany;
     h.zmianaTeraz = () => zmianaDla(h.teraz(), h.slowniki.zmiany);
     h.ustawienie = (klucz, domyslna) => {
       const w = (h.slowniki.ustawienia || {})[klucz];
@@ -1929,6 +2241,7 @@
     // --- start
     h.start = async () => {
       db = await otworzBaze('hala-' + nazwaPamieci);
+      poprosOTrwalaPamiec();
       hub = await ustalHub();
       token = (await pamiec.czytaj('token')) || null;
       h.pracownik = (await pamiec.czytaj('pracownik')) || null;
@@ -1936,8 +2249,17 @@
       h.kontrakt = (await pamiec.czytaj('kontrakt')) || null;
       h.slowniki = (await pamiec.czytaj('slowniki')) || {};
       h.pracownicy = (await pamiec.czytaj('pracownicy')) || [];
+      // D78: tryb bez sieci przeżywa przeładowanie (aktualizacja, telefon zamknął kartę) — w granicach 16 h od hasła.
+      const so = token ? null : await pamiec.czytaj('sesja-offline');
+      if (so && h.pracownik && h.pracownik.id === so.id && Date.parse(so.do) > Date.now()) {
+        trybOffline = so; h.polaczenie.trybOffline = true;
+      } else if (so) await pamiec.usun('sesja-offline');
       seq = (await pamiec.czytaj('seq')) || 0;
       epoka = (await pamiec.czytaj('epoka')) || null;
+      const zegar = await pamiec.czytaj('zegar');
+      if (zegar && typeof zegar.p === 'number' && Date.now() - zegar.kiedy < ZEGAR_WAZNY_MS && Date.now() >= zegar.kiedy) {
+        przesuniecieZegara = zegar.p; zegarZnany = true; zegarZapisany = zegar;
+      }
       for (const s of (await pamiec.czytaj('stan')) || []) stanSerwera.set(s.typ + '|' + s.id, s);
       // Wysłane zdjęcia są już w hubie — telefon trzyma je tydzień (podgląd bez sieci), potem zwalnia miejsce.
       const tydzien = Date.now() - 7 * 86400000;
@@ -1959,7 +2281,15 @@
         if (document.visibilityState === 'hidden') zrzucBrudnopisy(); else h.synchronizuj();
       });
       global.addEventListener('pagehide', zrzucBrudnopisy);
+      // D78: worker wysłał kolejkę sam (Background Sync) — ekran liczy ją od nowa, zamiast pokazywać „czeka: N”.
+      try {
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.addEventListener)
+          navigator.serviceWorker.addEventListener('message', ev => {
+            if (ev && ev.data && ev.data.typ === 'hala-kolejka' && ev.data.aplikacja === nazwaPamieci) odswiezKolejke().catch(() => {});
+          });
+      } catch (e) { /* bez workera */ }
       setInterval(() => h.synchronizuj(), 20000);
+      if (trybOffline) setTimeout(() => h.synchronizuj(), 0);
       if (token) {
         // Bez sieci startujemy z pamięci telefonu; odświeżenie przyjdzie samo.
         // Inna epoka niż zapamiętana (baza przywrócona, gdy telefon/monitor był wyłączony) — wszystko od nowa od razu.
@@ -1978,9 +2308,10 @@
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
-    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU,
+    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
+    mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;

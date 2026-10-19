@@ -356,7 +356,9 @@
         // ⏰ — znacznik „po terminie” na wierszu (UI etap 2: osobnego filtra już nie ma).
         spoznienie: po ? `⏰ spóźnione o ${H().formatCzasu(teraz - termin)}`
           : spoznioneWykonanie ? `wykonane ${H().formatCzasu(wykonano - termin)} po terminie`
-          : przepadlo ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})` : null,
+          : przepadlo ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})`
+            // D78: hub albo tunel nie działał w czasie zadania — telefon mógł go nie dostać; terminowość tego nie liczy.
+            + (d.bez_lacznosci === true ? ' — brak łączności z serwerem, nie liczy się do terminowości' : '') : null,
         przepadlo,
         odpowiedz: d.powod_odrzucenia ? `Nie może: ${d.powod_odrzucenia}` : null,
         // Test właściciela 2026-10-13: notatka dopisana krokiem (D56, „📝 Notatka” przed „Zrobione”) była tylko w historii —
@@ -500,7 +502,20 @@
   }
 
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
-  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: wszystkieZlecenia, teraz, bezRaportu, slowniki, bhp }) {
+  /* D78: „Urządzenia z niewysłanymi zapisami” (GET /api/v1/panel/urzadzenia — telefony meldują swoją kolejkę): jedna linia
+     na urządzenie, po ludzku. lista: [{urzadzenie, aplikacja, oczekuje, zglosil, najstarszy, czas, osoby: [{nazwa, ile}]}]. */
+  const NAZWY_APLIKACJI = { lider: 'GK Lider', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'GK Panel Kierownika' };
+  function opisUrzadzen(lista, teraz) {
+    const t = teraz === undefined ? Date.now() : teraz;
+    const kiedy = c => (c ? `${dataKrotka(c) === dataKrotka(t) ? '' : dataKrotka(c) + ' '}${godzina(c)}` : '—');
+    return (lista || []).filter(u => u && u.oczekuje > 0).map(u => ({
+      tytul: `${NAZWY_APLIKACJI[u.aplikacja] || u.aplikacja} · urządzenie ${u.urzadzenie} · ${H().czekaNaWyslanie(u.oczekuje)}`,
+      osoby: (u.osoby || []).map(o => `${o.nazwa || o.id}: ${o.ile}`).join(', '),
+      opis: `najstarszy zapis ${kiedy(u.najstarszy)} · zgłosił(a) ${u.zglosil || '—'} o ${kiedy(u.czas)}`,
+    }));
+  }
+
+  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: wszystkieZlecenia, teraz, bezRaportu, slowniki, bhp, urzadzenia }) {
     const lista = bezCzesci(wszystkieZlecenia);           // D76: rozdzielone zlecenie to jedno zadanie, nie N
     // „Stoi linii” liczy LINIE (etap 3): dwie zatrzymane maszyny na jednej linii to jedna stojąca linia.
     // D51: zakład z jedną linią (slowniki podane, linia jedna) — liczą się MASZYNY, a kafelek mówi „Maszyna stoi”.
@@ -530,7 +545,13 @@
       // Etap 3: OTWARTE zmiany bez raportu końcowego (2 doby) — to sygnał dla kierownika; nieotwarte z szablonem
       // (np. po weekendzie) to szum, więc są tylko w „Raporty”, zwinięte. Klik prowadzi do „Raporty”.
       { kod: 'bez-raportu', etykieta: 'Zmiany bez raportu', liczba: (bezRaportu || []).filter(b => b.otwarta).length,
-        klasa: klasa((bezRaportu || []).filter(b => b.otwarta).length, 'pilne') }]);
+        klasa: klasa((bezRaportu || []).filter(b => b.otwarta).length, 'pilne') }]).concat(urzadzenia === undefined ? [] : (() => {
+      // D78: telefony, w których czekają zapisy (np. osoby, która się nie loguje) — klik pokazuje które i czyje.
+      const u = (urzadzenia || []).filter(x => x && x.oczekuje > 0);
+      const ile = u.reduce((s, x) => s + x.oczekuje, 0);
+      return [{ kod: 'urzadzenia', etykieta: 'Urządzenia z niewysłanymi zapisami', liczba: u.length,
+                dopisek: ile ? H().czekaNaWyslanie(ile) : null, klasa: klasa(u.length, 'pilne') }];
+    })());
   }
 
   /* Które kafelki pokazać (szlif UI 2026-10-12): rząd zer na monitorze to szum, w którym ginie jedyna ważna liczba —
@@ -1730,7 +1751,12 @@
   function pasekPolaczenia({ zalogowany, polaczenie, kolejka, laska, ostatnio, teraz }) {
     const p = polaczenie || {}, k = kolejka || {};
     let klasa = 'ok', tekst = '';
-    if (zalogowany && !p.strumien) {
+    if (zalogowany && p.trybOffline) {
+      // D78: kierownik zalogowany PIN-em bez sieci — nic nie idzie do serwera, zlecenia czekają w urządzeniu.
+      klasa = 'offline';
+      tekst = 'Tryb bez połączenia — dane mogą być nieaktualne' + (k.moje ? ` · ${H().czekaNaWyslanie(k.moje)}` : '')
+        + ' · wyślą się po powrocie sieci';
+    } else if (zalogowany && !p.strumien) {
       if (p.dociaganie && !p.blad) { klasa = 'kolejka'; tekst = 'Odświeżanie co kilka sekund — sieć nie przepuszcza zmian na żywo'; }
       else {
         klasa = p.online ? 'brak-huba' : 'offline';
@@ -2229,7 +2255,7 @@
   }
 
   const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, autorNieZleca, staleAutora, ostrzezenieAutora,
+                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,

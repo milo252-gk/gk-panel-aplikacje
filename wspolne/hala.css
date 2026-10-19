@@ -507,6 +507,10 @@ dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; col
 .hala-konto-kto b { font-size: 16px; font-weight: 600; }
 .hala-konto-kto span { font-size: 14px; color: var(--tekst-slaby); }
 .hala-konto-drobne { margin: 0; font-size: 12px; color: var(--tekst-slaby); }
+/* D78: zapisy innych osób na wspólnym telefonie — imię, liczba i „Wyślij” w jednej linii. */
+.hala-konto-cudze { display: grid; gap: 6px; margin-top: 6px; }
+.hala-konto-cudze p { margin: 0; }
+.hala-konto-cudzy { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .hala-wybor { display: flex; flex-wrap: wrap; gap: 8px; }
 .hala-wybor button { min-height: var(--dotyk); padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
 .hala-wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }

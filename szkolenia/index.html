@@ -13,11 +13,13 @@
       stan.textContent = "GK Szkolenia nie działa teraz na komputerze w biurze. Poproś o uruchomienie programu — strona sama spróbuje znowu.";
       ponow.hidden = false; setTimeout(idz, 15000);
     }).catch(function () {
-      stan.textContent = 'Brak połączenia z internetem — sprawdź sieć w telefonie.';
+      stan.textContent = "Brak połączenia z internetem — GK Szkolenia otworzy się, gdy wróci sieć (strona sama spróbuje znowu).";
       ponow.hidden = false; setTimeout(idz, 15000);
     });
   }
   ponow.addEventListener('click', idz);
+  // D78: mały worker trzyma tę stronę — bez sieci telefon pokaże ją z komunikatem zamiast błędu przeglądarki.
+  if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) {} }
   idz();
 })();
 </script></body></html>

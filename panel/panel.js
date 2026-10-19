@@ -473,7 +473,7 @@
         rysujAwarie(wiersze);
         rysujJakosc(jakosc, bhpOtwarte);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
-                                slowniki: d.slowniki, bhp: bhpOtwarte.length }));
+                                slowniki: d.slowniki, bhp: bhpOtwarte.length, urzadzenia }));
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {
         rysujZlecenia(d, zlecenia);
@@ -504,7 +504,37 @@
     if (k && k.dataset.kafel === 'po-terminie') Panel.pokazZlecenia('otwarte', 'biezace');
     if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();
     if (k && k.dataset.kafel === 'bhp') Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp');
+    if (k && k.dataset.kafel === 'urzadzenia') pokazUrzadzenia();
   });
+
+  /* D78: „Urządzenia z niewysłanymi zapisami” — telefony meldują swoją kolejkę (hala.js → /api/v1/urzadzenie/kolejka),
+     Panel pyta hub co minutę. Same liczby: kto i ile; wysyła ta osoba po zalogowaniu albo kierownik z tego telefonu
+     (Moje konto → „Zapisy innych osób… Wyślij”). Bez sieci — ostatnia znana lista. */
+  let urzadzenia = [];
+  async function wczytajUrzadzenia() {
+    if (!hala.zalogowany() || (hala.trybOffline && hala.trybOffline())) return;
+    try {
+      urzadzenia = ((await hala.zapytaj('GET', '/api/v1/panel/urzadzenia')) || {}).urzadzenia || [];
+      narysuj();
+    } catch (e) { /* bez sieci albo starszy hub — zostaje to, co było */ }
+  }
+  setInterval(wczytajUrzadzenia, 60000);
+  hala.na('sesja', s => { if (s && s.zalogowany) wczytajUrzadzenia(); else urzadzenia = []; });
+  function pokazUrzadzenia() {
+    let d = document.getElementById('okno-urzadzen');
+    if (!d) {
+      d = document.createElement('dialog');
+      d.id = 'okno-urzadzen';
+      d.className = 'hala-okno';
+      document.body.appendChild(d);
+    }
+    const lista = W.opisUrzadzen(urzadzenia, hala.teraz());
+    d.innerHTML = `<form method="dialog"><h2>Urządzenia z niewysłanymi zapisami</h2>
+      ${lista.map(u => `<p><b>${esc(u.tytul)}</b><br>${esc(u.osoby)}<br><span class="slaby">${esc(u.opis)}</span></p>`).join('') || '<p>Nic nie czeka.</p>'}
+      <p class="slaby">Zapisy wyślą się, gdy ta osoba zaloguje się na swoim telefonie. Na wspólnym telefonie wyśle je też kierownik albo administrator: Moje konto → „Zapisy innych osób” → Wyślij.</p>
+      <div class="hala-okno-przyciski"><button type="submit" class="glowny">Zamknij</button></div></form>`;
+    if (!d.open) d.showModal();
+  }
 
   // ------------------------------------------------------------ zlecenia dla działów (kierownik)
 

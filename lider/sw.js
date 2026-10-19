@@ -19,11 +19,14 @@ const WERSJA = 'lider-777fa89f282d';
 // app.js zamienia adres na ekran. Wcześniej własna obsługa tylko przywracała okno (przegląd 2026-10-07).
 self.HALA_PUSH_OBSLUZ_KLIK = true;
 importScripts('../wspolne/hala-push-sw.js');
+// Kolejka po powrocie sieci bez otwierania aplikacji (D78, Background Sync — Android/Chromium; iPhone: przy otwarciu).
+self.HALA_APLIKACJA = 'lider';
+importScripts('../wspolne/hala-sync-sw.js');
 
 const ZASOBY = [
   './', './index.html', './lider.css', './app.js', './widok.js', './awarie.js', './jakosc.js', './zmiana.js', './formularze.js',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
-  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/zespol.js', '../wspolne/hala-push-sw.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/hala.css', '../wspolne/skaner.js', '../wspolne/logo-gkf.png',
+  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/zespol.js', '../wspolne/hala-push-sw.js', '../wspolne/hala-sync-sw.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/hala.css', '../wspolne/skaner.js', '../wspolne/logo-gkf.png',
   '../wspolne/skaner-zxing.js',          // zapasowy dekoder (iPhone) — obchód z QR musi działać bez sieci
 ];
 
@@ -47,6 +50,9 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (adres.origin !== self.location.origin) return;      // hub za tunelem, Pages → hub: nie nasze
   if (adres.pathname.includes('/api/')) return;           // dane i strumień zawsze z huba, nigdy z kopii
+  // ../konfiguracja.json (adres huba na Pages, D33) czytamy z ?t=<czas> — każde zapytanie ma inny adres. Kopia byłaby
+  // i stara, i rosła bez końca (przy padniętym tunelu ~2880 wpisów na dobę). Bez sieci hala.js bierze adres z pamięci.
+  if (adres.pathname.endsWith('/konfiguracja.json')) return;
 
   // Najpierw sieć (poprawki docierają od razu), kopia tylko gdy sieci nie ma.
   e.respondWith(

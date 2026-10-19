@@ -11,18 +11,21 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej Panel nie wstaje wcale.                        */
 
-const WERSJA = 'panel-f0851fadd5d8';
+const WERSJA = 'panel-91a138d7039a';
 
 // Powiadomienia przy zamkniętym Panelu (2026-10-02): kierownik, który zlecił, dowiaduje się, że zlecenie jest po
 // terminie (wspólna część z Liderem, UR i KJ — D28). Panel nie ma własnej obsługi dotknięcia: robi to wspólny plik
 // (okno Panelu dostaje {typ:'otworz', adres:'#zlecenia'}, a gdy go nie ma, otwiera ./#zlecenia).
 self.HALA_PUSH_OBSLUZ_KLIK = true;
 importScripts('../wspolne/hala-push-sw.js');
+// Kolejka po powrocie sieci bez otwierania aplikacji (D78, Background Sync — Android/Chromium; iPhone: przy otwarciu).
+self.HALA_APLIKACJA = 'panel';
+importScripts('../wspolne/hala-sync-sw.js');
 
 const ZASOBY = [
   './', './index.html', './panel.css', './panel.js', './widok.js', './administracja.js', './checklisty.js', './etykiety.js', './wskazniki.js', './stale.js', './kalendarz.js', './zgloszenia.js', './urlopy.js', './proby.js',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
-  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/miary.js', '../wspolne/zespol.js', '../wspolne/gk-dzwieki.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/zlecenia.js', '../wspolne/hala-push-sw.js', '../wspolne/skaner-zxing.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png',
+  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/miary.js', '../wspolne/zespol.js', '../wspolne/gk-dzwieki.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/zlecenia.js', '../wspolne/hala-push-sw.js', '../wspolne/hala-sync-sw.js', '../wspolne/skaner-zxing.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png',
   '../wspolne/skaner.js',
 ];
 
@@ -46,6 +49,9 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (adres.origin !== self.location.origin) return;      // hub za tunelem, Pages → hub: nie nasze
   if (adres.pathname.includes('/api/')) return;           // dane i strumień zawsze z huba, nigdy z kopii
+  // ../konfiguracja.json (adres huba na Pages, D33) czytamy z ?t=<czas> — każde zapytanie ma inny adres. Kopia byłaby
+  // i stara, i rosła bez końca (przy padniętym tunelu ~2880 wpisów na dobę). Bez sieci hala.js bierze adres z pamięci.
+  if (adres.pathname.endsWith('/konfiguracja.json')) return;
 
   // Najpierw sieć (poprawki docierają od razu), kopia tylko gdy sieci nie ma.
   e.respondWith(

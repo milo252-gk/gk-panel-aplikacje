@@ -242,6 +242,13 @@
       return tryb;
     }
     ident.addEventListener('input', () => { reczny = null; rysuj(); });
+    /* D78: tryb bez sieci właśnie się skończył (sieć wróciła po przeładowaniu strony) — ekran logowania wpisuje tę samą
+       osobę, a pole od razu jest polem PIN-u: zostaje wpisać 4 cyfry, a jej zapisy z kolejki wyjdą JEJ sesją. */
+    const wpiszPodpowiedz = () => {
+      const p = hala.podpowiedzLoginu ? hala.podpowiedzLoginu() : '';
+      if (p && !ident.value) { ident.value = p; reczny = null; rysuj(); }
+    };
+    if (hala.na) hala.na('sesja', s => { if (s && !s.zalogowany && s.powod) setTimeout(wpiszPodpowiedz, 0); });
     if (przelacz) przelacz.addEventListener('click', () => {
       reczny = (reczny || auto()) === 'pin' ? 'haslo' : 'pin';
       sekret.value = '';
@@ -293,6 +300,22 @@
 
   /* Treść okna (czysta funkcja — testy: reduktor-testy.js). dane: {nazwa, role: [nazwy], wyglad, komputer, czeka, cudze,
      odrzucone, zOdrzuconymi, pin} → HTML. komputer — szerokość komputera (naKomputerze()); bez niego słowa telefonu. */
+  /* D78 (właściciel 2026-10-19: „po odzyskaniu internetu dane trafiają w docelowe miejsca”): zapisy innych osób, które
+     zostały na wspólnym telefonie (ta osoba się nie loguje). „Wyślij” — tylko gdy zalogowana osoba może je przekazać
+     (kierownik zakładu, administrator, kierownik działu tej osoby — hala.cudzeZapisy → mozna; decyduje hub). Czysta
+     funkcja (testy: reduktor-testy.js). lista: [{autor, nazwa, ile, mozna}]. */
+  function trescCudzych(lista, komputer) {
+    const l = (lista || []).filter(c => c && c.ile > 0);
+    if (!l.length) return '';
+    const suma = l.reduce((s, c) => s + c.ile, 0);
+    return `<div class="hala-konto-cudze" data-cudze>
+        <p><b>Zapisy innych osób na tym ${komputer ? 'urządzeniu' : 'telefonie'}: ${suma}</b></p>
+        ${l.map(c => `<p class="hala-konto-cudzy"><span>${esc(c.nazwa || c.autor)}: ${Number(c.ile)}</span>${c.mozna
+          ? ` <button type="button" class="maly" data-wyslij-cudze="${esc(c.autor)}">Wyślij</button>` : ''}</p>`).join('')}
+        ${l.some(c => !c.mozna) ? '<p class="hala-konto-drobne">Wyślą się, gdy ta osoba zaloguje się tutaj — albo wyśle je kierownik jej działu lub administrator.</p>' : ''}
+      </div>`;
+  }
+
   function trescKonta(dane) {
     const d = dane || {};
     return `<form method="dialog" autocomplete="off">
@@ -308,6 +331,7 @@
         <div data-dodatki></div>
         <fieldset><legend>Dane w tym urządzeniu</legend>
           <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} od innych osób)` : ''}</p>
+          ${trescCudzych(d.cudzeLista, d.komputer)}
           ${d.odrzucone && d.zOdrzuconymi ? `<button type="button" data-odrzucone>Nie wysłane: ${Number(d.odrzucone)}</button>` : ''}
         </fieldset>
         <p class="hala-konto-drobne" data-wersja></p>
@@ -334,7 +358,20 @@
     const motyw = global.HalaMotyw;
     d.innerHTML = trescKonta({ nazwa: p.nazwa, role: (p.role || []).map(r => nazwyRol[r] || r), wyglad: motyw ? motyw.odczytaj() : 'auto',
                                komputer: naKomputerze(), czeka: k.moje || 0, cudze: Math.max(0, (k.oczekuje || 0) - (k.moje || 0)), odrzucone,
-                               zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran });
+                               zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran,
+                               cudzeLista: hala.cudzeZapisy ? hala.cudzeZapisy() : [] });
+    // D78: „Wyślij” zapisy innej osoby (w jej imieniu — hub zapisze, kto przekazał).
+    for (const b of d.querySelectorAll('[data-wyslij-cudze]')) b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const w = await hala.wyslijCudze(b.dataset.wyslijCudze);
+        if (o.komunikat) o.komunikat(`Wysłane: ${w.wyslane}${w.odrzucone ? ` · nie przyjęte: ${w.odrzucone}` : ''}`, w.odrzucone ? 'uwaga' : 'ok');
+        mojeKonto(hala, opcje);
+      } catch (e) {
+        b.disabled = false;
+        if (o.komunikat) o.komunikat(e && e.kod ? e.message : 'Brak połączenia z serwerem — spróbuj, gdy wróci sieć.', 'blad');
+      }
+    });
     if (!ekran) przycisk(d.querySelector('[data-pin]'), hala, { komunikat: o.komunikat });
     if (typeof o.dodatki === 'function') o.dodatki(d.querySelector('[data-dodatki]'));
     if (global.HalaAktualizacja) global.HalaAktualizacja.wpiszWersje(d.querySelector('[data-wersja]'), o.aplikacja);
@@ -568,6 +605,6 @@
   }
 
   global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, bezKodu, drukujKodyAplikacji, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
-                       biuro, bezSieci, mojeKonto, trescKonta, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
+                       biuro, bezSieci, mojeKonto, trescKonta, trescCudzych, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);
