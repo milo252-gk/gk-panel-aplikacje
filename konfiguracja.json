@@ -1,11 +1,15 @@
 {
   "hub": "https://editing-burner-third-institutes.trycloudflare.com",
-  "zmieniono": "2026-10-19T17:21:10.810Z",
+  "zmieniono": "2026-10-19T17:23:04.726Z",
   "wersje": {
     "wspolne": "wspolne-81e2b05a3cf3",
     "panel": "panel-f0851fadd5d8",
     "lider": "lider-777fa89f282d",
     "ur": "ur-2cc02ffc4961",
     "kj": "kj-e8aa086091c2"
+  },
+  "programy": {
+    "szkolenia": "https://assume-processors-lauren-growing.trycloudflare.com",
+    "wycena": "https://independence-highest-recipes-meanwhile.trycloudflare.com"
   }
 }
