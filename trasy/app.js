@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-566cc7606df6';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-15a50fa7b63a';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -82,6 +82,7 @@ const stan = {
   bezSerwera: false,       // sieć jest, a program w biurze nie odpowiada (pasek połączenia)
   wKolejce: 0,
   synchronizuje: false,
+  trybOffline: null,       // D78: {login, id, do} — zalogowano PIN-em bez sieci (bez tokenu)
   // D43: konta z Panelu mają hasło + PIN (z /api/zyje; zapamiętane na start bez sieci).
   trybD43: Pamiec.czytaj('d43') === '1',
 };
@@ -1196,8 +1197,9 @@ async function doKolejki(op, komunikatSukcesu) {
     throw e;
   }
   await odswiezStanSieci();
+  if (!stan.online || stan.trybOffline) zarejestrujSyncKolejki();     // D78: przypomnienie po powrocie sieci
   if (komunikatSukcesu) {
-    komunikat(stan.online ? komunikatSukcesu : komunikatSukcesu + ' (wyślę, gdy wróci zasięg)', 'ok');
+    komunikat(stan.online && !stan.trybOffline ? komunikatSukcesu : komunikatSukcesu + ' (wyślę, gdy wróci zasięg)', 'ok');
     // Kluczowy zapis kierowcy („✓ Dostarczone”, załadunek, raport) — krótki dźwięk
     // potwierdzenia, jak w hali; ślad GPS idzie bez komunikatu, więc bez dźwięku.
     Dzwiek.zagraj('sukces');
@@ -1207,6 +1209,8 @@ async function doKolejki(op, komunikatSukcesu) {
 }
 
 async function synchronizuj(cicho = true) {
+  // D78: tryb bez połączenia nie ma tokenu — tylko sprawdzamy, czy program wrócił (i logujemy tę osobę jej PIN-em).
+  if (stan.trybOffline) { await sprobujWrocicDoSieci(); return; }
   if (stan.synchronizuje || !stan.token || !stan.uz) return;
   // Flagę stawiamy przed pierwszym await. Zdarzenia 'online' i
   // 'visibilitychange' potrafią wypaść w tym samym ticku i bez tego dwie
@@ -1432,12 +1436,21 @@ async function zaloguj(login, pin) {
   // D43: pole „znacznik” idzie ZAWSZE (null, gdy go nie ma) — po nim program
   // poznaje, że ta wersja umie PIN i okno „Ustaw hasło i PIN”.
   const zn = Znaczniki.dla(login);
-  const odp = await pobierz('/api/logowanie', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ login, pin, znacznik: zn ? zn.z : null,
-                           urzadzenie: navigator.userAgent.slice(0, 110) }),
-  });
-  const wynik = await odpowiedzLogowania(odp);
+  let odp, wynik;
+  try {
+    odp = await pobierz('/api/logowanie', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, pin, znacznik: zn ? zn.z : null, offline: !!(gkOffline() && gkOffline().mozliwy()),
+                             urzadzenie: navigator.userAgent.slice(0, 110) }),
+    });
+    if ([502, 503, 504, 530].indexOf(odp.status) >= 0) throw new Error('Brak połączenia z programem w biurze.');
+    wynik = await odpowiedzLogowania(odp);
+  } catch (e) {
+    // D78: brak sieci albo programu w biurze — PIN-em bez sieci, gdy ta osoba ma tu ważny znacznik (16 h od hasła).
+    const bezSieci = await zalogujBezSieci(login, pin, zn);
+    if (bezSieci) return bezSieci;
+    throw e;
+  }
   if (!odp.ok) {
     const blad = new Error(wynik.blad || 'Nie udało się zalogować');
     blad.kodBledu = wynik.kod || '';
@@ -1457,12 +1470,105 @@ async function zaloguj(login, pin) {
   return przyjmijLogowanie(wynik, login);
 }
 
+/* ------------------------------------------- D78: praca bez połączenia (gk-offline.js)
+
+   Właściciel 2026-10-19: „Tracąc internet nic nie przerywasz, działasz dalej, a po jego odzyskaniu dane trafiają
+   w docelowe miejsca.” Bez sieci kierowca loguje się PIN-em (ważny znacznik tego telefonu, 16 h od hasła). Tryb bez
+   połączenia nie ma tokenu — synchronizuj nic nie wysyła; zapisy czekają z autorem = ta osoba. Po powrocie sieci:
+   logowanie PIN-em z pamięci strony (nigdy z dysku) i wysyłka JEJ tokenem; po przeładowaniu strony (PIN-u w pamięci
+   nie ma) — ekran logowania z jej imieniem. */
+let pinBezSieci = '';
+// gk-offline.js mógł się nie wczytać (stara kopia strony, testy z samym app.js) — wtedy po prostu bez trybu bez sieci.
+function gkOffline() { return typeof GKOffline !== 'undefined' ? GKOffline : null; }
+async function zalogujBezSieci(login, pin, zn) {
+  let r;
+  try {
+    if (!gkOffline()) return null;
+    r = await gkOffline().zaloguj(Kolejka, login, String(pin || '').trim(), zn);
+  } catch (e) {
+    if (e && e.kodBledu === 'wymagane_haslo') Znaczniki.zapomnij(login);
+    throw e;
+  }
+  if (!r || r.profil.rola !== 'kierowca') return null;      // biuro bez sieci — jak dotąd (D78)
+  stan.token = '';
+  Pamiec.usun('token');
+  stan.uz = r.profil;
+  stan.trybOffline = { login, id: r.profil.id, do: r.do };
+  pinBezSieci = String(pin).trim();
+  zakonczTrybDoOdczytu();
+  await Kolejka.zapamietaj('profil', stan.uz).catch(() => {});
+  await Kolejka.zapamietaj('sesja-offline', stan.trybOffline).catch(() => {});
+  odswiezPasekPolaczenia();
+  return stan.uz;
+}
+/* zostaw = login do wpisania na ekranie logowania (sieć wróciła po przeładowaniu, minęło 16 h) albo null. */
+async function zakonczBezSieci(zostaw) {
+  if (!stan.trybOffline) return;
+  stan.trybOffline = null;
+  pinBezSieci = '';
+  await Kolejka.zapomnij('sesja-offline').catch(() => {});
+  if (zostaw !== null && zostaw !== undefined) {
+    stan.uz = null;
+    pokazLogowanie();
+    const pole = document.getElementById('pole-loginu');
+    if (pole && !pole.value) { pole.value = zostaw; if (stan.poleLogowania) stan.poleLogowania.odswiez(); }
+    komunikat('Połączenie wróciło — wpisz PIN, żeby wysłać zapisy z telefonu.', 'ok');
+  }
+  odswiezPasekPolaczenia();
+}
+let wracamDoSieci = false;
+async function sprobujWrocicDoSieci() {
+  const t = stan.trybOffline;
+  if (!t || wracamDoSieci) return;
+  if (!(Date.parse(t.do) > Date.now())) { await zakonczBezSieci(t.login); return; }
+  wracamDoSieci = true;
+  try {
+    if (pinBezSieci) {
+      const zn = Znaczniki.dla(t.login);
+      let odp, wynik;
+      try {
+        odp = await pobierz('/api/logowanie', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ login: t.login, pin: pinBezSieci, znacznik: zn ? zn.z : null, offline: !!(gkOffline() && gkOffline().mozliwy()),
+                                 urzadzenie: navigator.userAgent.slice(0, 110) }) });
+        if ([502, 503, 504, 530].indexOf(odp.status) >= 0) return;            // tunel jeszcze nie stoi
+        wynik = await odp.json();
+      } catch (e) { return; }                                                 // dalej bez sieci
+      if (!odp.ok || (wynik.do_ustawienia && wynik.do_ustawienia.length)) { await zakonczBezSieci(t.login); return; }
+      await przyjmijLogowanie(wynik, t.login);
+      await odswiezStanSieci();
+      synchronizuj(false);
+      return;
+    }
+    try {
+      const odp = await pobierz('/api/zyje', { cache: 'no-store' });
+      if ([502, 503, 504, 530].indexOf(odp.status) >= 0) return;
+    } catch (e) { return; }
+    await zakonczBezSieci(t.login);
+  } finally {
+    wracamDoSieci = false;
+  }
+}
+/* Background Sync (Android/Chromium): przy powrocie sieci sw.js pokaże „N zapisów czeka — otwórz aplikację”
+   (token leży w localStorage, którego worker nie czyta — wysyła dopiero otwarta aplikacja). */
+function zarejestrujSyncKolejki() {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(r => (r && r.sync ? r.sync.register('gk-kolejka') : null)).catch(() => {});
+  } catch (e) { /* stara przeglądarka */ }
+}
+
 /* Zalogowano (logowanie albo „Ustaw hasło i PIN”): znacznik do Znaczniki,
    token i profil do pamięci. */
 async function przyjmijLogowanie(odpowiedz, wpisany) {
   const wynik = Object.assign({}, odpowiedz);
   if (wynik.znacznik) Znaczniki.zapamietaj([wpisany, wynik.login, wynik.imie], wynik.znacznik, wynik.znacznik_do);
   delete wynik.znacznik;                     // znacznik nie idzie do profilu w IndexedDB
+  delete wynik.offline;                      // weryfikator PIN-u też nie (D78 — osobny rekord niżej)
+  // D78: weryfikator PIN-u bez sieci dla znacznika tego telefonu (albo żaden — stary PIN bez sieci już nie wpuszcza).
+  // Tylko kierowca (telefon w trasie); biuro bez sieci — jak dotąd odczyt z pamięci i kolejka zapisów biura.
+  if (gkOffline()) await gkOffline().zapamietaj(Kolejka, wynik, wynik.rola === 'kierowca' ? odpowiedz.offline : null,
+                             [wpisany, wynik.login, wynik.imie]).catch(() => {});
+  await zakonczBezSieci(null);               // zwykła sesja zastępuje tryb bez sieci
   // Kto był tu ostatnio. Po wygasłej sesji (sesjaWygasla) jego profil
   // i kartoteka celowo zostały w telefonie — przy tej samej osobie to one
   // pozwalają wrócić bez utraty czegokolwiek. INNA osoba nie może jednak
@@ -1503,6 +1609,7 @@ async function wyloguj(cicho) {
   stan.token = ''; stan.uz = null;
   Pamiec.usun('token');
   zakonczTrybDoOdczytu();
+  if (stan.trybOffline) { stan.trybOffline = null; pinBezSieci = ''; Kolejka.zapomnij('sesja-offline').catch(() => {}); }
   // Kartoteka klientow i profil zostawaly w telefonie po wylogowaniu —
   // bezterminowo, bo nic ich nigdy nie kasowalo. Zgubiony albo oddany telefon
   // oddawal wtedy komus obcemu cala baze odbiorcow firmy.
@@ -1622,6 +1729,8 @@ function oknoUstawieniaKonta(u, dalej, bladNaStart) {
    tam, gdzie była; czekające zapisy wysyłają się same. Inna osoba — jak
    zwykłe logowanie (zaloguj): cudza kartoteka znika, cudze zapisy nie wychodzą. */
 function sesjaWygasla() {
+  // D78: w trybie bez połączenia tokenu nie ma od początku — 401 znaczy tylko „program już odpowiada”.
+  if (stan.trybOffline) { sprobujWrocicDoSieci(); return; }
   stan.token = '';
   Pamiec.usun('token');
   // Bez profilu nie ma czego pokazywać do odczytu (np. sam start aplikacji) —
@@ -2162,12 +2271,16 @@ function tytulKropkiSieci({ online, wKolejce, odrzucone, bezPamieci, komputer })
   return n ? `${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')} w wysyłce` : 'Połączono';
 }
 
-function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer }) {
+function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, bezPolaczenia }) {
   const n = wKolejce || 0;
   const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
   const czesci = [];
   let klasa = 'ok';
-  if (!online) {
+  if (bezPolaczenia) {
+    // D78: zalogowano PIN-em bez sieci — wyraźna wstęga: nic nie idzie do programu, zapisy czekają w telefonie.
+    klasa = 'offline';
+    czesci.push(`Tryb bez połączenia — ${n ? czeka : `zapisy zostają w ${slowoUrzadzenia('', komputer)}`} · wyślą się po powrocie sieci`);
+  } else if (!online) {
     klasa = 'offline';
     czesci.push(`Brak sieci — ${n ? czeka : `zapisy zostają w ${slowoUrzadzenia('', komputer)}`}`);
   } else if (serwer === false) {
@@ -2185,7 +2298,7 @@ function odswiezPasekPolaczenia() {
   const el = document.getElementById('pasek-polaczenia');
   if (!el) return;
   const p = tekstPaskaPolaczenia({ online: stan.online, wKolejce: stan.wKolejce,
-    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera });
+    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera, bezPolaczenia: !!stan.trybOffline });
   el.className = 'pasek-polaczenia ' + p.klasa;
   el.textContent = p.tekst;
   el.hidden = !p.tekst;
@@ -2499,6 +2612,7 @@ async function uruchom() {
     try {
       await zaloguj(f.get('login').trim(), f.get('pin'));
       await wejdzDoAplikacji();
+      if (stan.trybOffline) komunikat('Bez sieci — tryb bez połączenia. Zapisy wyślą się same, gdy wróci zasięg.');
     } catch (blad) {
       if (blad && blad.kodBledu === 'do_ustawienia') {
         // Hasło startowe: od razu okno „Ustaw hasło i PIN” (D43 §7.4).
@@ -2547,6 +2661,8 @@ async function uruchom() {
   window.addEventListener('online', () => { odswiezStanSieci(); synchronizuj(); });
   window.addEventListener('offline', odswiezStanSieci);
   setInterval(() => { if (navigator.onLine) { synchronizuj(); sprawdzZdarzenia(); } }, 25000);
+  // D78: jutrzejsza trasa zawczasu (funkcja sama pilnuje: najwyżej raz na 15 min, tylko kierowca z sesją).
+  setInterval(() => { if (navigator.onLine && typeof pobierzTraseNaJutro === 'function') pobierzTraseNaJutro(); }, 60000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && navigator.onLine) { synchronizuj(); sprawdzZdarzenia(); }
   });
@@ -2618,6 +2734,19 @@ async function uruchom() {
       }
     }
   }
+  // D78: tryb bez połączenia przeżywa przeładowanie strony (nowa wersja, telefon zamknął kartę) — do 16 h od hasła.
+  if (!stan.token) {
+    const so = await Kolejka.przypomnij('sesja-offline').catch(() => null);
+    const profil = so ? await Kolejka.przypomnij('profil').catch(() => null) : null;
+    if (so && profil && String(profil.id) === String(so.id) && Date.parse(so.do) > Date.now()) {
+      stan.uz = profil;
+      stan.trybOffline = so;
+      await wejdzDoAplikacji();
+      komunikat('Tryb bez połączenia — zapisy wyślą się po powrocie sieci.');
+      return;
+    }
+    if (so) await Kolejka.zapomnij('sesja-offline').catch(() => {});
+  }
   pokazLogowanie();
 }
 
@@ -2676,6 +2805,7 @@ async function wejdzDoAplikacji() {
   await wczytajSlowniki();
   synchronizuj();
   wyslijZapisyBiura();
+  if (typeof pobierzTraseNaJutro === 'function') pobierzTraseNaJutro(true);   // D78: na jutro bez zasięgu
   // Zdarzenia od tej chwili — pierwsze pytanie tylko ustawia numer (start nic nie gra).
   stanZdarzen.od = null;
   sprawdzZdarzenia();

@@ -31,9 +31,42 @@ async function wczytajMojaTrase(data, zPamieci) {
   } catch (e) {
     const kopia = await Kolejka.przypomnij(klucz);
     if (kopia === null || kopia === undefined) throw e;
+    // D78: telefon bywa wspólny (logowanie PIN-em bez sieci) — trasa z pamięci innego kierowcy to nie „moja trasa”.
+    if (!jestBiuro() && kopia.kierowca !== undefined && kopia.kierowca !== null && stan.uz && String(kopia.kierowca) !== String(stan.uz.id)) throw e;
     komunikat(stan.sesjaWygasla ? 'Sesja wygasła — pokazuję trasę z pamięci telefonu'
       : 'Brak sieci — pokazuję trasę z pamięci telefonu');
+    await nalozKolejke(kopia);
     return kopia;
+  }
+}
+
+/* D78 (właściciel 2026-10-19: „tracąc internet nic nie przerywasz”): trasa na JUTRO pobrana z wyprzedzeniem — przy
+   każdej synchronizacji (co 25 s, najwyżej raz na 15 min), gdy biuro już ją ułożyło. Dawniej pierwsze otwarcie nowego
+   dnia bez zasięgu (garaż, trasa w polu) kończyło się „Nie udało się wczytać” — trasy dnia w telefonie jeszcze nie było.
+   Tylko kierowca i tylko z sesją (nie w trybie bez połączenia). Trasa usunięta przez biuro znika też z telefonu. */
+let jutroPobrano = 0;
+function dataJutra(teraz) {
+  const d = new Date(teraz === undefined ? Date.now() : teraz);
+  d.setDate(d.getDate() + 1);
+  return dataLokalna(d);
+}
+async function pobierzTraseNaJutro(wymus) {
+  if (!stan.uz || !stan.token || stan.trybOffline || jestBiuro() || !navigator.onLine) return null;
+  if (!wymus && Date.now() - jutroPobrano < 15 * 60000) return null;
+  jutroPobrano = Date.now();
+  const data = dataJutra();
+  try {
+    const trasy = (await API.get('/api/trasy?data=' + data)).filter(t => String(t.kierowca) === String(stan.uz.id));
+    const klucz = 'moja-trasa-' + data;
+    if (!trasy.length) { await Kolejka.zapamietaj(klucz, null); return null; }
+    const czynna = trasy.find(x => x.status !== 'zakonczona') || trasy[0];
+    const pelna = await API.get('/api/trasy/' + czynna.id);
+    pelna.inne_trasy_dnia = trasy.filter(x => x.id !== czynna.id).map(x => ({ id: x.id, nazwa: x.nazwa, status: x.status, ile: x.ile }));
+    await Kolejka.zapamietaj(klucz, pelna);
+    return pelna;
+  } catch (e) {
+    jutroPobrano = Date.now() - 13 * 60000;   // program nie odpowiada — znowu za 2 minuty
+    return null;
   }
 }
 

@@ -2,7 +2,7 @@
    Trzyma kopie samego programu (HTML, style, skrypty, mapa). Danych nie
    buforuje tutaj — od tego jest IndexedDB w kolejka.js.                      */
 
-const WERSJA = 'trasex-566cc7606df6';
+const WERSJA = 'trasex-15a50fa7b63a';
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
    kopia nie ma jak zostać podana. Poprzednio wystarczyło, że przeglądarka
@@ -10,7 +10,7 @@ const WERSJA = 'trasex-566cc7606df6';
    index.html zostaje bez stempla — serwer oddaje go z „no-store". */
 const ZASOBY = [
   './style.css', './app.js', './kolejka.js', './mapa.js', './podpis.js', './skrot.js',
-  './biuro.js', './kierowca.js', './import.js', './eta.js', './dowody.js',
+  './biuro.js', './kierowca.js', './import.js', './eta.js', './dowody.js', './gk-offline.js',
   './szablony.js', './firma.js', './zaproszenie.js', './gk-dzwieki.js', './ikona.svg', './logo-gkf.png', './logo-strefa.jpg',
   './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
   './manifest.webmanifest', './vendor/leaflet.js', './vendor/leaflet.css',
@@ -130,6 +130,39 @@ self.addEventListener('push', e => {
       body: w.tresc || '', tag: w.tag || 'gk-trasy', renotify: true, requireInteraction: !!w.pilne,
       icon: ikona, badge: ikona, vibrate: w.pilne ? [300, 150, 300, 150, 300] : [200],
       data: { adres: w.adres || '' } })));
+  })());
+});
+
+/* D78: powrót sieci przy ZAMKNIĘTEJ aplikacji (Background Sync — Android/Chromium; iPhone tego nie ma).
+   Zapisy kierowcy czekają w IndexedDB (kolejka.js), ale token sesji leży w localStorage, którego worker nie czyta —
+   a wysyłka cudzym albo żadnym tokenem nie wchodzi w grę. Dlatego worker NIE wysyła, tylko przypomina: „N zapisów
+   czeka — otwórz aplikację” (tylko przy zgodzie na powiadomienia). Aplikacja na ekranie wysyła sama. */
+self.addEventListener('sync', e => {
+  if (e.tag !== 'gk-kolejka') return;
+  e.waitUntil((async () => {
+    const zakres = new URL(self.registration.scope).pathname;
+    const okna = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (okna.some(o => o.visibilityState === 'visible' && new URL(o.url).pathname.startsWith(zakres))) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const ile = await new Promise(ok => {
+      let z;
+      try { z = indexedDB.open('trasy-offline'); } catch (err) { ok(0); return; }
+      z.onupgradeneeded = () => { try { z.transaction.abort(); } catch (err) { /* i tak 0 */ } };
+      z.onerror = () => ok(0);
+      z.onsuccess = () => {
+        const db = z.result;
+        if (!db.objectStoreNames.contains('kolejka')) { db.close(); ok(0); return; }
+        const t = db.transaction('kolejka', 'readonly');
+        const r = t.objectStore('kolejka').count();
+        r.onsuccess = () => { db.close(); ok(r.result || 0); };
+        r.onerror = () => { db.close(); ok(0); };
+      };
+    });
+    if (!ile) return;
+    const slowo = ile === 1 ? 'zapis czeka' : (ile % 10 >= 2 && ile % 10 <= 4 && !(ile % 100 >= 12 && ile % 100 <= 14)) ? 'zapisy czekają' : 'zapisów czeka';
+    const ikona = new URL('./ikona-192.png', self.registration.scope).href;
+    await self.registration.showNotification('GK Trasy', { body: `${ile} ${slowo} — otwórz aplikację, żeby je wysłać.`,
+      tag: 'gk-trasy-kolejka', icon: ikona, badge: ikona, data: { adres: '' } });
   })());
 });
 
