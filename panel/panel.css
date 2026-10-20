@@ -333,22 +333,25 @@ dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
 #formularz-etykiet .przyciski { align-items: center; }
 #formularz-etykiet .przyciski .slaby { margin-right: auto; }
 
-/* Arkusz etykiet: na ekranie ukryty, w druku jedyny widoczny. Stałe barwy marki (strefa A w hala.css) —
-   naklejka ma być czarno-biała na białym także wtedy, gdy Panel jest w motywie ciemnym. */
-.etykiety-druk { display: none; }
-@media print {
-  @page { size: A4; margin: 10mm; }
-  body { background: var(--logowanie-karta); }
-  body > *:not(.etykiety-druk) { display: none !important; }
-  .etykiety-druk { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; color: var(--grafit-ciemny); }
-  .etykieta { display: flex; gap: 3mm; align-items: center; padding: 3mm; border: .3mm dashed var(--grafit-jasny);
-              background: var(--logowanie-karta); break-inside: avoid; page-break-inside: avoid; }
-  .etykieta-qr svg { display: block; width: 26mm; height: 26mm; }
-  .etykieta-opis { min-width: 0; font-size: 8pt; line-height: 1.25; }
-  .etykieta-kod { font-size: 14pt; font-weight: 800; }
-  .etykieta-nazwa { font-weight: 700; }
-  .etykieta-tekst { font-family: monospace; font-size: 7pt; }
-}
+/* Arkusz etykiet drukuje się w ukrytej ramce z własnym CSS (PanelEtykiety.dokument, HalaKonto.drukujArkusz) — Panel nie
+   ma już CSS druku (właściciel 2026-10-20: jeden sposób druku kodów QR wszędzie). */
+
+/* Okno „🖨 Kody QR” (Więcej): kategorie zwijane, w nagłówku liczba i „Drukuj wszystkie”, w środku 🖨 przy każdym kodzie. */
+dialog.okno.okno-kodow { width: min(680px, calc(100vw - 24px)); }
+.kody-kategoria { border: 1px solid var(--ramka); border-radius: var(--promien); margin: 0 0 8px; background: var(--karta); }
+.kody-kategoria > summary { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-weight: 700;
+                            min-height: var(--dotyk); list-style: none; }
+.kody-kategoria > summary::-webkit-details-marker { display: none; }
+.kody-kategoria > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
+.kody-kategoria[open] > summary::before { transform: rotate(90deg); }
+.kody-kategoria > summary .kody-nazwa { margin-right: auto; }
+.kody-kategoria > summary .znacznik { font-weight: 400; }
+.kody-kategoria > p { margin: 0 12px 6px; }
+.kody-lista { list-style: none; margin: 0; padding: 0 12px 8px; }
+.kody-lista li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0;
+                 border-top: 1px solid var(--ramka); overflow-wrap: anywhere; }
+.kody-lista li > span { min-width: 0; }
+.dostep-qr figcaption button { justify-self: center; margin-top: 4px; }
 
 /* Pola wyboru (role, linie, zmiany, etykiety) — wszędzie w Panelu, nie tylko w oknach: zwykły kwadracik
    z podpisem obok, a nie pole na całą szerokość (reguła input z hala.css). */
