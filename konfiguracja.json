@@ -1,6 +1,6 @@
 {
   "hub": "https://ciao-english-frontier-hit.trycloudflare.com",
-  "zmieniono": "2026-10-22T22:25:54.919Z",
+  "zmieniono": "2026-10-22T22:26:56.719Z",
   "wersje": {
     "wspolne": "wspolne-46d4e7e277ac",
     "panel": "panel-91a138d7039a",
@@ -9,6 +9,7 @@
     "kj": "kj-6c150e3be01c"
   },
   "programy": {
-    "szkolenia": "https://foot-jeff-cluster-strategic.trycloudflare.com"
+    "szkolenia": "https://foot-jeff-cluster-strategic.trycloudflare.com",
+    "wycena": "https://deserve-field-chambers-judgment.trycloudflare.com"
   }
 }
