@@ -129,8 +129,6 @@
           Najprościej: przy gotowym zleceniu użyj „💾 Zapisz”. <b>Checklista</b> — jedno zadanie z listą pozycji do odhaczenia
           (np. plan zmiany lidera: obsada, obchody, próby, przekazanie); serwer zleca ją na każdą wybraną zmianę.</p>
         <button type="button" id="zestaw-stalych" hidden>+ Zadania mistrza i lidera</button>
-        <!-- Właściciel 2026-10-20: naklejki maszyn, które zapisane każą zeskanować (▣, obchód) — wszystkie naraz; 🖨 QR przy wpisie. -->
-        <button type="button" id="kody-punktow" hidden>🖨 Kody QR punktów</button>
         <div id="lista-stalych" class="lista"></div>
       </div>
       <!-- D71 (właściciel 2026-10-15: „Dodaj do aplikacji kalendarz, żeby móc też wybierać dni zleceń”): miesiąc — co dnia
@@ -179,7 +177,6 @@
         <button type="button" data-idz="wskazniki">📈 Wskaźniki</button>
         <button type="button" data-idz="raporty">🧾 Raporty</button>
         <button type="button" data-idz="administracja" id="wiecej-administracja" hidden>⚙️ Administracja</button>
-        <button type="button" data-idz="kody" id="wiecej-kody" hidden>🖨 Kody QR</button>
         <button type="button" data-idz="niewyslane" id="wiecej-niewyslane">Nie wysłane</button>
       </nav>
       <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>
@@ -572,16 +569,8 @@
 
 <div id="komunikaty" class="komunikaty" popover="manual" role="status" aria-live="polite"></div>
 
-<!-- Właściciel 2026-10-20: wszystkie kody QR w jednym miejscu (Więcej → 🖨 Kody QR) — kategorie z „Drukuj wszystkie”,
-     rozwinięte — 🖨 przy każdym kodzie. Treść rysuje kody.js; druk w ukrytej ramce (HalaKonto.drukujArkusz). -->
-<dialog id="okno-kodow" class="okno okno-kodow" aria-labelledby="t-okno-kodow">
-  <form method="dialog">
-    <h2 id="t-okno-kodow">🖨 Kody QR</h2>
-    <p class="slaby">Drukuj w skali 100 %. Naklejki — na papierze samoprzylepnym albo zalaminuj.</p>
-    <div id="lista-kodow"></div>
-    <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
-  </form>
-</dialog>
+<!-- Arkusz etykiet QR — widoczny tylko w druku (panel.css → @media print). -->
+<div id="etykiety-druk" class="etykiety-druk" aria-hidden="true"></div>
 
 <script src="../wspolne/hala.js"></script>
 <script src="../wspolne/aktualizacja.js"></script>
@@ -598,7 +587,6 @@
 <script src="widok.js"></script>
 <script src="panel.js"></script>
 <script src="etykiety.js"></script>
-<script src="kody.js"></script>
 <script src="wskazniki.js"></script>
 <script src="administracja.js"></script>
 <script src="checklisty.js"></script>
