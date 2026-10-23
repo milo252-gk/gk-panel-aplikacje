@@ -17,6 +17,11 @@
     const pisze = P.mozeZapisacStale();
     const zlecaj = pisze && (hala.pracownik.role || []).some(r => r === 'admin'
       || ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role || []).includes(r));
+    // Właściciel 2026-10-20: kody QR punktów skanu przy zapisanym (▣ / obchód przy maszynie) — 🖨 = naklejki jego maszyn,
+    // „🖨 Kody QR punktów” = naklejki wszystkich (bez powtórzeń). Te same etykiety co Maszyny i Więcej → 🖨 Kody QR.
+    const punkty = new Map(window.PanelEtykiety.punktySkanu(d.slowniki).filter(p => p.zrodlo === 'zapisane').map(p => [p.kod, p]));
+    $('kody-punktow').hidden = !punkty.size;
+    $('kody-punktow').textContent = `🖨 Kody QR punktów (${window.PanelEtykiety.etykietyElementow([...punkty.values()]).length})`;
     $('lista-stalych').innerHTML = lista.map(s => `
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
@@ -35,6 +40,7 @@
         </div>
         <div class="akcje">
           ${zlecaj ? '<button type="button" class="maly glowny" data-akcja="zlec">Zleć teraz</button>' : ''}
+          ${punkty.has(s.kod) ? `<button type="button" class="maly" data-akcja="kody-qr" title="Drukuj kody QR punktów: ${esc(punkty.get(s.kod).etykiety.map(e => e.kod).join(', '))}">🖨 QR</button>` : ''}
           ${pisze ? `<button type="button" class="maly" data-akcja="zmien">Zmień</button>
             <button type="button" class="maly" data-akcja="kopiuj">Kopiuj</button>
             <button type="button" class="maly" data-akcja="wstrzymaj">${s.aktywny ? 'Wstrzymaj' : 'Wznów'}</button>
@@ -45,6 +51,12 @@
     $('zestaw-stalych').hidden = !brak.length;
     $('zestaw-stalych').textContent = `+ Zadania mistrza i lidera (${brak.length})`;
   }
+
+  $('kody-punktow').addEventListener('click', async () => {
+    const punkty = window.PanelEtykiety.punktySkanu(hala.slowniki).filter(p => p.zrodlo === 'zapisane');
+    try { await window.PanelEtykiety.drukuj(window.PanelEtykiety.etykietyElementow(punkty), 'Kody QR punktów skanu'); }
+    catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
+  });
 
   /* Zestaw od właściciela (D34) jednym przyciskiem — tylko brakujące, autor = kto klika (hub zleca w jego imieniu). */
   $('zestaw-stalych').addEventListener('click', async () => {
@@ -287,6 +299,11 @@
     const s = ((hala.slowniki || {}).zlecenia_stale || {})[kod];
     if (!s) return;
     try {
+      if (b.dataset.akcja === 'kody-qr') {
+        const p = window.PanelEtykiety.punktySkanu(hala.slowniki).find(x => x.zrodlo === 'zapisane' && x.kod === kod);
+        if (p) await window.PanelEtykiety.drukuj(p.etykiety, `Kody QR — ${s.tytul || kod}`);
+        return;
+      }
       // D67: checklista (zapisane z pozycjami) ma własne, proste okno (checklisty.js).
       const lista = Array.isArray(s.pozycje) && s.pozycje.length > 0;
       if (b.dataset.akcja === 'zmien') { if (lista) P.widoki.checklisty.otworz(kod); else otworz(W.stalyDoFormularza(s), kod); }

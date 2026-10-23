@@ -468,17 +468,26 @@
     return { komputer: lista.filter(a => a.komputer).map(a => a.nazwa), niedziala: lista.filter(a => !a.komputer).map(a => a.nazwa) };
   }
 
-  /* Druk kodów wszystkich aplikacji konta (okno „Kody QR aplikacji” i Panel → Administracja → Serwis): lista z huba według
-     ról — kierownik zakładu i administrator dostają każdą aplikację GK, nie tylko cztery aplikacje hali. Zwraca bezKodu. */
-  async function drukujKodyAplikacji(hala) {
-    const w = wierszeAplikacji((await hala.aplikacje()).aplikacje);
-    if (!w.some(a => a.adres)) throw new Error('Żadna aplikacja nie ma jeszcze adresu — najpierw „Wyślij aplikacje na GitHub”.');
-    const ZX = await wczytajZXing();
-    drukujArkusz(arkuszKodow(w, t => svgQR(t, ZX)));
+  /* Druk kodów aplikacji konta (okno „Kody QR aplikacji”, Panel → Administracja → Serwis i Panel → Więcej → 🖨 Kody QR):
+     lista z huba według ról — kierownik zakładu i administrator dostają każdą aplikację GK, nie tylko cztery aplikacje
+     hali. kod — tylko ta jedna aplikacja (właściciel 2026-10-20: „każdy kod QR osobno, jak i wszystkie zbiorczo”); bez
+     kodu — wszystkie, z listą tych bez kodu na dole. Zwraca bezKodu. */
+  async function drukujKodyAplikacji(hala, kod) {
+    let w = wierszeAplikacji((await hala.aplikacje()).aplikacje);
+    if (kod) w = w.filter(a => a.kod === kod && a.adres);
+    if (!w.some(a => a.adres)) throw new Error(kod ? 'Ta aplikacja nie ma jeszcze adresu — najpierw „Wyślij aplikacje na GitHub”.'
+      : 'Żadna aplikacja nie ma jeszcze adresu — najpierw „Wyślij aplikacje na GitHub”.');
+    await drukujKody(w);
     return bezKodu(w);
   }
+  /* Arkusz kodów z gotowych wierszy (wierszeAplikacji) — koder wczytany na żądanie, druk w ukrytej ramce. */
+  async function drukujKody(wiersze) {
+    const ZX = await wczytajZXing();
+    drukujArkusz(arkuszKodow(wiersze, t => svgQR(t, ZX)));
+  }
 
-  /* Druk arkusza w ukrytej ramce — działa w każdej aplikacji GK bez jej własnego CSS druku (okno Moje konto jest wspólne). */
+  /* Druk arkusza w ukrytej ramce — działa w każdej aplikacji GK bez jej własnego CSS druku (okno Moje konto jest wspólne).
+     Tym samym drukuje etykiety QR Panel (PanelEtykiety.drukuj) — jeden sposób druku kodów w całym systemie. */
   function drukujArkusz(html) {
     const ramka = document.createElement('iframe');
     ramka.setAttribute('aria-hidden', 'true');
@@ -604,7 +613,7 @@
     await rysuj();
   }
 
-  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, bezKodu, drukujKodyAplikacji, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
+  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, bezKodu, drukujKodyAplikacji, drukujKody, drukujArkusz, wczytajZXing, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
                        biuro, bezSieci, mojeKonto, trescKonta, trescCudzych, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,12 +5,14 @@
    Cztery części (UI etap 2, właściciel 2026-10-12 — wcześniej sześć chipów):
    - Pracownicy: dodaj, zmień dane, role, linie, nowy PIN, karta (zgubiona → usuń), wyłącz konto, odblokuj po złych PIN-ach.
      Hub: GET/POST /api/v1/admin/… przez hala.admin (rolę sprawdza hub). PIN-ów i kart nie widać — w bazie są tylko skróty.
+     🖨 przy osobie i „🖨 Identyfikatory” — kody HALA:P do logowania skanem w Liderze, UR i KJ (właściciel 2026-10-20).
    - Maszyny (bez linii i stanowisk — 2026-10-12): słownik przez zdarzenia slownik.zapisany / slownik.usuniety.
      „🖨 Drukuj etykiety” drukuje naklejki QR (dawny chip „Etykiety QR” — te same opcje i ten sam druk).
    - Ustawienia: sieć zakładu i progi (hub sprawdza zakresy przy zapisie), kopie poza komputerem (etap 2: folder,
      przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST /api/v1/admin/kopie), tunel i tokeny GitHub.
    - Serwis — dwie zwijane części, nad nimi niezwinięty alarm „Sieć zakładu”:
-     · Dostęp z telefonów (D33): stan tunelu, adresy czterech aplikacji na GitHub Pages z kodami QR, „Wyślij aplikacje na
+     · Dostęp z telefonów (D33): stan tunelu, adresy aplikacji na GitHub Pages z kodami QR (🖨 przy każdej i „Drukuj
+       wszystkie”), „Wyślij aplikacje na
        GitHub”, wersja na Pages, logowanie z internetu (D35). Ustawienia tunelu i tokenów — Ustawienia → „Tunel i GitHub”
        (tokeny nigdy nie wracają z huba).
      · Połączenia GK (D32): klucze programów GK Trasy i GK Flota, które biorą konta z huba (wspolne/GK-KONTA.md §3).
@@ -138,12 +140,16 @@
         <div class="admin-pasek">
           <input id="admin-szukaj" type="search" placeholder="Szukaj osoby" aria-label="Szukaj osoby" value="${esc(szukaj)}">
           <label class="zaznacz"><input type="checkbox" id="admin-nieaktywni" ${nieaktywni ? 'checked' : ''}> Pokaż wyłączone</label>
+          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Lider, UR, KJ)">🖨 Identyfikatory</button>
           <button type="button" class="glowny" id="admin-dodaj">+ Dodaj osobę</button>
         </div>
         <div id="admin-lista" class="lista"></div>`;
     }
     // Linie osoby nazwami — przy jednej linii (D51) bez nich: „Hala” przy każdym liderze to szum.
     const wiersze = W.pracownicyAdmin({ lista, szukaj, nieaktywni, stale: hala.kontrakt && hala.kontrakt.stale, slowniki: hala.slowniki });
+    // Identyfikator QR (HALA:P) ma sens tylko dla osób logujących się w Liderze, UR albo KJ — tam jest „Zeskanuj identyfikator”.
+    const zeSkanem = new Set(window.PanelEtykiety.identyfikatory(wiersze, hala.kontrakt).map(p => p.kod));
+    $('admin-identyfikatory').disabled = !zeSkanem.size;
     $('admin-lista').innerHTML = wiersze.map(p => `
       <article class="admin-osoba ${p.aktywny === false ? 'wylaczona' : ''} ${p.zablokowany ? 'zablokowana' : ''}" data-id="${esc(p.id)}">
         <div class="opis">
@@ -160,6 +166,7 @@
         </div>
         <div class="akcje">
           ${p.zablokowany ? '<button type="button" class="maly glowny" data-akcja="odblokuj">Odblokuj</button>' : ''}
+          ${zeSkanem.has(p.id) ? '<button type="button" class="maly" data-akcja="identyfikator" title="Drukuj identyfikator QR" aria-label="Drukuj identyfikator QR">🖨</button>' : ''}
           <button type="button" class="maly" data-akcja="edytuj">Zmień</button>
         </div>
       </article>`).join('') || '<p class="pusto">Nikogo nie znaleziono</p>';
@@ -756,9 +763,10 @@
         <div class="dostep-aplikacje">${s.aplikacje.filter(a => a.adres).map(a => `
           <figure class="dostep-qr">
             <div class="dostep-kod" data-qr="${esc(a.adres)}" role="img" aria-label="Kod QR: ${esc(a.nazwa)}"></div>
-            <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}${a.opis ? `<span class="slaby">${esc(a.opis)}</span>` : ''}</figcaption>
+            <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}${a.opis ? `<span class="slaby">${esc(a.opis)}</span>` : ''}
+              <button type="button" class="maly" data-akcja="drukuj-qr-aplikacji" data-app="${esc(a.app)}" aria-label="Drukuj kod ${esc(a.nazwa)}">🖨 Drukuj kod</button></figcaption>
           </figure>`).join('')}</div>
-        <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj kody wszystkich aplikacji GK</button></div>
+        <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj wszystkie</button></div>
       </section>
       <section class="admin-linia">
         <h3><span>GK Trasy i GK Flota</span></h3>
@@ -814,10 +822,10 @@
 
   /* Właściciel 2026-10-15: „chcę móc wydrukować kody QR do wszystkich aplikacji, nie tylko produkcyjnych” — ten sam arkusz
      co okno „Kody QR aplikacji” (HalaKonto.drukujKodyAplikacji): aplikacje hali, GK Trasy, GK Flota, GK Szkolenia, GK Wycena;
-     na dole, które są bez kodu i dlaczego. */
-  async function drukujKodyAplikacji() {
+     na dole, które są bez kodu i dlaczego. app — jedna aplikacja (właściciel 2026-10-20: „każdy kod QR osobno”). */
+  async function drukujKodyAplikacji(app) {
     try {
-      const bez = await window.HalaKonto.drukujKodyAplikacji(hala);
+      const bez = await window.HalaKonto.drukujKodyAplikacji(hala, app);
       if (bez.niedziala.length) P.komunikat(`Bez kodu (program w biurze wyłączony albo jeszcze nie na GitHub Pages): ${bez.niedziala.join(', ')}`, 'uwaga');
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   }
@@ -920,29 +928,26 @@
     $('etykiet-ile').textContent = lista.length ? `Etykiet: ${lista.length}` : 'Nic nie wybrano';
   }
 
-  /* Koder QR jest w bibliotece ZXing (360 kB) — wczytujemy ją dopiero przy drukowaniu, nie przy każdym starcie Panelu. */
-  function wczytajZXing() {
-    if (window.ZXing) return Promise.resolve(window.ZXing);
-    return new Promise((ok, zle) => {
-      const s = document.createElement('script');
-      s.src = '../wspolne/skaner-zxing.js';
-      s.onload = () => ok(window.ZXing);
-      s.onerror = () => zle(new Error('Nie udało się wczytać kodera QR. Sprawdź połączenie z serwerem i spróbuj jeszcze raz.'));
-      document.head.appendChild(s);
-    });
-  }
+  /* Koder QR jest w bibliotece ZXing (360 kB) — wczytujemy ją dopiero przy rysowaniu kodów, nie przy każdym starcie
+     Panelu. Jeden wczytywacz dla całego Panelu i okna Moje konto (HalaKonto). */
+  const wczytajZXing = () => window.HalaKonto.wczytajZXing();
 
   /* kod maszyny — D61 (właściciel 2026-10-14: „kody QR … do całości i poszczególnych maszyn pojedynczo”): etykieta
-     jednej maszyny (np. zniszczona naklejka); bez kodu — arkusz wybranych linii i rodzajów (wszystkie). */
+     jednej maszyny (np. zniszczona naklejka); bez kodu — arkusz wybranych linii i rodzajów (wszystkie). Druk w ukrytej
+     ramce (PanelEtykiety.drukuj — ten sam arkusz co w oknie „🖨 Kody QR”), nie druk całej strony Panelu. */
   async function drukujEtykiety(kod) {
     const lista = kod ? window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: [], rodzaje: ['maszyny'] }).filter(p => p.kod === kod)
       : window.PanelEtykiety.pozycje(hala.slowniki || {}, { linie: etykietyLinie, rodzaje: rodzajeEtykiet(hala.slowniki || {}) });
-    if (!lista.length) return;
-    const ZX = await wczytajZXing();
-    $('etykiety-druk').innerHTML = window.PanelEtykiety.arkusz(lista, ZX);
-    window.print();
+    await window.PanelEtykiety.drukuj(lista, kod ? `Etykieta QR ${kod}` : 'Etykiety QR maszyn');
   }
-  window.addEventListener('afterprint', () => { $('etykiety-druk').innerHTML = ''; });
+
+  /* Identyfikatory osób (HALA:P — logowanie skanem w GK Lider, UR i KJ): jednej osoby albo wszystkich z listy (z filtrem
+     wyszukiwania i „Pokaż wyłączone” — PanelEtykiety.identyfikatory i tak pomija wyłączonych i konta bez aplikacji ze skanem). */
+  function identyfikatoryListy(id) {
+    const osoby = id ? (lista || []).filter(p => p.id === id)
+      : W.pracownicyAdmin({ lista, szukaj, nieaktywni, stale: hala.kontrakt && hala.kontrakt.stale, slowniki: hala.slowniki });
+    return window.PanelEtykiety.identyfikatory(osoby, hala.kontrakt);
+  }
 
   // ------------------------------------------------------------ zdarzenia
 
@@ -993,7 +998,11 @@
       if (akcja === 'odswiez-polaczenia') await wczytajPolaczenia();
       if (akcja === 'odswiez-dostep') await wczytajDostep();
       if (akcja === 'wyslij-pages') await wyslijNaPages();
-      if (akcja === 'drukuj-qr-aplikacji') drukujKodyAplikacji();
+      if (akcja === 'drukuj-qr-aplikacji') drukujKodyAplikacji(b.dataset.app);
+      if (akcja === 'identyfikator' || akcja === 'identyfikatory') {
+        const osoby = identyfikatoryListy(akcja === 'identyfikator' ? id : null);
+        await window.PanelEtykiety.drukuj(osoby, osoby.length === 1 ? `Identyfikator QR ${osoby[0].nazwa}` : 'Identyfikatory QR');
+      }
       if (akcja === 'kopiuj-klucz') {
         const pole = b.parentElement.querySelector('input');
         try { await navigator.clipboard.writeText(pole.value); P.komunikat('Skopiowano klucz', 'ok'); }

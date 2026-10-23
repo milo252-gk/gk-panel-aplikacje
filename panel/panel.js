@@ -256,12 +256,15 @@
   for (const b of document.querySelectorAll('#wiecej [data-idz]')) {
     b.addEventListener('click', () => {
       if (b.dataset.idz === 'niewyslane') { pokazOdrzucone(); return; }
+      if (b.dataset.idz === 'kody') { if (Panel.widoki.kody) Panel.widoki.kody.otworz(); return; }
       const z = document.querySelector(`.zakladki [data-widok="${b.dataset.idz}"]`);
       if (z) z.click();
     });
   }
   function rysujWiecej() {
     $('wiecej-administracja').hidden = $('menu-administracja').hidden;
+    // Właściciel 2026-10-20: wszystkie kody QR do druku w jednym miejscu — dla kierownika zakładu i administratora.
+    $('wiecej-kody').hidden = !(Panel.widoki.kody && Panel.widoki.kody.dostepne());
     const n = (kolejka && kolejka.odrzucone) || 0;
     $('wiecej-niewyslane').textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
     $('plakietka-wiecej').hidden = !n;
