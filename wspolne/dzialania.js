@@ -490,7 +490,9 @@
      HalaZlecenia.wiersze — te same filtry co ekran Zleceń (dział, linia, osoba, urlop). */
   function zadaniaMaszyny(wiersze, maszyna) {
     // D56: zlecenie może mieć kilka maszyn — wystarczy, że ta jest wśród nich.
-    return (wiersze || []).filter(w => w.doZrobienia && ((w.maszyny && w.maszyny.length ? w.maszyny : [w.maszyna]).includes(maszyna)));
+    // 2026-10-26: checklista — maszyny pozycji ze skanem QR (w.maszynySkanu) też się liczą.
+    return (wiersze || []).filter(w => w.doZrobienia && ((w.maszyny && w.maszyny.length ? w.maszyny : [w.maszyna]).includes(maszyna)
+      || (w.maszynySkanu || []).includes(maszyna)));
   }
 
   function menuMaszyny(hala, maszyna, opcje) {

@@ -1032,12 +1032,30 @@
       if (!(m >= 1 && m <= 10080)) bledy.push('Minuty od startu zmiany: liczba od 1 do 10080.');
       termin.minuty = m;
     }
+    // Okno od–do (2026-10-26): „od” godziny zakładu albo N minut po starcie zmiany; puste = od startu. Hub odrzuca „od”
+    // nie wcześniejsze niż termin w minutach; przy godzinach pilnuje wystąpienia (zlecenie bez okna, nie błąd).
+    let okno = null;
+    if (f.okno_rodzaj === 'godzina') {
+      const g = String(f.okno_godzina || '').trim();
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(g)) bledy.push('Godzina „od” jako GG:MM, np. 08:00.');
+      okno = { rodzaj: 'godzina', godzina: g };
+    } else if (f.okno_rodzaj === 'minuty') {
+      const m = parseInt(f.okno_minuty, 10);
+      if (!(m >= 1 && m <= 10080)) bledy.push('„Od” — minuty po starcie zmiany: liczba od 1 do 10080.');
+      else if (tr === 'minuty' && m >= termin.minuty) bledy.push('„Od” musi być wcześniej niż termin (minuty po starcie).');
+      okno = { rodzaj: 'minuty', minuty: m };
+    }
     const wartosc = { tytul, dzial: dzialy[0] || f.dzial, priorytet: f.pilne ? 'pilne' : 'normalny',
                       wymagaj_zdjecia: !!f.wymagaj_zdjecia, wymagaj_notatki: !!f.wymagaj_notatki,
                       harmonogram, termin, aktywny: f.aktywny !== false, autor };
+    if (okno) wartosc.okno_od = okno;
     // Skan QR ma sens tylko z maszyną (naklejka HALA:M:… na niej) — bez maszyny pole po cichu odpada.
     if (f.wymagaj_skanu && String(f.maszyna || '').trim()) wartosc.wymagaj_skanu = true;
     for (const pole of ['opis', 'linia', 'maszyna']) { const v = String(f[pole] || '').trim(); if (v) wartosc[pole] = v; }
+    // 2026-10-26: kilka maszyn — `maszyny` (lista), `maszyna` = pierwsza (hub: maszyny_pozycji, skan wszystkich).
+    const listaM = [...new Set([].concat(Array.isArray(f.maszyny) ? f.maszyny : []).map(String).filter(Boolean))];
+    if (listaM.length > 1) { wartosc.maszyny = listaM.slice(0, 50); wartosc.maszyna = listaM[0]; }
+    else if (listaM.length === 1 && !wartosc.maszyna) wartosc.maszyna = listaM[0];
     if (dzialy.length > 1) wartosc.dzialy = dzialy;
     if (!f.kto && String(f.wykonawca || '').trim()) wartosc.wykonawca = String(f.wykonawca).trim();
     if (kto === 'kazdy') wartosc.kazdy = true;
@@ -1053,6 +1071,7 @@
     const h = (s && s.harmonogram) || {}, t = (s && s.termin) || {};
     const osoby = Array.isArray(s.wykonawcy) && s.wykonawcy.length ? s.wykonawcy : (s.wykonawca ? [s.wykonawca] : []);
     return { tytul: s.tytul || '', opis: s.opis || '', dzial: s.dzial || 'produkcja', linia: s.linia || '', maszyna: s.maszyna || '',
+             maszyny: Array.isArray(s.maszyny) && s.maszyny.length ? s.maszyny.slice() : (s.maszyna ? [s.maszyna] : []),
              dzialy: Array.isArray(s.dzialy) && s.dzialy.length ? s.dzialy : [s.dzial || 'produkcja'],
              kto: s.kazdy === true ? 'kazdy' : osoby.length ? 'osoby' : 'dzial', wykonawcy: osoby,
              wykonawca: s.wykonawca || '', pilne: s.priorytet === 'pilne',
@@ -1062,7 +1081,8 @@
              wymagaj_zdjecia: s.wymagaj_zdjecia !== false, wymagaj_notatki: s.wymagaj_notatki !== false, wymagaj_skanu: s.wymagaj_skanu === true,
              rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], dzien_miesiaca: h.dzien_miesiaca || 1, zmiany: h.zmiany || [],
              co_min: h.co_min || '',
-             termin_rodzaj: t.rodzaj || 'koniec_zmiany', godzina: t.godzina || '', minuty: t.minuty || 60, aktywny: s.aktywny !== false };
+             termin_rodzaj: t.rodzaj || 'koniec_zmiany', godzina: t.godzina || '', minuty: t.minuty || 60, aktywny: s.aktywny !== false,
+             okno_rodzaj: (s.okno_od || {}).rodzaj || '', okno_godzina: (s.okno_od || {}).godzina || '', okno_minuty: (s.okno_od || {}).minuty || 60 };
   }
 
   /* „💾 Zapisz” przy zwykłym zleceniu (jak „Zapisz jako szablon” w GK Trasy): te same pola, domyślnie POJEDYNCZE
@@ -1360,7 +1380,30 @@
     if (p.trwa) powod = 'Wysyłka trwa…';
     else if (!u.github_token_ustawiony) powod = 'Najpierw wklej token GitHub: Ustawienia → Tunel i GitHub.';
     else if (!tunel.adres) powod = 'Najpierw musi działać tunel — bez niego aplikacje na Pages nie mają gdzie wysyłać danych.';
-    return { tunel, wersja, adres, wyslij: { mozna: !powod, powod }, aplikacje: p.aplikacje || [], strona: p.adres || '' };
+    return { tunel, wersja, adres, wyslij: { mozna: !powod, powod }, aplikacje: p.aplikacje || [], strona: p.adres || '',
+      serwer: aktualizacjaSerwera(d && d.serwer, teraz) };
+  }
+
+  /* „Zaktualizuj serwer teraz” (2026-10-26) po ludzku: stan automatu aktualizacji serwera (hub czyta go z pliku, który
+     zapisuje aktualizacja.py) i to, czy prośba już czeka na strażnika. null — hub nie stoi na serwerze GK (brak karty). */
+  function aktualizacjaSerwera(sr, teraz) {
+    if (!sr) return null;
+    const kiedy = iso => kiedyKrotko(iso, teraz);
+    const wersja = sr.wersja ? `Zainstalowana wersja: ${sr.wersja}. ` : '';
+    const ost = sr.ostatnia_aktualizacja || {};
+    let stan, kolor, opis;
+    if (sr.prosba) { stan = 'Czeka na start'; kolor = 'uwaga';
+      opis = `Prośba wysłana ${kiedy(sr.prosba.czas)}${sr.prosba.kto ? ` (${sr.prosba.kto})` : ''} — serwer zacznie w ciągu 5 minut, `
+        + 'a skończy po kilku minutach. Panel na chwilę przestanie odpowiadać — to normalne.'; }
+    else if (sr.wynik === 'blad') { stan = 'Błąd'; kolor = 'alarm'; opis = `${sr.opis || 'Serwer nie może sprawdzić nowych wersji.'}`; }
+    else if (sr.wynik === 'cofnieta' || (ost.wynik === 'cofnieta' && sr.wynik !== 'zainstalowana')) { stan = 'Wróciła stara wersja'; kolor = 'alarm';
+      opis = `${sr.opis || ost.opis || 'Nowa wersja nie wstała, serwer wrócił do poprzedniej.'}`; }
+    else if (sr.wynik === 'zainstalowana') { stan = 'Zaktualizowany'; kolor = 'ok'; opis = sr.opis || 'Nowa wersja działa.'; }
+    else if (sr.wynik === 'aktualna') { stan = 'Aktualny'; kolor = 'ok'; opis = 'Na GitHubie nie ma nowszej wersji.'; }
+    else { stan = 'Nie wiadomo'; kolor = 'neutral'; opis = sr.opis || 'Serwer jeszcze nic nie sprawdził.'; }
+    const kontrola = sr.sprawdzono || sr.ostatnia_kontrola;
+    return { stan, kolor, opis: `${wersja}${opis}${kontrola ? ` Ostatnie sprawdzenie: ${kiedy(kontrola)}.` : ''}`.trim(),
+      mozna: !sr.prosba };
   }
 
   /* Logowanie z internetu (D35) po ludzku: alarm sieci zakładu (z tym, co zrobić), licznik złych PIN-ów z internetu
@@ -2159,13 +2202,26 @@
         if (m === null || m > 10080) bledy.push(`Pozycja ${nr}: godzina od startu zmiany jako g:mm, np. 0:30.`);
         else q.minuty = m;
       }
+      // Okno od–do (2026-10-26): „od” godziny po starcie zmiany (g:mm) — wcześniej pozycji nie da się odhaczyć.
+      const og = String(p.od || '').trim();
+      if (og) {
+        const mo = minutyZTekstu(og);
+        if (mo === null || mo > 10080) bledy.push(`Pozycja ${nr}: „od” jako g:mm po starcie zmiany, np. 0:15.`);
+        else if (Number.isInteger(q.minuty) && mo >= q.minuty) bledy.push(`Pozycja ${nr}: „od” musi być wcześniej niż godzina pozycji.`);
+        else q.od_minuty = mo;
+      }
       if (p.czynnosc && czynnosci.has(p.czynnosc)) q.czynnosc = p.czynnosc;
-      if (p.maszyna) q.maszyna = String(p.maszyna);
+      // Właściciel 2026-10-26: „chcę móc wyznaczać kilka maszyn do sprawdzenia” — lista `maszyny` (jedna zostaje w polu
+      // `maszyna`, jak dotąd; bliźniak huba: maszyny_pozycji). Okno może podać `maszyny` albo starą `maszyna`.
+      const wybrane = [...new Set([].concat(Array.isArray(p.maszyny) ? p.maszyny : [], p.maszyna ? [p.maszyna] : []).map(String).filter(Boolean))];
+      if (wybrane.length > 50) bledy.push(`Pozycja ${nr}: najwyżej 50 maszyn.`);
+      if (wybrane.length > 1) q.maszyny = wybrane.slice(0, 50);
+      else if (wybrane.length === 1) q.maszyna = wybrane[0];
       if (p.zdjecie) q.wymagaj_zdjecia = true;
       if (p.notatka) q.wymagaj_notatki = true;
       if (p.skan) {
-        if (q.maszyna) q.wymagaj_skanu = true;
-        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę pod „⋯”.`);
+        if (wybrane.length) q.wymagaj_skanu = true;
+        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę (albo kilka) pod „⋯”.`);
       }
       pozycje.push(q);
     });
@@ -2183,13 +2239,17 @@
     return { nazwa: (s && s.tytul) || '', dzial: (s && s.dzial) || 'produkcja', linia: (s && s.linia) || '', wykonawca: (s && s.wykonawca) || '',
              rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], zmiany: h.zmiany || [], aktywny: !s || s.aktywny !== false,
              pozycje: ((s && s.pozycje) || []).map(p => ({ id: p.id, nazwa: p.nazwa || '', godzina: Number.isInteger(p.minuty) ? tekstZMinut(p.minuty) : '',
-                                                          czynnosc: p.czynnosc || '', maszyna: p.maszyna || '', zdjecie: !!p.wymagaj_zdjecia,
+                                                          od: Number.isInteger(p.od_minuty) ? tekstZMinut(p.od_minuty) : '',
+                                                          czynnosc: p.czynnosc || '', maszyna: p.maszyna || '',
+                                                          maszyny: Array.isArray(p.maszyny) && p.maszyny.length ? p.maszyny.slice() : (p.maszyna ? [p.maszyna] : []),
+                                                          zdjecie: !!p.wymagaj_zdjecia,
                                                           notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu })) };
   }
   /* Zapisane zlecenie → pozycja checklisty (lista „➕ Z zapisanych…” — bez pisania drugi raz). */
   function pozycjaZZapisanego(z) {
     const m = parseInt(z && z.minuty, 10);
-    return { nazwa: (z && z.tytul) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '',
+    const maszyny = z && Array.isArray(z.maszyny) && z.maszyny.length ? z.maszyny.slice() : (z && z.maszyna ? [z.maszyna] : []);
+    return { nazwa: (z && z.tytul) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '', maszyny,
              czynnosc: (z && z.czynnosc) || '', zdjecie: !!(z && z.zdjecie), notatka: !!(z && z.notatka), skan: !!(z && z.skan) };
   }
 
@@ -2205,7 +2265,8 @@
       .map(([kod, s]) => {
         const t = s.termin || {};
         const reczny = ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny';
-        return { kod, tytul: s.tytul, opis: s.opis || '', maszyna: s.maszyna || '', czynnosc: s.czynnosc || '', zdjecie: s.wymagaj_zdjecia === true,
+        return { kod, tytul: s.tytul, opis: s.opis || '', maszyna: s.maszyna || '', maszyny: Array.isArray(s.maszyny) ? s.maszyny.slice() : [],
+                 czynnosc: s.czynnosc || '', zdjecie: s.wymagaj_zdjecia === true,
                  notatka: s.wymagaj_notatki === true, skan: s.wymagaj_skanu === true && !!s.maszyna,
                  minuty: t.rodzaj === 'minuty' && t.minuty ? t.minuty : '',
                  opisWyboru: `${s.tytul}${s.maszyna ? ` · ${(maszyny[s.maszyna] || {}).nazwa || s.maszyna}` : ''} (${reczny ? 'pojedyncze' : 'stałe'})` };
@@ -2260,7 +2321,7 @@
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
                        bezCzesci, rozdzialZlecenia, MOJE_DZIALY, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow };

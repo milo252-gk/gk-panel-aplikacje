@@ -665,6 +665,8 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-pozycja.stan-wykonana .hala-pozycja-znak { color: var(--zielony); }
 .hala-pozycja.stan-wykonana .hala-pozycja-nazwa { color: var(--tekst-slaby); }
 .hala-pozycja.stan-pominieta .hala-pozycja-nazwa { color: var(--tekst-slaby); text-decoration: line-through; }
+.hala-pozycja.stan-przed { opacity: .6; }
+.hala-pozycja.stan-przed .hala-pozycja-znak { color: var(--tekst-slaby); }
 .hala-pozycja.stan-po-terminie { border-color: var(--czerwony); }
 .hala-pozycja.stan-po-terminie .hala-pozycja-znak, .hala-pozycja.stan-po-terminie .hala-pozycja-godz { color: var(--czerwony); }
 .hala-pozycja-panel { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--ramka-mocna); border-top: 0;

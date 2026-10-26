@@ -106,6 +106,7 @@ dl.dane dd { margin: 0; white-space: pre-wrap; }
 .pozycja.stan-pominieta .tresc { text-decoration: line-through; }
 .pozycja.stan-opozniona { border-left-color: var(--czerwony); }
 .pozycja.stan-opozniona .stan, .pozycja.stan-opozniona .czas { color: var(--czerwony); }
+.pozycja.stan-przed { border-left-color: var(--szary); opacity: .6; }
 .pozycja.stan-bliska { border-left-color: var(--zolty); }
 .pozycja.stan-bliska .stan { color: var(--zolty); }
 

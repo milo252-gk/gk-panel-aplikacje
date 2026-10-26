@@ -896,6 +896,7 @@
     const plan = !!fz.edycja.value;
     $('zlecenie-plan').hidden = !plan;
     $('zlecenie-termin').hidden = plan;
+    $('zlecenie-od').hidden = plan;
     $('zlecenie-termin-po').hidden = !plan;
     const w = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
     $('zlecenie-plan-opis').textContent = !plan ? '' : !fz.plan_dzien.value ? 'Wybierz dzień startu.'
@@ -984,6 +985,7 @@
     fz.pilne.checked = !!w.pilne;
     if (wstepne) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; fz.wymagaj_skanu.checked = !!w.wymagaj_skanu; }
     fz.termin.value = w.termin ? W.poleCzasu(w.termin) : '';
+    fz.od.value = w.od ? W.poleCzasu(w.od) : '';
     fz.stale.value = edycja ? '' : (w.stale || '');
     fz.edycja.value = edycja ? edycja.id : '';
     if (edycja) { fz.wymagaj_zdjecia.checked = !!w.wymagaj_zdjecia; fz.wymagaj_notatki.checked = !!w.wymagaj_notatki; fz.wymagaj_skanu.checked = !!w.wymagaj_skanu; }
@@ -1079,7 +1081,11 @@
       // UI etap 2: nowe zlecenie idzie do działu od razu. D55: „Na zmianę” — trwająca zmiana: od razu z terminem do jej
       // końca; późniejsza: zaplanowane na jej start (dział zobaczy je wtedy). Kilka osób — każda dostaje osobne zlecenie.
       if (fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
-      if (fz.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fz.zdjecie.files[0])];
+      if (fz.od.value) {
+        dane.od = lokalnyNaIso(fz.od.value);
+        if (dane.termin && Date.parse(dane.od) >= Date.parse(dane.termin)) { blad('„Od kiedy” musi być wcześniej niż termin.'); return; }
+      }
+      { const ids = await zdjeciaPola(fz.zdjecie); if (ids.length) dane.zdjecia = ids; }
       delete dane.wykonawca;
       const osoby = [...fz.querySelectorAll('input[name="osoby"]:checked')].map(x => x.value);
       const zm = fz.na_zmiane.value ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
@@ -1127,24 +1133,50 @@
 
   /* Pole zdjęcia (hala.css → .hala-zdjecie): przycisk „📷 Dodaj zdjęcie” zamiast surowego „Wybierz plik / Nie wybrano
      pliku”. Po wyborze — miniatura, nazwa pliku i „Zmień zdjęcie”; reset formularza (nowe okno) wraca do pustego. */
+  /* Właściciel 2026-10-26: „opcje dodawania większej ilości zdjęć do zlecenia”. Telefon robi jedno zdjęcie na raz, więc
+     pole zbiera je w kolejce (do MAKS_ZDJEC_FORMULARZA, jak przy wykonaniu w zlecenia.js): każde ma miniaturę i ✕. Pliki
+     czyta zdjeciaPola(input) przy wysyłce. */
+  const MAKS_ZDJEC_FORMULARZA = 8;
+  const plikiPola = new WeakMap();
   function poleZdjecia(input) {
     const pole = input.closest('.hala-zdjecie');
     const napis = pole.querySelector('[data-zdjecie-napis]'), img = pole.querySelector('.hala-zdjecie-miniatura');
     const nazwa = pole.querySelector('.hala-zdjecie-nazwa');
     const pusto = { napis: napis.textContent, nazwa: nazwa.textContent };
-    let adres = null;
+    const pliki = [];
+    plikiPola.set(input, pliki);
+    const miniatury = document.createElement('div');
+    miniatury.className = 'hala-zdjecie-lista';
+    pole.appendChild(miniatury);
+    let adresy = [];
+    img.hidden = true;                                        // jedna duża miniatura zastąpiona listą
     const pokaz = () => {
-      const plik = input.files && input.files[0];
-      if (adres) { URL.revokeObjectURL(adres); adres = null; }
-      if (plik) adres = URL.createObjectURL(plik);
-      img.hidden = !adres;
-      if (adres) img.src = adres; else img.removeAttribute('src');
-      napis.textContent = plik ? '📷 Zmień zdjęcie' : pusto.napis;
-      nazwa.textContent = plik ? plik.name : pusto.nazwa;
+      adresy.forEach(a => URL.revokeObjectURL(a)); adresy = [];
+      miniatury.textContent = '';
+      pliki.forEach((plik, i) => {
+        const a = URL.createObjectURL(plik); adresy.push(a);
+        const poz = document.createElement('span'); poz.className = 'hala-zdjecie-poz';
+        const im = document.createElement('img'); im.alt = ''; im.src = a;
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'maly'; x.textContent = '✕'; x.setAttribute('aria-label', 'Usuń zdjęcie');
+        x.addEventListener('click', () => { pliki.splice(i, 1); pokaz(); });
+        poz.append(im, x); miniatury.appendChild(poz);
+      });
+      napis.textContent = !pliki.length ? pusto.napis : pliki.length < MAKS_ZDJEC_FORMULARZA ? '📷 Dodaj kolejne' : '📷 Komplet';
+      nazwa.textContent = pliki.length ? `${pliki.length} z ${MAKS_ZDJEC_FORMULARZA}` : pusto.nazwa;
+      input.disabled = pliki.length >= MAKS_ZDJEC_FORMULARZA;
     };
-    input.addEventListener('change', pokaz);
+    input.addEventListener('change', () => {
+      for (const plik of Array.from(input.files || [])) if (pliki.length < MAKS_ZDJEC_FORMULARZA) pliki.push(plik);
+      input.value = '';                                       // kolejne zdjęcie z tego samego pola nie zastąpi poprzednich
+      pokaz();
+    });
     // „reset” przychodzi PRZED wyczyszczeniem pól — stan czytamy chwilę później.
-    input.form.addEventListener('reset', () => setTimeout(pokaz, 0));
+    input.form.addEventListener('reset', () => setTimeout(() => { pliki.length = 0; pokaz(); }, 0));
+  }
+  async function zdjeciaPola(input) {
+    const ids = [];
+    for (const plik of plikiPola.get(input) || []) ids.push(await hala.dodajPlik(plik));
+    return ids;
   }
   poleZdjecia(fz.zdjecie);
   poleZdjecia(fa.zdjecie);
@@ -1174,7 +1206,7 @@
       const linia = W.wieleLinii(hala.slowniki) ? fa.linia.value : (((hala.slowniki.maszyny || {})[fa.maszyna.value] || {}).linia || fa.linia.value);
       const dane = { linia, maszyna: fa.maszyna.value, priorytet: fa.priorytet.value };
       if (fa.opis.value.trim()) dane.opis = fa.opis.value.trim();
-      if (fa.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(fa.zdjecie.files[0])];
+      { const ids = await zdjeciaPola(fa.zdjecie); if (ids.length) dane.zdjecia = ids; }
       await hala.zapisz('awaria.zgloszona', hala.nowyId(), dane);
       $('okno-awarii').close();
       document.querySelector('.zakladki [data-widok="na-zywo"]').click();

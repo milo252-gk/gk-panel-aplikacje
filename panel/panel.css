@@ -480,6 +480,11 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .pozycja-szczegoly label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .pozycja-szczegoly label.zaznacz { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--tekst); }
 @media (max-width: 640px) { .pozycja-szczegoly { padding-left: 0; } }
+/* Maszyny pozycji checklisty (2026-10-26): pola wyboru w siatce, na całą szerokość szczegółów. */
+.pozycja-szczegoly .maszyny-pozycji { flex: 1 1 100%; border: 1px solid var(--ramka-mocna); border-radius: 10px; padding: 8px 12px 10px; margin: 0; min-width: 0; }
+.pozycja-szczegoly .maszyny-pozycji legend { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); padding: 0 6px; }
+.maszyny-akcje { display: flex; gap: 8px; margin-bottom: 6px; }
+.maszyny-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; }
 /* D67: pozycje checklisty w wierszu zadania (kierownik widzi, co odhaczone, co pominięte i dlaczego). */
 .pozycje-zlecenia { margin-top: 6px; }
 .pozycje-zlecenia summary { cursor: pointer; font-weight: 700; }
@@ -540,7 +545,13 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .osoby-stalego { max-height: 180px; overflow: auto; }
 .mies-tryb select { width: auto; min-height: var(--dotyk); display: inline-block; }
 .mies-tryb label.zaznacz { flex-wrap: wrap; }
-dialog.okno .mies-tryb, dialog.okno .kto { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+dialog.okno .kto { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+/* „Raz w miesiącu”: dwa wybory pod sobą, każdy w jednej linii („W [pierwszy] [poniedziałek] miesiąca”) — w siatce
+   220 px lista „który” i „dzień tygodnia” spadały pod napis, a „miesiąca” wisiało osobno (właściciel 2026-10-26). */
+dialog.okno .mies-tryb { grid-template-columns: 1fr; gap: 10px; }
+dialog.okno .mies-tryb label.zaznacz { flex-wrap: nowrap; white-space: nowrap; }
+dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
+@media (max-width: 600px) { dialog.okno .mies-tryb label.zaznacz { flex-wrap: wrap; white-space: normal; } }
 .presety .chip.maly { min-height: var(--dotyk); padding: 0 12px; }
 .blad-tekst { color: var(--czerwony); }
 @media (max-width: 600px) { .dla-dzialy { grid-template-columns: minmax(0, 1fr); } }
@@ -553,3 +564,10 @@ dialog.okno .mies-tryb, dialog.okno .kto { grid-template-columns: repeat(auto-fi
 }
 .menu-wiecej { display: grid; gap: 10px; margin: 12px 0; max-width: 520px; }
 .menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }
+
+/* Kilka zdjęć w formularzu (zlecenie, awaria): miniatury z ✕ w jednym rzędzie, zawijane. */
+.hala-zdjecie-lista { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
+.hala-zdjecie-lista:empty { display: none; }
+.hala-zdjecie-poz { position: relative; display: inline-flex; }
+.hala-zdjecie-poz img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); }
+.hala-zdjecie-poz button { position: absolute; top: -6px; right: -6px; min-height: 0; width: 22px; height: 22px; padding: 0; border-radius: 50%; line-height: 1; }

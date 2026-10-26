@@ -96,6 +96,8 @@
         const zPoprzedniejZmiany = doZrobienia && isNaN(termin) && typeof poczatekZmiany === 'number' && !isNaN(poczatekZmiany)
           && !isNaN(czasMs) && czasMs < poczatekZmiany;
         const poCzasie = doZrobienia && przepadlo(z, teraz);           // D55: po końcu zmiany — jeszcze można zrobić
+        // Okno „od–do” (2026-10-26): przed godziną „od” zlecenie jest widoczne, ale nie do zrobienia (hub też odrzuci).
+        const odMs = Date.parse(d.od);
         return {
           id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
           tytul: d.tytul || '', opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyna: d.maszyna || null, linia: d.linia || null,
@@ -107,12 +109,16 @@
           zalegleOpis: poCzasie ? 'zmiana się skończyła — zrób i tak, kierownik zobaczy spóźnienie'
             : poTerminie ? (opis ? opis.tekst : 'po terminie') : zPoprzedniejZmiany ? `z poprzedniej zmiany (zlecone ${godz(d.czas_zlecenia)})` : null,
           doZrobienia, wyslane: WYSLANE.has(z.status),
+          odMs: isNaN(odMs) ? null : odMs, odGodz: godz(d.od), przed: doZrobienia && !isNaN(odMs) && odMs > teraz,
           wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true, stale: !!d.stale,
           // D56: kilka maszyn jednego zlecenia, postęp krok po kroku (zlecenie.postep) i czynność, która zalicza sama.
           maszyny: maszynyZlecenia(d), wymagajSkanu: d.wymagaj_skanu === true && maszynyZlecenia(d).length > 0,
           postep: [].concat(d.postep || []), juz: juzZrobione(d), czynnosc: d.czynnosc || null,
           // D67: checklista — pozycje do odhaczenia (każda z godziną i wymaganiami) zamiast jednego „Zrobione”.
           pozycje: pozycjeWiersza(d, teraz, H), postepPozycji: H && H.postepPozycji ? H.postepPozycji(d) : null,
+          // Maszyny, które jeszcze trzeba zeskanować w pozycjach tej checklisty (menu po skanie QR maszyny).
+          maszynySkanu: [...new Set(pozycjeWiersza(d, teraz, H).filter(q => q.wymagajSkanu && q.czynnosc !== 'obchod'
+            && (q.stan === 'czeka' || q.stan === 'po-terminie')).flatMap(q => q.maszyny))],
           uwagiZwrotu: d.uwagi_zwrotu || null, czas: d.czas_zlecenia || '',
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
           // D76: „do kierownika działu”, rozdział (postęp z osobami), część całości, „Przekaż” / „Rozdziel” dla kierownika działu.
@@ -165,6 +171,12 @@
     return { czesci, rozdzielone };
   }
 
+  /* Maszyny pozycji checklisty: lista `maszyny` (kilka maszyn, 2026-10-26), inaczej jedna `maszyna` (bliźniak hala.py →
+     maszyny_pozycji, hala.js → maszynyPozycji). skanyPozycji — które z nich już zeskanowano (krok postępu z polem `pozycja`). */
+  const maszynyPozycji = p => (Array.isArray(p && p.maszyny) && p.maszyny.length ? p.maszyny.filter(x => typeof x === 'string' && x)
+    : (p && typeof p.maszyna === 'string' && p.maszyna ? [p.maszyna] : []));
+  const skanyPozycji = (d, id) => [...new Set([].concat((d && d.postep) || []).filter(e => e && e.pozycja === id && e.skan).map(e => String(e.skan).trim()))];
+
   /* D67: pozycje checklisty do karty — stan (wykonana / pominięta / po terminie / czeka), godzina, wymagania, wpis
      (kto, kiedy, notatka). Czysta funkcja (testy: reduktor-testy.js). */
   function pozycjeWiersza(d, teraz, H) {
@@ -172,11 +184,15 @@
       const l = H.lokalny(ms); return `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
     return [].concat((d && d.pozycje) || []).filter(p => p && p.id).map(p => {
       const wyk = (d.wykonane || {})[p.id], pom = (d.pominiete || {})[p.id];
-      const t = Date.parse(p.termin);
-      const stan = wyk ? 'wykonana' : pom ? 'pominieta' : (!isNaN(t) && t < teraz ? 'po-terminie' : 'czeka');
-      return { id: p.id, nazwa: p.nazwa || '', godz: godz(p.termin), terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
-               maszyna: p.maszyna || null, wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true,
-               wymagajSkanu: (p.wymagaj_skanu === true && !!p.maszyna) || p.czynnosc === 'obchod', stan, wpis: wyk || pom || null };
+      const maszyny = maszynyPozycji(p);
+      const t = Date.parse(p.termin), o = Date.parse(p.od);
+      // „przed” — pozycja ma godzinę „od” (2026-10-26) i ta jeszcze nie nadeszła: widać ją, nie da się jej odhaczyć.
+      const stan = wyk ? 'wykonana' : pom ? 'pominieta' : (!isNaN(o) && o > teraz ? 'przed' : !isNaN(t) && t < teraz ? 'po-terminie' : 'czeka');
+      return { id: p.id, nazwa: p.nazwa || '', godz: godz(p.termin), odGodz: godz(p.od), odMs: isNaN(o) ? null : o,
+               terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
+               maszyna: p.maszyna || null, maszyny, skany: skanyPozycji(d, p.id),
+               wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true,
+               wymagajSkanu: (p.wymagaj_skanu === true && maszyny.length > 0) || p.czynnosc === 'obchod', stan, wpis: wyk || pom || null };
     });
   }
 
@@ -387,7 +403,8 @@
         ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">⏰ ${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
-        ${z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
+        ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">⏳ Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
+        : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
           <button type="button" data-akcja="nie-moge">Nie mogę</button></div>`)
@@ -414,7 +431,7 @@
         : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
       </article>`;
     // Zaległe osobno i z numerami 1, 2, 3… — kolejność roboty, a nie tylko kolor (jak „Zaległe dostawy” w GK Trasy).
-    const zal = lista.filter(z => z.zalegle), doZ = lista.filter(z => z.doZrobienia && !z.zalegle), wys = lista.filter(z => z.wyslane);
+    const zal = lista.filter(z => z.zalegle), doZ = lista.filter(z => z.doZrobienia && !z.zalegle).sort((a, b) => (a.przed ? 1 : 0) - (b.przed ? 1 : 0)), wys = lista.filter(z => z.wyslane);
     const roz = lista.filter(z => z.rozdzielone);              // D76: całość rozdzielona — postęp części, „Rozdziel” dokłada osoby
     const pusto = s.moje ? 'Nie masz przypisanych zleceń' : 'Nie ma zleceń do zrobienia';
     // Kursor w polu tekstowym — przerysowanie nie może go zabrać (tekst i tak jest w stanie).
@@ -657,7 +674,7 @@
      w notatce), przy zrobionej — „Cofnij”. Czynność (obsada, próba, audyt BHP, przekazanie) — aplikacja, która ma jej
      formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Lider); próba i przegląd
      odhaczają się też same (hub). Ostatnia pozycja wysyła „Zrobione” sama (odhaczPozycje → zakonczJesliGotowe). */
-  const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', 'po-terminie': '○', czeka: '○' };
+  const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', 'po-terminie': '○', czeka: '○', przed: '⏳' };
   const OPIS_CZYNNOSCI = { obsada: '👥 Raport obsady', obchod: '▣ Obchód — skan QR', proba: '🔬 Próba jakościowa',
                            bhp: '⛑ Audyt BHP', przekazanie: '📋 Przekazanie zmiany', przeglad: '🔧 Przegląd UR' };
 
@@ -667,10 +684,11 @@
     const otwarta = s.poz && s.poz.id === z.id ? s.poz : null;
     return `<div class="hala-checklista" aria-label="Checklista">
       <div class="hala-checklista-naglowek">☑ Checklista <b>${p.gotowe}/${p.wszystkie}</b></div>
-      ${z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia ? '' : 'disabled'}>
+      ${z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia && !z.przed && q.stan !== 'przed' ? '' : 'disabled'}>
           <span class="hala-pozycja-znak" aria-hidden="true">${ZNAK_POZYCJI[q.stan]}</span>
-          ${q.godz ? `<span class="hala-pozycja-godz">${esc(q.godz)}</span>` : ''}
-          <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.maszyna ? ` <span class="slaby">· ${esc(nazwaM(q.maszyna))}</span>` : ''}</span>
+          ${q.odGodz || q.godz ? `<span class="hala-pozycja-godz">${esc(q.odGodz ? (q.godz ? `${q.odGodz}–${q.godz}` : `od ${q.odGodz}`) : q.godz)}</span>` : ''}
+          <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
+            : q.maszyny.length > 1 ? ` <span class="slaby">· ${q.maszyny.length} maszyn${q.wymagajSkanu ? ` · ▣ ${q.maszyny.filter(m => q.skany.includes(m)).length}/${q.maszyny.length}` : ''}</span>` : ''}</span>
           <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? esc((OPIS_CZYNNOSCI[q.czynnosc] || '').split(' ')[0]) : ''}${q.wymagajZdjecia ? '📷' : ''}${q.wymagajNotatki ? '📝' : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? '▣' : ''}</span>
         </button>${otwarta && otwarta.pozycja === q.id ? formularzPozycji(z, q, otwarta, opcje, nazwaM) : ''}`).join('')}
     </div>`;
@@ -680,7 +698,8 @@
     // Obchód bez wskazanej maszyny: dowolna maszyna z linii zlecenia (bez linii — dowolna w zakładzie).
     const wszystkie = Object.entries((slowniki && slowniki.maszyny) || {}).filter(([, m]) => !z.linia || !m || !m.linia || m.linia === z.linia).map(([k]) => k);
     return { wymagajZdjecia: q.wymagajZdjecia, wymagajNotatki: q.wymagajNotatki, wymagajSkanu: q.wymagajSkanu,
-             maszyny: q.maszyna ? [q.maszyna] : [], doSkanu: q.maszyna ? [q.maszyna] : wszystkie };
+             maszyny: q.maszyny && q.maszyny.length ? q.maszyny.slice() : [], doSkanu: q.maszyny && q.maszyny.length ? q.maszyny.slice() : wszystkie,
+             juz: { skany: (q.skany || []).slice() } };
   }
 
   function formularzPozycji(z, q, f, opcje, nazwaM) {
@@ -693,7 +712,9 @@
           <button type="button" data-akcja="pozycja-cofnij">Cofnij odhaczenie</button></div></div>`;
     }
     const w = f.wymagania;
-    const brak = brakuje(w, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan });
+    const wielo = q.czynnosc !== 'obchod' && q.maszyny.length > 0;          // 2026-10-26: skany liczą się od razu (postęp pozycji)
+    const zesk = new Set([].concat(q.skany || [], (w.juz || {}).skany || []));
+    const brak = brakuje(w, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan, skany: [...zesk] });
     const pole = (wymagane, nazwa) => `${nazwa} <span class="slaby">(${wymagane ? 'wymagane' : 'można pominąć'})</span>`;
     const cz = q.czynnosc && opcje && opcje.czynnosc && (opcje.czynnosc.nazwy || {})[q.czynnosc];
     const samo = !cz && (q.czynnosc === 'proba' || q.czynnosc === 'przeglad')
@@ -701,7 +722,13 @@
     return `<div class="hala-pozycja-panel">
       ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
       ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">▶ ${esc(cz)}</button>` : samo}
-      ${w.wymagajSkanu ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(!f.skan, q.czynnosc === 'obchod' && !q.maszyna ? 'Skan QR maszyny na linii' : 'Skan QR maszyny')}</span>
+      ${w.wymagajSkanu && wielo ? (() => {
+        const brakM = q.maszyny.filter(m => !zesk.has(m));
+        return `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(brakM.length > 0, q.maszyny.length > 1 ? 'Skan QR maszyn' : 'Skan QR maszyny')}</span>
+        <p class="hala-zlecenie-skan">${q.maszyny.map(m => `<span class="hala-krok-wymogu ${zesk.has(m) ? 'ok' : ''}">${zesk.has(m) ? '✓' : '○'} ${esc(nazwaM(m))}</span>`).join(' ')}</p>
+        ${brakM.length ? `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">▣ Zeskanuj QR: ${esc(brakM.map(nazwaM).join(', '))}</button>`
+          : `<p class="slaby">Wszystkie zeskanowane${q.wymagajZdjecia || q.wymagajNotatki ? '.' : ' — pozycja odhaczy się sama (do minuty).'}</p>`}</div>`; })()
+      : w.wymagajSkanu ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(!f.skan, q.czynnosc === 'obchod' && !q.maszyna ? 'Skan QR maszyny na linii' : 'Skan QR maszyny')}</span>
         ${f.skan ? `<p class="hala-zlecenie-skan"><span class="hala-krok-wymogu ok">✓ ${esc(nazwaM(f.skan))}</span></p>`
                  : `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">▣ Zeskanuj QR${q.maszyna ? `: ${esc(nazwaM(q.maszyna))}` : ''}</button>`}</div>` : ''}
       <div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !f.pliki.length, 'Zdjęcie')}</span>
@@ -792,9 +819,25 @@
     }
     if (a === 'pozycja-skan') {
       if (!global.HalaSkaner || !global.Hala) { f.blad = 'Brak skanera. Odśwież aplikację.'; return rysuj(el, hala, o); }
+      const wielo = q.czynnosc !== 'obchod' && q.maszyny.length > 0;
+      const zesk = new Set([].concat(q.skany || [], f.wymagania.juz.skany || []));
+      const doSk = wielo ? q.maszyny.filter(m => !zesk.has(m)) : f.wymagania.doSkanu;
       const tekst = await global.HalaSkaner.skanuj({ tytul: `Zeskanuj QR: ${q.nazwa}`, podpowiedz: 'Naklejka z kodem na maszynie' });
       if (s.poz !== f || tekst === null || tekst === undefined) return;
-      const w = skanMaszyny(tekst, f.wymagania.doSkanu, hala.slowniki, global.Hala.odczytajKod);
+      const w = skanMaszyny(tekst, wielo ? q.maszyny : doSk, hala.slowniki, global.Hala.odczytajKod);
+      if (wielo) {
+        // Skan od razu jako krok pozycji — hub odhacza ją sam, gdy zeskanowano wszystkie maszyny (zalicz_skanami).
+        if (w.kod && zesk.has(w.kod)) { f.blad = 'Ta maszyna jest już zeskanowana.'; return rysuj(el, hala, o); }
+        if (w.kod) {
+          try {
+            await dopiszPostep(hala, id, { skan: w.kod, pozycja: q.id });
+            f.wymagania.juz.skany = [...new Set([...zesk, w.kod])];
+            f.blad = null;
+            s.info = `Zeskanowano ${((((hala.slowniki || {}).maszyny || {})[w.kod] || {}).nazwa || w.kod)} — zapisane w pozycji`;
+          } catch (e) { f.blad = (e && e.message) || 'Nie udało się zapisać skanu. Spróbuj jeszcze raz.'; }
+        } else f.blad = w.blad || null;
+        return rysuj(el, hala, o);
+      }
       f.skan = w.kod || f.skan; f.blad = w.blad || null;
       return rysuj(el, hala, o);
     }
@@ -830,8 +873,19 @@
   async function zaliczSkan(hala, id, maszyna) {
     const z = hala.obiekt('zlecenie', id);
     if (!z) return 'Tego zlecenia już nie ma.';
-    if (maszynyZlecenia(z.dane || {}).includes(maszyna)) await dopiszPostep(hala, id, { skan: maszyna });
-    return `Zapisane w zleceniu „${(z.dane || {}).tytul || ''}” — dokończ je na ekranie Zleceń`;
+    const d = z.dane || {};
+    if (maszynyZlecenia(d).includes(maszyna)) await dopiszPostep(hala, id, { skan: maszyna });
+    // Checklista (2026-10-26): skan zalicza tę maszynę w każdej niezrobionej pozycji, która jej wymaga — hub odhaczy
+    // pozycję sam, gdy zeskanowano wszystkie jej maszyny.
+    let pozycji = 0;
+    for (const p of d.pozycje || []) {
+      if (!p || !p.id || p.wymagaj_skanu !== true || p.czynnosc === 'obchod' || (d.wykonane || {})[p.id] || (d.pominiete || {})[p.id]) continue;
+      if (!maszynyPozycji(p).includes(maszyna) || skanyPozycji(d, p.id).includes(maszyna)) continue;
+      await dopiszPostep(hala, id, { skan: maszyna, pozycja: p.id });
+      pozycji += 1;
+    }
+    return pozycji ? `Zeskanowano maszynę w ${pozycji === 1 ? 'pozycji' : 'pozycjach'} checklisty „${d.tytul || ''}” — serwer odhaczy je, gdy będą wszystkie maszyny`
+      : `Zapisane w zleceniu „${d.tytul || ''}” — dokończ je na ekranie Zleceń`;
   }
 
   /* D55: moje zgłoszenia nieprawidłowości i odłożone narzędzia z ostatnich 7 dni — z odpowiedzią kierownika. */

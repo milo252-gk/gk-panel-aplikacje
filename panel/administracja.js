@@ -637,7 +637,7 @@
 
   /* Stan z huba (GET /api/v1/admin/dostep): ustawienia bez wartości tokenów, tunel, wersja na Pages. Odświeżany przy
      wejściu w część i co ~15 s, gdy jest otwarta (tunel łączy się kilka sekund, wysyłka trwa minutę). */
-  let dostepStan = null, dostepCzas = 0, bladDostepu = '', bladDostepuCzas = 0, wczytujeDostep = null, wysyla = false;
+  let dostepStan = null, dostepCzas = 0, bladDostepu = '', bladDostepuCzas = 0, wczytujeDostep = null, wysyla = false, aktualizuje = false;
 
   function wczytajDostep() {
     if (wczytujeDostep) return wczytujeDostep;
@@ -726,7 +726,7 @@
     // Odcisk: przerysowanie co 20 s (P.narysuj) nie może migać kodami QR ani kasować zaznaczenia adresu. Godzina
     // sprawdzenia przez strażnika (co 2 min) zmienia tylko swój akapit — bez niej w odcisku.
     const straznik = s.tunel.straznik;
-    const odcisk = JSON.stringify([s, lz, wysyla, programy], (k, w) => (k === 'straznik' && w ? w.kolor : w));
+    const odcisk = JSON.stringify([s, lz, wysyla, aktualizuje, programy], (k, w) => (k === 'straznik' && w ? w.kolor : w));
     if (el.dataset.odcisk === odcisk) {
       const p = el.querySelector('[data-straznik]');
       if (p && straznik) p.textContent = straznik.tekst;
@@ -753,6 +753,13 @@
         ${straznik ? `<p data-straznik class="${straznik.kolor === 'alarm' ? 'tekst-alarm' : 'slaby'}">${esc(straznik.tekst)}</p>` : ''}
         <p class="slaby">${esc(s.tunel.opis)}</p>
       </section>
+      ${s.serwer ? `<section class="admin-linia">
+        <h3><span>Aktualizacja serwera <span class="znacznik ${s.serwer.kolor}">${esc(s.serwer.stan)}</span></span>
+          <button type="button" class="maly glowny" data-akcja="aktualizuj-serwer" ${s.serwer.mozna && !aktualizuje ? '' : 'disabled'}>${aktualizuje ? 'Wysyłam…' : 'Zaktualizuj serwer teraz'}</button></h3>
+        <p class="${s.serwer.kolor === 'alarm' ? 'tekst-alarm' : 'slaby'}">${esc(s.serwer.opis)}</p>
+        <p class="slaby">Serwer sam sprawdza GitHub co noc o 3:00. Ten przycisk robi to od razu: pobiera najnowsze wydanie, instaluje je
+          i uruchamia programy od nowa (kilka minut przerwy). Aplikacje na telefony serwer wyśle potem sam.</p>
+      </section>` : ''}
       <section class="admin-linia">
         <h3><span>Aplikacje na GitHub Pages <span class="znacznik ${s.wersja.kolor}">${esc(s.wersja.stan)}</span></span>
           <button type="button" class="maly glowny" data-akcja="wyslij-pages" ${s.wyslij.mozna && !wysyla ? '' : 'disabled'}>${wysyla ? 'Wysyłam…' : 'Wyślij aplikacje na GitHub'}</button></h3>
@@ -803,6 +810,19 @@
     await hala.zapisz('slownik.zapisany', 'ustawienia/siec_zakladu', { slownik: 'ustawienia', klucz: 'siec_zakladu', wartosc: { wartosc } });
     P.komunikat(`Sieć zakładu: ${wartosc}`, 'ok');
     setTimeout(() => { wczytajDostep(); }, 1500);
+  }
+
+  async function aktualizujSerwer() {
+    if (!(await P.potwierdz('Zaktualizować serwer teraz?', 'Serwer pobierze najnowsze wydanie z GitHuba i zainstaluje je w ciągu kilku minut. '
+      + 'Programy w biurze (hala, GK Trasy, GK Flota, Szkolenia, Wycena) wyłączą się na chwilę — najlepiej poza godzinami pracy.', 'Zaktualizuj'))) return;
+    aktualizuje = true; rysuj();
+    try {
+      dostepStan = await hala.admin('POST', '/api/v1/admin/serwer/aktualizuj', {}); dostepCzas = Date.now();
+      P.komunikat('Prośba wysłana — serwer zacznie w ciągu 5 minut.', 'ok');
+    } catch (e) {
+      P.komunikat(P.komunikatBledu(e), 'blad');
+      await wczytajDostep();
+    } finally { aktualizuje = false; rysuj(); }
   }
 
   async function wyslijNaPages() {
@@ -998,6 +1018,7 @@
       if (akcja === 'odswiez-polaczenia') await wczytajPolaczenia();
       if (akcja === 'odswiez-dostep') await wczytajDostep();
       if (akcja === 'wyslij-pages') await wyslijNaPages();
+      if (akcja === 'aktualizuj-serwer') await aktualizujSerwer();
       if (akcja === 'drukuj-qr-aplikacji') drukujKodyAplikacji(b.dataset.app);
       if (akcja === 'identyfikator' || akcja === 'identyfikatory') {
         const osoby = identyfikatoryListy(akcja === 'identyfikator' ? id : null);

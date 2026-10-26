@@ -23,6 +23,19 @@
   };
   const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
 
+  /* Maszyny pozycji do zaznaczenia (właściciel 2026-10-26: „zlecić sprawdzenie na wszystkich maszynach… wyznaczać kilka
+     maszyn”): pola wyboru zamiast listy jednej maszyny; zaznaczona maszyna spoza wybranej linii zostaje na liście. */
+  function maszynyPozycjiHtml(p, maszyny) {
+    const wybrane = new Set(Array.isArray(p.maszyny) && p.maszyny.length ? p.maszyny : (p.maszyna ? [p.maszyna] : []));
+    const znane = new Set(maszyny.map(([k]) => k));
+    const wszystkie = [...maszyny, ...[...wybrane].filter(k => !znane.has(k)).map(k => [k, `${k} (spoza tej linii)`])];
+    return `<fieldset class="maszyny-pozycji"><legend>Maszyny <span class="slaby" data-liczba-maszyn></span></legend>
+      <div class="maszyny-akcje"><button type="button" class="maly" data-maszyny="wszystkie">Wszystkie</button>
+        <button type="button" class="maly" data-maszyny="zadna">Żadna</button></div>
+      <div class="maszyny-lista">${wszystkie.map(([k, n]) => `<label class="zaznacz"><input type="checkbox" class="maszyna-wybor" value="${esc(k)}" ${wybrane.has(k) ? 'checked' : ''}> ${esc(n)}</label>`).join('')
+        || '<span class="slaby">Brak maszyn — dodaj je w Administracja → Maszyny.</span>'}</div></fieldset>`;
+  }
+
   function wierszPozycji(p) {
     const maszyny = P.maszynyLinii(f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value);
     return `<div class="pozycja-checklisty" data-id="${esc(p.id || '')}" data-czynnosc="${esc(p.czynnosc || '')}">
@@ -37,18 +50,21 @@
         <button type="button" class="maly" data-usun aria-label="Usuń pozycję">✕</button>
       </div>
       <div class="pozycja-szczegoly" hidden>${/* zawsze zwinięte — w wierszu widać ikony (👥 ▣ 📷 📝) */ ''}
-        <label>Maszyna<select class="maszyna">${P.opcje(maszyny, '— bez maszyny —')}</select></label>
+        <label class="pozycja-od" title="Przed tą godziną pozycji nie da się odhaczyć (okno od–do)">⏳ Od godziny (po starcie zmiany)
+          <input class="od" value="${esc(p.od || '')}" placeholder="0:15" inputmode="numeric" aria-label="Pozycja do zrobienia od godziny po starcie zmiany (g:mm)"></label>
+        ${maszynyPozycjiHtml(p, maszyny)}
         <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> 📷 zdjęcie</label>
         <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> 📝 notatka</label>
-        <label class="zaznacz" title="Odhaczy tylko po zeskanowaniu naklejki QR wybranej maszyny"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ▣ skan QR</label>
+        <label class="zaznacz" title="Pozycja odhaczy się sama po zeskanowaniu naklejek QR wszystkich wybranych maszyn"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ▣ skan QR wszystkich wybranych maszyn</label>
       </div>
     </div>`;
   }
 
   const pozycjeZOkna = () => [...f.querySelectorAll('.pozycja-checklisty')].map(w => {
     const v = c => w.querySelector('.' + c);
-    return { id: w.dataset.id || null, godzina: v('godzina').value, nazwa: v('nazwa').value, czynnosc: w.dataset.czynnosc || '',
-             maszyna: v('maszyna').value, zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked };
+    return { id: w.dataset.id || null, godzina: v('godzina').value, od: v('od').value, nazwa: v('nazwa').value, czynnosc: w.dataset.czynnosc || '',
+             maszyny: [...w.querySelectorAll('.maszyna-wybor:checked')].map(x => x.value),
+             zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked };
   });
 
   /* D72: wybrana gotowa czynność ustawia swoje domyślne wymagania — tylko gdy w wierszu nic jeszcze nie zaznaczono. */
@@ -65,8 +81,6 @@
 
   function rysujPozycje(pozycje) {
     $('checklista-pozycje').innerHTML = pozycje.map(wierszPozycji).join('');
-    const wiersze = [...f.querySelectorAll('.pozycja-checklisty')];
-    wiersze.forEach((w, i) => { w.querySelector('.maszyna').value = pozycje[i].maszyna || ''; });
     odswiez();
   }
 
@@ -86,6 +100,11 @@
       const cz = w.dataset.czynnosc;
       w.querySelector('.ikony').textContent = [cz ? (W.CZYNNOSCI_POZYCJI.find(([k]) => k === cz) || ['', ''])[1].split(' ')[0] : '',
         w.querySelector('.zdjecie').checked ? '📷' : '', w.querySelector('.notatka').checked ? '📝' : '', w.querySelector('.skan').checked ? '▣' : ''].join('');
+      const ile = w.querySelectorAll('.maszyna-wybor:checked').length;
+      const licznik = w.querySelector('[data-liczba-maszyn]');
+      if (licznik) licznik.textContent = ile ? `(zaznaczone: ${ile})` : '';
+      if (ile) w.querySelector('.ikony').textContent += ` ⚙${ile}`;
+      if (w.querySelector('.od').value.trim()) w.querySelector('.ikony').textContent += ' ⏳';
     }
     const r = f.rodzaj.value;
     $('checklista-dni').hidden = r !== 'dni_tygodnia';
@@ -173,6 +192,8 @@
       if (cel) (+b.dataset.ruch < 0 ? cel.before(w) : cel.after(w));
     } else if (b.hasAttribute('data-usun') && w) {
       w.remove();
+    } else if (b.dataset.maszyny && w) {
+      for (const x of w.querySelectorAll('.maszyna-wybor')) x.checked = b.dataset.maszyny === 'wszystkie';
     } else if (b.hasAttribute('data-szczegoly') && w) {
       const s = w.querySelector('.pozycja-szczegoly');
       s.hidden = !s.hidden;

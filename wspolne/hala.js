@@ -391,14 +391,25 @@
         wynik.dane.pozycje.push({ id, nazwa: p.nazwa || '', typ: TYP_CZYNNOSCI[p.czynnosc] || 'zadanie', czynnosc: p.czynnosc || null,
                                   termin: p.termin || d.termin || d.wazne_do || zmiana.do,
                                   wymaga_qr: !!(p.wymagaj_skanu || p.czynnosc === 'obchod'), cel: p.maszyna || null,
-                                  maszyna: p.maszyna || null, wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
-                                  wymagaj_skanu: !!p.wymagaj_skanu, zlecenie: z.id, pozycja: p.id });
+                                  maszyna: p.maszyna || null, maszyny: maszynyPozycji(p), skany: skanyPozycji(d, p.id),
+                                  wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
+                                  wymagaj_skanu: !!p.wymagaj_skanu, od: p.od || d.od || null, zlecenie: z.id, pozycja: p.id });
         if ((d.wykonane || {})[p.id]) wynik.dane.wykonane[id] = d.wykonane[p.id];
         if ((d.pominiete || {})[p.id]) wynik.dane.pominiete[id] = d.pominiete[p.id];
       }
     }
     wynik.dane.pozycje.sort((a, b) => (Date.parse(a.termin) || 0) - (Date.parse(b.termin) || 0));
     return wynik;
+  }
+
+  /* Maszyny pozycji checklisty: lista `maszyny` (kilka), inaczej jedna `maszyna` (bliźniak hala.py → maszyny_pozycji). */
+  function maszynyPozycji(p) {
+    if (p && Array.isArray(p.maszyny) && p.maszyny.length) return p.maszyny.filter(x => typeof x === 'string' && x);
+    return p && typeof p.maszyna === 'string' && p.maszyna ? [p.maszyna] : [];
+  }
+  /* Maszyny pozycji już zeskanowane: kroki postępu zlecenia z jej id (zlecenie.postep, pole `pozycja`). */
+  function skanyPozycji(d, idPozycji) {
+    return [...new Set(((d && d.postep) || []).filter(e => e && e.pozycja === idPozycji && e.skan).map(e => String(e.skan).trim()))];
   }
 
   /* Pozycje zlecenia stałego → pozycje zlecenia z godzinami od startu (bliźniak hala.py → pozycje_wystapienia; Panel
@@ -408,12 +419,20 @@
     return (pozycje || []).filter(p => p && p.id).map(p => {
       const q = { id: p.id, nazwa: String(p.nazwa || '').trim() };
       for (const k of ['czynnosc', 'maszyna']) if (p[k]) q[k] = p[k];
+      const wiele = maszynyPozycji(p);                  // kilka maszyn: lista; jedna zostaje w polu „maszyna” (bliźniak hala.py)
+      if (wiele.length > 1) { q.maszyny = wiele; delete q.maszyna; } else if (wiele.length) q.maszyna = wiele[0];
       for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu']) if (p[k] === true) q[k] = true;
       if (!isNaN(start) && Number.isInteger(p.minuty)) {
         const l = lokalny(start);
         let t = zLokalnego(l.rok, l.miesiac, l.dzien, l.godz, l.min + p.minuty);
         if (!isNaN(granica) && t > granica) t = granica;
         q.termin = iso(t);
+      }
+      // Okno „od–do” (2026-10-26, bliźniak hala.py): pozycja do zrobienia dopiero od tej godziny (minuty od startu).
+      if (!isNaN(start) && Number.isInteger(p.od_minuty)) {
+        const l = lokalny(start);
+        const o = zLokalnego(l.rok, l.miesiac, l.dzien, l.godz, l.min + p.od_minuty);
+        if (q.termin === undefined || o < Date.parse(q.termin)) q.od = iso(o);
       }
       return q;
     });
@@ -931,8 +950,21 @@
           termin = zNaiwnego(tN);
         } else if (t.rodzaj === 'minuty') termin = start + (parseInt(t.minuty, 10) || 0) * 60000;
         else termin = zNaiwnego(koniecN);
-        wynik.push({ klucz: `${kod}|${data}|${wybrane.length ? nr : '-'}${przes ? `|+${przes}` : ''}`, zmiana: `${data}/${nr}`,
-                     start: iso(start), termin: iso(termin) });
+        const wyst = { klucz: `${kod}|${data}|${wybrane.length ? nr : '-'}${przes ? `|+${przes}` : ''}`, zmiana: `${data}/${nr}`,
+                       start: iso(start), termin: iso(termin) };
+        // Okno „od–do” (2026-10-26, bliźniak hala.py): od godziny zakładu (najbliższej po starcie) albo N minut po starcie;
+        // „od” nie wcześniej niż start i nie później niż termin — inaczej zlecenie jest bez okna.
+        const ot = (szablon && szablon.okno_od) || {};
+        let od = null;
+        if (ot.rodzaj === 'godzina') {
+          const gm = hhmm(ot.godzina);
+          if (!gm) throw new Error(`zła godzina 'od' '${ot.godzina}'`);
+          let oN = Date.UTC(r, mi - 1, dz, gm[0], gm[1]);
+          while (oN < startN) oN += 86400000;
+          od = zNaiwnego(oN);
+        } else if (ot.rodzaj === 'minuty') od = start + (parseInt(ot.minuty, 10) || 0) * 60000;
+        if (od !== null && od > start && od < termin) wyst.od = iso(od);
+        wynik.push(wyst);
         przes += co;
         if (!co || start0N + przes * 60000 >= koniecN) break;
       }
@@ -2307,7 +2339,7 @@
 
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
-    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
+    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,

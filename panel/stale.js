@@ -84,12 +84,31 @@
     return Object.keys(z).length ? z : { I: { nazwa: 'Zmiana I', od: '06:00' }, II: { nazwa: 'Zmiana II', od: '14:00' }, III: { nazwa: 'Zmiana III', od: '22:00' } };
   };
   const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
+  /* Maszyny zlecenia stałego jako pola wyboru; ukryte pole „maszyna” = pierwsza zaznaczona (wymaganie skanu, hub). Maszyna
+     zaznaczona wcześniej, a spoza wybranej linii, zostaje na liście — okno jej po cichu nie odbiera. */
+  function rysujMaszynyStalego(zaznaczone) {
+    const wybrane0 = new Set(zaznaczone || []);
+    const linia = f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value;
+    const maszyny = P.maszynyLinii(linia);
+    const znane = new Set(maszyny.map(([k]) => k));
+    const wszystkie = [...maszyny, ...[...wybrane0].filter(k => !znane.has(k)).map(k => [k, `${k} (spoza tej linii)`])];
+    f.querySelector('[data-maszyny-stalego]').innerHTML = wszystkie.map(([k, n]) =>
+      `<label class="zaznacz"><input type="checkbox" name="maszyny_stalego" value="${esc(k)}" ${wybrane0.has(k) ? 'checked' : ''}> ${esc(n)}</label>`).join('')
+      || '<span class="slaby">Brak maszyn — dodaj je w Administracja → Maszyny.</span>';
+    synchMaszynyStalego();
+  }
+  function synchMaszynyStalego() {
+    const pierwsza = (f.querySelector('input[name="maszyny_stalego"]:checked') || {}).value || '';
+    if (pierwsza && ![...f.maszyna.options].some(o => o.value === pierwsza)) f.maszyna.insertAdjacentHTML('beforeend', `<option value="${esc(pierwsza)}"></option>`);
+    f.maszyna.value = pierwsza;
+    P.pokazSkan(f);
+  }
   const dzis = () => W.dzienZakladu(hala.teraz());
   // D76: kierownik UR/KJ zapisuje zlecenia tylko dla swojego działu (hub odrzuca resztę) — okno pokazuje tylko jego.
   const dzialyKontraktu = () => P.dzialyZlecajacego();
   const pola = () => ({
     tytul: f.tytul.value, opis: f.opis.value, dzialy: wybrane('dzialy'), kto: (f.querySelector('input[name="kto"]:checked') || {}).value || 'dzial',
-    wykonawcy: wybrane('osoby'), linia: f.linia.value, maszyna: f.maszyna.value,
+    wykonawcy: wybrane('osoby'), linia: f.linia.value, maszyna: f.maszyna.value, maszyny: wybrane('maszyny_stalego'),
     pilne: f.pilne.checked, wymagaj_zdjecia: f.wymagaj_zdjecia.checked, wymagaj_notatki: f.wymagaj_notatki.checked,
     wymagaj_skanu: f.wymagaj_skanu.checked, co_min: f.co_min.value,
     rodzaj: f.rodzaj.value, dni: wybrane('dni'), dzien_miesiaca: f.dzien_miesiaca.value, zmiany: wybrane('zmiany'),
@@ -97,6 +116,7 @@
     tydzien: f.tydzien.value, dzien_tygodnia: f.dzien_tygodnia.value, od: f.od.value, do: f.do.value, bez_swiat: f.bez_swiat.checked,
     daty: kal.daty, pomin: kal.pomin, dzis: dzis(),
     termin_rodzaj: f.termin_rodzaj.value, godzina: f.godzina.value, minuty: f.minuty.value, aktywny: f.aktywny.checked,
+    okno_rodzaj: f.okno_rodzaj.value, okno_godzina: f.okno_godzina.value, okno_minuty: f.okno_minuty.value,
   });
 
   /* Osoby zaznaczonych działów (każda dostaje własne zlecenie); zaznaczenie zostaje przy zmianie działów. */
@@ -142,6 +162,8 @@
     P.pokazSkan(f);
     $('stale-godzina').hidden = t !== 'godzina';
     $('stale-minuty').hidden = t !== 'minuty';
+    $('stale-okno-godzina').hidden = f.okno_rodzaj.value !== 'godzina';
+    $('stale-okno-minuty').hidden = f.okno_rodzaj.value !== 'minuty';
     const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik && hala.pracownik.id);
     const a = W.adresaciPoLudzku(w.wartosc, hala.kontrakt.stale, hala.pracownicy, hala.slowniki, dzis());
     $('stale-adresaci').textContent = a.tekst;
@@ -181,8 +203,7 @@
     P.pokazPolaLinii(f);
     f.linia.innerHTML = P.opcje([[W.LINIA_KAZDA, '— każda linia osobno —'], ...P.linieLista()], '— każda —');
     f.linia.value = wartosci.linia || '';
-    f.maszyna.innerHTML = P.opcje(P.maszynyLinii(f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value), '— żadna —');
-    f.maszyna.value = wartosci.maszyna || '';
+    rysujMaszynyStalego(wartosci.maszyny && wartosci.maszyny.length ? wartosci.maszyny : (wartosci.maszyna ? [wartosci.maszyna] : []));
     f.tytul.value = wartosci.tytul || '';
     f.opis.value = wartosci.opis || '';
     f.pilne.checked = !!wartosci.pilne;
@@ -207,6 +228,9 @@
     f.termin_rodzaj.value = wartosci.termin_rodzaj || 'koniec_zmiany';
     f.godzina.value = wartosci.godzina || '';
     f.minuty.value = wartosci.minuty || 60;
+    f.okno_rodzaj.value = wartosci.okno_rodzaj || '';
+    f.okno_godzina.value = wartosci.okno_godzina || '';
+    f.okno_minuty.value = wartosci.okno_minuty || 60;
     $('stale-dni').innerHTML = W.DNI_NAZWY.map((n, i) =>
       `<label class="zaznacz"><input type="checkbox" name="dni" value="${i + 1}" ${(wartosci.dni || []).includes(i + 1) ? 'checked' : ''}> ${esc(n)}</label>`).join('');
     $('stale-zmiany').innerHTML = Object.entries(zmianySlownik()).map(([k, z]) =>
@@ -266,8 +290,16 @@
       if (c) { if (c.opis && !f.opis.value.trim()) f.opis.value = c.opis; f.wymagaj_zdjecia.checked = !!c.zdjecie; f.wymagaj_notatki.checked = !!c.notatka; }
     }
     if (ev.target.name === 'dzialy') rysujOsoby(wybrane('osoby'));
-    if (ev.target === f.linia) f.maszyna.innerHTML = f.linia.value === W.LINIA_KAZDA ? P.opcje([], '— żadna —') : P.opcje(P.maszynyLinii(f.linia.value), '— żadna —');
+    if (ev.target === f.linia) rysujMaszynyStalego(wybrane('maszyny_stalego'));
+    if (ev.target.name === 'maszyny_stalego') synchMaszynyStalego();
     if (ev.target === f.rodzaj && f.rodzaj.value === 'daty') ustawMiesiac(kal.daty.filter(d => d >= dzis())[0]);
+    odswiez();
+  });
+  f.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-maszyny-stale]');
+    if (!b) return;
+    for (const x of f.querySelectorAll('input[name="maszyny_stalego"]')) x.checked = b.dataset.maszynyStale === 'wszystkie';
+    synchMaszynyStalego();
     odswiez();
   });
   f.addEventListener('submit', async ev => {
@@ -275,9 +307,10 @@
     const blad = f.querySelector('.blad');
     const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
-    // „Zmień” nie może zgubić tego, czego okno nie pokazuje (stara czynność, kilka maszyn — D56, D72; audyt 2026-10-16).
+    // „Zmień” nie może zgubić tego, czego okno nie pokazuje (stara czynność — D56, D72; audyt 2026-10-16). Maszyny okno
+    // pokazuje od 2026-10-26, więc zapisuje je samo (zdjęcie wszystkich z listy = brak listy).
     const dawny = edytowanyKod && ((hala.slowniki || {}).zlecenia_stale || {})[edytowanyKod];
-    if (dawny) for (const pole of ['czynnosc', 'maszyny']) if (dawny[pole] !== undefined && w.wartosc[pole] === undefined) w.wartosc[pole] = dawny[pole];
+    if (dawny) for (const pole of ['czynnosc']) if (dawny[pole] !== undefined && w.wartosc[pole] === undefined) w.wartosc[pole] = dawny[pole];
     try {
       await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
       if (poZapisie) { const fn = poZapisie; poZapisie = null; await fn(w.kod); }

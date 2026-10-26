@@ -218,10 +218,13 @@
     const wyk = d.wykonane || {}, pom = d.pominiete || {};
     const opoz = new Set(k.opoznione.map(p => p.id)), blis = new Set(k.bliskie.map(p => p.id));
     const wiersze = (d.pozycje || []).map(p => {
-      const stan = wyk[p.id] ? 'wykonana' : pom[p.id] ? 'pominieta' : opoz.has(p.id) ? 'opozniona' : blis.has(p.id) ? 'bliska' : 'czeka';
+      // Okno od–do (2026-10-26): przed godziną „od” pozycja jest widoczna, ale nie do odhaczenia (hub też odrzuci).
+      const przed = !wyk[p.id] && !pom[p.id] && !!p.od && ms(p.od) > teraz;
+      const stan = wyk[p.id] ? 'wykonana' : pom[p.id] ? 'pominieta' : przed ? 'przed' : opoz.has(p.id) ? 'opozniona' : blis.has(p.id) ? 'bliska' : 'czeka';
       const wpis = wyk[p.id] || pom[p.id] || null;
       return { id: p.id, nazwa: p.nazwa, typ: p.typ || 'zadanie', wymaga_qr: !!p.wymaga_qr, cel: p.cel || null,
-               termin: p.termin, godz: godzina(p.termin), stan, wpis,
+               maszyny: p.maszyny || [], skany: p.skany || [], wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
+               termin: p.termin, godz: godzina(p.termin), od: p.od || null, odGodz: p.od ? godzina(p.od) : '', stan, wpis,
                poTerminie: stan === 'wykonana' && wpis && wpis.czas && ms(wpis.czas) > ms(p.termin),
                zaMin: stan === 'czeka' || stan === 'bliska' ? Math.round((ms(p.termin) - teraz) / MIN) : null };
     }).sort((a, b) => ms(a.termin) - ms(b.termin));

@@ -242,6 +242,7 @@
     <fieldset id="zlecenie-osoby"><legend>Dla kogo (nic = cały dział; każda osoba dostaje osobne zlecenie)</legend>
       <div class="zaznaczenia" data-osoby></div></fieldset>
     <p class="slaby konto-drobne" id="zlecenie-zmiana-opis" hidden></p>
+    <label id="zlecenie-od">Od kiedy (opcjonalnie — wcześniej nie da się go zrobić)<input name="od" type="datetime-local"></label>
     <label id="zlecenie-termin">Termin (opcjonalnie)<input name="termin" type="datetime-local"></label>
     <!-- D47: zmiana już zaplanowanego zlecenia (tylko „Zmień” przy nim). Nowych planów to okno nie robi — powtarzalne
          zadania na później zakłada się jako Zlecenia stałe. -->
@@ -278,7 +279,7 @@
         <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
              miniatura i nazwa pliku (panel.js → poleZdjecia). -->
         <div class="hala-zdjecie" id="zlecenie-zdjecie">
-          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" capture="environment" aria-label="Zdjęcie (opcjonalnie)"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
+          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" capture="environment" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
           <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
         </div>
         <!-- D31: jak dowód dostawy w GK Trasy — dział nie zamknie zlecenia bez tego, co tu zaznaczone. -->
@@ -322,8 +323,14 @@
     </fieldset>
     <div class="dwie">
       <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
-      <label id="stale-maszyna">Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
+      <label id="stale-maszyna" hidden>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
     </div>
+    <!-- Właściciel 2026-10-26: „wyznaczać kilka maszyn do sprawdzenia” — jak w oknie „Nowe zlecenie” (D56): pola wyboru,
+         ukryte pole „maszyna” = pierwsza zaznaczona (skan, wymagania). -->
+    <fieldset id="stale-maszyny"><legend>Maszyny (zaznacz jedną albo kilka)</legend>
+      <div class="maszyny-akcje"><button type="button" class="maly" data-maszyny-stale="wszystkie">Wszystkie</button>
+        <button type="button" class="maly" data-maszyny-stale="zadna">Żadna</button></div>
+      <div class="maszyny-lista" data-maszyny-stalego></div></fieldset>
     <fieldset><legend>Kiedy</legend>
       <div class="chipy presety" id="stale-presety" role="group" aria-label="Gotowe opcje"></div>
       <div class="dwie">
@@ -386,6 +393,16 @@
         <label id="stale-godzina">Godzina<input name="godzina" type="time"></label>
         <label id="stale-minuty">Minut<input name="minuty" type="number" min="1" max="10080" inputmode="numeric"></label>
       </div>
+      <!-- Okno od–do (2026-10-26): przed tą godziną zlecenie jest widoczne, ale nie da się go zrobić. -->
+      <div class="dwie">
+        <label>Od kiedy<select name="okno_rodzaj">
+          <option value="">Od startu zmiany</option>
+          <option value="godzina">Od godziny</option>
+          <option value="minuty">Minut po starcie zmiany</option>
+        </select></label>
+        <label id="stale-okno-godzina">Godzina od<input name="okno_godzina" type="time"></label>
+        <label id="stale-okno-minuty">Minut po starcie<input name="okno_minuty" type="number" min="1" max="10080" inputmode="numeric"></label>
+      </div>
     </fieldset>
     <fieldset id="stale-wymagania"><legend>Do zakończenia potrzebne</legend>
       <div class="zaznaczenia">
@@ -440,7 +457,7 @@
     <!-- D47: notatka i zdjęcie nieobowiązkowe — brak nie blokuje zgłoszenia (liczy się czas: przestój biegnie od „Zgłoś”). -->
     <label>Notatka (opcjonalnie)<textarea name="opis" rows="3" maxlength="2000" placeholder="Co się dzieje? (np. dźwięk, błąd na panelu)"></textarea></label>
     <div class="hala-zdjecie">
-      <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" aria-label="Zdjęcie (opcjonalnie)"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
+      <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
       <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
     </div>
     <p class="blad" role="alert" hidden></p>

@@ -12,7 +12,7 @@
   const prog = () => hala.ustawienie('prog_zolty_min', 30);
 
   const IKONY = { obchod: '⌖', proba: '◎', bhp: '⛑', obsada: '👥', przekazanie: '📋', zadanie: '✓' };
-  const OPIS_STANU = { wykonana: 'Zrobione', pominieta: 'Pominięte', opozniona: 'Po terminie', bliska: 'Wkrótce', czeka: '' };
+  const OPIS_STANU = { wykonana: 'Zrobione', pominieta: 'Pominięte', opozniona: 'Po terminie', bliska: 'Wkrótce', czeka: '', przed: 'Później' };
 
   // ------------------------------------------------------------ zapisy checklisty
 
@@ -72,6 +72,7 @@
     const c = W.checklista(k.lista, hala.teraz(), prog());
     const p = c.wiersze.find(w => w.id === id);
     if (!p) return;
+    if (p.stan === 'przed') { L.komunikat(`„${p.nazwa}” zrobisz od ${p.odGodz}${p.godz ? ` (do ${p.godz})` : ''}`, 'info', 'pozycja-przed'); return; }
     const zrobiona = p.stan === 'wykonana';
     const wpis = p.wpis || {};
     const kto = W.nazwaPracownika(hala.pracownicy, wpis.autor);
@@ -115,7 +116,9 @@
   async function wykonaj(p, k) {
     // D67: pozycja z wymaganym zdjęciem albo notatką (bez formularza czynności) — karta checklisty w Zleceniach, gdzie
     // jest aparat i pole notatki; ta sama pozycja otwarta od razu.
-    if ((p.wymagaj_zdjecia || p.wymagaj_notatki) && !['proba', 'bhp', 'obsada', 'przekazanie'].includes(p.typ)) {
+    // 2026-10-26: pozycja z kilkoma maszynami do zeskanowania — postęp skanów (✓ ○ przy maszynach) jest w karcie zlecenia.
+    const wielomaszynowa = (p.maszyny || []).length > 1 && p.typ !== 'obchod';
+    if ((p.wymagaj_zdjecia || p.wymagaj_notatki || wielomaszynowa) && !['proba', 'bhp', 'obsada', 'przekazanie'].includes(p.typ)) {
       const m = k.lista.mapa[p.id];
       L.zamknijOkno();
       L.pokazEkran('zlecenia');
@@ -228,7 +231,7 @@
           <span class="czas">${esc(w.godz)}</span>
           <span class="ikona-typu" aria-hidden="true">${IKONY[w.typ] || '✓'}</span>
           <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}</span>
-          <span class="stan">${w.stan === 'wykonana' ? '✔' : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
+          <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
         </li>`).join('')}</ul>
       ${przyciskiZmiany(pozycje)}`;
   }
