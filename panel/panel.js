@@ -257,6 +257,7 @@
     b.addEventListener('click', () => {
       if (b.dataset.idz === 'niewyslane') { pokazOdrzucone(); return; }
       if (b.dataset.idz === 'kody') { if (Panel.widoki.kody) Panel.widoki.kody.otworz(); return; }
+      if (b.dataset.idz === 'role') { if (Panel.widoki.role) Panel.widoki.role.otworz(); return; }
       const z = document.querySelector(`.zakladki [data-widok="${b.dataset.idz}"]`);
       if (z) z.click();
     });

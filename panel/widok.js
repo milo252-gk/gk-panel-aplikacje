@@ -906,6 +906,36 @@
       harmonogram: { rodzaj: 'dni_tygodnia', dni: PN_PT, zmiany: ['I', 'II', 'III'] }, termin: { rodzaj: 'koniec_zmiany' } },
   ];
 
+  /* Tabela ról i uprawnień (właściciel 2026-10-27: „zdefiniuj, jakie dostępy i do jakich opcji mają role, opisz to w aplikacji”):
+     katalog funkcji z kontraktu (stale.uprawnienia) × role; komórka to „tak”, „dzial” (tylko swój dział) albo „nie”. Role biorą się
+     z ról zapisanych w zdarzeniach kontraktu, w słownikach (zapis) i w aplikacjach — jedno źródło z serwerem, więc tabela nie rozjedzie
+     się z tym, co serwer naprawdę pozwala. Administrator może wszystko, więc ma „tak” w każdym wierszu. */
+  function uprawnienia(kontrakt) {
+    const k = kontrakt || {};
+    const kat = ((k.stale || {}).uprawnienia) || {};
+    const role = kat.role_w_tabeli || [];
+    const nazwyRol = (k.stale || {}).role || {};
+    const zdarzenia = k.zdarzenia || {}, slowniki = k.slowniki || {}, aplikacje = k.aplikacje || {}, zespoly = (k.stale || {}).zespoly || {};
+    const DZIALOWE = new Set(['kierownik_ur', 'kierownik_kj']);
+    const komorka = (wiersz, rola) => {
+      if (rola === 'admin' && !wiersz.aplikacja) return 'tak';
+      let rolePozwolone = [];
+      if (wiersz.tylko_admin) rolePozwolone = ['admin'];
+      else if (wiersz.aplikacja) rolePozwolone = (aplikacje[wiersz.aplikacja] || {}).role || [];
+      else if (wiersz.zdarzenia) rolePozwolone = [].concat(...wiersz.zdarzenia.map(z => (zdarzenia[z] || {}).role || []));
+      else if (wiersz.slownik) rolePozwolone = ((slowniki[wiersz.slownik] || {}).zapis) || [];
+      else if (wiersz.konta) rolePozwolone = ['admin', ...Object.keys(zespoly).filter(r => (zespoly[r] || []).length)];
+      if (!rolePozwolone.includes(rola)) return 'nie';
+      return wiersz.zakres_dzialu && DZIALOWE.has(rola) ? 'dzial' : 'tak';
+    };
+    return {
+      zasady: kat.zasady || [],
+      role: role.map(kod => ({ kod, nazwa: String(nazwyRol[kod] || kod).split(' (')[0], opis: (kat.opisy_rol || {})[kod] || '' })),
+      grupy: (kat.grupy || []).map(g => ({ nazwa: g.nazwa, wiersze: g.wiersze.map(wi => ({
+        nazwa: wi.nazwa, opis: wi.opis || '', tylkoAdmin: wi.tylko_admin === true, komorki: Object.fromEntries(role.map(r => [r, komorka(wi, r)])) })) })),
+    };
+  }
+
   /* Te z zestawu, których jeszcze nie ma (po kodzie) — przycisk dodaje tylko brakujące, więc drugi klik niczego nie
      dubluje, a usunięte zadanie wraca dopiero na wyraźne życzenie. Zmiany, których nie ma w słowniku, odpadają. */
   function brakujaceZestawu(slowniki, autor) {
@@ -2487,7 +2517,7 @@
   const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
-                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
+                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,

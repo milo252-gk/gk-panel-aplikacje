@@ -595,3 +595,20 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
   #stale-pozycje .pozycja-szczegoly { padding-left: 0; }
 }
 
+/* Role i uprawnienia (2026-10-27): tabela funkcji × role, swoja rola podświetlona. */
+.okno-role { max-width: min(1100px, 96vw); }
+.role-zasady ol { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 4px; }
+.role-opisy dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
+.role-opisy dt { font-weight: 700; } .role-opisy dd { margin: 0; color: var(--tekst-slaby); }
+.role-tabela-opak { overflow-x: auto; border: 1px solid var(--ramka); border-radius: 8px; }
+.role-tabela { border-collapse: collapse; width: 100%; font-size: 14px; }
+.role-tabela th, .role-tabela td { padding: 6px 8px; border-bottom: 1px solid var(--ramka); text-align: center; }
+.role-tabela thead th { position: sticky; top: 0; background: var(--karta); font-size: 12px; vertical-align: bottom; }
+.role-tabela tbody th[scope="row"] { text-align: left; font-weight: 600; min-width: 230px; }
+.role-tabela .role-opis { display: block; font-weight: 400; font-size: 12px; }
+.role-tabela .role-grupa th { text-align: left; background: var(--tlo-neutralne); }
+.role-tabela td.rola-tak { color: var(--zielony); font-weight: 700; }
+.role-tabela td.rola-dzial { color: var(--zolty); font-weight: 700; }
+.role-tabela td.rola-nie { color: var(--tekst-slaby); }
+.role-tabela .moja-rola { background: var(--info-tlo); }
+.role-tabela tr.tylko-admin th[scope="row"] { color: var(--czerwony); }

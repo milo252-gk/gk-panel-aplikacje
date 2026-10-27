@@ -184,6 +184,7 @@
         <button type="button" data-idz="raporty">🧾 Raporty</button>
         <button type="button" data-idz="administracja" id="wiecej-administracja" hidden>⚙️ Administracja</button>
         <button type="button" data-idz="kody" id="wiecej-kody" hidden>🖨 Kody QR</button>
+        <button type="button" data-idz="role" id="wiecej-role">🔐 Role i uprawnienia</button>
         <button type="button" data-idz="niewyslane" id="wiecej-niewyslane">Nie wysłane</button>
       </nav>
       <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>
@@ -579,6 +580,15 @@
 
 <!-- Właściciel 2026-10-20: wszystkie kody QR w jednym miejscu (Więcej → 🖨 Kody QR) — kategorie z „Drukuj wszystkie”,
      rozwinięte — 🖨 przy każdym kodzie. Treść rysuje kody.js; druk w ukrytej ramce (HalaKonto.drukujArkusz). -->
+<!-- Właściciel 2026-10-27: standard ról i uprawnień opisany w aplikacji (Więcej → 🔐 Role i uprawnienia); treść rysuje role.js z kontraktu. -->
+<dialog id="okno-roli" class="okno okno-szerokie okno-role" aria-labelledby="t-okno-roli">
+  <form method="dialog">
+    <h2 id="t-okno-roli">🔐 Role i uprawnienia</h2>
+    <div id="role-tresc"></div>
+    <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
+  </form>
+</dialog>
+
 <dialog id="okno-kodow" class="okno okno-kodow" aria-labelledby="t-okno-kodow">
   <form method="dialog">
     <h2 id="t-okno-kodow">🖨 Kody QR</h2>
@@ -604,6 +614,7 @@
 <script src="panel.js"></script>
 <script src="etykiety.js"></script>
 <script src="kody.js"></script>
+<script src="role.js"></script>
 <script src="wskazniki.js"></script>
 <script src="administracja.js"></script>
 <script src="checklisty.js"></script>
