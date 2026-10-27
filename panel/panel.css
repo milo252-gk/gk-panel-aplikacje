@@ -612,3 +612,31 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 .role-tabela td.rola-nie { color: var(--tekst-slaby); }
 .role-tabela .moja-rola { background: var(--info-tlo); }
 .role-tabela tr.tylko-admin th[scope="row"] { color: var(--czerwony); }
+
+/* Okno dnia w kalendarzu (2026-10-27) */
+#dzien-tresc h3 { margin: 14px 0 6px; font-size: 16px; }
+#dzien-tresc .kal-pozycja { align-items: flex-start; }
+.kal-szczegoly { margin-top: 6px; } .kal-szczegoly summary { cursor: pointer; color: var(--akcent); font-size: 14px; }
+.kal-wyst, .kal-pozycje, .kal-zlecone { margin: 6px 0; padding-left: 18px; display: grid; gap: 4px; }
+.kal-pozycje { font-size: 14px; } .kal-opis { white-space: pre-line; margin: 2px 0 4px; }
+.kal-dzien-link { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-weight: 700; color: var(--akcent); cursor: pointer; text-align: left; }
+
+/* Wykresy we Wskaźnikach (2026-10-27): karty w siatce, koła z legendą, kolumny przewijane w poziomie na wąskim ekranie. */
+.wskazniki-wykresy { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 12px 0; }
+.wykres-karta { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien, 10px); padding: 12px; min-width: 0; }
+.wykres-karta h3 { margin: 0 0 8px; font-size: 15px; }
+.wykres { margin: 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.wykres-kolo .wykres-svg { width: 150px; height: 150px; flex: none; }
+.wykres-srodek { font-size: 24px; font-weight: 700; fill: var(--tekst); font-variant-numeric: tabular-nums; }
+.wykres-podpis { font-size: 11px; fill: var(--tekst-slaby); }
+.wykres-legenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 14px; min-width: 0; }
+.wykres-legenda li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.wykres-legenda-pozioma { display: flex; flex-wrap: wrap; gap: 4px 14px; flex-basis: 100%; }
+.wykres-kropka { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
+.wykres-kolumny { display: block; }
+.wykres-przewijanie { overflow-x: auto; max-width: 100%; }
+.wykres-svg text { font-family: inherit; }
+.wykres-os { font-size: 11px; fill: var(--tekst-slaby); }
+.wykres-wartosc { font-size: 11px; fill: var(--tekst); font-variant-numeric: tabular-nums; font-weight: 600; }
+.wykres-siatka { stroke: var(--ramka); stroke-width: 1; stroke-dasharray: 3 3; }
+.wykres-oska { stroke: var(--ramka-mocna); stroke-width: 1.5; }

@@ -30,7 +30,7 @@
     $('kal-tytul').textContent = `Najbliższe ${stan.dniAgendy} dni`;
     $('kal-agenda').innerHTML = (dni.map(c => `
       <section class="kal-agenda-dzien${c.swieto ? ' swieto' : ''}">
-        <h3>${esc(nazwaDnia(c))}${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}</h3>
+        <h3><button type="button" class="kal-dzien-link" data-dzien="${c.data}" title="Szczegóły dnia">${esc(nazwaDnia(c))} ›</button>${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}</h3>
         ${c.pozycje.map(p => `<article class="kal-pozycja">
           <div class="opis"><div><b>${p.checklista ? '☑ ' : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}</div>
             <div class="slaby">${p.godziny.length ? `${esc(p.godziny.join(', '))} · ` : ''}${esc(p.dla || '')}</div></div></article>`).join('')}
@@ -42,7 +42,7 @@
     stan.widok = widok;
     for (const b of document.querySelectorAll('[data-kal-widok]')) b.setAttribute('aria-pressed', String(b.dataset.kalWidok === widok));
     for (const b of document.querySelectorAll('#zlecenia-kalendarz [data-kal]')) b.hidden = widok === 'agenda';
-    $('kal-siatka').hidden = $('kal-dzien').hidden = widok === 'agenda';
+    $('kal-siatka').hidden = $('kal-podpowiedz').hidden = widok === 'agenda';
     $('kal-agenda').hidden = widok !== 'agenda';
     rysuj();
   }
@@ -64,21 +64,40 @@
           <span class="kal-nr">${c.dzien}</span>${c.liczba ? `<span class="kal-licznik">${c.liczba}</span>` : ''}
           <span class="kal-wpisy">${tytuly}${wiecej}</span></button>`;
       }).join('');
-    rysujDzien(k.dni.find(c => c.data === stan.dzien));
+    if ($('okno-dnia').open) rysujDzien(k.dni.find(c => c.data === stan.dzien));       // szczegóły dnia odświeżają się razem z listą
+  }
+
+  /* Okno dnia (właściciel 2026-10-27: „nie mogę wejść w dany dzień i szczegółowo zobaczyć, co jest zaplanowane”): dotknięcie dnia
+     otwiera okno — na górze, co jest zaplanowane na ten dzień (zmiana, godziny od–do, dla kogo, opis, a przy checkliście każda
+     pozycja z godziną, opisem i maszynami), niżej, co już zlecono tego dnia (numer, status, postęp). Te same przyciski:
+     Pomiń ten dzień, Zakończ po tym dniu, Zmień. */
+  function szczegolyHtml(p) {
+    const s = p.szczegoly;
+    if (!s) return '';
+    const wyst = s.wystapienia.map(x => `<li><b>${esc(x.zmiana || 'Zlecenie')}</b> ${esc(x.start)}${x.termin ? `–${esc(x.termin)}` : ''}${x.od ? ` <span class="slaby">(do zrobienia od ${esc(x.od)})</span>` : ''}${
+      x.pozycje.length ? `<ol class="kal-pozycje">${x.pozycje.map(q => `<li><span class="slaby">${esc(q.od ? `${q.od}–${q.godz}` : q.godz)}</span> <b>${esc(q.nazwa)}</b>${
+        q.maszyny.length ? ` <span class="slaby">· ${q.maszyny.length > 3 ? `${q.maszyny.length} maszyn` : esc(q.maszyny.join(', '))}${q.skan ? ' · ▣ skan każdej' : ''}</span>` : ''}${
+        q.zdjecie ? ' 📷' : ''}${q.notatka ? ' 📝' : ''}${q.opis ? `<div class="slaby kal-opis">${esc(q.opis)}</div>` : ''}</li>`).join('')}</ol>` : ''}</li>`).join('');
+    return `<details class="kal-szczegoly"><summary>Szczegóły</summary>
+      ${s.opis ? `<p class="kal-opis">${esc(s.opis)}</p>` : ''}
+      <ul class="kal-wyst">${wyst}</ul>
+      <p class="slaby">${s.harmonogram ? `${esc(s.harmonogram)} · ` : ''}${s.linia ? `${esc(s.linia)} · ` : ''}${s.maszyny.length ? `maszyny: ${esc(s.maszyny.join(', '))} · ` : ''}${
+      s.wymagania.length ? `wymagane: ${esc(s.wymagania.join(', '))}` : ''}${s.pilne ? ' · <b>pilne</b>' : ''}</p></details>`;
   }
 
   function rysujDzien(c) {
-    const el = $('kal-dzien');
-    if (!c) { el.innerHTML = '<p class="slaby">Dotknij dnia, żeby zobaczyć jego zlecenia.</p>'; return; }
+    const el = $('dzien-tresc');
+    if (!c) { el.innerHTML = ''; return; }
     const pisze = P.mozeZapisacStale();
     const dt = (new Date(`${c.data}T12:00:00Z`).getUTCDay() + 6) % 7;
-    const naglowek = `<h3>${esc(`${W.DNI_NAZWY[dt]}, ${W.dataDluga(`${c.data}T12:00:00Z`)}`)}${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}</h3>`;
+    $('t-okno-dnia').innerHTML = `${esc(`${W.DNI_NAZWY[dt]}, ${W.dataDluga(`${c.data}T12:00:00Z`)}`)}${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}`;
     const wiersze = c.pozycje.map(p => `
       <article class="kal-pozycja${p.pominiety ? ' pominieta' : ''}" ${p.kod ? `data-kod="${esc(p.kod)}"` : ''}>
         <div class="opis">
           <div><b>${p.checklista ? '☑ ' : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}
             ${p.pominiety ? `<span class="znacznik">${esc(p.pominiety === 'pominięty' ? 'Pominięte' : `Pominięte — ${p.pominiety}`)}</span>` : ''}</div>
           <div class="slaby">${p.godziny.length ? esc(p.godziny.join(', ')) + ' · ' : ''}${esc(p.dla || '')}</div>
+          ${szczegolyHtml(p)}
         </div>
         ${pisze && p.kod && !c.przeszly ? `<div class="akcje">
           ${p.pominiety === 'pominięty' ? '<button type="button" class="maly" data-akcja="przywroc">Przywróć</button>'
@@ -86,8 +105,18 @@
           ${!p.pominiety ? '<button type="button" class="maly" data-akcja="zakoncz">Zakończ po tym dniu</button>' : ''}
           <button type="button" class="maly" data-akcja="zmien">Zmień</button></div>` : ''}
       </article>`).join('');
-    el.innerHTML = naglowek + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${
-      pisze ? ' Nowe stałe zlecenie: 💾 Zapisane → „+ Nowe zapisane”.' : ''}</p>`);
+    const zlecone = (c.zlecone || []).map(z => `<li><span class="slaby">${esc(z.godz)}</span> <b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)} · ${esc(z.status)}${
+      z.postep ? ` · ☑ ${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · 🔁' : ''}</span></li>`).join('');
+    el.innerHTML = `<h3>${c.przeszly ? 'Było zaplanowane' : 'Zaplanowane'}</h3>`
+      + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Nowe stałe zlecenie: 💾 Zapisane → „+ Nowe zapisane”.' : ''}</p>`)
+      + (zlecone ? `<h3>Zlecone tego dnia (${c.zlecone.length})</h3><ul class="kal-zlecone">${zlecone}</ul>` : '');
+  }
+
+  function otworzDzien() {
+    const k = ostatnie && W.kalendarzZlecen({ slowniki: ostatnie.d.slowniki, pracownicy: ostatnie.d.pracownicy, stale: ostatnie.d.stale,
+                                              zlecenia: ostatnie.lista, rok: stan.rok, miesiac: stan.miesiac, teraz: ostatnie.d.teraz });
+    rysujDzien(k && k.dni.find(c => c.data === stan.dzien));
+    if (!$('okno-dnia').open) $('okno-dnia').showModal();
   }
 
   async function zapiszHarmonogram(kod, zmiana, komunikat) {
@@ -103,6 +132,13 @@
     const widok = ev.target.closest('[data-kal-widok]');
     if (widok) { ustawWidok(widok.dataset.kalWidok); return; }
     if (ev.target.closest('[data-agenda-wiecej]')) { stan.dniAgendy += 14; rysuj(); return; }
+    const wDzien = ev.target.closest('[data-dzien]');
+    if (wDzien) {
+      const [r, m] = wDzien.dataset.dzien.split('-');
+      stan.rok = +r; stan.miesiac = +m; stan.dzien = wDzien.dataset.dzien;
+      otworzDzien();
+      return;
+    }
     const nav = ev.target.closest('[data-kal]');
     if (nav) {
       if (+nav.dataset.kal === 0) ustawDzis();
@@ -114,7 +150,10 @@
       return;
     }
     const dzien = ev.target.closest('.kal-komorka');
-    if (dzien) { stan.dzien = dzien.dataset.data; rysuj(); return; }
+    if (dzien) { stan.dzien = dzien.dataset.data; rysuj(); otworzDzien(); return; }
+  });
+  $('okno-dnia').querySelector('[data-zamknij]').addEventListener('click', () => $('okno-dnia').close());
+  $('okno-dnia').addEventListener('click', async ev => {
     const b = ev.target.closest('[data-akcja]');
     if (!b) return;
     const kod = b.closest('[data-kod]').dataset.kod;
@@ -122,7 +161,7 @@
     const s = ((hala.slowniki || {}).zlecenia_stale || {})[kod];
     if (!s || !data) return;
     try {
-      if (b.dataset.akcja === 'zmien') P.widoki.stale.otworzKod(kod);
+      if (b.dataset.akcja === 'zmien') { $('okno-dnia').close(); P.widoki.stale.otworzKod(kod); }
       if (b.dataset.akcja === 'pomin' || b.dataset.akcja === 'przywroc')
         await zapiszHarmonogram(kod, h => W.przelaczDzien(h, data),
                                 b.dataset.akcja === 'pomin' ? `Pominięte ${+data.slice(8)}.${data.slice(5, 7)} — pozostałe dni bez zmian` : 'Przywrócone');

@@ -1668,7 +1668,7 @@
         if (c && (!g.najstarszy || c < g.najstarszy)) g.najstarszy = c;
         grupy.set(w.autor, g);
       }
-      const zespoly = ((h.kontrakt && h.kontrakt.stale) || {}).zespoly || {};
+      const zespoly = Object.assign({}, ((h.kontrakt && h.kontrakt.stale) || {}).zespoly || {}, ((h.kontrakt && h.kontrakt.stale) || {}).zespoly_przekazania || {});
       return Array.from(grupy.values()).map(g => {
         const p = (h.pracownicy || []).find(x => x && x.id === g.autor);
         return Object.assign(g, { nazwa: (p && p.nazwa) || g.autor,

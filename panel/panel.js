@@ -262,7 +262,20 @@
       if (z) z.click();
     });
   }
+  /* Wskaźniki i Raporty (wykresy, KPI) — tylko kierownik zakładu i administrator (właściciel 2026-10-27); serwer też odmawia
+     (GET /api/v1/panel/wskazniki → 403). Kierownik UR/KJ i ekran widzą Na żywo i Zlecenia. */
+  function pokazAnalityke() {
+    const ok = !!(hala.pracownik && (hala.pracownik.role || []).some(r => r === 'kierownik' || r === 'admin'));
+    for (const w of ['wskazniki', 'raporty']) {
+      const t = document.querySelector(`.zakladki [data-widok="${w}"]`);
+      if (t) t.hidden = !ok;
+      const m = document.querySelector(`#wiecej [data-idz="${w}"]`);
+      if (m) m.hidden = !ok;
+    }
+    if (!ok && (widokAktywny === 'wskazniki' || widokAktywny === 'raporty')) { const n = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (n) n.click(); }
+  }
   function rysujWiecej() {
+    pokazAnalityke();
     $('wiecej-administracja').hidden = $('menu-administracja').hidden;
     // Właściciel 2026-10-20: wszystkie kody QR do druku w jednym miejscu — dla kierownika zakładu i administratora.
     $('wiecej-kody').hidden = !(Panel.widoki.kody && Panel.widoki.kody.dostepne());
@@ -659,6 +672,8 @@
   });
   $('filtry-zlecen').addEventListener('submit', ev => ev.preventDefault());
 
+  $('zlecenia-czysc').addEventListener('click', () => { if (Panel.widoki.czyszczenie) Panel.widoki.czyszczenie.otworz(); });
+
   function rysujZlecenia(d, lista) {
     for (const b of document.querySelectorAll('#tryb-zlecen [data-tryb]')) b.setAttribute('aria-pressed', String(b.dataset.tryb === trybZlecen));
     for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) b.setAttribute('aria-pressed', String(b.dataset.filtr === filtrZlecen));
@@ -670,6 +685,7 @@
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
     $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
+    $('zlecenia-czysc').hidden = !(trybZlecen === 'biezace' && Panel.widoki.czyszczenie && Panel.widoki.czyszczenie.dostepne());
     // D71: 📅 Kalendarz — miesiąc zleceń stałych i zaplanowanych (kalendarz.js).
     if (trybZlecen === 'kalendarz') {
       if (Panel.widoki.kalendarz) Panel.widoki.kalendarz.rysuj(d, lista);

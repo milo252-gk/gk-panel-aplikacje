@@ -10,6 +10,7 @@
   const P = window.Panel;
   const { hala, W, $, esc } = P;
   const M = window.HalaMiary;
+  const G = window.PanelWykresy;
   const pamiec = M.pamiecZakresu('panel', () => hala.teraz());
   const zapis = pamiec.czytaj();
   let okres = zapis.wybrany ? 'zakres' : 'zmiana';
@@ -99,6 +100,29 @@
   });
   $('filtry-osob').addEventListener('submit', ev => ev.preventDefault());
 
+  /* Wykresy (2026-10-27: „dodaj wykresy, słupki, koła”): koło terminowości, koło wad, kolumny przestoju wg maszyny (albo linii)
+     i kolumny piętrowe zleceń wg działu — te same liczby co kafelki i paski pod spodem (W.wskazniki), tylko obrazem. */
+  function wykresy(w, tw) {
+    if (!G) return '';
+    const zielony = 'var(--zielony)', czerwony = 'var(--czerwony)';
+    const sekcja = (tytul, kod, tresc, pusto) => `<section class="wykres-karta"><h3>${esc(tytul)}${kod ? info(kod) : ''}</h3>${tresc || `<p class="pusto">${esc(pusto)}</p>`}</section>`;
+    const terminowosc = G.kolo([{ nazwa: 'W terminie', ile: tw.wTerminie, kolor: zielony }, { nazwa: 'Po terminie', ile: tw.poTerminie, kolor: czerwony }],
+      { tytul: 'Terminowość zleceń', srodek: tw.proc === null ? '—' : `${W.procent(tw.proc)} %`, podpis: 'w terminie' }).html;
+    const wady = G.kolo(G.kategorie(w.pareto.map(p => ({ nazwa: p.nazwa, ile: p.ile }))), { tytul: 'Wady w próbach', srodek: w.pareto.reduce((n, p) => n + p.ile, 0), podpis: 'szt.' }).html;
+    const zrodlo = (w.naMaszyne ? w.maszyny : w.linie) || [];
+    const przestoj = G.kolumny(zrodlo.filter(k => k.przestojMs > 0).sort((a, b) => b.przestojMs - a.przestojMs).slice(0, 10)
+      .map(k => ({ nazwa: k.nazwa, wartosc: k.przestojMs, etykieta: czas(k.przestojMs), opis: `${k.nazwa}: przestój ${czas(k.przestojMs)}, ${k.awarie} aw.` })),
+      { tytul: w.naMaszyne ? 'Przestój wg maszyny' : 'Przestój wg linii', format: czas }).html;
+    const dzialy = G.kolumnyPietrowe(tw.dzialy.map(d => ({ nazwa: d.nazwa, czesci: [{ nazwa: 'W terminie', ile: d.wTerminie, kolor: zielony }, { nazwa: 'Po terminie', ile: d.poTerminie, kolor: czerwony }] })),
+      { tytul: 'Zlecenia wg działu' }).html;
+    return `<div class="wskazniki-wykresy">
+      ${sekcja('Terminowość zleceń', 'zlecenia_w_terminie', terminowosc, 'Brak zleceń z terminem w tym okresie')}
+      ${sekcja('Zlecenia wg działu', 'terminowosc_dzialy', dzialy, 'Brak zleceń z terminem w tym okresie')}
+      ${sekcja(w.naMaszyne ? 'Przestój wg maszyny' : 'Przestój wg linii', w.naMaszyne ? 'przestoj_maszyny' : 'przestoj_linie', przestoj, 'Bez przestojów w tym okresie')}
+      ${sekcja('Wady w próbach', 'wady', wady, w.proby ? 'Bez wad w próbach' : 'Brak prób w tym okresie')}
+    </div>`;
+  }
+
   function rysuj(d) {
     const oknoOsob = okres === 'zakres' ? (bladZakresu ? null : oknoZakresu()) : W.oknoWskaznikow(okres, d.teraz, d.zmiana);
     rysujOsoby(d, oknoOsob);
@@ -156,6 +180,7 @@
         ${kafel('zlecenia_wykonane', `${w.zleceniaWykonane}/${w.zlecenia}`, w.zlecenia ? 'dobrze' : 'zero')}
         ${kafel('zlecenia_w_terminie', tw.proc === null ? '—' : `${W.procent(tw.proc)} %`, tw.proc === null ? 'zero' : tw.proc >= 80 ? 'dobrze' : 'pilne')}
       </div>
+      ${wykresy(w, tw)}
       <div class="wskazniki-dwa">
         <section>${naglowek(w.naMaszyne ? 'przestoj_maszyny' : 'przestoj_linie')}
           ${(w.naMaszyne ? w.maszyny : w.linie).map(k => `<div class="pasek-wsk">

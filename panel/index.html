@@ -93,7 +93,8 @@
       <h2 id="t-zlecenia">Zlecenia dla działów
         <span class="licznik"><button type="button" id="nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
           <button type="button" id="nowe-stale" class="glowny" hidden>+ Nowe zapisane</button>
-          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista</button></span></h2>
+          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista</button>
+          <button type="button" id="zlecenia-czysc" hidden title="Usuń historię zleceń (tylko administrator)">🧹 Czyszczenie</button></span></h2>
       <!-- Jak w GK Trasy: zlecenia i zapisane (szablony). Zapisane POJEDYNCZE zleca kierownik „Zleć teraz” ile razy chce,
            STAŁE (z harmonogramem) hub zleca sam — D31; właściciel 2026-10-13: zapis nie tylko stałych. -->
       <!-- D60 (właściciel 2026-10-14): jedna lista zadań — zlecenia, zapisane/stałe, checklisty zadań, zadania kierownika,
@@ -146,7 +147,7 @@
             <button type="button" class="chip maly" data-kal-widok="agenda" aria-pressed="false">Najbliższe dni</button></span>
         </div>
         <div class="kal-siatka" id="kal-siatka" role="grid" aria-label="Kalendarz zleceń"></div>
-        <div class="kal-dzien" id="kal-dzien" aria-live="polite"></div>
+        <p class="slaby" id="kal-podpowiedz">Dotknij dnia, żeby zobaczyć, co jest w nim zaplanowane i zlecone.</p>
         <div class="kal-agenda" id="kal-agenda" aria-live="polite" hidden></div>
       </div>
     </section>
@@ -589,6 +590,28 @@
   </form>
 </dialog>
 
+<!-- Czyszczenie zleceń (Zlecenia → 🧹 Czyszczenie; tylko administrator) — czyszczenie.js. -->
+<dialog id="okno-czyszczenia" class="okno" aria-labelledby="t-okno-czyszczenia">
+  <form method="dialog">
+    <h2 id="t-okno-czyszczenia">🧹 Czyszczenie zleceń</h2>
+    <p class="slaby">Usuwa zlecenia zlecone <b>przed</b> wybraną chwilą (razem z historią). Zapisane zlecenia i checklisty zostają, zaplanowane na później też.
+      Przed usunięciem serwer robi pełną kopię bazy.</p>
+    <label>Usuń zlecenia zlecone przed<input type="datetime-local" id="czysc-przed"></label>
+    <div class="admin-pasek"><button type="button" class="maly glowny" data-akcja="czysc-policz">Policz, ile usunę</button></div>
+    <div id="czysc-wynik" aria-live="polite"></div>
+    <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
+  </form>
+</dialog>
+
+<!-- Okno dnia w kalendarzu Zleceń (kalendarz.js): zaplanowane na ten dzień ze szczegółami + zlecone tego dnia. -->
+<dialog id="okno-dnia" class="okno okno-szerokie" aria-labelledby="t-okno-dnia">
+  <form method="dialog">
+    <h2 id="t-okno-dnia"></h2>
+    <div id="dzien-tresc"></div>
+    <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
+  </form>
+</dialog>
+
 <dialog id="okno-kodow" class="okno okno-kodow" aria-labelledby="t-okno-kodow">
   <form method="dialog">
     <h2 id="t-okno-kodow">🖨 Kody QR</h2>
@@ -615,6 +638,8 @@
 <script src="etykiety.js"></script>
 <script src="kody.js"></script>
 <script src="role.js"></script>
+<script src="czyszczenie.js"></script>
+<script src="wykresy.js"></script>
 <script src="wskazniki.js"></script>
 <script src="administracja.js"></script>
 <script src="checklisty.js"></script>

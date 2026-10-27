@@ -797,7 +797,7 @@
         const checklista = Array.isArray(s.pozycje) && s.pozycje.length > 0;
         if (lista.length) {
           pozycje.push({ kod, tytul: s.tytul || kod, dla, checklista, godziny: [...new Set(lista.map(w => godzina(Date.parse(w.start))))],
-                         start: Date.parse(lista[0].start) });
+                         start: Date.parse(lista[0].start), szczegoly: szczegolyStalego(s, lista, zm, slowniki, stale, pracownicy) });
         } else {
           const powod = powodPominiecia(s.harmonogram, c.data);
           if (powod) pozycje.push({ kod, tytul: s.tytul || kod, dla, checklista, godziny: [], pominiety: powod, start: Infinity });
@@ -806,14 +806,48 @@
       for (const z of plan) {
         const start = Date.parse(z.dane.zaplanowane_na);
         if (dzienZakladu(start) === c.data)
-          pozycje.push({ id: z.id, tytul: z.dane.tytul || 'Zlecenie', dla: dlaKogoPoLudzku(z.dane, stale, pracownicy), godziny: [godzina(start)], zaplanowane: true, start });
+          pozycje.push({ id: z.id, tytul: z.dane.tytul || 'Zlecenie', dla: dlaKogoPoLudzku(z.dane, stale, pracownicy), godziny: [godzina(start)], zaplanowane: true, start,
+                         szczegoly: szczegolyZaplanowanego(z.dane, start, slowniki) });
       }
+      // Co faktycznie zlecono tego dnia (dzień, który już był albo trwa): numer, status — kierownik widzi, co się stało z zaplanowanym.
+      const zlecone = (zlecenia || []).filter(z => z.status !== 'zaplanowane' && z.dane && z.dane.czas_zlecenia && dzienZakladu(Date.parse(z.dane.czas_zlecenia)) === c.data)
+        .map(z => ({ id: z.id, numer: z.numer || '—', tytul: z.dane.tytul || '', status: z.etykieta || z.status, godz: godzina(Date.parse(z.dane.czas_zlecenia)),
+                     checklista: Array.isArray(z.dane.pozycje) && z.dane.pozycje.length > 0, stale: !!z.dane.stale,
+                     postep: Array.isArray(z.dane.pozycje) && z.dane.pozycje.length ? H().postepPozycji(z.dane) : null }))
+        .sort((a, b) => (a.godz < b.godz ? -1 : 1));
       pozycje.sort((a, b) => a.start - b.start || a.tytul.localeCompare(b.tytul, 'pl'));
-      return Object.assign(c, { pozycje, dzis: c.data === dzis, przeszly: c.data < dzis,
+      return Object.assign(c, { pozycje, zlecone, dzis: c.data === dzis, przeszly: c.data < dzis,
                                 swieto: H().swietaPL(+c.data.slice(0, 4))[c.data] || null,
                                 liczba: pozycje.filter(p => !p.pominiety).length });
     });
     return { tytul: `${MIESIACE[miesiac - 1]} ${rok}`, dni };
+  }
+
+  /* Szczegóły zapisanego zlecenia na jeden dzień (okno dnia w kalendarzu): na której zmianie, od której do której godziny, kto dostaje,
+     co trzeba zrobić i — przy checkliście — każda pozycja z godziną, opisem i maszynami. Te same wystąpienia, które zleci serwer. */
+  function szczegolyStalego(s, lista, zm, slowniki, stale, pracownicy) {
+    const maszynyNazwy = ms => ms.map(m => (((slowniki && slowniki.maszyny) || {})[m] || {}).nazwa || m);
+    return {
+      opis: s.opis || '', pilne: s.priorytet === 'pilne', dla: dlaKogoPoLudzku(s, stale, pracownicy),
+      linia: s.linia === LINIA_KAZDA ? 'każda linia osobno' : s.linia ? nazwaLinii(slowniki, s.linia) : '',
+      maszyny: maszynyNazwy(H().maszynyPozycji(s)),
+      wymagania: [s.wymagaj_zdjecia === true ? '📷 zdjęcie' : '', s.wymagaj_notatki === true ? '📝 notatka' : '', s.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
+      harmonogram: harmonogramPoLudzku(s, slowniki),
+      wystapienia: lista.map(w => ({
+        zmiana: (zm[String(w.zmiana).split('/')[1]] || {}).nazwa || (String(w.zmiana).split('/')[1] ? `Zmiana ${String(w.zmiana).split('/')[1]}` : ''),
+        start: godzina(Date.parse(w.start)), termin: godzina(Date.parse(w.termin)), od: w.od ? godzina(Date.parse(w.od)) : '',
+        pozycje: (Array.isArray(s.pozycje) ? H().pozycjeWystapienia(s.pozycje, w.start, w.termin) : []).map(p => ({
+          nazwa: p.nazwa || '', opis: p.opis || '', godz: p.termin ? godzina(Date.parse(p.termin)) : '', od: p.od ? godzina(Date.parse(p.od)) : '',
+          maszyny: maszynyNazwy(H().maszynyPozycji(p)), skan: p.wymagaj_skanu === true, zdjecie: p.wymagaj_zdjecia === true, notatka: p.wymagaj_notatki === true })),
+      })),
+    };
+  }
+  function szczegolyZaplanowanego(d, start, slowniki) {
+    const maszyny = (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
+      .map(m => (((slowniki && slowniki.maszyny) || {})[m] || {}).nazwa || m);
+    return { opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyny,
+             wymagania: [d.wymagaj_zdjecia === true ? '📷 zdjęcie' : '', d.wymagaj_notatki === true ? '📝 notatka' : '', d.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
+             wystapienia: [{ zmiana: '', start: godzina(start), termin: d.termin ? godzina(Date.parse(d.termin)) : '', od: '', pozycje: [] }] };
   }
 
   /* Lista najbliższych dni (właściciel 2026-10-27: „widok przyszłych zleceń zleconych na kolejne dni”): co dnia zlecą zapisane
@@ -909,7 +943,7 @@
   /* Tabela ról i uprawnień (właściciel 2026-10-27: „zdefiniuj, jakie dostępy i do jakich opcji mają role, opisz to w aplikacji”):
      katalog funkcji z kontraktu (stale.uprawnienia) × role; komórka to „tak”, „dzial” (tylko swój dział) albo „nie”. Role biorą się
      z ról zapisanych w zdarzeniach kontraktu, w słownikach (zapis) i w aplikacjach — jedno źródło z serwerem, więc tabela nie rozjedzie
-     się z tym, co serwer naprawdę pozwala. Administrator może wszystko, więc ma „tak” w każdym wierszu. */
+     się z tym, co serwer naprawdę pozwala. Konto administratora może wszystko, więc ma „tak” w każdym wierszu. */
   function uprawnienia(kontrakt) {
     const k = kontrakt || {};
     const kat = ((k.stale || {}).uprawnienia) || {};
@@ -924,6 +958,7 @@
       else if (wiersz.aplikacja) rolePozwolone = (aplikacje[wiersz.aplikacja] || {}).role || [];
       else if (wiersz.zdarzenia) rolePozwolone = [].concat(...wiersz.zdarzenia.map(z => (zdarzenia[z] || {}).role || []));
       else if (wiersz.slownik) rolePozwolone = ((slowniki[wiersz.slownik] || {}).zapis) || [];
+      else if (wiersz.role) rolePozwolone = ['admin', ...wiersz.role];
       else if (wiersz.konta) rolePozwolone = ['admin', ...Object.keys(zespoly).filter(r => (zespoly[r] || []).length)];
       if (!rolePozwolone.includes(rola)) return 'nie';
       return wiersz.zakres_dzialu && DZIALOWE.has(rola) ? 'dzial' : 'tak';

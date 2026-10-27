@@ -655,7 +655,7 @@
      było widać „czy wszystko gra” bez rozwijania. Czerwona karta „Sieć zakładu” stoi nad nimi, niezwinięta — to alarm.
      Rozwinięcie pamiętamy do wylogowania (przerysowanie co 20 s go nie zwija); Dostęp pierwszy raz rozwija się sam,
      gdy jest w nim coś do zrobienia (alarm sieci, konta zablokowane z internetu). */
-  let serwisOtwarte = { dostep: null, polaczenia: false, czyszczenie: false };
+  let serwisOtwarte = { dostep: null, polaczenia: false };
 
   function rysujSerwis(el) {
     if (!el.querySelector('#serwis-dostep')) {
@@ -669,54 +669,10 @@
           <summary><h3>Połączenia GK</h3><span id="serwis-polaczenia-stan"></span></summary>
           <div class="serwis-czesc-tresc" id="serwis-polaczenia-tresc"></div>
         </details>
-        <details class="serwis-czesc" id="serwis-czyszczenie" data-sekcja="czyszczenie" ${serwisOtwarte.czyszczenie ? 'open' : ''}>
-          <summary><h3>🧹 Czyszczenie zleceń</h3></summary>
-          <div class="serwis-czesc-tresc" id="serwis-czyszczenie-tresc">${czyszczenieHtml()}</div>
-        </details>`;
+        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Zlecenia → 🧹 Czyszczenie</b> — tylko dla administratora.</p>`;
     }
     rysujDostep($('serwis-dostep-tresc'));
     rysujPolaczenia($('serwis-polaczenia-tresc'));
-  }
-
-  /* Czyszczenie zleceń (właściciel 2026-10-27: „usuń historię zadań z wczoraj i dziś z 1 zmiany”): usuwa zlecenia zlecone PRZED
-     wybraną chwilą — zapisanych (stałych) zleceń i zaplanowanych na później nie rusza. Najpierw liczy (nic nie zmienia),
-     dopiero potem, po potwierdzeniu, robi kopię bazy i usuwa. Pole z datą powstaje raz — przerysowanie co 20 s go nie kasuje. */
-  let czyszczenie = null;
-  // Domyślnie „do tej chwili” (cała dotychczasowa historia); chwilę w przyszłości hub odrzuca, a zlecenia stałe zleci sam dalej.
-  function czyszczenieDomyslnie() { return W.poleCzasu(hala.teraz() - 60000); }
-  function czyszczenieHtml() {
-    return `<p class="slaby">Usuwa zlecenia zlecone <b>przed</b> wybraną chwilą (razem z historią). Zapisane zlecenia i checklisty zostają,
-        zaplanowane na później też. Przed usunięciem serwer robi pełną kopię bazy.</p>
-      <label>Usuń zlecenia zlecone przed<input type="datetime-local" id="czysc-przed" value="${esc(czyszczenieDomyslnie())}"></label>
-      <div class="admin-pasek"><button type="button" class="maly" data-akcja="czysc-policz">Policz, ile usunę</button></div>
-      <div id="czysc-wynik" aria-live="polite"></div>`;
-  }
-  function rysujCzyszczenie() {
-    const el = $('czysc-wynik');
-    if (!el) return;
-    if (!czyszczenie) { el.innerHTML = ''; return; }
-    const c = czyszczenie;
-    const statusy = Object.entries(c.statusy || {}).map(([k, v]) => `${esc(k)}: ${v}`).join(', ');
-    el.innerHTML = c.usunieto
-      ? `<p class="ok-tekst"><b>Usunięto ${c.liczba} zleceń.</b> Kopia bazy sprzed czyszczenia: <code>${esc(c.kopia)}</code> (folder Odlozone obok bazy). Telefony wczytają dane od nowa.</p>`
-      : c.liczba
-        ? `<p>Do usunięcia: <b>${c.liczba}</b> zleceń${c.najstarsze ? ` (od ${esc(W.dataKrotka(c.najstarsze))} ${esc(W.godzina(c.najstarsze))} do ${esc(W.dataKrotka(c.najnowsze))} ${esc(W.godzina(c.najnowsze))})` : ''}
-            <span class="slaby">— ${statusy}</span></p>
-          ${c.przyklady.length ? `<p class="slaby">Ostatnie: ${c.przyklady.map(esc).join(' · ')}</p>` : ''}
-          <div class="admin-pasek"><button type="button" class="maly czerwony" data-akcja="czysc-usun">Usuń ${c.liczba} zleceń</button></div>`
-        : '<p class="slaby">Nie ma takich zleceń — nic do usunięcia.</p>';
-  }
-  async function czysc(wykonaj) {
-    const pole = $('czysc-przed');
-    const przed = pole && pole.value ? W.czasZPola(pole.value) : null;
-    if (!przed) { P.komunikat('Wybierz dzień i godzinę.', 'blad'); return; }
-    if (wykonaj && !(await P.potwierdz('Usunąć zlecenia?', `${czyszczenie ? czyszczenie.liczba : ''} zleceń zleconych przed ${pole.value.replace('T', ' ')} zniknie z Panelu i telefonów. `
-      + 'Serwer najpierw robi pełną kopię bazy. Zapisanych zleceń nie rusza.', 'Usuń'))) return;
-    try {
-      czyszczenie = await hala.admin('POST', '/api/v1/admin/zlecenia/wyczysc', { przed, potwierdz: !!wykonaj });
-      rysujCzyszczenie();
-      if (wykonaj) P.komunikat(`Usunięto ${czyszczenie.liczba} zleceń`, 'ok');
-    } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   }
 
   /* Wstawia HTML tylko, gdy się zmienił — nagłówki i karta alarmu są przerysowywane co 20 s (P.narysuj). */
@@ -1040,8 +996,6 @@
         if (czesc === 'serwis') await wczytajDostep();
       }
       if (akcja === 'wpisz-moj-adres') await wpiszMojAdres();
-      if (akcja === 'czysc-policz') { czyszczenie = null; await czysc(false); }
-      if (akcja === 'czysc-usun') await czysc(true);
       if (akcja === 'kopia-teraz') await kopiaTeraz();
       if (akcja === 'nowa-maszyna') otworzMaszyne();
       if (akcja === 'etykiety') await przyciskEtykiet();
@@ -1088,7 +1042,7 @@
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
     lista = null; zakres = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
-    kopieStan = null; alarmy = []; alarmyCzas = 0; serwisOtwarte = { dostep: null, polaczenia: false, czyszczenie: false }; czyszczenie = null; etykietyOtwarte = false;
+    kopieStan = null; alarmy = []; alarmyCzas = 0; serwisOtwarte = { dostep: null, polaczenia: false }; etykietyOtwarte = false;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;
     rysujAlarmy();
     $('admin-zespol').hidden = true; $('admin-zespol').textContent = '';
