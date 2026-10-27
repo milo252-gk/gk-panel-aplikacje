@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-15a50fa7b63a';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-fb8b02d4deb8';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -1874,6 +1874,7 @@ async function pokazEkran(nazwa, parametry) {
   if (!ekran) return;
   if (ekran.tylkoBiuro && !jestBiuro()) return;
   if (ekran.tylkoAdministrator && !jestAdministratorem()) return;
+  if (ekran.dlaBiura && !jestBiuro()) return;     // np. Ustawienia: biuro widzi swoje sekcje
   stan.ekran = nazwa;
   stan.parametryEkranu = parametry || {};
   document.getElementById('tytul-ekranu').textContent = ekran.tytul;

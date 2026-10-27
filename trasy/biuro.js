@@ -1660,22 +1660,8 @@ function godzinyMinuty(minuty) {
 
 const OPIS_ROLI = { admin: 'administrator', biuro: 'biuro', kierowca: 'kierowca' };
 
-EKRANY.ustawienia = {
-  tytul: 'Ustawienia',
-  tylkoAdministrator: true,
-  async rysuj(pole, param) {
-    const [u, ustawienia] = await Promise.all([
-      API.get('/api/uzytkownicy'), API.get('/api/ustawienia'),
-    ]);
-    await odswiezLokalizacje();
-    stan._lokalizatory = ustawienia.ikol_ustawiony
-      ? await API.get('/api/ikol/lokalizatory').catch(() => []) : [];
-    stan.ustawienia = ustawienia;
-    stan._kierowcy = u.filter(x => x.aktywny);
-    stan.pojazdy = await API.get('/api/pojazdy');
-
-    pole.innerHTML = `
-      ${wstegiAlarmow(ustawienia.alarmy, true)}
+function kartaFirmyUst(ustawienia) {
+  return `
       <div class="karta">
         <h2>Firma i baza</h2>
         <label>Nazwa firmy<input id="u-firma" value="${escHtml(ustawienia.firma || '')}"></label>
@@ -1690,8 +1676,11 @@ EKRANY.ustawienia = {
           <textarea id="u-powody" style="min-height:140px">${escHtml(ustawienia.powody_nieudanych || '')}</textarea>
         </label>
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
-      </div>
+      </div>`;
+}
 
+function kartaGodzinUst(ustawienia) {
+  return `
       ${zwin('Godziny dojazdu', '', `
         <p class="male slaby">Z tego program liczy, o której auto będzie u każdego klienta,
           i ostrzega, gdy nie zdąży przed zamknięciem. Liczy w przeglądarce, więc działa
@@ -1720,8 +1709,11 @@ EKRANY.ustawienia = {
           zasięgu, a nie brak pracy — ale biuro ma o tym wiedzieć.</p>
         <p class="male slaby">W ciągu dnia godziny liczą się od ostatniej zamkniętej dostawy,
           a nie od porannego planu — po pierwszym opóźnieniu reszta i tak byłaby nieprawdziwa.</p>
-        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
+        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}`;
+}
 
+function kartaPrzerwUst(ustawienia) {
+  return `
       ${zwin('Przerwy kierowcy', String(ustawienia.przerwy_wlaczone || '1') === '0'
         ? '<span class="plakietka p-oczekuje">wyłączone</span>'
         : '<span class="plakietka p-dostarczone">✓ doliczane</span>', `
@@ -1772,7 +1764,83 @@ EKRANY.ustawienia = {
             <input type="number" id="u-doba" min="60" max="1440"
                    value="${escHtml(ustawienia.doba_pracy_min || '780')}"></label>
         </div>
-        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
+        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}`;
+}
+
+/* Ustawienia dla biura („kierownika GK Trasy"): tylko wymogi operacyjne. Nie
+   pytamy o konta, IKOL ani kopie — te endpointy są tylko dla administratora
+   i 403 zepsułby cały ekran. Serwer i tak odrzuci każdy inny klucz. */
+async function rysujUstawieniaBiura(pole) {
+  const ustawienia = await API.get('/api/ustawienia');
+  stan.ustawienia = ustawienia;
+  pole.innerHTML = `
+    <p class="male slaby" style="margin:0 0 10px">Tu ustawiasz, jak program liczy trasy
+      i pilnuje kierowców. Klucze, pocztę, kopie zapasowe i konta zmienia administrator.</p>
+    ${kartaFirmyUst(ustawienia)}
+    ${kartaGodzinUst(ustawienia)}
+    ${kartaPrzerwUst(ustawienia)}`;
+  const zapisz = async () => {
+    // Tylko pola, które są na tym ekranie — i tylko klucze operacyjne.
+    const dane = {
+      firma: val('u-firma'), baza_adres: val('u-baza'),
+      baza_lat: '', baza_lon: '',
+      powody_nieudanych: document.getElementById('u-powody').value,
+      godzina_wyjazdu: val('u-wyjazd'),
+      srednia_predkosc: val('u-predkosc'),
+      czas_rozladunku_min: val('u-rozladunek'),
+      czas_zaladunku_min: val('u-zaladunek'),
+      cisza_alarm_min: val('u-cisza'),
+      przerwy_wlaczone: document.getElementById('u-przepisy')
+        && !document.getElementById('u-przepisy').checked ? '0' : '1',
+      jazda_do_przerwy_min: val('u-jazda-przerwa'),
+      przerwa_min: val('u-przerwa'),
+      praca_do_przerwy_min: val('u-praca-przerwa'),
+      przerwa_pracownicza_min: val('u-przerwa-praca'),
+      dluga_praca_min: val('u-dluga-praca'),
+      przerwa_dlugiej_pracy_min: val('u-przerwa-dluga'),
+      dobowy_limit_jazdy_min: val('u-limit-jazdy'),
+      doba_pracy_min: val('u-doba'),
+    };
+    zajety(true);
+    let w = null;
+    try { w = await sprobuj(() => API.post('/api/ustawienia', dane), 'Zapisano'); }
+    finally { zajety(false); }
+    if (w) pokazEkran('ustawienia');
+  };
+  pole.querySelectorAll('.zapisz-ustawienia').forEach(p => p.onclick = zapisz);
+  const otwarte = stan.otwarteUstawienia || (stan.otwarteUstawienia = new Set());
+  pole.querySelectorAll('details[id]').forEach(d => {
+    if (otwarte.has(d.id)) d.open = true;
+    d.addEventListener('toggle', () => { if (d.open) otwarte.add(d.id); else otwarte.delete(d.id); });
+  });
+}
+
+EKRANY.ustawienia = {
+  get tytul() { return jestAdministratorem() ? 'Ustawienia' : 'Ustawienia firmy'; },
+  // Biuro widzi ten ekran, ale tylko trzy sekcje operacyjne (wymogi wobec tras
+  // i kierowców) — reszta zostaje administratorowi. Osobny znacznik zamiast
+  // `tylkoAdministrator`, żeby reguła dla innych ekranów się nie zmieniła.
+  dlaBiura: true,
+  async rysuj(pole, param) {
+    if (!jestAdministratorem()) { await rysujUstawieniaBiura(pole); return; }
+    const [u, ustawienia] = await Promise.all([
+      API.get('/api/uzytkownicy'), API.get('/api/ustawienia'),
+    ]);
+    await odswiezLokalizacje();
+    stan._lokalizatory = ustawienia.ikol_ustawiony
+      ? await API.get('/api/ikol/lokalizatory').catch(() => []) : [];
+    stan.ustawienia = ustawienia;
+    stan._kierowcy = u.filter(x => x.aktywny);
+    stan.pojazdy = await API.get('/api/pojazdy');
+
+
+    pole.innerHTML = `
+      ${wstegiAlarmow(ustawienia.alarmy, true)}
+      ${kartaFirmyUst(ustawienia)}
+
+      ${kartaGodzinUst(ustawienia)}
+
+      ${kartaPrzerwUst(ustawienia)}
 
       <div class="karta">
         <div class="karta-gora"><h2>Konta</h2>
