@@ -1,6 +1,6 @@
 {
   "hub": "https://statistics-packages-wholesale-marker.trycloudflare.com",
-  "zmieniono": "2026-10-27T12:48:48.147Z",
+  "zmieniono": "2026-10-27T12:49:42.145Z",
   "wersje": {
     "wspolne": "wspolne-9a05f6953831",
     "panel": "panel-748d448924d4",
@@ -9,6 +9,7 @@
     "kj": "kj-5e21ace6932a"
   },
   "programy": {
-    "szkolenia": "https://contained-willing-pairs-valve.trycloudflare.com"
+    "szkolenia": "https://contained-willing-pairs-valve.trycloudflare.com",
+    "wycena": "https://deployment-patients-careers-systematic.trycloudflare.com"
   }
 }
