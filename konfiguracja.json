@@ -1,6 +1,6 @@
 {
   "hub": "https://old-assessments-insulation-version.trycloudflare.com",
-  "zmieniono": "2026-10-27T08:43:47.130Z",
+  "zmieniono": "2026-10-27T08:44:41.227Z",
   "wersje": {
     "wspolne": "wspolne-69d50ce8ca28",
     "panel": "panel-06dfc0b8881b",
@@ -9,6 +9,7 @@
     "kj": "kj-cfeb0e6ff471"
   },
   "programy": {
-    "szkolenia": "https://join-computed-suse-dinner.trycloudflare.com"
+    "szkolenia": "https://join-computed-suse-dinner.trycloudflare.com",
+    "wycena": "https://wrestling-farmer-enjoyed-stanford.trycloudflare.com"
   }
 }
