@@ -490,6 +490,7 @@
   // ------------------------------------------------------------ odrzucone i konflikty
 
   const NAZWY_TYPOW = {
+    'zlecenie.postep': 'Skan maszyny', 'zlecenie.wykonane': 'Zrobione (zlecenie)', 'zlecenie.przyjete': 'Biorę', 'zlecenie.odrzucone': 'Nie mogę',
     'awaria.zgloszona': 'Zgłoszenie awarii', 'awaria.potwierdzona': 'Potwierdzenie naprawy',
     'awaria.potwierdzenie_odrzucone': 'Odrzucenie naprawy', 'awaria.anulowana': 'Anulowanie awarii',
     'zmiana.rozpoczeta': 'Otwarcie zmiany', 'checklista.pozycja_wykonana': 'Odhaczenie pozycji',

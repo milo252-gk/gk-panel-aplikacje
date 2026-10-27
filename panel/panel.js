@@ -709,11 +709,14 @@
     const ja = hala.pracownik && hala.pracownik.id;
     const zrob = z.rodzaj === 'kierownik' && z.otwarte && ((hala.pracownik && hala.pracownik.role) || []).some(r => r === 'kierownik' || r === 'admin')
       && (!z.wykonawcaId || z.wykonawcaId === ja);
-    const rodzajNapis = z.checklista ? `☑ Checklista ${z.checklista.gotowe}/${z.checklista.wszystkie}` : W.nazwaRodzaju(z.rodzaj);
+    const rodzajNapis = (z.checklista ? `☑ Checklista ${z.checklista.gotowe}/${z.checklista.wszystkie}` : W.nazwaRodzaju(z.rodzaj));
+    // 2026-10-27: postęp maszyn „▣ 2/7 maszyn” z paskiem — kierownik widzi, ile maszyn jest już sprawdzonych.
+    const maszynyPasek = z.maszynyPostep ? `<span class="postep-maszyn${z.maszynyPostep.gotowe === z.maszynyPostep.wszystkie ? ' pelny' : ''}" style="--p:${z.maszynyPostep.proc}%"
+      title="Zeskanowane maszyny">▣ ${z.maszynyPostep.gotowe}/${z.maszynyPostep.wszystkie} maszyn</span>` : '';
     // D67: pozycje checklisty — kierownik widzi, co odhaczone, co pominięte (z powodem) i co zostało.
     const ZNAK = { wykonana: '✓', pominieta: '–', czeka: '○' };
     const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Pozycje (${z.checklista.gotowe}/${z.checklista.wszystkie})</summary>
-      <ul>${z.pozycje.map(p => `<li class="stan-${esc(p.stan)}"><span aria-hidden="true">${ZNAK[p.stan]}</span> ${p.godz ? `<span class="slaby">${esc(p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}</li>`).join('')}</ul></details>` : '';
+      <ul>${z.pozycje.map(p => `<li class="stan-${esc(p.stan)}"><span aria-hidden="true">${ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}</li>`).join('')}</ul></details>` : '';
     return `
       <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-rodzaj="zlecenie" data-id="${esc(z.id)}">
         <div class="opis">
@@ -723,6 +726,7 @@
           ${z.czynnosc && z.otwarte ? `<div class="slaby">${z.czynnosc === 'proba' ? '🔬 zaliczy się samo po próbie jakościowej' : '🔧 zaliczy się samo po przeglądzie UR'}</div>` : ''}
           <div class="szczegoly">
             <span class="znacznik rodzaj-zadania">${esc(rodzajNapis)}</span>
+            ${maszynyPasek}${z.okno ? ` <span class="znacznik neutral" title="Wcześniej nie da się go zrobić">⏳ ${esc(z.okno)}</span>` : ''}
             <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
             ${z.spoznienie ? `<span class="znacznik alarm">${esc(z.spoznienie)}</span>` : ''}
@@ -753,6 +757,7 @@
           ${/* D76: kierownik działu (UR, KJ) w Panelu — te same okna co w aplikacji działu (dzialania.js). */
             z.dzialania.przekaz ? `<button type="button" class="maly${z.doKierownika ? ' glowny' : ''}" data-akcja="przekaz">Przekaż</button>` : ''}
           ${z.dzialania.rozdziel ? '<button type="button" class="maly" data-akcja="rozdziel">Rozdziel</button>' : ''}
+          ${kier && z.moznaEdytowac && mozeWyslac('zlecenie.edytowane') ? '<button type="button" class="maly" data-akcja="edytuj" title="Popraw treść, opis, pozycje, godziny — także w zapisanym wzorcu">✎ Zmień</button>' : ''}
           ${z.moznaZmienic ? `<button type="button" class="maly" data-akcja="zmien-plan">Zmień</button>
             <button type="button" class="maly glowny" data-akcja="zlec-teraz" title="Zleć od razu — dział dostanie powiadomienie">Zleć teraz</button>` : ''}
           ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
@@ -822,6 +827,7 @@
         await hala.zapisz('zlecenie.anulowane', id, powod ? { powod } : {});
       }
       if (b.dataset.akcja === 'zmien-plan') Panel.noweZlecenie(null, hala.obiekt('zlecenie', id));
+      if (b.dataset.akcja === 'edytuj') Panel.widoki.stale.otworzInstancje(hala.obiekt('zlecenie', id));
       if (b.dataset.akcja === 'zlec-teraz') {
         // D47: zaplanowane zlecenie od razu — jak hub o planowanej chwili (termin „po starcie” liczony od teraz).
         const z = hala.obiekt('zlecenie', id);
@@ -894,14 +900,18 @@
      (edycja = obiekt zlecenia; dział, linia i maszyna wtedy bez zmian). */
   function pokazPlan() {
     const plan = !!fz.edycja.value;
-    $('zlecenie-plan').hidden = !plan;
+    // 2026-10-27 („widok przyszłych zleceń zleconych na kolejne dni”): nowe zlecenie też można zaplanować na wybrany dzień
+    // (kierownik zakładu) — dział zobaczy je dopiero wtedy, a kalendarz Zleceń pokazuje je wcześniej.
+    const naPozniej = plan || mozeWyslac('zlecenie.zaplanowane');
+    $('zlecenie-plan').hidden = !naPozniej;
+    $('zlecenie-plan').querySelector('legend').textContent = plan ? 'Zaplanuj na' : 'Zleć dopiero później (opcjonalnie)';
     $('zlecenie-termin').hidden = plan;
     $('zlecenie-od').hidden = plan;
-    $('zlecenie-termin-po').hidden = !plan;
+    $('zlecenie-termin-po').hidden = !(naPozniej && (plan || fz.plan_dzien.value));
     const w = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
-    $('zlecenie-plan-opis').textContent = !plan ? '' : !fz.plan_dzien.value ? 'Wybierz dzień startu.'
+    $('zlecenie-plan-opis').textContent = !naPozniej ? '' : !fz.plan_dzien.value ? (plan ? 'Wybierz dzień startu.' : 'Puste = zlecenie idzie do działu od razu.')
       : w.blad ? w.blad : `Dział zobaczy je ${w.opis} i wtedy dostanie powiadomienie.`;
-    fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz zmiany' : 'Zleć';
+    fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz zmiany' : fz.plan_dzien.value ? 'Zaplanuj' : 'Zleć';
   }
   /* D55: „Dla kogo” — osoby działu do zaznaczenia (każda dostaje własne zlecenie); „Na zmianę” — zmiany ze słownika. */
   /* D56: maszyny zlecenia jako lista do zaznaczenia (kilka naraz); ukryte pole „maszyna” = pierwsza zaznaczona (skan, plan). */
@@ -1085,21 +1095,38 @@
         dane.od = lokalnyNaIso(fz.od.value);
         if (dane.termin && Date.parse(dane.od) >= Date.parse(dane.termin)) { blad('„Od kiedy” musi być wcześniej niż termin.'); return; }
       }
-      { const ids = await zdjeciaPola(fz.zdjecie); if (ids.length) dane.zdjecia = ids; }
       delete dane.wykonawca;
       const osoby = [...fz.querySelectorAll('input[name="osoby"]:checked')].map(x => x.value);
-      const zm = fz.na_zmiane.value ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
+      // Zaplanowane na wybrany dzień (zamiast „Na zmianę”): zlecenie.zaplanowane z godziną startu i terminem po starcie.
+      let planNa = null, planPo = null;
+      if (fz.plan_dzien.value) {
+        const pl = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
+        if (pl.blad) { blad(pl.blad); return; }
+        if (!mozeWyslac('zlecenie.zaplanowane')) { blad('Na później zleca tylko kierownik zakładu.'); return; }
+        planNa = pl.na;
+        planPo = W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value);
+        if (planPo.blad) { blad(planPo.blad); return; }
+      }
+      const zm = fz.na_zmiane.value && !planNa ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
       if (zm) dane.zmiana = fz.na_zmiane.value;
       if (wstepneZgloszenie) dane.zgloszenie = wstepneZgloszenie;
       if (zm && !zm.biezaca && !mozeWyslac('zlecenie.zaplanowane')) { blad('Na późniejszą zmianę zleca tylko kierownik — wybierz „teraz”.'); return; }
+      if (planNa && dane.termin && Date.parse(dane.termin) <= Date.parse(planNa)) { blad('Termin musi być po dniu i godzinie startu.'); return; }
       const ids = [];
       // D76: „Też dla działów” — każdy dział swoje; zlecenie kierownika zakładu dla UR/KJ bez osoby — do kierownika działu.
       const tez = [...fz.querySelectorAll('input[name="tez_dzialy"]:checked')].map(x => x.value);
       const doZapisu = W.zleceniaDzialow(dane, { dzialy: [dane.dzial, ...tez], osoby, role: roleJa(), stale: hala.kontrakt.stale || {} });
       if (!doZapisu.length) { blad('Ten dział zleca kierownik zakładu — wybierz swój dział.'); return; }
+      // Zdjęcia wysyłamy dopiero po wszystkich sprawdzeniach — błąd w formularzu nie zostawia osieroconych plików.
+      const zdjeciaIds = await zdjeciaPola(fz.zdjecie);
       for (const d1 of doZapisu) {
+        if (zdjeciaIds.length) d1.zdjecia = zdjeciaIds;
         const id = hala.nowyId();
-        if (zm && !zm.biezaca) {
+        if (planNa) {
+          d1.zaplanowane_na = planNa;
+          if (!d1.termin && planPo.min) d1.termin_po_min = planPo.min;
+          await hala.zapisz('zlecenie.zaplanowane', id, d1);
+        } else if (zm && !zm.biezaca) {
           d1.zaplanowane_na = new Date(zm.start).toISOString();
           if (!d1.termin) d1.termin_po_min = Math.max(1, Math.round((zm.koniec - zm.start) / 60000));
           await hala.zapisz('zlecenie.zaplanowane', id, d1);
@@ -1122,6 +1149,7 @@
       $('okno-zlecenia').close();
       const doKier = doZapisu.some(d => d.do_kierownika);
       komunikat(`${ids.length > 1 ? (tez.length ? `Zlecone ${ids.length} — każdy dział ma swoje` : `Zlecone ${ids.length} osobom`)
+        : planNa ? `Zaplanowane — dział zobaczy je ${W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: 0 }).opis || ''}`
         : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : doKier ? 'Zlecone — kierownik działu je rozdzieli' : 'Zlecone'}${zapisane ? ' i zapisane w „💾 Zapisane”' : ''}`, 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
     } catch (e) { blad(komunikatBledu(e)); }

@@ -380,7 +380,7 @@
     for (const z of zlecenia || []) {
       const d = (z && z.dane) || {};
       if (!Array.isArray(d.pozycje) || !d.pozycje.length || d.dzial !== dz) continue;
-      if (z.status === 'anulowane' || z.status === 'zaplanowane') continue;
+      if (z.status === 'anulowane' || z.status === 'zaplanowane' || z.status === 'odrzucone') continue;      // „Nie mogę” nie czerwieni zmiany
       if (d.linia && linia && d.linia !== linia) continue;
       if (!zlecenieZmiany(d, zmiana)) continue;
       wynik.zlecenia.push(z);
@@ -390,10 +390,11 @@
         wynik.mapa[id] = { zlecenie: z.id, pozycja: p.id };
         wynik.dane.pozycje.push({ id, nazwa: p.nazwa || '', typ: TYP_CZYNNOSCI[p.czynnosc] || 'zadanie', czynnosc: p.czynnosc || null,
                                   termin: p.termin || d.termin || d.wazne_do || zmiana.do,
-                                  wymaga_qr: !!(p.wymagaj_skanu || p.czynnosc === 'obchod'), cel: p.maszyna || null,
+                                  wymaga_qr: !!(p.wymagaj_skanu || p.czynnosc === 'obchod'),
+                                  cel: maszynyPozycji(p).length === 1 ? maszynyPozycji(p)[0] : (p.maszyna || null),
                                   maszyna: p.maszyna || null, maszyny: maszynyPozycji(p), skany: skanyPozycji(d, p.id),
                                   wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
-                                  wymagaj_skanu: !!p.wymagaj_skanu, od: p.od || d.od || null, zlecenie: z.id, pozycja: p.id });
+                                  wymagaj_skanu: !!p.wymagaj_skanu, od: p.od || d.od || null, opis: p.opis || '', zlecenie: z.id, pozycja: p.id });
         if ((d.wykonane || {})[p.id]) wynik.dane.wykonane[id] = d.wykonane[p.id];
         if ((d.pominiete || {})[p.id]) wynik.dane.pominiete[id] = d.pominiete[p.id];
       }
@@ -418,7 +419,7 @@
     const start = Date.parse(startIso), granica = Date.parse(granicaIso);
     return (pozycje || []).filter(p => p && p.id).map(p => {
       const q = { id: p.id, nazwa: String(p.nazwa || '').trim() };
-      for (const k of ['czynnosc', 'maszyna']) if (p[k]) q[k] = p[k];
+      for (const k of ['czynnosc', 'maszyna', 'opis']) if (p[k]) q[k] = p[k];
       const wiele = maszynyPozycji(p);                  // kilka maszyn: lista; jedna zostaje w polu „maszyna” (bliźniak hala.py)
       if (wiele.length > 1) { q.maszyny = wiele; delete q.maszyna; } else if (wiele.length) q.maszyna = wiele[0];
       for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu']) if (p[k] === true) q[k] = true;
@@ -432,7 +433,8 @@
       if (!isNaN(start) && Number.isInteger(p.od_minuty)) {
         const l = lokalny(start);
         const o = zLokalnego(l.rok, l.miesiac, l.dzien, l.godz, l.min + p.od_minuty);
-        if (q.termin === undefined || o < Date.parse(q.termin)) q.od = iso(o);
+        const granice = [Date.parse(q.termin), granica].filter(x => !isNaN(x));
+        if (!granice.length || o < Math.min(...granice)) q.od = iso(o);
       }
       return q;
     });
@@ -963,7 +965,8 @@
           while (oN < startN) oN += 86400000;
           od = zNaiwnego(oN);
         } else if (ot.rodzaj === 'minuty') od = start + (parseInt(ot.minuty, 10) || 0) * 60000;
-        if (od !== null && od > start && od < termin) wyst.od = iso(od);
+        const granicaOd = wybrane.length ? Math.min(termin, zNaiwnego(koniecN)) : termin;     // zadanie zmianowe przepada z końcem zmiany
+        if (od !== null && od > start && od < granicaOd) wyst.od = iso(od);
         wynik.push(wyst);
         przes += co;
         if (!co || start0N + przes * 60000 >= koniecN) break;

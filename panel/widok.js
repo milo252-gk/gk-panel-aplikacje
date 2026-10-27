@@ -373,7 +373,10 @@
         podsumowanie: String(d.wystapienie || '').startsWith('podsumowanie|'),
         // D60: rodzaj zadania — znacznik na wierszu i filtr „Rodzaj” (jedna lista zamiast osobnych zakładek).
         rodzaj: rodzajZlecenia(d, szablony), checklista: Array.isArray(d.pozycje) && d.pozycje.length ? H().postepPozycji(d) : null,
-        pozycje: Array.isArray(d.pozycje) ? d.pozycje.map(p => ({ nazwa: p.nazwa || '', godz: p.termin ? godzina(p.termin) : '',
+        maszynyPostep: maszynyPostepZlecenia(d), okno: d.od ? `od ${godzina(d.od)}` : null,
+        moznaEdytowac: (z.status === 'nowe' || z.status === 'przyjete') && !d.nadrzedne,
+        pozycje: Array.isArray(d.pozycje) ? d.pozycje.map(p => ({ nazwa: p.nazwa || '', opis: p.opis || '', godz: p.termin ? godzina(p.termin) : '',
+          od: p.od ? godzina(p.od) : '', maszynyPostep: maszynyPostepPozycji(d, p),
           stan: (d.wykonane || {})[p.id] ? 'wykonana' : (d.pominiete || {})[p.id] ? 'pominieta' : 'czeka',
           powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '' })) : [],
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
@@ -813,6 +816,26 @@
     return { tytul: `${MIESIACE[miesiac - 1]} ${rok}`, dni };
   }
 
+  /* Lista najbliższych dni (właściciel 2026-10-27: „widok przyszłych zleceń zleconych na kolejne dni”): co dnia zlecą zapisane
+     stałe i co jest zaplanowane na później — od dziś na `dni` dni naprzód, tylko dni, w których coś jest. Te same reguły
+     co kalendarz (jedno źródło). */
+  function agendaZlecen({ slowniki, pracownicy, stale, zlecenia, teraz, dni }) {
+    const dzis = dzienZakladu(teraz);
+    const [r, m, d] = dzis.split('-').map(Number);
+    const koniec = new Date(Date.UTC(r, m - 1, d + (dni || 14))).toISOString().slice(0, 10);
+    const dniMap = new Map();
+    for (let i = 0, rok = r, mies = m; i < 8; i++) {
+      const k = kalendarzZlecen({ slowniki, pracownicy, stale, zlecenia, rok, miesiac: mies, teraz });
+      for (const c of k.dni) if (c.data >= dzis && c.data <= koniec && !dniMap.has(c.data)) dniMap.set(c.data, c);
+      if (`${rok}-${String(mies).padStart(2, '0')}-28` > koniec) break;
+      mies++; if (mies > 12) { mies = 1; rok++; }
+    }
+    return [...dniMap.values()].sort((a, b) => (a.data < b.data ? -1 : 1))
+      .map(c => ({ data: c.data, dzis: c.data === dzis, swieto: c.swieto, pozycje: c.pozycje.filter(p => !p.pominiety),
+                   pominiete: c.pozycje.filter(p => p.pominiety) }))
+      .filter(c => c.pozycje.length);
+  }
+
   /* „dziś”, „jutro” albo „pn 05.10” — dzień zakładu względem teraz. */
   function dzienPoLudzku(ms, teraz) {
     const a = H().lokalny(ms), b = H().lokalny(teraz);
@@ -948,8 +971,25 @@
         nieZleca: s.aktywny !== false ? autorNieZleca(s, pracownicy, roleZlecajacych || null) : null,
         // D67: checklista = zapisane z pozycjami (jedno zlecenie z pozycjami do odhaczenia).
         checklista: Array.isArray(s.pozycje) && s.pozycje.length > 0, pozycji: Array.isArray(s.pozycje) ? s.pozycje.length : 0,
+        // Właściciel 2026-10-27: „checklisty to stałe zadania i powinny same się zlecać… nie chcę codziennie klikać ZLEĆ” —
+        // checklista w trybie ręcznym dostaje na liście ostrzeżenie i przycisk „Włącz automat”.
+        nieAutomat: s.aktywny !== false && Array.isArray(s.pozycje) && s.pozycje.length > 0 && ((s.harmonogram || {}).rodzaj || 'reczny') === 'reczny',
       };
     }).sort((a, b) => (b.aktywny - a.aktywny) || (b.checklista - a.checklista) || a.tytul.localeCompare(b.tytul, 'pl'));
+  }
+
+  /* Harmonogram „codziennie, każda zmiana” dla zapisanego, które dotąd zlecało się ręcznie (przycisk „Włącz automat”). */
+  function automatDlaStalego(s, slowniki, autor) {
+    const zmiany = Object.keys(zmianySl(slowniki));
+    return Object.assign({}, s, { harmonogram: { rodzaj: 'codziennie', zmiany }, autor });
+  }
+
+  /* „Zleć teraz” robi zawsze NOWE zlecenie (inne id niż automat), więc przy zapisanym, które już trwa na tej zmianie, ręczne
+     kliknięcie je podwoi. Zwraca trwające (nowe, przyjęte) zlecenie z tego wzorca zlecone na bieżącej zmianie albo null. */
+  function juzZleconeNaZmianie(kod, zlecenia, zmiana, teraz) {
+    const od = zmiana ? Date.parse(zmiana.od) : teraz - 8 * 3600 * 1000;
+    return (zlecenia || []).find(z => z && (z.status === 'nowe' || z.status === 'przyjete') && z.dane && z.dane.stale === kod
+      && Date.parse(z.dane.czas_zlecenia) >= od) || null;
   }
 
   /* Formularz okna „Zlecenie stałe” → { bledy, kod, wartosc } dla slownik.zapisany zlecenia_stale/<kod>.
@@ -1061,9 +1101,82 @@
     if (kto === 'kazdy') wartosc.kazdy = true;
     if (kto === 'osoby' && osoby.length === 1) wartosc.wykonawca = osoby[0];
     if (kto === 'osoby' && osoby.length > 1) wartosc.wykonawcy = osoby;
+    // Checklista (2026-10-27: jedno okno dla zapisanego i checklisty): pozycje zamiast wymagań całego zlecenia i maszyny
+    // zlecenia — wymagania i maszyny ma każda pozycja osobno.
+    if (f.checklista) {
+      const pozycje = pozycjeZFormularza(f.pozycje, bledy, {});
+      if (!pozycje.length) bledy.push('Dodaj co najmniej jedną pozycję — co trzeba zrobić.');
+      if (pozycje.length > 60) bledy.push('Najwyżej 60 pozycji w jednej checkliście.');
+      Object.assign(wartosc, { pozycje, wymagaj_zdjecia: false, wymagaj_notatki: false });
+      for (const pole of ['wymagaj_skanu', 'maszyna', 'maszyny']) delete wartosc[pole];
+      const i = bledy.indexOf('Napisz, co zrobić.');
+      if (i >= 0) bledy[i] = 'Nazwij checklistę.';
+    }
     const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => k !== istniejacyKod);
-    const kod = istniejacyKod || kodZNazwy(tytul || 'zlecenie', zajete);
+    const kod = istniejacyKod || kodZNazwy(f.checklista ? `checklista ${tytul || ''}` : (tytul || 'zlecenie'), zajete);
     return { bledy, kod, wartosc };
+  }
+
+  /* Pozycje checklisty z okna → pozycje zapisanego (godzina i „od” jako g:mm po starcie zmiany). instancja: trwające
+     zlecenie — godzin pozycji okno nie zmienia (zostają `termin` i `od` z wiersza, jako ISO w polach `termin_iso`, `od_iso`). */
+  function pozycjeZFormularza(lista, bledy, o) {
+    const czynnosci = new Set(CZYNNOSCI_POZYCJI.map(([k]) => k).filter(Boolean));
+    const ids = new Set();
+    const pozycje = [];
+    // Najpierw rezerwujemy poprawne, niepowtórzone id istniejących pozycji — nowy wiersz przesunięty ↑ nie może zabrać „p1”
+    // pozycji, która już ma odhaczenia i godziny w trwających zleceniach.
+    const wolneId = new Set();
+    for (const p of lista || []) {
+      const id = String((p && p.id) || '');
+      if (p && String(p.nazwa || '').trim() && /^[A-Za-z0-9_.-]{1,60}$/.test(id) && !wolneId.has(id)) wolneId.add(id);
+    }
+    const przydzielone = new Set();
+    (lista || []).forEach(p => {
+      const n = String((p && p.nazwa) || '').trim().replace(/\s+/g, ' ');
+      if (!n) return;                                         // pusty wiersz — pomijamy po cichu
+      const nr = pozycje.length + 1;
+      let id = wolneId.has(String(p.id || '')) && !przydzielone.has(p.id) ? p.id : null;
+      for (let i = nr; !id; i++) if (!wolneId.has(`p${i}`) && !ids.has(`p${i}`)) id = `p${i}`;
+      przydzielone.add(id);
+      ids.add(id);
+      const q = { id, nazwa: n.slice(0, 200) };
+      if (o && o.instancja) {
+        if (p.termin_iso) q.termin = p.termin_iso;
+        if (p.od_iso) q.od = p.od_iso;
+      } else {
+        const g = String(p.godzina || '').trim();
+        if (g) {
+          const m = minutyZTekstu(g);
+          if (m === null || m > 10080) bledy.push(`Pozycja ${nr}: godzina od startu zmiany jako g:mm, np. 0:30.`);
+          else q.minuty = m;
+        }
+        // Okno od–do (2026-10-26): „od” godziny po starcie zmiany (g:mm) — wcześniej pozycji nie da się odhaczyć.
+        const og = String(p.od || '').trim();
+        if (og) {
+          const mo = minutyZTekstu(og);
+          if (mo === null || mo > 10080) bledy.push(`Pozycja ${nr}: „od” jako g:mm po starcie zmiany, np. 0:15.`);
+          else if (Number.isInteger(q.minuty) && mo >= q.minuty) bledy.push(`Pozycja ${nr}: „od” musi być wcześniej niż godzina pozycji.`);
+          else q.od_minuty = mo;
+        }
+      }
+      const opis = String(p.opis || '').trim();
+      if (opis) q.opis = opis.slice(0, 2000);
+      if (p.czynnosc && czynnosci.has(p.czynnosc)) q.czynnosc = p.czynnosc;
+      // Właściciel 2026-10-26: „chcę móc wyznaczać kilka maszyn do sprawdzenia” — lista `maszyny` (jedna zostaje w polu
+      // `maszyna`, jak dotąd; bliźniak huba: maszyny_pozycji). Okno może podać `maszyny` albo starą `maszyna`.
+      const wybrane = [...new Set([].concat(Array.isArray(p.maszyny) ? p.maszyny : [], p.maszyna ? [p.maszyna] : []).map(String).filter(Boolean))];
+      if (wybrane.length > 50) bledy.push(`Pozycja ${nr}: najwyżej 50 maszyn.`);
+      if (wybrane.length > 1) q.maszyny = wybrane.slice(0, 50);
+      else if (wybrane.length === 1) q.maszyna = wybrane[0];
+      if (p.zdjecie) q.wymagaj_zdjecia = true;
+      if (p.notatka) q.wymagaj_notatki = true;
+      if (p.skan) {
+        if (wybrane.length) q.wymagaj_skanu = true;
+        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę (albo kilka) pod „⋯”.`);
+      }
+      pozycje.push(q);
+    });
+    return pozycje;
   }
 
   /* Zlecenie stałe ze słownika → pola okna. */
@@ -1082,7 +1195,13 @@
              rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], dzien_miesiaca: h.dzien_miesiaca || 1, zmiany: h.zmiany || [],
              co_min: h.co_min || '',
              termin_rodzaj: t.rodzaj || 'koniec_zmiany', godzina: t.godzina || '', minuty: t.minuty || 60, aktywny: s.aktywny !== false,
-             okno_rodzaj: (s.okno_od || {}).rodzaj || '', okno_godzina: (s.okno_od || {}).godzina || '', okno_minuty: (s.okno_od || {}).minuty || 60 };
+             okno_rodzaj: (s.okno_od || {}).rodzaj || '', okno_godzina: (s.okno_od || {}).godzina || '', okno_minuty: (s.okno_od || {}).minuty || 60,
+             checklista: Array.isArray(s.pozycje) && s.pozycje.length > 0,
+             pozycje: (Array.isArray(s.pozycje) ? s.pozycje : []).map(p => ({ id: p.id, nazwa: p.nazwa || '', opis: p.opis || '',
+               godzina: Number.isInteger(p.minuty) ? tekstZMinut(p.minuty) : '', od: Number.isInteger(p.od_minuty) ? tekstZMinut(p.od_minuty) : '',
+               czynnosc: p.czynnosc || '', maszyna: p.maszyna || '',
+               maszyny: Array.isArray(p.maszyny) && p.maszyny.length ? p.maszyny.slice() : (p.maszyna ? [p.maszyna] : []),
+               zdjecie: !!p.wymagaj_zdjecia, notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu })) };
   }
 
   /* „💾 Zapisz” przy zwykłym zleceniu (jak „Zapisz jako szablon” w GK Trasy): te same pola, domyślnie POJEDYNCZE
@@ -2180,76 +2299,102 @@
     return n ? podpowiedziCzynnosci(slowniki).find(c => c.nazwa.toLowerCase() === n) || null : null;
   }
   function checklistaZFormularza(f, slowniki, istniejacyKod, autor) {
-    const nazwa = String(f.nazwa || '').trim().replace(/\s+/g, ' ');
-    const w = stalyZFormularza(Object.assign({}, f, { tytul: nazwa, termin_rodzaj: 'koniec_zmiany', maszyna: '', pilne: false, co_min: '',
-                                                      wymagaj_zdjecia: false, wymagaj_notatki: false, wymagaj_skanu: false }),
-                               slowniki, istniejacyKod, autor);
-    const bledy = w.bledy.map(b => (b === 'Napisz, co zrobić.' ? 'Nazwij checklistę.' : b));
-    const czynnosci = new Set(CZYNNOSCI_POZYCJI.map(([k]) => k).filter(Boolean));
-    const ids = new Set();
-    const pozycje = [];
-    (f.pozycje || []).forEach(p => {
-      const n = String((p && p.nazwa) || '').trim().replace(/\s+/g, ' ');
-      if (!n) return;                                         // pusty wiersz — pomijamy po cichu
-      const nr = pozycje.length + 1;
-      let id = /^[A-Za-z0-9_.-]{1,60}$/.test(String(p.id || '')) && !ids.has(p.id) ? p.id : null;
-      for (let i = nr; !id; i++) if (!ids.has(`p${i}`)) id = `p${i}`;
-      ids.add(id);
-      const q = { id, nazwa: n.slice(0, 200) };
-      const g = String(p.godzina || '').trim();
-      if (g) {
-        const m = minutyZTekstu(g);
-        if (m === null || m > 10080) bledy.push(`Pozycja ${nr}: godzina od startu zmiany jako g:mm, np. 0:30.`);
-        else q.minuty = m;
-      }
-      // Okno od–do (2026-10-26): „od” godziny po starcie zmiany (g:mm) — wcześniej pozycji nie da się odhaczyć.
-      const og = String(p.od || '').trim();
-      if (og) {
-        const mo = minutyZTekstu(og);
-        if (mo === null || mo > 10080) bledy.push(`Pozycja ${nr}: „od” jako g:mm po starcie zmiany, np. 0:15.`);
-        else if (Number.isInteger(q.minuty) && mo >= q.minuty) bledy.push(`Pozycja ${nr}: „od” musi być wcześniej niż godzina pozycji.`);
-        else q.od_minuty = mo;
-      }
-      if (p.czynnosc && czynnosci.has(p.czynnosc)) q.czynnosc = p.czynnosc;
-      // Właściciel 2026-10-26: „chcę móc wyznaczać kilka maszyn do sprawdzenia” — lista `maszyny` (jedna zostaje w polu
-      // `maszyna`, jak dotąd; bliźniak huba: maszyny_pozycji). Okno może podać `maszyny` albo starą `maszyna`.
-      const wybrane = [...new Set([].concat(Array.isArray(p.maszyny) ? p.maszyny : [], p.maszyna ? [p.maszyna] : []).map(String).filter(Boolean))];
-      if (wybrane.length > 50) bledy.push(`Pozycja ${nr}: najwyżej 50 maszyn.`);
-      if (wybrane.length > 1) q.maszyny = wybrane.slice(0, 50);
-      else if (wybrane.length === 1) q.maszyna = wybrane[0];
-      if (p.zdjecie) q.wymagaj_zdjecia = true;
-      if (p.notatka) q.wymagaj_notatki = true;
-      if (p.skan) {
-        if (wybrane.length) q.wymagaj_skanu = true;
-        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę (albo kilka) pod „⋯”.`);
-      }
-      pozycje.push(q);
-    });
-    if (!pozycje.length) bledy.push('Dodaj co najmniej jedną pozycję — co trzeba zrobić.');
-    if (pozycje.length > 60) bledy.push('Najwyżej 60 pozycji w jednej checkliście.');
-    const wartosc = Object.assign(w.wartosc, { pozycje });
-    delete wartosc.wymagaj_skanu;
-    const zajete = Object.keys((slowniki && slowniki.zlecenia_stale) || {}).filter(k => k !== istniejacyKod);
-    const kod = istniejacyKod || kodZNazwy(`checklista ${nazwa || ''}`, zajete);
-    return { bledy, kod, wartosc };
+    // Stare wywołania (okno „Checklista” sprzed 2026-10-27) podają `nazwa` i nie mają terminu ani wymagań zlecenia.
+    const nazwa = String(f.nazwa !== undefined ? f.nazwa : f.tytul || '').trim().replace(/\s+/g, ' ');
+    return stalyZFormularza(Object.assign({ termin_rodzaj: 'koniec_zmiany', maszyna: '', pilne: false, co_min: '' }, f, { tytul: nazwa, checklista: true }),
+                            slowniki, istniejacyKod, autor);
   }
-  /* Checklista ze słownika → pola okna. */
+  /* Checklista ze słownika → pola okna (to samo co zapisane zlecenie; `nazwa` dla starych wywołań). */
   function checklistaDoFormularza(s) {
-    const h = (s && s.harmonogram) || {};
-    return { nazwa: (s && s.tytul) || '', dzial: (s && s.dzial) || 'produkcja', linia: (s && s.linia) || '', wykonawca: (s && s.wykonawca) || '',
-             rodzaj: h.rodzaj || 'codziennie', dni: h.dni || [1, 2, 3, 4, 5], zmiany: h.zmiany || [], aktywny: !s || s.aktywny !== false,
-             pozycje: ((s && s.pozycje) || []).map(p => ({ id: p.id, nazwa: p.nazwa || '', godzina: Number.isInteger(p.minuty) ? tekstZMinut(p.minuty) : '',
-                                                          od: Number.isInteger(p.od_minuty) ? tekstZMinut(p.od_minuty) : '',
-                                                          czynnosc: p.czynnosc || '', maszyna: p.maszyna || '',
-                                                          maszyny: Array.isArray(p.maszyny) && p.maszyny.length ? p.maszyny.slice() : (p.maszyna ? [p.maszyna] : []),
-                                                          zdjecie: !!p.wymagaj_zdjecia,
-                                                          notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu })) };
+    s = s || {};
+    return Object.assign(stalyDoFormularza(s), { nazwa: s.tytul || '', checklista: true,
+                                                 rodzaj: (s.harmonogram || {}).rodzaj || 'codziennie', aktywny: s.aktywny !== false });
   }
+  /* Czas z pola datetime-local („2026-10-27T14:00” — czas zakładu) → ISO UTC; puste albo zły format → null. */
+  function czasZPola(tekst) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(tekst || '');
+    return m ? new Date(H().zLokalnego(+m[1], +m[2], +m[3], +m[4], +m[5])).toISOString() : null;
+  }
+
+  /* Edycja trwającego zlecenia albo checklisty (2026-10-27: „wszędzie powinno dać edytować zlecenie w pełni”): pola okna →
+     dane `zlecenie.edytowane` (hub: scal; null czyści). Pozycje: id zostają (odhaczenia też), terminy i „od” istniejących
+     pozycji zostają z wiersza (okno ich nie zmienia), nowa pozycja dostaje termin zlecenia. */
+  function zlecenieEdytowane(f, d) {
+    const bledy = [];
+    const tytul = String(f.tytul || '').trim().replace(/\s+/g, ' ');
+    if (!tytul) bledy.push('Napisz, co zrobić.');
+    if (tytul.length > 200) bledy.push('Tytuł może mieć najwyżej 200 znaków.');
+    const dane = { tytul, opis: String(f.opis || '').trim(), priorytet: f.pilne ? 'pilne' : 'normalny' };
+    // Pole czasu nie zna sekund ani offsetu — niezmienione (undefined) zostawiamy hubowi, zmienione (także puste = czyści) idzie.
+    const termin = f.termin === undefined ? undefined : f.termin ? czasZPola(f.termin) : null;
+    const od = f.od === undefined ? undefined : f.od ? czasZPola(f.od) : null;
+    if (f.termin && !termin) bledy.push('Termin: zła data.');
+    if (f.od && !od) bledy.push('„Od kiedy”: zła data.');
+    const tEf = termin === undefined ? (d && d.termin) : termin, oEf = od === undefined ? (d && d.od) : od;
+    if (tEf && oEf && Date.parse(oEf) >= Date.parse(tEf)) bledy.push('„Od kiedy” musi być wcześniej niż termin.');
+    if (termin !== undefined) dane.termin = termin;
+    if (od !== undefined) dane.od = od;
+    if (Array.isArray(f.pozycje) && f.checklista) {
+      const pozycje = pozycjeZFormularza(f.pozycje, bledy, { instancja: true });
+      if (!pozycje.length) bledy.push('Dodaj co najmniej jedną pozycję — co trzeba zrobić.');
+      dane.pozycje = pozycje;
+    } else {
+      dane.wymagaj_zdjecia = !!f.wymagaj_zdjecia; dane.wymagaj_notatki = !!f.wymagaj_notatki;
+      const m = [...new Set([].concat(f.maszyny || []).map(String).filter(Boolean))];
+      dane.maszyny = m.length > 1 ? m.slice(0, 50) : null;
+      dane.maszyna = m[0] || null;
+      dane.wymagaj_skanu = !!f.wymagaj_skanu && m.length > 0;
+    }
+    return { bledy, dane };
+  }
+
+  /* Zmieniony wzorzec (zapisane / checklista) → pozycje trwającego zlecenia z niego: istniejące id zostają z terminem i „od”
+     tej instancji (odhaczenia też), nowe dostają terminy z minut od początku zlecenia (nie dalej niż jego termin). */
+  function pozycjeDlaInstancji(wzorzecPozycje, d) {
+    const stare = new Map(((d && d.pozycje) || []).filter(p => p && p.id).map(p => [p.id, p]));
+    const start = d && d.czas_zlecenia ? d.czas_zlecenia : new Date().toISOString();
+    return (wzorzecPozycje || []).filter(p => p && p.id).map(p => {
+      const istniejaca = stare.get(p.id);
+      const q = H().pozycjeWystapienia([p], start, d && d.termin)[0];
+      if (istniejaca) {
+        for (const k of ['termin', 'od']) { if (istniejaca[k]) q[k] = istniejaca[k]; else delete q[k]; }
+      }
+      return q;
+    });
+  }
+
+  /* Poprawione trwające zlecenie → wzorzec, z którego powstało („zapisuje się to wszędzie”): treść, opis, priorytet i pozycje
+     (id istniejących zostają z ich godzinami od startu zmiany; nowe pozycje bez godziny; usunięte znikają). */
+  function wzorzecZInstancji(wzorzec, dane, autor) {
+    const w = Object.assign({}, wzorzec, { tytul: dane.tytul, priorytet: dane.priorytet, autor });
+    if (dane.opis) w.opis = dane.opis; else delete w.opis;
+    if (Array.isArray(dane.pozycje)) {
+      const stare = new Map(((wzorzec && wzorzec.pozycje) || []).map(p => [p.id, p]));
+      w.pozycje = dane.pozycje.map(p => {
+        const q = Object.assign({}, p);
+        delete q.termin; delete q.od;
+        const dawna = stare.get(p.id) || {};
+        for (const k of ['minuty', 'od_minuty']) if (dawna[k] !== undefined) q[k] = dawna[k];
+        return q;
+      });
+    } else {
+      for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu', 'maszyna', 'maszyny']) {
+        if (dane[k] === null || dane[k] === false || dane[k] === undefined) delete w[k]; else w[k] = dane[k];
+      }
+    }
+    return w;
+  }
+
+  /* Trwające zlecenia z danego wzorca (nowe, przyjęte) — do przepisania zmian z wzorca. */
+  function instancjeWzorca(zlecenia, kod) {
+    return (zlecenia || []).filter(z => z && (z.status === 'nowe' || z.status === 'przyjete') && z.dane && z.dane.stale === kod);
+  }
+
   /* Zapisane zlecenie → pozycja checklisty (lista „➕ Z zapisanych…” — bez pisania drugi raz). */
   function pozycjaZZapisanego(z) {
     const m = parseInt(z && z.minuty, 10);
     const maszyny = z && Array.isArray(z.maszyny) && z.maszyny.length ? z.maszyny.slice() : (z && z.maszyna ? [z.maszyna] : []);
-    return { nazwa: (z && z.tytul) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '', maszyny,
+    return { nazwa: (z && z.tytul) || '', opis: (z && z.opis) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '', maszyny,
              czynnosc: (z && z.czynnosc) || '', zdjecie: !!(z && z.zdjecie), notatka: !!(z && z.notatka), skan: !!(z && z.skan) };
   }
 
@@ -2300,6 +2445,30 @@
   }
 
   /* Postęp zlecenia na liście Panelu (D56): ile kroków, zeskanowane maszyny „1/2”, zdjęcia — kierownik widzi na żywo. */
+  /* Postęp zeskanowanych maszyn (właściciel 2026-10-27: „chcę widzieć postęp, np. 2/7 maszyn”): pozycja checklisty ze skanem
+     kilku maszyn albo zlecenie z listą maszyn i skanem. Odhaczona pozycja liczy wszystkie swoje maszyny. null — nie dotyczy
+     (bez skanu, obchód zalicza się innym skanem). Czysta funkcja — testy w widok-testy.js. */
+  function maszynyPostepPozycji(d, p) {
+    const m = H().maszynyPozycji(p);
+    if (!(p && p.wymagaj_skanu === true && m.length) || p.czynnosc === 'obchod') return null;
+    if (((d && d.wykonane) || {})[p.id] || ((d && d.pominiete) || {})[p.id]) return { gotowe: m.length, wszystkie: m.length };
+    const sk = new Set(H().skanyPozycji(d, p.id));
+    return { gotowe: m.filter(x => sk.has(x)).length, wszystkie: m.length };
+  }
+  function maszynyPostepZlecenia(d) {
+    d = d || {};
+    if (Array.isArray(d.pozycje) && d.pozycje.length) {
+      let gotowe = 0, wszystkie = 0;
+      for (const p of d.pozycje) { const x = maszynyPostepPozycji(d, p); if (x) { gotowe += x.gotowe; wszystkie += x.wszystkie; } }
+      return wszystkie > 1 ? { gotowe, wszystkie, proc: Math.round(gotowe * 100 / wszystkie) } : null;
+    }
+    const m = Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny.map(String) : (d.maszyna ? [String(d.maszyna)] : []);
+    if (d.wymagaj_skanu !== true || m.length < 2) return null;
+    const sk = new Set([...[].concat(d.postep || []).map(e => e && e.skan), d.skan_maszyny].filter(Boolean).map(x => String(x).trim()));
+    const gotowe = m.filter(x => sk.has(x)).length;
+    return { gotowe, wszystkie: m.length, proc: Math.round(gotowe * 100 / m.length) };
+  }
+
   function postepZlecenia(d) {
     const p = [].concat((d && d.postep) || []).filter(e => e && typeof e === 'object');
     if (!p.length) return null;
@@ -2315,10 +2484,10 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
-                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
+                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,

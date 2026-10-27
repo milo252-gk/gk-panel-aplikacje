@@ -25,7 +25,7 @@
     $('lista-stalych').innerHTML = lista.map(s => `
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
-          ${s.checklista ? `<div class="slaby">☑ Checklista · ${esc(s.pozycji)} ${s.pozycji === 1 ? 'pozycja' : s.pozycji < 5 ? 'pozycje' : 'pozycji'}</div>` : ''}
+          ${s.checklista ? `<div class="slaby">☑ Checklista · ${esc(ile(s.pozycji, 'pozycja', 'pozycje', 'pozycji'))}</div>` : ''}
           <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">📷</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">📝</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">▣</span>' : ''}</div>
           <div class="szczegoly">
             <span class="znacznik ${s.aktywny ? 'ok' : ''}">${!s.aktywny ? 'Wstrzymane' : s.reczny ? (s.checklista ? 'Ręczna' : 'Pojedyncze') : (s.checklista ? 'Stała' : 'Stałe')}</span>
@@ -36,6 +36,7 @@
           </div>
           <div class="slaby">${esc(s.harmonogram)}</div>
           ${s.nieZleca ? `<div class="ostrzezenie-stalego">Nie zleca — ${esc(s.nieZleca)}, kliknij „Zmień”</div>` : ''}
+          ${s.nieAutomat ? `<div class="ostrzezenie-stalego">⚠ Nie zleca się sama — zlecasz ją przyciskiem „Zleć teraz”.${pisze ? ' <button type="button" class="maly glowny" data-akcja="automat">Włącz automat</button>' : ''}</div>` : ''}
           ${s.aktywny && !s.reczny ? `<div class="nastepne">${s.nastepne ? `Następne: ${esc(s.nastepne)}` : 'Brak wystąpień w najbliższych dwóch miesiącach'}</div>` : ''}
         </div>
         <div class="akcje">
@@ -84,6 +85,14 @@
     return Object.keys(z).length ? z : { I: { nazwa: 'Zmiana I', od: '06:00' }, II: { nazwa: 'Zmiana II', od: '14:00' }, III: { nazwa: 'Zmiana III', od: '22:00' } };
   };
   const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
+  // Trwające zlecenie otwarte do poprawienia (Zlecenia → ✎ Zmień): { id, kod, d }. Null — zwykłe okno zapisanego.
+  let instancja = null;
+  const ped = P.widoki.checklisty.utworz(f, {
+    lista: $('stale-pozycje'),
+    linia: () => (f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value),
+    zmianaOd: () => { const zm = zmianySlownik(); return (zm[wybrane('zmiany')[0] || Object.keys(zm)[0]] || {}).od; },
+    zmiana: () => odswiez(), instancja: () => !!instancja, kod: () => edytowanyKod,
+  });
   /* Maszyny zlecenia stałego jako pola wyboru; ukryte pole „maszyna” = pierwsza zaznaczona (wymaganie skanu, hub). Maszyna
      zaznaczona wcześniej, a spoza wybranej linii, zostaje na liście — okno jej po cichu nie odbiera. */
   function rysujMaszynyStalego(zaznaczone) {
@@ -117,6 +126,7 @@
     daty: kal.daty, pomin: kal.pomin, dzis: dzis(),
     termin_rodzaj: f.termin_rodzaj.value, godzina: f.godzina.value, minuty: f.minuty.value, aktywny: f.aktywny.checked,
     okno_rodzaj: f.okno_rodzaj.value, okno_godzina: f.okno_godzina.value, okno_minuty: f.okno_minuty.value,
+    checklista: f.jako_checklista.checked, pozycje: ped.odczytaj(),
   });
 
   /* Osoby zaznaczonych działów (każda dostaje własne zlecenie); zaznaczenie zostaje przy zmianie działów. */
@@ -150,6 +160,19 @@
 
   /* Pokaż tylko pola pasujące do wyborów, podgląd dni i „Trafi do …” — kierownik od razu widzi, kiedy i komu hub zleci. */
   function odswiez() {
+    const lista = f.jako_checklista.checked;
+    $('stale-pozycje-pole').hidden = !lista;
+    $('stale-wymagania').hidden = $('stale-maszyny').hidden = lista;
+    $('stale-instancja').hidden = !instancja;
+    for (const id of ['stale-dla', 'stale-kiedy', 'stale-termin', 'stale-aktywne', 'stale-jako-checklista']) $(id).hidden = !!instancja;
+    if (instancja) {
+      // Trwające zlecenie: bez harmonogramu i adresatów — tylko to, co da się poprawić w już zleconym.
+      $('inst-wzorzec').hidden = !(instancja.kod && ((hala.slowniki || {}).zlecenia_stale || {})[instancja.kod] && P.mozeZapisacStale());
+      $('stale-podglad').textContent = '';
+      ped.odswiez();
+      P.pokazSkan(f);
+      return;
+    }
     const r = f.rodzaj.value, t = f.termin_rodzaj.value;
     $('stale-dni').hidden = r !== 'dni_tygodnia';
     $('stale-co-tygodni').hidden = r !== 'dni_tygodnia';
@@ -180,6 +203,7 @@
     $('stale-podglad').textContent = podglad;
     $('stale-najblizsze').textContent = najblizsze;
     rysujKalendarz(w.wartosc);
+    ped.odswiez();
   }
 
   function ustawMiesiac(data) {
@@ -187,13 +211,21 @@
     kal.rok = +m[1]; kal.miesiac = +m[2];
   }
 
-  function otworz(wartosci, kod, tytulOkna, poZapisieFn) {
+  function otworz(wartosci, kod, tytulOkna, poZapisieFn, inst) {
     P.podpowiedziCzynnosci();
     edytowanyKod = kod || null;
+    instancja = inst || null;
     poZapisie = poZapisieFn || null;
     f.reset();
     f.querySelector('.blad').hidden = true;
-    $('t-okno-stalego').textContent = tytulOkna || (edytowanyKod ? `Zapisane zlecenie: ${wartosci.tytul}` : 'Nowe zapisane zlecenie');
+    f.jako_checklista.checked = !!wartosci.checklista;
+    $('t-okno-stalego').textContent = tytulOkna || (wartosci.checklista ? (edytowanyKod ? `Checklista: ${wartosci.tytul}` : 'Nowa checklista')
+      : edytowanyKod ? `Zapisane zlecenie: ${wartosci.tytul}` : 'Nowe zapisane zlecenie');
+    const zapisane = W.zadaniaDoChecklisty(hala.slowniki, edytowanyKod ? [edytowanyKod] : []);
+    const z = f.querySelector('[data-z-zapisanych]');
+    z.innerHTML = `<option value="">${zapisane.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak'}</option>`
+      + zapisane.map(x => `<option value="${esc(x.kod)}">${esc(x.opisWyboru)}</option>`).join('');
+    z.disabled = !zapisane.length;
     const dz = (wartosci.dzialy && wartosci.dzialy.length ? wartosci.dzialy : [wartosci.dzial || (dzialyKontraktu()[0] || {}).kod || 'produkcja']);
     $('stale-dzialy').innerHTML = dzialyKontraktu().map(d => `<label class="zaznacz"><input type="checkbox" name="dzialy" value="${esc(d.kod)}" ${dz.includes(d.kod) ? 'checked' : ''}> ${esc(d.nazwa)}</label>`).join('');
     const kto = wartosci.kto || (wartosci.wykonawca ? 'osoby' : 'dzial');
@@ -203,6 +235,9 @@
     P.pokazPolaLinii(f);
     f.linia.innerHTML = P.opcje([[W.LINIA_KAZDA, '— każda linia osobno —'], ...P.linieLista()], '— każda —');
     f.linia.value = wartosci.linia || '';
+    f.linia.disabled = !!instancja;                         // trwającemu zleceniu linii się nie zmienia (tylko lista maszyn z niej)
+    // Pozycje dopiero po ustawieniu linii — lista maszyn w pozycji pochodzi z wybranej linii.
+    ped.rysuj(wartosci.checklista ? (wartosci.pozycje && wartosci.pozycje.length ? wartosci.pozycje : [{ godzina: '0:30' }, {}]) : []);
     rysujMaszynyStalego(wartosci.maszyny && wartosci.maszyny.length ? wartosci.maszyny : (wartosci.maszyna ? [wartosci.maszyna] : []));
     f.tytul.value = wartosci.tytul || '';
     f.opis.value = wartosci.opis || '';
@@ -286,13 +321,15 @@
   f.addEventListener('change', ev => {
     if (ev.target === f.tytul) {
       // D72: podpowiedź wstawia opis (gdy pusty) i swoje domyślne wymagania — kierownik zmienia je, jak chce.
-      const c = W.gotowaCzynnosc(f.tytul.value, hala.slowniki);
+      const c = instancja || edytowanyKod ? null : W.gotowaCzynnosc(f.tytul.value, hala.slowniki);
       if (c) { if (c.opis && !f.opis.value.trim()) f.opis.value = c.opis; f.wymagaj_zdjecia.checked = !!c.zdjecie; f.wymagaj_notatki.checked = !!c.notatka; }
     }
     if (ev.target.name === 'dzialy') rysujOsoby(wybrane('osoby'));
     if (ev.target === f.linia) rysujMaszynyStalego(wybrane('maszyny_stalego'));
     if (ev.target.name === 'maszyny_stalego') synchMaszynyStalego();
     if (ev.target === f.rodzaj && f.rodzaj.value === 'daty') ustawMiesiac(kal.daty.filter(d => d >= dzis())[0]);
+    if (ev.target === f.jako_checklista && f.jako_checklista.checked && !ped.odczytaj().length) ped.rysuj([{ godzina: '0:30' }, {}]);
+    if (ev.target === f.linia) ped.rysuj(ped.odczytaj());               // maszyny pozycji — z wybranej linii
     odswiez();
   });
   f.addEventListener('click', ev => {
@@ -302,9 +339,75 @@
     synchMaszynyStalego();
     odswiez();
   });
+  /* Trwające zlecenie ↔ wzorzec: zmiana jednego idzie do drugiego („zapisuje się to wszędzie”). */
+  const zmienione = (dane, d) => ['tytul', 'opis', 'priorytet', 'pozycje', 'wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu', 'maszyna', 'maszyny']
+    .some(k => dane[k] !== undefined && JSON.stringify(dane[k] === '' ? null : dane[k]) !== JSON.stringify(d[k] === '' || d[k] === undefined ? null : d[k]));
+  /* Do trwających zleceń z wzorca idzie tylko to, co różni NOWY wzorzec od DAWNEGO (nie „czym zlecenie różni się od wzorca”) —
+     ręczna poprawka dzisiejszego zlecenia nie ginie, gdy ktoś zmieni we wzorcu sam harmonogram. Błąd jednego zlecenia nie przerywa
+     reszty. Zwraca { ile, bledy }. */
+  async function przepiszDoTrwajacych(kod, wartosc, dawny, bezId) {
+    const rowne = (a, b) => JSON.stringify(a === undefined || a === '' ? null : a) === JSON.stringify(b === undefined || b === '' ? null : b);
+    const inne = k => !dawny || !rowne(dawny[k], wartosc[k]);
+    const wynik = { ile: 0, bledy: [] };
+    for (const z of W.instancjeWzorca(hala.obiekty('zlecenie'), kod)) {
+      if (z.id === bezId) continue;
+      const dane = {};
+      for (const k of ['tytul', 'opis', 'priorytet']) if (inne(k)) dane[k] = k === 'priorytet' ? (wartosc.priorytet || 'normalny') : (wartosc[k] || null);
+      if (Array.isArray(wartosc.pozycje)) { if (inne('pozycje')) dane.pozycje = W.pozycjeDlaInstancji(wartosc.pozycje, z.dane); }
+      else {
+        for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu']) if (inne(k)) dane[k] = !!wartosc[k];
+        if (inne('maszyna') || inne('maszyny')) {
+          dane.maszyna = wartosc.maszyna || null;
+          dane.maszyny = Array.isArray(wartosc.maszyny) && wartosc.maszyny.length > 1 ? wartosc.maszyny : null;
+        }
+      }
+      if (!Object.keys(dane).length || !zmienione(dane, z.dane || {})) continue;
+      try { await hala.zapisz('zlecenie.edytowane', z.id, dane); wynik.ile++; }
+      catch (e) { wynik.bledy.push(`${z.numer || z.id.slice(0, 8)}: ${P.komunikatBledu(e)}`); }
+    }
+    return wynik;
+  }
+  const ile = (n, jedno, kilka, wiele) => `${n} ${n === 1 ? jedno : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) ? kilka : wiele}`;
+
+  async function zapiszInstancje(blad) {
+    const d = instancja.d;
+    const pola0 = { tytul: f.tytul.value, opis: f.opis.value, pilne: f.pilne.checked,
+                    termin: f.inst_termin.value === instancja.terminPole ? undefined : f.inst_termin.value,
+                    od: f.inst_od.value === instancja.odPole ? undefined : f.inst_od.value,
+                    checklista: Array.isArray(d.pozycje) && d.pozycje.length > 0, pozycje: ped.odczytaj(),
+                    wymagaj_zdjecia: f.wymagaj_zdjecia.checked, wymagaj_notatki: f.wymagaj_notatki.checked, wymagaj_skanu: f.wymagaj_skanu.checked,
+                    maszyny: wybrane('maszyny_stalego') };
+    const r = W.zlecenieEdytowane(pola0, d);
+    if (r.bledy.length) { blad.textContent = r.bledy.join(' '); blad.hidden = false; return; }
+    await hala.zapisz('zlecenie.edytowane', instancja.id, r.dane);
+    const wzorzec = instancja.kod && ((hala.slowniki || {}).zlecenia_stale || {})[instancja.kod];
+    const dowzorca = !!wzorzec && !$('inst-wzorzec').hidden && f.inst_wzorzec.checked;
+    let reszta = { ile: 0, bledy: [] };
+    if (dowzorca) {
+      const nowy = W.wzorzecZInstancji(wzorzec, r.dane, hala.pracownik.id);
+      try {
+        await hala.zapisz('slownik.zapisany', `zlecenia_stale/${instancja.kod}`, { slownik: 'zlecenia_stale', klucz: instancja.kod, wartosc: nowy });
+        // Pozostałe trwające zlecenia z tego wzorca (np. inne zmiany) dostają to samo.
+        reszta = await przepiszDoTrwajacych(instancja.kod, nowy, wzorzec, instancja.id);
+      } catch (e) {
+        $('okno-stalego').close(); instancja = null;
+        P.komunikat(`Zlecenie poprawione, ale wzorca nie udało się zapisać: ${P.komunikatBledu(e)}`, 'uwaga');
+        return;
+      }
+    }
+    $('okno-stalego').close();
+    instancja = null;
+    P.komunikat(`Zlecenie poprawione${dowzorca ? ' — także w zapisanym wzorcu' : ''}${reszta.ile ? ` i w ${ile(reszta.ile, 'innym trwającym', 'innych trwających', 'innych trwających')}` : ''}${
+      reszta.bledy.length ? `. Nie udało się: ${reszta.bledy.join('; ')}` : ''}`, reszta.bledy.length ? 'uwaga' : 'ok');
+  }
+
   f.addEventListener('submit', async ev => {
     ev.preventDefault();
     const blad = f.querySelector('.blad');
+    if (instancja) {
+      try { await zapiszInstancje(blad); } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+      return;
+    }
     const w = W.stalyZFormularza(pola(), hala.slowniki, edytowanyKod, hala.pracownik.id);
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
     // „Zmień” nie może zgubić tego, czego okno nie pokazuje (stara czynność — D56, D72; audyt 2026-10-16). Maszyny okno
@@ -314,9 +417,12 @@
     try {
       await hala.zapisz('slownik.zapisany', `zlecenia_stale/${w.kod}`, { slownik: 'zlecenia_stale', klucz: w.kod, wartosc: w.wartosc });
       if (poZapisie) { const fn = poZapisie; poZapisie = null; await fn(w.kod); }
+      // Zmiana wzorca idzie też do trwających zleceń z niego (nowe, przyjęte) — treść, opis, pozycje; odhaczenia zostają.
+      const trwajace = edytowanyKod ? await przepiszDoTrwajacych(w.kod, w.wartosc, dawny, null) : { ile: 0, bledy: [] };
       $('okno-stalego').close();
-      P.komunikat(w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Zapisano — zlecasz je przyciskiem „Zleć teraz”'
-        : 'Zapisano — serwer sam zleci je według harmonogramu', 'ok');
+      P.komunikat((w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Zapisano — zlecasz je przyciskiem „Zleć teraz”'
+        : 'Zapisano — serwer sam zleci je według harmonogramu') + (trwajace.ile ? ` · poprawione też trwające: ${trwajace.ile}` : '')
+        + (trwajace.bledy.length ? `. Nie udało się poprawić trwających: ${trwajace.bledy.join('; ')}` : ''), trwajace.bledy.length ? 'uwaga' : 'ok');
       P.pokazZlecenia(null, 'stale');
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
@@ -337,26 +443,38 @@
         if (p) await window.PanelEtykiety.drukuj(p.etykiety, `Kody QR — ${s.tytul || kod}`);
         return;
       }
-      // D67: checklista (zapisane z pozycjami) ma własne, proste okno (checklisty.js).
+      // 2026-10-27: checklista i zwykłe zapisane w jednym oknie (pozycje są w oknie, gdy to checklista).
       const lista = Array.isArray(s.pozycje) && s.pozycje.length > 0;
-      if (b.dataset.akcja === 'zmien') { if (lista) P.widoki.checklisty.otworz(kod); else otworz(W.stalyDoFormularza(s), kod); }
+      if (b.dataset.akcja === 'automat') {
+        if (!(await P.potwierdz('Włączyć automat?', `„${s.tytul}” będzie się zlecać codziennie na każdą zmianę, bez klikania. Dni i zmiany zawęzisz przyciskiem „Zmień”.`, 'Włącz'))) return;
+        await hala.zapisz('slownik.zapisany', `zlecenia_stale/${kod}`, { slownik: 'zlecenia_stale', klucz: kod, wartosc: W.automatDlaStalego(s, hala.slowniki, hala.pracownik.id) });
+        P.komunikat('Automat włączony — serwer sam zleci ją na każdą zmianę', 'ok');
+        return;
+      }
+      if (b.dataset.akcja === 'zlec') {
+        // „Zleć teraz” robi nowe zlecenie obok tego, które zlecił automat — pytamy, zanim je podwoi.
+        const juz = W.juzZleconeNaZmianie(kod, hala.obiekty('zlecenie'), hala.zmianaTeraz(), hala.teraz());
+        if (juz && !(await P.potwierdz('Już zlecone na tej zmianie', `„${s.tytul}” jest już zlecone (${juz.numer || 'w toku'}). Zlecić jeszcze raz?`, 'Zleć jeszcze raz'))) return;
+      }
+      if (b.dataset.akcja === 'zmien') otworz(W.stalyDoFormularza(s), kod);
       if (b.dataset.akcja === 'kopiuj') {
-        if (lista) P.widoki.checklisty.otworz(kod, true);
-        else otworz(Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` }), null, 'Nowe zapisane (kopia)');
+        const kopia = Object.assign(W.stalyDoFormularza(s), { tytul: `${s.tytul} (kopia)` });
+        kopia.pozycje.forEach(p => { delete p.id; });
+        otworz(kopia, null, lista ? 'Nowa checklista (kopia)' : 'Nowe zapisane (kopia)');
       }
       if (b.dataset.akcja === 'zlec' && W.wieluAdresatow(s)) {
         // D71: wiele adresatów — każdy dostaje własne zlecenie od razu (jak w harmonogramie), po potwierdzeniu liczby.
         const cele = Hala.celeStalego(s, (hala.kontrakt.stale || {}).dzialy || [], hala.pracownicy || [], hala.slowniki || {}, dzis());
         if (!cele.length) { P.komunikat('Nikt nie dostanie tego zlecenia — zaznacz osoby albo sprawdź urlopy.', 'blad'); return; }
         const n = cele.length;
-        if (!(await P.potwierdz('Zlecić teraz?', `„${s.tytul}” — ${n} ${n === 1 ? 'zlecenie' : n < 5 ? 'zlecenia' : 'zleceń'}, każdy adresat dostaje własne.`, 'Zleć'))) return;
+        if (!(await P.potwierdz('Zlecić teraz?', `„${s.tytul}” — ${ile(n, 'zlecenie', 'zlecenia', 'zleceń')}, każdy adresat dostaje własne.`, 'Zleć'))) return;
         const zmiana = hala.zmianaTeraz(), teraz = hala.teraz();
         for (const dane of W.zleceniaTeraz(kod, s, cele, zmiana, teraz, W.terminTeraz(s, zmiana, teraz))) {
           // D76: „Zleć teraz” kierownika zakładu dla UR/KJ bez osoby — jak „Nowe zlecenie”: do kierownika działu.
           if (Hala.doKierownika(dane, hala.pracownik.role, (hala.kontrakt.stale || {}).dzialy || [])) dane.do_kierownika = true;
           await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
         }
-        P.komunikat(`Zlecone: ${s.tytul} — ${n} ${n === 1 ? 'zlecenie' : n < 5 ? 'zlecenia' : 'zleceń'}`, 'ok');
+        P.komunikat(`Zlecone: ${s.tytul} — ${ile(n, 'zlecenie', 'zlecenia', 'zleceń')}`, 'ok');
       } else if (b.dataset.akcja === 'zlec' && lista) {
         // Zlecenie z pozycjami od razu — okno „Nowe zlecenie” nie ma pozycji.
         const dane = W.checklistaTeraz(kod, s, hala.zmianaTeraz(), hala.teraz(), W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz()));
@@ -388,15 +506,38 @@
     otworz(W.stalyZZlecenia(z), null, 'Zapisz zlecenie');
   }
 
-  $('nowa-checklista-zlecen').addEventListener('click', () => P.widoki.checklisty.otworz(null));
+  // Nowa checklista: domyślnie sama zleca się na wszystkie zmiany, codziennie (właściciel 2026-10-27: „nie chcę codziennie
+  // klikać ZLEĆ”) — kierownik zawęża dni i zmiany w tym samym oknie.
+  $('nowa-checklista-zlecen').addEventListener('click', () => otworz({
+    checklista: true, dzial: (dzialyKontraktu()[0] || {}).kod || 'produkcja', linia: W.LINIA_KAZDA, rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5],
+    zmiany: Object.keys(zmianySlownik()), termin_rodzaj: 'koniec_zmiany', wymagaj_zdjecia: false, wymagaj_notatki: false, bez_swiat: false,
+    aktywny: true, pozycje: [{ godzina: '0:30' }, {}] }, null, 'Nowa checklista'));
 
   /* D71: „Zmień” z kalendarza Zleceń — to samo okno co na liście (checklista — swoje). */
   function otworzKod(kod) {
     const s = ((hala.slowniki || {}).zlecenia_stale || {})[kod];
     if (!s) return;
-    if (Array.isArray(s.pozycje) && s.pozycje.length) P.widoki.checklisty.otworz(kod);
-    else otworz(W.stalyDoFormularza(s), kod);
+    otworz(W.stalyDoFormularza(s), kod);
   }
 
-  P.widoki.stale = { rysuj, zZlecenia, otworzKod, otworzZ: (wartosci, tytul, fn) => otworz(wartosci, null, tytul, fn) };
+  /* Trwające zlecenie albo checklista do poprawienia (Zlecenia → ✎ Zmień): to samo okno bez harmonogramu i adresatów;
+     „Zapisz też w wzorcu” przepisuje zmianę do zapisanego, z którego zlecenie powstało. z = obiekt zlecenia z huba. */
+  function otworzInstancje(z) {
+    if (!z) { P.komunikat('Tego zlecenia już nie ma na liście — odśwież.', 'uwaga'); return; }
+    const d = z.dane || {};
+    const lista = Array.isArray(d.pozycje) && d.pozycje.length > 0;
+    const maszyny = Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : (d.maszyna ? [d.maszyna] : []);
+    otworz({ tytul: d.tytul || '', opis: d.opis || '', dzial: d.dzial, linia: d.linia || '', maszyny, maszyna: d.maszyna || '', pilne: d.priorytet === 'pilne',
+             wymagaj_zdjecia: d.wymagaj_zdjecia === true, wymagaj_notatki: d.wymagaj_notatki === true, wymagaj_skanu: d.wymagaj_skanu === true,
+             checklista: lista, rodzaj: 'reczny', zmiany: [], termin_rodzaj: 'koniec_zmiany', aktywny: true,
+             pozycje: (d.pozycje || []).map(p => Object.assign(W.stalyDoFormularza({ pozycje: [p] }).pozycje[0], { godzina: '', od: '', termin_iso: p.termin || '', od_iso: p.od || '' })) },
+          null, `${lista ? 'Checklista' : 'Zlecenie'} (trwa): ${d.tytul || ''}`, null,
+          { id: z.id, kod: d.stale || null, d, terminPole: d.termin ? W.poleCzasu(Date.parse(d.termin)) : '', odPole: d.od ? W.poleCzasu(Date.parse(d.od)) : '' });
+    f.inst_termin.value = instancja.terminPole;
+    f.inst_od.value = instancja.odPole;
+    odswiez();
+  }
+
+  P.widoki.stale = { rysuj, zZlecenia, otworzKod, otworzInstancje, otworz: (wartosci, kod, tytul, fn) => otworz(wartosci, kod, tytul, fn),
+                     otworzZ: (wartosci, tytul, fn) => otworz(wartosci, null, tytul, fn) };
 })();

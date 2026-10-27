@@ -98,6 +98,7 @@
         const poCzasie = doZrobienia && przepadlo(z, teraz);           // D55: po końcu zmiany — jeszcze można zrobić
         // Okno „od–do” (2026-10-26): przed godziną „od” zlecenie jest widoczne, ale nie do zrobienia (hub też odrzuci).
         const odMs = Date.parse(d.od);
+        const przedZl = doZrobienia && !isNaN(odMs) && odMs > teraz;
         return {
           id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
           tytul: d.tytul || '', opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyna: d.maszyna || null, linia: d.linia || null,
@@ -109,7 +110,7 @@
           zalegleOpis: poCzasie ? 'zmiana się skończyła — zrób i tak, kierownik zobaczy spóźnienie'
             : poTerminie ? (opis ? opis.tekst : 'po terminie') : zPoprzedniejZmiany ? `z poprzedniej zmiany (zlecone ${godz(d.czas_zlecenia)})` : null,
           doZrobienia, wyslane: WYSLANE.has(z.status),
-          odMs: isNaN(odMs) ? null : odMs, odGodz: godz(d.od), przed: doZrobienia && !isNaN(odMs) && odMs > teraz,
+          odMs: isNaN(odMs) ? null : odMs, odGodz: godz(d.od), przed: przedZl,
           wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true, stale: !!d.stale,
           // D56: kilka maszyn jednego zlecenia, postęp krok po kroku (zlecenie.postep) i czynność, która zalicza sama.
           maszyny: maszynyZlecenia(d), wymagajSkanu: d.wymagaj_skanu === true && maszynyZlecenia(d).length > 0,
@@ -117,8 +118,9 @@
           // D67: checklista — pozycje do odhaczenia (każda z godziną i wymaganiami) zamiast jednego „Zrobione”.
           pozycje: pozycjeWiersza(d, teraz, H), postepPozycji: H && H.postepPozycji ? H.postepPozycji(d) : null,
           // Maszyny, które jeszcze trzeba zeskanować w pozycjach tej checklisty (menu po skanie QR maszyny).
-          maszynySkanu: [...new Set(pozycjeWiersza(d, teraz, H).filter(q => q.wymagajSkanu && q.czynnosc !== 'obchod'
-            && (q.stan === 'czeka' || q.stan === 'po-terminie')).flatMap(q => q.maszyny))],
+          // Zlecenie przed godziną „od”, pozycje z czynnością (zalicza je formularz) i maszyny już zeskanowane nie wchodzą do menu po skanie.
+          maszynySkanu: przedZl ? [] : [...new Set(pozycjeWiersza(d, teraz, H).filter(q => q.wymagajSkanu && !q.czynnosc
+            && (q.stan === 'czeka' || q.stan === 'po-terminie')).flatMap(q => q.maszyny.filter(m => !q.skany.includes(m))))],
           uwagiZwrotu: d.uwagi_zwrotu || null, czas: d.czas_zlecenia || '',
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
           // D76: „do kierownika działu”, rozdział (postęp z osobami), część całości, „Przekaż” / „Rozdziel” dla kierownika działu.
@@ -188,7 +190,7 @@
       const t = Date.parse(p.termin), o = Date.parse(p.od);
       // „przed” — pozycja ma godzinę „od” (2026-10-26) i ta jeszcze nie nadeszła: widać ją, nie da się jej odhaczyć.
       const stan = wyk ? 'wykonana' : pom ? 'pominieta' : (!isNaN(o) && o > teraz ? 'przed' : !isNaN(t) && t < teraz ? 'po-terminie' : 'czeka');
-      return { id: p.id, nazwa: p.nazwa || '', godz: godz(p.termin), odGodz: godz(p.od), odMs: isNaN(o) ? null : o,
+      return { id: p.id, nazwa: p.nazwa || '', opis: p.opis || '', godz: godz(p.termin), odGodz: godz(p.od), odMs: isNaN(o) ? null : o,
                terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
                maszyna: p.maszyna || null, maszyny, skany: skanyPozycji(d, p.id),
                wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true,
@@ -712,6 +714,7 @@
           <button type="button" data-akcja="pozycja-cofnij">Cofnij odhaczenie</button></div></div>`;
     }
     const w = f.wymagania;
+    const opisPozycji = q.opis ? `<p class="hala-pozycja-opis">${esc(q.opis)}</p>` : '';
     const wielo = q.czynnosc !== 'obchod' && q.maszyny.length > 0;          // 2026-10-26: skany liczą się od razu (postęp pozycji)
     const zesk = new Set([].concat(q.skany || [], (w.juz || {}).skany || []));
     const brak = brakuje(w, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan, skany: [...zesk] });
@@ -720,6 +723,7 @@
     const samo = !cz && (q.czynnosc === 'proba' || q.czynnosc === 'przeglad')
       ? `<p class="hala-zlecenie-czynnosc">${q.czynnosc === 'proba' ? '🔬 Odhaczy się samo, gdy zapiszesz próbę' : '🔧 Odhaczy się samo po przeglądzie UR'}${q.maszyna ? ` na: ${esc(nazwaM(q.maszyna))}` : ''}</p>` : '';
     return `<div class="hala-pozycja-panel">
+      ${opisPozycji}
       ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
       ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">▶ ${esc(cz)}</button>` : samo}
       ${w.wymagajSkanu && wielo ? (() => {
@@ -874,12 +878,15 @@
     const z = hala.obiekt('zlecenie', id);
     if (!z) return 'Tego zlecenia już nie ma.';
     const d = z.dane || {};
-    if (maszynyZlecenia(d).includes(maszyna)) await dopiszPostep(hala, id, { skan: maszyna });
+    const teraz = hala.teraz();
+    if (Date.parse(d.od) > teraz) return `To zlecenie zaczyna się o ${godzinaLok(d.od)} — skan nie został zapisany.`;
+    if (maszynyZlecenia(d).includes(maszyna) && !(juzZrobione(d).skany || []).includes(maszyna)) await dopiszPostep(hala, id, { skan: maszyna });
     // Checklista (2026-10-26): skan zalicza tę maszynę w każdej niezrobionej pozycji, która jej wymaga — hub odhaczy
     // pozycję sam, gdy zeskanowano wszystkie jej maszyny.
     let pozycji = 0;
     for (const p of d.pozycje || []) {
-      if (!p || !p.id || p.wymagaj_skanu !== true || p.czynnosc === 'obchod' || (d.wykonane || {})[p.id] || (d.pominiete || {})[p.id]) continue;
+      if (!p || !p.id || p.wymagaj_skanu !== true || p.czynnosc || (d.wykonane || {})[p.id] || (d.pominiete || {})[p.id]) continue;
+      if (p.od && Date.parse(p.od) > teraz) continue;                        // przed godziną „od” serwer odrzuciłby skan
       if (!maszynyPozycji(p).includes(maszyna) || skanyPozycji(d, p.id).includes(maszyna)) continue;
       await dopiszPostep(hala, id, { skan: maszyna, pozycja: p.id });
       pozycji += 1;

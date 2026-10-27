@@ -257,3 +257,4 @@ details.wiecej[open] { display: grid; gap: 12px; }
 /* D74 „☰ Więcej” (jak UR i KJ): przyciski jeden pod drugim, na całą szerokość. */
 .menu-wiecej { display: grid; gap: 10px; margin: 12px 0; }
 .menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }
+.opis-pozycji { margin: 8px 0; white-space: pre-line; }

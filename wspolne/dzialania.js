@@ -173,6 +173,8 @@
   // ================================================================ historia (zlecenie i inne obiekty)
 
   const OPISY_ZDARZEN = {
+    'zlecenie.pozycja_wykonana': 'Pozycja odhaczona', 'zlecenie.pozycja_pominieta': 'Pozycja pominięta', 'zlecenie.pozycja_cofnieta': 'Odhaczenie cofnięte',
+    'zlecenie.edytowane': 'Poprawione przez kierownika', 'zlecenie.postep': 'Krok wykonania',
     'zlecenie.utworzone': 'Zlecone', 'zlecenie.zaplanowane': 'Zaplanowane', 'zlecenie.plan_zmieniony': 'Plan zmieniony',
     'zlecenie.aktywowane': 'Zlecone (z planu)', 'zlecenie.przyjete': 'Przyjęte — „Biorę”', 'zlecenie.wykonane': 'Zrobione',
     'zlecenie.odrzucone': '„Nie mogę”', 'zlecenie.zwrocone': 'Zwrócone przez kierownika', 'zlecenie.zamkniete': 'Przyjęte przez kierownika',
@@ -491,7 +493,7 @@
   function zadaniaMaszyny(wiersze, maszyna) {
     // D56: zlecenie może mieć kilka maszyn — wystarczy, że ta jest wśród nich.
     // 2026-10-26: checklista — maszyny pozycji ze skanem QR (w.maszynySkanu) też się liczą.
-    return (wiersze || []).filter(w => w.doZrobienia && ((w.maszyny && w.maszyny.length ? w.maszyny : [w.maszyna]).includes(maszyna)
+    return (wiersze || []).filter(w => w.doZrobienia && !w.przed && ((w.maszyny && w.maszyny.length ? w.maszyny : [w.maszyna]).includes(maszyna)
       || (w.maszynySkanu || []).includes(maszyna)));
   }
 

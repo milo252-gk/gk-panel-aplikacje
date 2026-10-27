@@ -141,9 +141,13 @@
           <h3 id="kal-tytul" aria-live="polite"></h3>
           <button type="button" class="maly" data-kal="1" aria-label="Następny miesiąc">›</button>
           <button type="button" class="maly" data-kal="0">Dziś</button>
+          <span class="kal-widok" role="group" aria-label="Widok kalendarza">
+            <button type="button" class="chip maly" data-kal-widok="miesiac" aria-pressed="true">Miesiąc</button>
+            <button type="button" class="chip maly" data-kal-widok="agenda" aria-pressed="false">Najbliższe dni</button></span>
         </div>
         <div class="kal-siatka" id="kal-siatka" role="grid" aria-label="Kalendarz zleceń"></div>
         <div class="kal-dzien" id="kal-dzien" aria-live="polite"></div>
+        <div class="kal-agenda" id="kal-agenda" aria-live="polite" hidden></div>
       </div>
     </section>
   </div>
@@ -242,14 +246,16 @@
     <fieldset id="zlecenie-osoby"><legend>Dla kogo (nic = cały dział; każda osoba dostaje osobne zlecenie)</legend>
       <div class="zaznaczenia" data-osoby></div></fieldset>
     <p class="slaby konto-drobne" id="zlecenie-zmiana-opis" hidden></p>
-    <label id="zlecenie-od">Od kiedy (opcjonalnie — wcześniej nie da się go zrobić)<input name="od" type="datetime-local"></label>
-    <label id="zlecenie-termin">Termin (opcjonalnie)<input name="termin" type="datetime-local"></label>
+    <div class="dwie" id="zlecenie-terminy">
+      <label id="zlecenie-od" title="Wcześniej zlecenia nie da się zrobić">Od kiedy (opcjonalnie)<input name="od" type="datetime-local"></label>
+      <label id="zlecenie-termin">Termin (opcjonalnie)<input name="termin" type="datetime-local"></label>
+    </div>
     <!-- D47: zmiana już zaplanowanego zlecenia (tylko „Zmień” przy nim). Nowych planów to okno nie robi — powtarzalne
          zadania na później zakłada się jako Zlecenia stałe. -->
     <fieldset id="zlecenie-plan" hidden><legend>Zaplanuj na</legend>
       <div class="dwie">
         <label>Dzień<input name="plan_dzien" type="date"></label>
-        <label>Godzina (puste = start 1. zmiany)<input name="plan_godzina" type="time"></label>
+        <label>Godzina (puste = start zmiany)<input name="plan_godzina" type="time"></label>
       </div>
       <div class="dwie" id="zlecenie-termin-po" hidden>
         <label>Termin po starcie (opcjonalnie)<input name="termin_po" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="np. 8"></label>
@@ -309,6 +315,16 @@
     <h2 id="t-okno-stalego">Nowe zapisane zlecenie</h2>
     <label>Co zrobić<input name="tytul" list="podpowiedzi-czynnosci" required maxlength="200" placeholder="np. Sprzątanie stanowisk po zmianie"></label>
     <label>Szczegóły<textarea name="opis" rows="2" maxlength="4000"></textarea></label>
+    <!-- 2026-10-27: jedno okno dla zapisanego zlecenia i checklisty — checklista to to samo zlecenie z listą pozycji. -->
+    <label class="zaznacz" id="stale-jako-checklista"><input type="checkbox" name="jako_checklista"> ☑ Checklista — lista pozycji do odhaczenia (godzina, maszyny i wymagania każdej osobno)</label>
+    <!-- Trwające zlecenie (Zlecenia → ✎ Zmień): termin i „od” zamiast harmonogramu; zmiana trafia też do wzorca. -->
+    <fieldset id="stale-instancja" hidden><legend>To zlecenie trwa</legend>
+      <div class="dwie">
+        <label>Od kiedy (opcjonalnie)<input name="inst_od" type="datetime-local"></label>
+        <label>Termin (opcjonalnie)<input name="inst_termin" type="datetime-local"></label>
+      </div>
+      <label class="zaznacz" id="inst-wzorzec"><input type="checkbox" name="inst_wzorzec" checked> Zapisz też w zapisanym wzorcu — kolejne zlecenia będą już ze zmianą</label>
+    </fieldset>
     <!-- D71: „Dla kogo” — właściciel 2026-10-15: „zlecenia cykliczne, które można wrzucić wszystkim”. -->
     <fieldset id="stale-dla"><legend>Dla kogo</legend>
       <div class="dla-dzialy"><div id="stale-dzialy" class="zaznaczenia"></div>
@@ -331,7 +347,14 @@
       <div class="maszyny-akcje"><button type="button" class="maly" data-maszyny-stale="wszystkie">Wszystkie</button>
         <button type="button" class="maly" data-maszyny-stale="zadna">Żadna</button></div>
       <div class="maszyny-lista" data-maszyny-stalego></div></fieldset>
-    <fieldset><legend>Kiedy</legend>
+    <fieldset id="stale-pozycje-pole" hidden><legend>Pozycje — godzina od startu zmiany i co zrobić</legend>
+      <div id="stale-pozycje" class="pozycje-checklisty"></div>
+      <div class="dodaj-pozycje">
+        <button type="button" data-dodaj-pozycje>+ Pozycja</button>
+        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
+      </div>
+    </fieldset>
+    <fieldset id="stale-kiedy"><legend>Kiedy</legend>
       <div class="chipy presety" id="stale-presety" role="group" aria-label="Gotowe opcje"></div>
       <div class="dwie">
         <label>Powtarzaj<select name="rodzaj">
@@ -414,7 +437,7 @@
     </fieldset>
     <div class="zaznaczenia">
       <label class="zaznacz"><input type="checkbox" name="pilne"> Pilne</label>
-      <label class="zaznacz"><input type="checkbox" name="aktywny"> Aktywne (odznacz, żeby wstrzymać)</label>
+      <label class="zaznacz" id="stale-aktywne"><input type="checkbox" name="aktywny"> Aktywne (odznacz, żeby wstrzymać)</label>
     </div>
     <p class="slaby" id="stale-podglad"></p>
     <p class="blad" role="alert" hidden></p>
@@ -462,41 +485,6 @@
     </div>
     <p class="blad" role="alert" hidden></p>
     <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="czerwony" type="submit">Zgłoś do UR</button></div>
-  </form>
-</dialog>
-
-<!-- D67 (właściciel 2026-10-14: „jeden rodzaj checklist… uprość budowanie”): checklista = jedno zadanie z pozycjami.
-     Okno: nazwa, kto, kiedy i pozycje (godzina od startu zmiany + co zrobić; szczegóły pozycji pod „⋯”). checklisty.js -->
-<dialog id="okno-checklisty" class="okno okno-szerokie" aria-labelledby="t-okno-checklisty">
-  <form method="dialog" id="formularz-checklisty" autocomplete="off">
-    <h2 id="t-okno-checklisty">Nowa checklista</h2>
-    <label>Nazwa<input name="nazwa" required maxlength="200" placeholder="np. Start zmiany na linii"></label>
-    <div class="dwie">
-      <label>Kto robi<select name="dzial" required></select></label>
-      <label>Osoba (opcjonalnie)<select name="wykonawca"><option value="">— cały dział —</option></select></label>
-    </div>
-    <label class="pole-linii">Linia<select name="linia"></select></label>
-    <fieldset><legend>Kiedy</legend>
-      <label>Powtarzaj<select name="rodzaj">
-        <option value="codziennie">Codziennie</option>
-        <option value="dni_tygodnia">W wybrane dni tygodnia</option>
-        <option value="reczny">Ręcznie — zlecam sam („Zleć teraz”)</option>
-      </select></label>
-      <div id="checklista-dni" class="zaznaczenia"></div>
-      <p class="slaby konto-drobne" id="checklista-zmiany-opis">Na które zmiany (nic nie zaznaczone = raz dziennie, na start pierwszej zmiany):</p>
-      <div id="checklista-zmiany" class="zaznaczenia"></div>
-      <p class="slaby" id="checklista-podglad"></p>
-    </fieldset>
-    <fieldset><legend>Pozycje — godzina od startu zmiany i co zrobić</legend>
-      <div id="checklista-pozycje" class="pozycje-checklisty"></div>
-      <div class="dodaj-pozycje">
-        <button type="button" data-dodaj-pozycje>+ Pozycja</button>
-        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">➕ Z zapisanych…</option></select>
-      </div>
-    </fieldset>
-    <label class="zaznacz"><input type="checkbox" name="aktywny" checked> Aktywna (serwer zleca według harmonogramu)</label>
-    <p class="blad" role="alert" hidden></p>
-    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz checklistę</button></div>
   </form>
 </dialog>
 

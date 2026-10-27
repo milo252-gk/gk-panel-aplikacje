@@ -48,7 +48,7 @@
   L.odhaczTyp = async (typ, pozycja, extra, ctx) => {
     const k = ctx || L.kontekst();
     const d = (k.lista && k.lista.dane) || {};
-    const wolna = p => !(d.wykonane || {})[p.id];
+    const wolna = p => !(d.wykonane || {})[p.id] && !(p.od && Date.parse(p.od) > hala.teraz());     // pozycji „przed godziną od” serwer nie odhaczy
     const cel = pozycja ? (d.pozycje || []).find(p => p.id === pozycja)
       : (d.pozycje || []).filter(p => p.typ === typ && wolna(p))
         .sort((a, b) => Date.parse(a.termin) - Date.parse(b.termin))[0];
@@ -81,10 +81,12 @@
       przekazanie: 'Przekazanie zmiany', zadanie: 'Zrobione',
     }[p.typ] || 'Zrobione';
     const m = k.lista.mapa[p.id] || {};
+    if (!m.zlecenie) { L.komunikat('Kierownik zmienił tę listę — pozycji już nie ma. Odśwież ekran.', 'blad', 'pozycja-zniknela'); return; }
     L.okno({
       tytul: p.nazwa,
       html: `<p><span class="znacznik ${esc({ wykonana: 'ok', pominieta: 'neutral', opozniona: 'alarm', bliska: 'uwaga' }[p.stan] || 'info')}">${esc(OPIS_STANU[p.stan] || 'Do zrobienia')}</span>
           Termin <b>${esc(p.godz)}</b>${p.wymaga_qr ? ' · wymaga skanu QR' : ''}${p.cel ? ` · punkt ${esc(p.cel)}` : ''}${p.wymagaj_zdjecia ? ' · 📷 zdjęcie' : ''}${p.wymagaj_notatki ? ' · 📝 notatka' : ''}</p>
+        ${p.opis ? `<p class="opis-pozycji">${esc(p.opis)}</p>` : ''}
         ${zrobiona ? `<p class="ok-tekst">Zrobione ${esc(W.godzina(wpis.czas))}${kto ? ' · ' + esc(kto) : ''}${p.poTerminie ? ' (po terminie)' : ''}</p>
           ${wpis.qr ? `<p class="slaby">Kod: ${esc(wpis.qr)}</p>` : ''}${wpis.uwagi ? `<p>${esc(wpis.uwagi)}</p>` : ''}` : ''}
         ${p.stan === 'pominieta' ? `<p>Pominięte: ${esc(wpis.powod || '')}</p>` : ''}
@@ -230,7 +232,8 @@
       <ul class="lista checklista">${c.wiersze.map(w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">
           <span class="czas">${esc(w.godz)}</span>
           <span class="ikona-typu" aria-hidden="true">${IKONY[w.typ] || '✓'}</span>
-          <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}</span>
+          <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
+            w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
           <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
         </li>`).join('')}</ul>
       ${przyciskiZmiany(pozycje)}`;

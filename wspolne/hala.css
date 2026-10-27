@@ -726,3 +726,4 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
   .hala-reakcja-zla .r-czerwienieje { fill: #E24B4A; }
   .hala-reakcja-zla .r-para, .hala-reakcja-wkoncu .r-wydech { opacity: 0; }
 }
+.hala-pozycja-opis { margin: 0 0 8px; color: var(--tekst-slaby); font-size: 14px; white-space: pre-line; }

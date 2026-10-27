@@ -10,7 +10,7 @@
   'use strict';
   const P = window.Panel;
   const { hala, W, $, esc } = P;
-  const stan = { rok: 0, miesiac: 0, dzien: null };
+  const stan = { rok: 0, miesiac: 0, dzien: null, widok: 'miesiac', dniAgendy: 14 };
   let ostatnie = null;                          // ostatnie dane rysowania — dotknięcie dnia rysuje bez czekania na hub
 
   function ustawDzis() {
@@ -19,10 +19,39 @@
     stan.dzien = W.dzienZakladu(hala.teraz());
   }
 
+  /* Najbliższe dni: lista zamiast siatki — co dnia zlecą zapisane stałe i co zaplanowano na później (W.agendaZlecen). */
+  function rysujAgende() {
+    const o = ostatnie;
+    const dni = W.agendaZlecen({ slowniki: o.d.slowniki, pracownicy: o.d.pracownicy, stale: o.d.stale, zlecenia: o.lista, teraz: o.d.teraz, dni: stan.dniAgendy });
+    const nazwaDnia = c => {
+      const dt = (new Date(`${c.data}T12:00:00Z`).getUTCDay() + 6) % 7;
+      return `${c.dzis ? 'Dziś' : W.DNI_NAZWY[dt]}, ${W.dataDluga(`${c.data}T12:00:00Z`)}`;
+    };
+    $('kal-tytul').textContent = `Najbliższe ${stan.dniAgendy} dni`;
+    $('kal-agenda').innerHTML = (dni.map(c => `
+      <section class="kal-agenda-dzien${c.swieto ? ' swieto' : ''}">
+        <h3>${esc(nazwaDnia(c))}${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}</h3>
+        ${c.pozycje.map(p => `<article class="kal-pozycja">
+          <div class="opis"><div><b>${p.checklista ? '☑ ' : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}</div>
+            <div class="slaby">${p.godziny.length ? `${esc(p.godziny.join(', '))} · ` : ''}${esc(p.dla || '')}</div></div></article>`).join('')}
+      </section>`).join('') || `<p class="pusto">Nic nie jest zaplanowane na najbliższe ${stan.dniAgendy} dni.</p>`)
+      + (stan.dniAgendy < 90 ? '<div class="przyciski"><button type="button" class="maly" data-agenda-wiecej>Pokaż dalej (+14 dni)</button></div>' : '');
+  }
+
+  function ustawWidok(widok) {
+    stan.widok = widok;
+    for (const b of document.querySelectorAll('[data-kal-widok]')) b.setAttribute('aria-pressed', String(b.dataset.kalWidok === widok));
+    for (const b of document.querySelectorAll('#zlecenia-kalendarz [data-kal]')) b.hidden = widok === 'agenda';
+    $('kal-siatka').hidden = $('kal-dzien').hidden = widok === 'agenda';
+    $('kal-agenda').hidden = widok !== 'agenda';
+    rysuj();
+  }
+
   function rysuj(d, lista) {
     if (d) ostatnie = { d, lista };
     if (!ostatnie) return;
     if (!stan.rok) ustawDzis();
+    if (stan.widok === 'agenda') { rysujAgende(); return; }
     const k = W.kalendarzZlecen({ slowniki: ostatnie.d.slowniki, pracownicy: ostatnie.d.pracownicy, stale: ostatnie.d.stale,
                                   zlecenia: ostatnie.lista, rok: stan.rok, miesiac: stan.miesiac, teraz: ostatnie.d.teraz });
     $('kal-tytul').textContent = k.tytul;
@@ -71,6 +100,9 @@
   }
 
   $('zlecenia-kalendarz').addEventListener('click', async ev => {
+    const widok = ev.target.closest('[data-kal-widok]');
+    if (widok) { ustawWidok(widok.dataset.kalWidok); return; }
+    if (ev.target.closest('[data-agenda-wiecej]')) { stan.dniAgendy += 14; rysuj(); return; }
     const nav = ev.target.closest('[data-kal]');
     if (nav) {
       if (+nav.dataset.kal === 0) ustawDzis();

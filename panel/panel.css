@@ -571,3 +571,27 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 .hala-zdjecie-poz { position: relative; display: inline-flex; }
 .hala-zdjecie-poz img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); }
 .hala-zdjecie-poz button { position: absolute; top: -6px; right: -6px; min-height: 0; width: 22px; height: 22px; padding: 0; border-radius: 50%; line-height: 1; }
+
+/* Postęp maszyn „▣ 2/7 maszyn” (2026-10-27): napis z cienkim paskiem pod spodem; zielony, gdy wszystkie. */
+.postep-maszyn { display: inline-block; padding: 1px 8px 3px; border-radius: 999px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--tekst);
+  background: linear-gradient(to right, var(--zolty-tlo) var(--p, 0%), var(--tlo-neutralne) var(--p, 0%)); }
+.postep-maszyn.pelny { background: var(--zielony-tlo); }
+.postep-maszyn.mala { padding: 0 6px; font-size: 12px; background: var(--tlo-neutralne); }
+.postep-maszyn.mala.pelny { background: var(--zielony-tlo); }
+.pozycje-zlecenia .opis-pozycji { margin: 2px 0 6px 22px; white-space: pre-line; }
+#stale-pozycje .pozycja-od { flex: 1 1 100%; display: grid; gap: 4px; }
+#stale-pozycje > .pozycja-checklisty > textarea.opis { width: 100%; min-height: 40px; resize: vertical; margin-left: 132px; width: calc(100% - 132px); }
+#stale-pozycje.bez-godzin > .pozycja-checklisty > textarea.opis { margin-left: 0; width: 100%; }
+#stale-pozycje.bez-godzin .godzina, #stale-pozycje.bez-godzin .pozycja-od { display: none; }
+#stale-pozycje.bez-godzin .pozycja-szczegoly { padding-left: 0; }
+
+/* Kalendarz Zleceń: przełącznik Miesiąc / Najbliższe dni i lista dni (2026-10-27). */
+.kal-widok { display: inline-flex; gap: 6px; margin-left: auto; }
+.kal-agenda { display: grid; gap: 12px; }
+.kal-agenda-dzien h3 { margin: 0 0 6px; font-size: 16px; }
+.kal-agenda-dzien.swieto h3 { color: var(--czerwony); }
+@media (max-width: 600px) {
+  #stale-pozycje > .pozycja-checklisty > textarea.opis { margin-left: 0; width: 100%; }
+  #stale-pozycje .pozycja-szczegoly { padding-left: 0; }
+}
+

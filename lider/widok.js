@@ -224,7 +224,7 @@
       const wpis = wyk[p.id] || pom[p.id] || null;
       return { id: p.id, nazwa: p.nazwa, typ: p.typ || 'zadanie', wymaga_qr: !!p.wymaga_qr, cel: p.cel || null,
                maszyny: p.maszyny || [], skany: p.skany || [], wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
-               termin: p.termin, godz: godzina(p.termin), od: p.od || null, odGodz: p.od ? godzina(p.od) : '', stan, wpis,
+               termin: p.termin, godz: godzina(p.termin), opis: p.opis || '', od: p.od || null, odGodz: p.od ? godzina(p.od) : '', stan, wpis,
                poTerminie: stan === 'wykonana' && wpis && wpis.czas && ms(wpis.czas) > ms(p.termin),
                zaMin: stan === 'czeka' || stan === 'bliska' ? Math.round((ms(p.termin) - teraz) / MIN) : null };
     }).sort((a, b) => ms(a.termin) - ms(b.termin));
