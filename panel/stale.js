@@ -367,6 +367,52 @@
     }
     return wynik;
   }
+  /* Wspólne zadanie (2026-10-27): zmiana nazwy, opisu, wymagań albo maszyn w zapisanym zleceniu idzie do pozycji checklist,
+     które z niego powstały (z_kodu albo, w starych checklistach, ta sama nazwa) — i odwrotnie: zmiana takiej pozycji w checkliście
+     idzie do zapisanego zlecenia, a stąd do pozostałych checklist. Idą tylko pola zmienione w tej edycji. Trwające zlecenia też. */
+  async function synchronizujPowiazane(kod, wartosc, dawny, bezKod) {
+    const wynik = { ile: 0, bledy: [] };
+    if (!dawny) return wynik;
+    const sl = (hala.slowniki || {}).zlecenia_stale || {};
+    const lista = x => Array.isArray(x && x.pozycje) && x.pozycje.length > 0;
+    const zapisz = (k, w) => hala.zapisz('slownik.zapisany', `zlecenia_stale/${k}`, { slownik: 'zlecenia_stale', klucz: k, wartosc: w });
+    const blad = (k, e) => wynik.bledy.push(`${(sl[k] || {}).tytul || k}: ${P.komunikatBledu(e)}`);
+    if (lista(wartosc)) {
+      const stare = new Map((dawny.pozycje || []).map(p => [p.id, p]));
+      for (const p of wartosc.pozycje) {
+        const zrodlo = p.z_kodu && p.z_kodu !== kod ? sl[p.z_kodu] : null;
+        const st = stare.get(p.id);
+        if (!zrodlo || lista(zrodlo) || !st || st.z_kodu !== p.z_kodu) continue;
+        const zm = W.zmianyPowiazane(st, p);
+        if (!Object.keys(zm).length) continue;
+        const nowy = W.zastosujPowiazane(zrodlo, zm, false);
+        try {
+          await zapisz(p.z_kodu, nowy); wynik.ile++;
+          await przepiszDoTrwajacych(p.z_kodu, nowy, zrodlo, null);
+          const r = await synchronizujPowiazane(p.z_kodu, nowy, zrodlo, kod);
+          wynik.ile += r.ile; wynik.bledy.push(...r.bledy);
+        } catch (e) { blad(p.z_kodu, e); }
+      }
+      return wynik;
+    }
+    const zm = W.zmianyPowiazane(dawny, wartosc);
+    if (!Object.keys(zm).length) return wynik;
+    const staraNazwa = W.nazwaPorownawcza(dawny.tytul);
+    const jedyny = Object.values(sl).filter(x => x && !lista(x) && W.nazwaPorownawcza(x.tytul) === staraNazwa).length === 1;
+    for (const [k, c] of Object.entries(sl)) {
+      if (k === kod || k === bezKod || !lista(c)) continue;
+      let zmieniona = false;
+      const pozycje = c.pozycje.map(p => {
+        if (!(p.z_kodu === kod || (!p.z_kodu && jedyny && W.nazwaPorownawcza(p.nazwa) === staraNazwa))) return p;
+        zmieniona = true;
+        return Object.assign(W.zastosujPowiazane(p, zm, true), { z_kodu: kod });
+      });
+      if (!zmieniona) continue;
+      const nowa = Object.assign({}, c, { pozycje });
+      try { await zapisz(k, nowa); wynik.ile++; await przepiszDoTrwajacych(k, nowa, c, null); } catch (e) { blad(k, e); }
+    }
+    return wynik;
+  }
   const ile = (n, jedno, kilka, wiele) => `${n} ${n === 1 ? jedno : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) ? kilka : wiele}`;
 
   async function zapiszInstancje(blad) {
@@ -419,9 +465,11 @@
       if (poZapisie) { const fn = poZapisie; poZapisie = null; await fn(w.kod); }
       // Zmiana wzorca idzie też do trwających zleceń z niego (nowe, przyjęte) — treść, opis, pozycje; odhaczenia zostają.
       const trwajace = edytowanyKod ? await przepiszDoTrwajacych(w.kod, w.wartosc, dawny, null) : { ile: 0, bledy: [] };
+      const wspolne = edytowanyKod ? await synchronizujPowiazane(w.kod, w.wartosc, dawny, null) : { ile: 0, bledy: [] };
       $('okno-stalego').close();
       P.komunikat((w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Zapisano — zlecasz je przyciskiem „Zleć teraz”'
-        : 'Zapisano — serwer sam zleci je według harmonogramu') + (trwajace.ile ? ` · poprawione też trwające: ${trwajace.ile}` : '')
+        : 'Zapisano — serwer sam zleci je według harmonogramu') + (trwajace.ile ? ` · poprawione też trwające: ${trwajace.ile}` : '') + (wspolne.ile ? ` · to samo zadanie poprawione też w ${wspolne.ile} zapisanych` : '')
+        + (wspolne.bledy.length ? `. Nie udało się poprawić powiązanych: ${wspolne.bledy.join('; ')}` : '')
         + (trwajace.bledy.length ? `. Nie udało się poprawić trwających: ${trwajace.bledy.join('; ')}` : ''), trwajace.bledy.length ? 'uwaga' : 'ok');
       P.pokazZlecenia(null, 'stale');
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }

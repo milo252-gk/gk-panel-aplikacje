@@ -35,7 +35,7 @@
     function wiersz(p) {
       const maszyny = P.maszynyLinii(o.linia());
       return `<div class="pozycja-checklisty" data-id="${esc(p.id || '')}" data-czynnosc="${esc(p.czynnosc || '')}"
-          data-termin-iso="${esc(p.termin_iso || '')}" data-od-iso="${esc(p.od_iso || '')}">
+          data-z-kodu="${esc(p.z_kodu || '')}" data-termin-iso="${esc(p.termin_iso || '')}" data-od-iso="${esc(p.od_iso || '')}">
         <div class="pozycja-glowna">
           <input class="godzina" value="${esc(p.godzina || '')}" placeholder="0:30" inputmode="numeric" aria-label="Godzina od startu zmiany (g:mm)">
           <span class="godz slaby" aria-hidden="true"></span>
@@ -66,7 +66,7 @@
         return { id: w.dataset.id || null, godzina: v('godzina').value, od: v('od').value, nazwa: v('nazwa').value, opis: v('opis').value,
                  czynnosc: w.dataset.czynnosc || '', maszyny: [...w.querySelectorAll('.maszyna-wybor:checked')].map(x => x.value),
                  zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked,
-                 termin_iso: w.dataset.terminIso || '', od_iso: w.dataset.odIso || '' };
+                 z_kodu: w.dataset.zKodu || '', termin_iso: w.dataset.terminIso || '', od_iso: w.dataset.odIso || '' };
       });
     }
 

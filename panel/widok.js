@@ -1226,6 +1226,8 @@
       }
       const opis = String(p.opis || '').trim();
       if (opis) q.opis = opis.slice(0, 2000);
+      // Powiązanie z zapisanym pojedynczym zleceniem (2026-10-27: edycja w jednym miejscu idzie do drugiego) — tylko we wzorcu.
+      if (!(o && o.instancja) && /^[A-Za-z0-9_.-]{1,100}$/.test(String(p.z_kodu || ''))) q.z_kodu = p.z_kodu;
       if (p.czynnosc && czynnosci.has(p.czynnosc)) q.czynnosc = p.czynnosc;
       // Właściciel 2026-10-26: „chcę móc wyznaczać kilka maszyn do sprawdzenia” — lista `maszyny` (jedna zostaje w polu
       // `maszyna`, jak dotąd; bliźniak huba: maszyny_pozycji). Okno może podać `maszyny` albo starą `maszyna`.
@@ -1264,7 +1266,7 @@
              checklista: Array.isArray(s.pozycje) && s.pozycje.length > 0,
              pozycje: (Array.isArray(s.pozycje) ? s.pozycje : []).map(p => ({ id: p.id, nazwa: p.nazwa || '', opis: p.opis || '',
                godzina: Number.isInteger(p.minuty) ? tekstZMinut(p.minuty) : '', od: Number.isInteger(p.od_minuty) ? tekstZMinut(p.od_minuty) : '',
-               czynnosc: p.czynnosc || '', maszyna: p.maszyna || '',
+               czynnosc: p.czynnosc || '', maszyna: p.maszyna || '', z_kodu: p.z_kodu || '',
                maszyny: Array.isArray(p.maszyny) && p.maszyny.length ? p.maszyny.slice() : (p.maszyna ? [p.maszyna] : []),
                zdjecie: !!p.wymagaj_zdjecia, notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu })) };
   }
@@ -2439,7 +2441,7 @@
         const q = Object.assign({}, p);
         delete q.termin; delete q.od;
         const dawna = stare.get(p.id) || {};
-        for (const k of ['minuty', 'od_minuty']) if (dawna[k] !== undefined) q[k] = dawna[k];
+        for (const k of ['minuty', 'od_minuty', 'z_kodu']) if (dawna[k] !== undefined) q[k] = dawna[k];
         return q;
       });
     } else {
@@ -2459,10 +2461,45 @@
   function pozycjaZZapisanego(z) {
     const m = parseInt(z && z.minuty, 10);
     const maszyny = z && Array.isArray(z.maszyny) && z.maszyny.length ? z.maszyny.slice() : (z && z.maszyna ? [z.maszyna] : []);
-    return { nazwa: (z && z.tytul) || '', opis: (z && z.opis) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '', maszyny,
+    return { z_kodu: (z && z.kod) || '', nazwa: (z && z.tytul) || '', opis: (z && z.opis) || '', godzina: m >= 0 && !isNaN(m) ? tekstZMinut(m) : '', maszyna: (z && z.maszyna) || '', maszyny,
              czynnosc: (z && z.czynnosc) || '', zdjecie: !!(z && z.zdjecie), notatka: !!(z && z.notatka), skan: !!(z && z.skan) };
   }
 
+
+  /* Wspólne pola zadania w zapisanym zleceniu (tytul, opis, wymagania, maszyny) i w pozycji checklisty (nazwa, opis, ...) —
+     właściciel 2026-10-27: „opisy zadań różnią się między checklistą a pojedynczymi zleceniami… edytuję w jednym miejscu, ma być
+     wszędzie”. Pozycja dodana „Z zapisanych” pamięta kod zapisanego (z_kodu). Godzina i „od” zostają osobne (to część checklisty). */
+  const nazwaPorownawcza = t => String(t || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  function wspolnePola(x) {
+    const m = [...new Set([].concat(Array.isArray(x.maszyny) ? x.maszyny : [], x.maszyna ? [x.maszyna] : []).map(String).filter(Boolean))];
+    return { nazwa: String(x.nazwa !== undefined ? x.nazwa : (x.tytul || '')).trim(), opis: String(x.opis || '').trim(),
+             wymagaj_zdjecia: x.wymagaj_zdjecia === true, wymagaj_notatki: x.wymagaj_notatki === true, wymagaj_skanu: x.wymagaj_skanu === true, maszyny: m };
+  }
+  /* Co się zmieniło między starą a nową wersją (zapisanego albo pozycji): tylko te pola idą do drugiej strony. */
+  function zmianyPowiazane(stare, nowe) {
+    const a = wspolnePola(stare || {}), b = wspolnePola(nowe || {});
+    const r = {};
+    for (const k of Object.keys(b)) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) r[k] = b[k];
+    return r;
+  }
+  /* Zmiany → kopia celu: jakoPozycja (nazwa, brak pola zamiast false) albo zapisane pojedyncze (tytul, jawne tak/nie). */
+  function zastosujPowiazane(cel, zmiany, jakoPozycja) {
+    const q = Object.assign({}, cel);
+    const m = zmiany.maszyny !== undefined ? zmiany.maszyny : wspolnePola(cel).maszyny;
+    if ('nazwa' in zmiany) q[jakoPozycja ? 'nazwa' : 'tytul'] = zmiany.nazwa;
+    if ('opis' in zmiany) { if (zmiany.opis) q.opis = zmiany.opis; else delete q.opis; }
+    if ('maszyny' in zmiany) {
+      delete q.maszyna; delete q.maszyny;
+      if (m.length > 1) { q.maszyny = m.slice(0, 50); if (!jakoPozycja) q.maszyna = m[0]; } else if (m.length === 1) q.maszyna = m[0];
+    }
+    for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu']) {
+      if (!(k in zmiany)) continue;
+      const tak = k === 'wymagaj_skanu' ? zmiany[k] && m.length > 0 : zmiany[k];
+      if (jakoPozycja && !tak) delete q[k]; else q[k] = !!tak;
+    }
+    if ('maszyny' in zmiany && !m.length) { if (jakoPozycja) delete q.wymagaj_skanu; else q.wymagaj_skanu = false; }
+    return q;
+  }
 
   /* Pozycje checklisty z zapisanych zleceń (właściciel 2026-10-13: „żebym nie musiał pisać tego samego wiele razy”):
      zapisane pojedyncze i stałe z „💾 Zapisane i stałe” — bez pozycji innych checklist (to już są części checklist).
@@ -2549,7 +2586,7 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
