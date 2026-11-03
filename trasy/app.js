@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-fb8b02d4deb8';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-faa0fcc50242';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.

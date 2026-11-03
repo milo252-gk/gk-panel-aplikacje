@@ -153,6 +153,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
   if (p.towar) dopiski.push('📦 ' + escHtml(p.towar));
   if (p.dokument && !nasze) dopiski.push('📄 ' + escHtml(p.dokument));
   if (p.uwagi) dopiski.push('📝 ' + escHtml(p.uwagi));
+  if (p.status === 'oczekuje' && p.zwrot_powod) dopiski.push('<span style="color:var(--czerwony)">↩ biuro zwróciło: ' + escHtml(p.zwrot_powod) + '</span>');
   if (p.status === 'nieudane' && p.powod) dopiski.push('⚠️ ' + escHtml(p.powod));
   if (p.status !== 'oczekuje' && p.zamkniete_o) dopiski.push('🕓 ' + samaGodzina(p.zamkniete_o));
   if (p.eta && p.status === 'oczekuje') dopiski.push(ETA.opis(p));
@@ -392,6 +393,8 @@ function oknoPrzystanku(id) {
       ${p.towar ? `<p><b>Towar:</b> ${escHtml(p.towar)}</p>` : ''}
       ${p.dokument && !p.nasze ? `<p><b>Dokument:</b> ${escHtml(p.dokument)}</p>` : ''}
       ${p.uwagi ? `<p><b>Uwagi do dostawy:</b> ${escHtml(p.uwagi)}</p>` : ''}
+      ${p.status === 'oczekuje' && p.zwrot_powod ? `<div class="wstega uwaga">↩ Biuro zwróciło ten punkt do poprawy:
+          <b>${escHtml(p.zwrot_powod)}</b> — popraw i zamknij jeszcze raz.</div>` : ''}
       ${zamkniety ? `<div class="wstega ${p.status === 'dostarczone' ? 'info' : 'uwaga'}">
           ${p.status === 'dostarczone' ? (p.nasze ? '✓ Załatwione' : '✓ Dostarczone')
             : odwolany ? 'Biuro zdjęło ten punkt z trasy — nie musisz tam jechać'

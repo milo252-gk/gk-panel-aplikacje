@@ -31,6 +31,8 @@ EKRANY.pulpit = {
         ${kafelek('Nieudane', razem.nie, razem.nie ? 'var(--czerwony)' : '')}
       </div>
 
+      <div id="p-do-przyjecia"></div>
+
       <div id="p-zywo"></div>
 
       ${p.nieudane.length ? `
@@ -57,6 +59,7 @@ EKRANY.pulpit = {
     pole.querySelector('#p-wczoraj').onclick = () => pokazEkran('pulpit', { data: przesunDate(data, -1) });
     pole.querySelector('#p-jutro').onclick = () => pokazEkran('pulpit', { data: przesunDate(data, 1) });
     pole.querySelector('#p-planuj').onclick = () => pokazEkran('trasy', { data });
+    await rysujDoPrzyjecia(pole.querySelector('#p-do-przyjecia'), () => pokazEkran('pulpit', { data }));
     await rysujZywo(pole.querySelector('#p-zywo'), data);
     odswiezajZywo(data);
 
@@ -214,6 +217,98 @@ EKRANY.trasy = {
   },
 };
 
+/* Przyjmowanie dostaw od kierowców (właściciel 2026-11-03: „niech działa jak w Panelu kierownika”): dostawa zamknięta na
+   telefonie czeka na „Przyjmij” albo „Zwróć” (powód — kierowca poprawia i zamyka jeszcze raz). Biuro może też zamknąć
+   punkt za kierowcę (np. gdy padł telefon) — takie zamknięcie jest przyjęte od razu. */
+async function przyjmijDostawe(id, poZmianie) {
+  const w = await sprobuj(() => API.post(`/api/przystanki/${id}/przyjmij-dostawe`), 'Przyjęto');
+  if (w && poZmianie) poZmianie();
+}
+
+function oknoZwrotuDostawy(id, nazwa, poZmianie) {
+  okno({
+    tytul: 'Zwróć kierowcy: ' + nazwa,
+    tresc: `<label>Co kierowca ma poprawić? <span style="color:var(--czerwony)">*</span>
+        <textarea id="zw-powod" maxlength="200" placeholder="np. brak zdjęcia dokumentu, zły odbierający"></textarea></label>
+      <p class="male slaby">Punkt wróci do kierowcy jako otwarty — dostanie powiadomienie i zamknie go jeszcze raz.
+        Podpisy i zdjęcia, które już zrobił, zostają.</p>`,
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: 'Zwróć', klasa: 'czerwony', klik: async z => {
+        const powod = val('zw-powod').trim();
+        if (!powod) { komunikat('Napisz, co kierowca ma poprawić', 'blad'); return; }
+        const w = await sprobuj(() => API.post(`/api/przystanki/${id}/zwroc-dostawe`, { powod }), 'Zwrócono kierowcy');
+        if (w) { z(); if (poZmianie) poZmianie(); }
+      } },
+    ],
+  });
+}
+
+async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
+  if (!(stan.ustawienia || {}).powody_nieudanych) {
+    try { stan.ustawienia = await API.get('/api/ustawienia'); } catch (e) { /* bez listy powodów — wpis własny */ }
+  }
+  let powody = [];
+  try { powody = powodyNieudanych(); } catch (e) { powody = []; }
+  okno({
+    tytul: 'Zamknij za kierowcę: ' + p.klient_nazwa,
+    tresc: `<div class="wstega info">Zamykasz ten punkt w imieniu kierowcy. W uwagach punktu zostanie ślad, kto to zrobił.</div>
+      <label class="plaska"><input type="radio" name="zb-status" value="dostarczone" checked> ✓ Dostarczone</label>
+      <label class="plaska"><input type="radio" name="zb-status" value="nieudane"> ✕ Nieudane</label>
+      <div id="zb-powod-pole" hidden>
+        <label>Powód <span style="color:var(--czerwony)">*</span>
+          <select id="zb-powod"><option value="">— wybierz —</option>
+            ${powody.map(x => `<option>${escHtml(x)}</option>`).join('')}</select></label>
+        <label>Inny powód<input id="zb-inny" maxlength="80" placeholder="wpisz własny"></label>
+      </div>
+      <label>Odebrał <span class="slaby">(nieobowiązkowe)</span><input id="zb-odebral" maxlength="120"></label>
+      <label>Notatka <span class="slaby">(nieobowiązkowe)</span><textarea id="zb-notatka" maxlength="2000"></textarea></label>`,
+    poOtwarciu: pole => {
+      const pokaz = () => { pole.querySelector('#zb-powod-pole').hidden =
+        pole.querySelector('input[name="zb-status"]:checked').value !== 'nieudane'; };
+      pole.querySelectorAll('input[name="zb-status"]').forEach(r => r.onchange = pokaz);
+    },
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: 'Zamknij punkt', klasa: 'glowny', klik: async z => {
+        const status = document.querySelector('input[name="zb-status"]:checked').value;
+        const powod = status === 'nieudane' ? (val('zb-inny').trim() || val('zb-powod')) : '';
+        if (status === 'nieudane' && !powod) { komunikat('Przy nieudanej dostawie wybierz albo wpisz powód', 'blad'); return; }
+        const w = await sprobuj(() => API.post(`/api/przystanki/${p.id}/zamknij-za-kierowce`,
+          { status, powod, odebral: val('zb-odebral'), notatka: val('zb-notatka') }), 'Zamknięto punkt');
+        if (w) { z(); if (poZmianie) poZmianie(); }
+      } },
+    ],
+  });
+}
+
+async function rysujDoPrzyjecia(el, poZmianie) {
+  if (!el) return;
+  let lista = [];
+  try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return; }
+  if (!lista.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<h2 style="margin-top:20px">Do przyjęcia
+      <span class="plakietka p-oczekuje" style="margin-left:6px">${lista.length}</span></h2>
+    <div class="karta">${lista.map(x => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
+        <b>${escHtml(x.klient_nazwa)}</b>
+        ${x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone" style="margin-left:6px">✓ dostarczone</span>'
+          : `<span class="plakietka p-nieudane" style="margin-left:6px">✕ ${escHtml(x.powod)}</span>`}
+        <div class="male slaby">${escHtml(x.kierowca_imie || '')} · ${polskaData(x.data)} ${samaGodzina(x.zamkniete_o)}${
+          x.odebral ? ' · odebrał: ' + escHtml(x.odebral) : ''}${x.notatka ? ' · ' + escHtml(x.notatka) : ''}${
+          x.ile_zalacznikow ? ' · 📎 ' + x.ile_zalacznikow : ''}</div>
+        <div class="przyciski" style="margin-top:6px">
+          <button class="maly glowny" data-przyjmij="${x.id}">✓ Przyjmij</button>
+          <button class="maly" data-zwroc="${x.id}">↩ Zwróć kierowcy</button>
+          <button class="maly" data-do-trasy="${x.trasa}">Trasa</button></div>
+      </div>`).join('')}</div>`;
+  el.querySelectorAll('[data-przyjmij]').forEach(bt => bt.onclick = () => przyjmijDostawe(Number(bt.dataset.przyjmij), poZmianie));
+  el.querySelectorAll('[data-zwroc]').forEach(bt => bt.onclick = () => {
+    const x = lista.find(y => y.id === Number(bt.dataset.zwroc));
+    oknoZwrotuDostawy(x.id, x.klient_nazwa, poZmianie);
+  });
+  el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
+}
+
 function kartaTrasy(t) {
   return `<button class="przystanek s-oczekuje" data-trasa="${t.id}" style="border-left-color:${
     t.status === 'zakonczona' ? 'var(--zielony)' : t.status === 'w_toku' ? 'var(--zolty)' : 'var(--akcent)'}">
@@ -224,7 +319,7 @@ function kartaTrasy(t) {
           ${t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}</span>
         <span class="dopisek">${t.ile_ok} ${odmiana(t.ile_ok, 'dostarczona', 'dostarczone', 'dostarczonych')}${
           t.ile_nie ? ', ' + t.ile_nie + ' ' + odmiana(t.ile_nie, 'nieudana', 'nieudane', 'nieudanych') : ''}
-          z ${t.ile}</span>
+          z ${t.ile}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">⏳ ${t.ile_do_przyjecia} do przyjęcia</b>` : ''}</span>
       </span>
       <span class="prawo"><span class="plakietka p-${t.status}">${escHtml(
         t.status === 'odwolana' ? 'odwołane' : t.status.replace('_', ' '))}</span></span>
@@ -632,6 +727,8 @@ function wierszPrzystanku(p, indeks, ile, admin) {
     : p.status === 'nieudane' ? `<span class="plakietka p-nieudane">✕ ${escHtml(p.powod)}</span>`
     : p.status === 'odwolany' ? '<span class="plakietka p-odwolany">Zdjęte z trasy</span>' : '';
   const dopiski = [];
+  if (p.do_przyjecia) dopiski.push('<span style="color:var(--zolty)">⏳ do przyjęcia</span>');
+  if (p.zwrot_powod && p.status === 'oczekuje') dopiski.push('<span style="color:var(--czerwony)">↩ zwrócone kierowcy</span>');
   // Przy naszym miejscu nie ma zamowienia ani kontroli zaladunku — czerwone
   // ostrzezenie o niezgodnym numerze byloby tu falszywym alarmem.
   const nasze = !!p.nasze;
@@ -1012,9 +1109,15 @@ function oknoSzczegolowPunktu(t, id) {
           ${p.ile_zalacznikow ? `<br><span class="male">📎 ${p.ile_zalacznikow}
             ${odmiana(p.ile_zalacznikow, 'załącznik', 'załączniki', 'załączników')}</span>` : ''}
         </div>` : ''}
+      ${admin && zamkniety && p.do_przyjecia ? '<div class="wstega uwaga">⏳ Czeka na przyjęcie przez biuro.</div>' : ''}
+      ${p.zwrot_powod && !zamkniety ? `<div class="wstega uwaga">↩ Zwrócone kierowcy do poprawy: ${escHtml(p.zwrot_powod)}
+          ${p.zwrocono_o ? ' · ' + escHtml(p.zwrocono_o) : ''}</div>` : ''}
       <div id="sp-os">${osCzasuPunktu(t, p, null)}</div>
       <div id="sp-postep"></div>
       <div class="przyciski" style="margin:0 0 14px">
+        ${admin && zamkniety && p.do_przyjecia ? `<button class="maly glowny" id="sp-przyjmij">✓ Przyjmij</button>
+          <button class="maly" id="sp-zwroc">↩ Zwróć kierowcy</button>` : ''}
+        ${admin && !zamkniety && p.status === 'oczekuje' ? '<button class="maly" id="sp-zamknij-biuro">✔ Zamknij za kierowcę</button>' : ''}
         ${p.ile_zalacznikow ? `<button class="maly glowny" id="sp-dowod">📎 ${
           p.nasze ? 'Zdjęcia z tego postoju' : 'Zobacz dowód dostawy'}</button>` : ''}
         ${zamkniety && !p.nasze ? '<button class="maly" id="sp-druk">🖨 Wydrukuj potwierdzenie</button>' : ''}
@@ -1070,6 +1173,10 @@ function oknoSzczegolowPunktu(t, id) {
         const przycisk = pole.querySelector(id);
         if (przycisk) przycisk.onclick = akcja;
       };
+      const odswiez = () => { zamknijOkno(); pokazEkran('trasa', { id: t.id }); };
+      podepnij('#sp-przyjmij', () => przyjmijDostawe(p.id, odswiez));
+      podepnij('#sp-zwroc', () => { zamknijOkno(); oknoZwrotuDostawy(p.id, p.klient_nazwa, () => pokazEkran('trasa', { id: t.id })); });
+      podepnij('#sp-zamknij-biuro', () => { zamknijOkno(); oknoZamknieciaPrzezBiuro(p, () => pokazEkran('trasa', { id: t.id })); });
       podepnij('#sp-dowod', () => oknoZalacznikow(p.id, p.klient_nazwa));
       podepnij('#sp-druk', () => wydrukPotwierdzenia(p.id));
       podepnij('#sp-historia', () => oknoHistoriiKlienta(p.klient, p.klient_nazwa));
@@ -1770,15 +1877,48 @@ function kartaPrzerwUst(ustawienia) {
 /* Ustawienia dla biura („kierownika GK Trasy"): tylko wymogi operacyjne. Nie
    pytamy o konta, IKOL ani kopie — te endpointy są tylko dla administratora
    i 403 zepsułby cały ekran. Serwer i tak odrzuci każdy inny klucz. */
+/* Konta kierowców dla biura (2026-11-03: „admin i biuro mogą tworzyć konta kierowców”). To samo okno co u administratora
+   (oknoKontaZespolu) — konto powstaje w Panelu, jedno dla osoby we wszystkich aplikacjach GK — ale tylko kierowcy:
+   biura i administratorów prowadzi administrator (serwer i Panel pilnują tego samego). */
+function kartaKontKierowcow(ustawienia, konta) {
+  const mozna = kontaZespolu(ustawienia);
+  const powod = (ustawienia.konta_zespolu || {}).powod;
+  return `<div class="karta">
+    <div class="karta-gora"><h2>Konta kierowców</h2>
+      ${mozna ? '<button class="maly glowny" id="u-nowy-kierowca">+ Dodaj kierowcę</button>' : ''}</div>
+    <div class="wstega info">${mozna
+      ? 'Kierowcę zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby we wszystkich aplikacjach GK. Hasło startowe: <b>haslo123</b>.'
+      : powod === 'awaryjny' ? 'Kierowców zakłada osoba z kontem z Panelu — zaloguj się swoim kontem z Panelu.'
+        : 'Teraz kierowców zakłada się w <b>Panelu → Administracja</b> (brak połączenia z Panelem).'}</div>
+    <div class="tabela-przewijana"><table>
+      <thead><tr><th>Imię</th><th>Login</th><th>Telefon</th><th></th></tr></thead>
+      <tbody>${(konta || []).map(x => `<tr style="${x.aktywny ? '' : 'opacity:.5'}">
+        <td><b>${escHtml(x.imie)}</b>${x.aktywny ? '' : ' <span class="male">(wyłączone)</span>'}
+          ${x.aktywny && (x.haslo_do_zmiany || x.pin_do_zmiany)
+            ? `<br><span class="male slaby">${x.haslo_do_zmiany ? 'hasło startowe — ustawi przy pierwszym logowaniu'
+              : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}</td>
+        <td>${escHtml(x.login)}</td><td>${escHtml(x.telefon || '')}</td>
+        <td>${x.mozna_zmienic && mozna ? `<button class="maly" data-kierowca-konto="${x.id}">Zmień</button>` : ''}</td>
+      </tr>`).join('') || '<tr><td colspan="4" class="slaby">Nie ma jeszcze kierowców.</td></tr>'}</tbody>
+    </table></div></div>`;
+}
+
 async function rysujUstawieniaBiura(pole) {
-  const ustawienia = await API.get('/api/ustawienia');
+  const [ustawienia, konta] = await Promise.all([API.get('/api/ustawienia'), API.get('/api/konta-kierowcow')]);
   stan.ustawienia = ustawienia;
+  await odswiezLokalizacje();
   pole.innerHTML = `
     <p class="male slaby" style="margin:0 0 10px">Tu ustawiasz, jak program liczy trasy
-      i pilnuje kierowców. Klucze, pocztę, kopie zapasowe i konta zmienia administrator.</p>
+      i pilnuje kierowców oraz zakładasz konta kierowców. Klucze, pocztę, kopie zapasowe
+      i konta biura zmienia administrator.</p>
     ${kartaFirmyUst(ustawienia)}
     ${kartaGodzinUst(ustawienia)}
-    ${kartaPrzerwUst(ustawienia)}`;
+    ${kartaPrzerwUst(ustawienia)}
+    ${kartaKontKierowcow(ustawienia, konta)}`;
+  const nowyKierowca = pole.querySelector('#u-nowy-kierowca');
+  if (nowyKierowca) nowyKierowca.onclick = () => oknoKontaZespolu(null);
+  pole.querySelectorAll('[data-kierowca-konto]').forEach(b =>
+    b.onclick = () => oknoKontaZespolu(konta.find(x => x.id === Number(b.dataset.kierowcaKonto))));
   const zapisz = async () => {
     // Tylko pola, które są na tym ekranie — i tylko klucze operacyjne.
     const dane = {
