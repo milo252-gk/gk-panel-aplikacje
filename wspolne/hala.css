@@ -304,6 +304,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
     background: var(--menu-wybrany); box-shadow: inset 3px 0 0 var(--akcent); color: var(--na-marce);
   }
   .hala-uklad > .hala-menu .ikona { width: 22px; flex: 0 0 22px; text-align: center; font-size: 15px; margin: 0; }
+  /* STYL-GK §8: ikony menu liniowe z gk-ikony.js (`<span class="ikona" data-ikona="…">`), 20 px, kolor jak tekst pozycji
+     (currentColor), więc zaznaczenie i najechanie zmieniają je razem z napisem. */
+  .hala-uklad > .hala-menu .ikona { display: inline-flex; align-items: center; justify-content: center; }
+  .hala-uklad > .hala-menu .ikona svg { display: block; width: 20px; height: 20px; }
   /* Plakietka z liczbą (nowe awarie, zlecenia) — do prawej krawędzi menu, nie nad ikoną jak na telefonie. */
   .hala-uklad > .hala-menu .plakietka { position: static; margin-left: auto; transform: none; }
   /* Nagłówek menu jak w GK Trasy: znak GK w bieli na 150 px, pod nim osoba i rola (aplikacja). */
@@ -335,14 +339,31 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
     flex: 1 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     min-height: 0; margin: 0; padding: 6px 0; border: 0; border-radius: 0; background: none; box-shadow: none; filter: none;
     /* 13 px (szlif UI 2026-10-12): 11 px było za drobne do czytania na hali. Bez bocznego odstępu i z odrobinę ciaśniejszymi
-       literami „Reklamacje” (KJ) i „Przeglądy” (UR) mieszczą się w 6 pozycjach na 390 px. Dłuższy podpis przycinamy w swojej
-       pozycji, zamiast pozwolić mu wjechać na sąsiada (Panel z 7 pozycjami chowa podpisy na wąskim telefonie — panel.css). */
+       literami „Przeglądy” (UR) i „Zlecenia” mieszczą się w 5 pozycjach (4 ekrany + Więcej, STYL-GK §8) na 390 px. Dłuższy
+       podpis przycinamy w swojej pozycji, zamiast pozwolić mu wjechać na sąsiada. Ekrany ponad 4 mają klasę `.w-wiecej`
+       (niżej) i na telefonie są tylko w „Więcej”. */
     font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: -.2px; color: var(--tekst-slaby); text-decoration: none;
     text-align: center; overflow: hidden; white-space: nowrap;
   }
-  .hala-uklad > .hala-menu .ikona { font-size: 20px; line-height: 1; }
+  /* Ikona dolnego paska: liniowy SVG 24 px (gk-ikony.js), kolor z tekstu pozycji — zaznaczona robi się granatowa razem z napisem. */
+  .hala-uklad > .hala-menu .ikona { display: flex; align-items: center; justify-content: center; font-size: 20px; line-height: 1; }
+  .hala-uklad > .hala-menu .ikona svg { display: block; width: 24px; height: 24px; }
+  /* STYL-GK §8: najwyżej 4 ekrany + „Więcej”. Ekran z klasą `.w-wiecej` (KJ: Reklamacje, UR: Plan, Panel: Wskaźniki, Raporty,
+     Administracja) znika z paska na telefonie — jest w ekranie „Więcej”, a adres (#reklamacje, #plan, skrót, powiadomienie)
+     działa jak dawniej. Selektor jest mocniejszy niż `.tylko-kierownik` (UR), bo ten wymusza display:flex. Na komputerze
+     pozycja zostaje w menu bocznym. */
+  .hala-uklad > .hala-menu > :is(a, button).w-wiecej { display: none !important; }
+  /* Otwarty ekran schowany w „Więcej” — podświetlone „Więcej” (kolor i pomarańczowa kreska jak przy wybranej pozycji). */
+  .hala-uklad > .hala-menu:has(> .w-wiecej[aria-current="page"]) > [data-ekran="wiecej"] { color: var(--granat-tekst); }
+  .hala-uklad > .hala-menu:has(> .w-wiecej[aria-current="page"]) > [data-ekran="wiecej"]::before {
+    content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--pomarancz);
+  }
   .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny) {
     color: var(--granat-tekst); box-shadow: none;
+  }
+  /* STYL-GK §1: zaznaczony ekran ma pomarańczową kreskę 3 px u góry dolnego paska (jak w GK Szkolenia i GK Wycena). */
+  .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny)::before {
+    content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--pomarancz);
   }
   .hala-uklad > .hala-menu .plakietka { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
 }

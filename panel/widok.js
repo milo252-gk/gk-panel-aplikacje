@@ -2076,13 +2076,15 @@
 
   /* Części Administracji dla tej osoby, w kolejności chipów. Checklisty (szablony obchodów lidera) zeszły z górnego menu
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
-     admin — wszystko; zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; szablony (kontrakt: zapis
+     admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Kody QR, Ustawienia, Serwis); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; szablony (kontrakt: zapis
      szablony_checklist) — Checklisty. */
   function czesciAdministracji({ admin, zespol, szablony, urlopy } = {}) {
     const c = [];
     if (admin || zespol) c.push('pracownicy');
     if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
-    if (admin) c.push('maszyny', 'ustawienia');
+    // STYL-GK §8 (2026-11-04): „Dane” (czyszczenie zleceń) i „Kody QR” mają wejście także tutaj — to te same okna co
+    // Zlecenia → 🧹 i ☰ Więcej → Kody QR (chip tylko je otwiera). Zespół (kierownicy) ich nie dostaje: D49 — tylko Pracownicy.
+    if (admin) c.push('maszyny', 'dane', 'kody', 'ustawienia');
     // D60 (właściciel 2026-10-14: „checklisty nie powinny być schowane w ustawieniach, tylko w zleceniach”):
     // szablony checklisty lidera są w Zlecenia → 💾 Zapisane, nie w Administracji (parametr szablony zostaje dla zgodności).
     if (admin) c.push('serwis');

@@ -11,6 +11,7 @@
   const { hala, W, $, esc } = P;
 
   let wynik = null;
+  let wykaz = null;
   const dostepne = () => ((hala.pracownik && hala.pracownik.role) || []).includes('admin');
 
   // Domyślnie „do tej chwili” (cała dotychczasowa historia); chwilę w przyszłości serwer odrzuca, a zapisane zlecenia zleci sam dalej.
@@ -44,9 +45,47 @@
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   }
 
+  // Wybór konkretnych zleceń (2026-11-04): wykaz z huba (najnowsze pierwsze), pola wyboru, „Usuń zaznaczone”.
+  function rysujWybor() {
+    const el = $('czysc-wybor');
+    if (!wykaz) { el.innerHTML = ''; return; }
+    if (!wykaz.length) { el.innerHTML = '<p class="slaby">Nie ma zleceń do wyboru.</p>'; return; }
+    el.innerHTML = `<label class="wiersz-wyboru"><input type="checkbox" data-akcja="czysc-wszystkie"> <b>Zaznacz wszystkie (${wykaz.length})</b></label>
+      <div class="lista-wyboru" style="max-height:40vh;overflow:auto">${wykaz.map(z => `<label class="wiersz-wyboru" style="display:flex;gap:8px;align-items:flex-start;padding:4px 0">
+        <input type="checkbox" data-zlecenie="${esc(z.id)}"> <span>${esc(z.tytul || '(bez nazwy)')} <span class="slaby">· ${esc(z.status || '')} · ${esc(W.dataKrotka(z.czas))} ${esc(W.godzina(z.czas))}</span></span></label>`).join('')}</div>
+      <div class="admin-pasek"><button type="button" class="maly czerwony" data-akcja="czysc-usun-wybrane" disabled>Usuń zaznaczone (0)</button></div>`;
+  }
+
+  const zaznaczone = () => [...$('czysc-wybor').querySelectorAll('[data-zlecenie]:checked')].map(x => x.dataset.zlecenie);
+
+  function odswiezPrzycisk() {
+    const b = $('czysc-wybor').querySelector('[data-akcja="czysc-usun-wybrane"]');
+    if (b) { const n = zaznaczone().length; b.disabled = !n; b.textContent = `Usuń zaznaczone (${n})`; }
+  }
+
+  async function wczytajWybor() {
+    try {
+      const d = await hala.admin('POST', '/api/v1/admin/zlecenia/wyczysc', { lista: true });
+      wykaz = d.zlecenia || [];
+      rysujWybor();
+    } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
+  }
+
+  async function usunWybrane() {
+    const ids = zaznaczone();
+    if (!ids.length) return;
+    if (!(await P.potwierdz('Usunąć zaznaczone zlecenia?', `${ids.length} zleceń zniknie z Panelu i telefonów. Serwer najpierw robi pełną kopię bazy.`, 'Usuń'))) return;
+    try {
+      const d = await hala.admin('POST', '/api/v1/admin/zlecenia/wyczysc', { ids, potwierdz: true });
+      P.komunikat(`Usunięto ${d.liczba} zleceń`, 'ok');
+      P.pokazZlecenia(null, 'biezace');
+      await wczytajWybor();
+    } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
+  }
+
   function otworz() {
     if (!dostepne()) return;
-    wynik = null; rysujWynik();
+    wynik = null; wykaz = null; rysujWynik(); rysujWybor();
     $('czysc-przed').value = domyslnie();
     $('okno-czyszczenia').showModal();
   }
@@ -57,9 +96,17 @@
     ev.preventDefault();
     if (b.dataset.akcja === 'czysc-policz') { wynik = null; wykonaj(false); }
     if (b.dataset.akcja === 'czysc-usun') wykonaj(true);
+    if (b.dataset.akcja === 'czysc-wybor') wczytajWybor();
+    if (b.dataset.akcja === 'czysc-usun-wybrane') usunWybrane();
+  });
+  $('okno-czyszczenia').addEventListener('change', ev => {
+    if (ev.target.dataset.akcja === 'czysc-wszystkie') {
+      $('czysc-wybor').querySelectorAll('[data-zlecenie]').forEach(x => { x.checked = ev.target.checked; });
+    }
+    odswiezPrzycisk();
   });
   $('okno-czyszczenia').querySelector('[data-zamknij]').addEventListener('click', () => $('okno-czyszczenia').close());
-  hala.na('sesja', () => { wynik = null; if ($('okno-czyszczenia').open) $('okno-czyszczenia').close(); });
+  hala.na('sesja', () => { wynik = null; wykaz = null; if ($('okno-czyszczenia').open) $('okno-czyszczenia').close(); });
 
   P.widoki.czyszczenie = { otworz, dostepne };
 })();

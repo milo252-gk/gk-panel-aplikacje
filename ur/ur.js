@@ -537,6 +537,7 @@
 
   // ------------------------------------------------------------ „Więcej”
 
+  // STYL-GK §8: Plan (menu `.w-wiecej`) jest na telefonie tylko tutaj (dolny pasek: najwyżej 4 ekrany + Więcej); #plan działa jak dawniej.
   UR.ekran('wiecej', {
     rysuj(el) {
       el.innerHTML = `<h1>Więcej</h1>

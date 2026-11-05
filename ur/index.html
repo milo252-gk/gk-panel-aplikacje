@@ -68,14 +68,16 @@
       <div class="hala-menu-nazwa" id="menu-kto"></div>
       <div class="hala-menu-kto">GK Utrzymanie Ruchu</div>
     </div>
-    <a href="#awarie" data-ekran="awarie"><span class="ikona" aria-hidden="true">⚠️</span>Awarie<b id="licznik-nowych" class="plakietka" hidden></b></a>
-    <a href="#przeglady" data-ekran="przeglady"><span class="ikona" aria-hidden="true">🔧</span>Przeglądy<b id="licznik-opoznionych" class="plakietka" hidden></b></a>
-    <!-- KPI i Plan tylko dla kierownika UR (UI etap 2) — mechanik ma w pasku Awarie, Przeglądy, Zlecenia i Więcej. -->
-    <a href="#kpi" data-ekran="kpi" class="tylko-kierownik"><span class="ikona" aria-hidden="true">📈</span>KPI</a>
-    <a href="#plan" data-ekran="plan" class="tylko-kierownik"><span class="ikona" aria-hidden="true">🗓️</span>Plan</a>
-    <a href="#zlecenia" data-ekran="zlecenia"><span class="ikona" aria-hidden="true">📋</span>Zlecenia<b id="licznik-zlecen" class="plakietka" hidden></b></a>
+    <a href="#awarie" data-ekran="awarie"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awarie<b id="licznik-nowych" class="plakietka" hidden></b></a>
+    <a href="#przeglady" data-ekran="przeglady"><span class="ikona" data-ikona="przeglady" aria-hidden="true"></span>Przeglądy<b id="licznik-opoznionych" class="plakietka" hidden></b></a>
+    <!-- KPI i Plan tylko dla kierownika UR (UI etap 2) — mechanik ma w pasku Awarie, Przeglądy, Zlecenia i Więcej.
+         STYL-GK §8 (2026-11-04): na telefonie najwyżej 4 ekrany + Więcej — Plan (`.w-wiecej`) jest tam tylko w „Więcej”,
+         na komputerze zostaje w menu bocznym. -->
+    <a href="#kpi" data-ekran="kpi" class="tylko-kierownik"><span class="ikona" data-ikona="kpi" aria-hidden="true"></span>KPI</a>
+    <a href="#plan" data-ekran="plan" class="tylko-kierownik w-wiecej"><span class="ikona" data-ikona="plan" aria-hidden="true"></span>Plan</a>
+    <a href="#zlecenia" data-ekran="zlecenia"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span>Zlecenia<b id="licznik-zlecen" class="plakietka" hidden></b></a>
     <!-- D64: „Więcej” = ☰ (⚙️ to Administracja w Panelu), zawsze ostatnie. -->
-    <a href="#wiecej" data-ekran="wiecej"><span class="ikona" aria-hidden="true">☰</span>Więcej</a>
+    <a href="#wiecej" data-ekran="wiecej"><span class="ikona" data-ikona="wiecej" aria-hidden="true"></span>Więcej</a>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 </div>
@@ -89,6 +91,7 @@
 <script src="../wspolne/konto.js"></script>
 <script src="../wspolne/eksport.js"></script>
 <script src="../wspolne/miary.js"></script>
+<script src="../wspolne/gk-ikony.js"></script>
 <script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/reakcje.js"></script>
 <script src="../wspolne/dzialania.js"></script>

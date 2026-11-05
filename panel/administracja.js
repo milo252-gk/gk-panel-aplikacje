@@ -118,8 +118,35 @@
     if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'urlopy') { if (P.widoki.urlopy) P.widoki.urlopy.rysuj(el); }
     else if (czesc === 'maszyny') rysujMaszyny(el);
+    else if (czesc === 'dane') rysujDane(el);
+    else if (czesc === 'kody') rysujKody(el);
     else if (czesc === 'serwis') rysujSerwis(el);
     else rysujUstawienia(el);
+  }
+
+  // ------------------------------------------------------------ dane i kody QR (STYL-GK §8, 2026-11-04)
+
+  /* „Dane” i „Kody QR” to tylko drzwi do istniejących okien: czyszczenie zleceń (czyszczenie.js — wybór pozycji, pełna kopia
+     bazy przed usunięciem, serwer odmawia nie-administratorom) i druk kodów QR (kody.js). Nic nie jest tu kopiowane, więc
+     wejścia w Zlecenia → 🧹 i ☰ Więcej → Kody QR działają dokładnie tak samo. Szkielet budowany raz na wejście w część
+     (przejdz() czyści treść), żeby przerysowanie co 20 s nie zabierało fokusu z przycisku. */
+  function rysujDane(el) {
+    if (el.querySelector('[data-karta="dane"]')) return;
+    el.innerHTML = `<section class="admin-linia" data-karta="dane">
+        <h3>Czyszczenie zleceń</h3>
+        <p class="slaby">Usuwa wybrane zlecenia (albo całą historię sprzed wybranej chwili) z Panelu i telefonów. Zapisanych zleceń stałych nie rusza.
+          Serwer najpierw robi pełną kopię bazy, a po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → 🧹 Czyszczenie.</p>
+        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-czyszczenie">🧹 Czyszczenie zleceń</button></div>
+      </section>`;
+  }
+  function rysujKody(el) {
+    if (el.querySelector('[data-karta="kody"]')) return;
+    el.innerHTML = `<section class="admin-linia" data-karta="kody">
+        <h3>Kody QR</h3>
+        <p class="slaby">Kody aplikacji, maszyn, punktów skanu, linii i identyfikatorów osób — każdy osobno albo wszystkie z kategorii.
+          Wejście jest też w ☰ Więcej → Kody QR.</p>
+        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-kody">🖨 Kody QR</button></div>
+      </section>`;
   }
 
   // ------------------------------------------------------------ pracownicy
@@ -669,7 +696,7 @@
           <summary><h3>Połączenia GK</h3><span id="serwis-polaczenia-stan"></span></summary>
           <div class="serwis-czesc-tresc" id="serwis-polaczenia-tresc"></div>
         </details>
-        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Zlecenia → 🧹 Czyszczenie</b> — tylko dla administratora.</p>`;
+        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Administracja → Dane</b> i w <b>Zlecenia → 🧹 Czyszczenie</b> — tylko dla administratora.</p>`;
     }
     rysujDostep($('serwis-dostep-tresc'));
     rysujPolaczenia($('serwis-polaczenia-tresc'));
@@ -995,6 +1022,8 @@
         await wczytajPracownikow();
         if (czesc === 'serwis') await wczytajDostep();
       }
+      if (akcja === 'otworz-czyszczenie' && P.widoki.czyszczenie) P.widoki.czyszczenie.otworz();
+      if (akcja === 'otworz-kody' && P.widoki.kody) P.widoki.kody.otworz();
       if (akcja === 'wpisz-moj-adres') await wpiszMojAdres();
       if (akcja === 'kopia-teraz') await kopiaTeraz();
       if (akcja === 'nowa-maszyna') otworzMaszyne();

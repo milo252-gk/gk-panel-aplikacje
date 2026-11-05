@@ -402,6 +402,8 @@ dialog.okno { max-height: calc(100vh - 24px); overflow: auto; }
   body.tryb-ekran .hala-uklad > .hala-menu > button { justify-content: center; padding: 14px 0; }
   body.tryb-ekran .hala-uklad > .hala-menu > button > span:not(.ikona):not(.plakietka) { display: none; }
   body.tryb-ekran .hala-uklad > .hala-menu .ikona { font-size: 24px; flex-basis: auto; width: auto; }
+  /* Monitor: menu tylko z ikonami — liniowe SVG (gk-ikony.js) 24 px jak na telefonie, żeby były czytelne z daleka. */
+  body.tryb-ekran .hala-uklad > .hala-menu .ikona svg { width: 24px; height: 24px; }
   body.tryb-ekran .hala-uklad > .hala-menu .plakietka { position: absolute; top: 6px; right: 8px; margin: 0; }
 }
 

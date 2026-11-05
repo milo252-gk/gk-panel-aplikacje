@@ -2040,7 +2040,11 @@
                                                                    offline: offlineMozliwy() }, dane),
                       { bezSesji: true });
       } catch (e) {
-        if (e && e.powod === 'wymagane_haslo' && z) { zapomnijZnacznik(z.znacznik); }
+        // Tak samo „zly_pin” przy wpisie z literą albo znakiem: pole „PIN” ma limit 4 znaków, więc to było ucięte hasło, a znacznik
+        // jest już nieważny po stronie huba (zmiana hasła gdzie indziej) — bez zapomnienia go pole wracałoby do „PIN” bez końca.
+        if (e && z && (e.powod === 'wymagane_haslo' || (e.powod === 'zly_pin' && /\D/.test(String((dane && dane.pin) || '').trim())))) {
+          zapomnijZnacznik(z.znacznik);
+        }
         // D78: hub nieosiągalny (brak sieci, tunel padł) — PIN-em bez sieci, gdy ta osoba ma na urządzeniu ważny znacznik.
         if (bladSieciLogowania(e)) {
           const p = await zalogujBezSieci(ident, String((dane && dane.pin) || '').trim(), z);

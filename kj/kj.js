@@ -398,10 +398,13 @@
 
   // ------------------------------------------------------------ „Więcej”
 
+  // STYL-GK §8: dolny pasek telefonu ma najwyżej 4 ekrany + Więcej, więc Reklamacje (menu `.w-wiecej`) są na telefonie tutaj;
+  // adres #reklamacje i powiadomienia nic nie zmieniają — ekran ten sam, tylko podświetla „Więcej” (hala.css → :has).
   KJ.ekran('wiecej', {
     rysuj(el) {
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu">
+          <a class="przycisk" href="#reklamacje">Reklamacje</a>
           <a class="przycisk" href="#pareto">Pareto wad</a>
           <a class="przycisk" href="#partie">Partie brakowe</a>
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
