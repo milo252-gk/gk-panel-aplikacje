@@ -7,7 +7,7 @@
    nie siega, a zasieg komorkowy bywa jednokreskowy. Program ma sie tam otworzyc
    i przyjac komplet zdjec.                                                   */
 
-const WERSJA = 'flotex-943f526341b9';
+const WERSJA = 'flotex-df70ce5be6bd';
 
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
@@ -22,7 +22,7 @@ const WERSJA = 'flotex-943f526341b9';
 const ZASOBY = [
   './style.css', './app.js', './kolejka.js', './zdjecia.js', './podpis.js',
   './skrot.js', './pojazdy.js', './przeglady.js', './kierowca.js', './awaria.js', './zaproszenie.js',
-  './ustawienia.js', './konta.js', './gk-dzwieki.js', './gk-offline.js',
+  './ustawienia.js', './konta.js', './administracja.js', './gk-dzwieki.js', './gk-ikony.js', './gk-offline.js',
   './ikona.svg', './logo-gkf.png', './manifest.webmanifest',
   './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
 ];

@@ -101,7 +101,7 @@ EKRANY.konta = {
     pole.innerHTML = `
       ${stan.kontaZPanelu ? `<div class="wstega info">Konta zakłada się w <b>Panelu
         Kierownika → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
-        GK. GK Flota pobiera je sama co kilka minut (Ustawienia → Zaawansowane → Konta GK). ${stan.zespolGk
+        GK. GK Flota pobiera je sama co kilka minut (Administracja → Ustawienia → Zaawansowane → Konta GK). ${stan.zespolGk
           ? `Konta <b>biura i kierowców</b> zakładasz też tutaj — „+ Dodaj konto” zapisuje
             je w Panelu.` : `Tutaj zostaje tylko awaryjny administrator.${zespol.powod
             ? `<br>${escHtml(zespol.powod)}` : ''}`}</div>` : ''}
@@ -157,8 +157,8 @@ EKRANY.konta = {
 };
 
 /* Blokada logowania z internetu (przez tunel): 10 złych PIN-ów na jedno konto
-   w 15 minut zamyka je z internetu na kwadrans, trzecia taka seria w ciągu
-   doby — do odblokowania tutaj (albo na dobę). Z firmowego wifi konto loguje
+   w 15 minut zamyka je z internetu na minutę (od 2026-11-03 nie ma już blokady
+   do odblokowania; dawne wpisy serwer ignoruje). Z firmowego wifi konto loguje
    się cały czas. Liczba złych prób w ostatniej godzinie mówi, czy ktoś
    właśnie zgaduje, zanim zablokuje się którekolwiek konto.               */
 function rysujBlokady(b) {

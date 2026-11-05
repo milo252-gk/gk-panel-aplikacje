@@ -208,12 +208,18 @@ const SEKCJE_ALARMOW = {
   kopia: 'u-kopie', kopia_folder: 'u-kopie', pages: 'u-pages', tunel: 'u-tunel',
 };
 
+/* Ustawienia są zakładką ekranu „Administracja” (administracja.js; STYL-GK §8), nie osobnym ekranem —
+   „jestem na Ustawieniach” znaczy więc: widać tę zakładkę. Samo `ustawienia` zostaje dla starego wejścia.  */
+function naUstawieniach() {
+  return stan.ekran === 'ustawienia' || (stan.ekran === 'administracja' && stan.adminZakladka === 'ustawienia');
+}
+
 /* Rozwija „Zaawansowane” i przewija do karty `id`. Z innego ekranu (wstęga
    alarmu na pulpicie) najpierw otwiera Ustawienia z tym samym celem.        */
 function pokazSekcjeUstawien(id) {
   const zaawansowane = document.getElementById('u-zaawansowane');
-  if (stan.ekran !== 'ustawienia' || !zaawansowane) {
-    pokazEkran('ustawienia', { sekcja: id });
+  if (!naUstawieniach() || !zaawansowane) {
+    pokazEkran('ustawienia', { sekcja: id });      // pokazEkran przekieruje do Administracja → Ustawienia
     return;
   }
   zaawansowane.open = true;
@@ -472,7 +478,7 @@ function podepnijKontaGk(pole) {
     komunikat(['polaczono', 'polaczony'].includes(w.wynik) ? 'Połączono z Panelem na tym komputerze — konta przyjdą za chwilę'
       : w.wynik === 'wylaczone_w_panelu' ? 'Połączenie jest wyłączone w Panelu → Administracja → Połączenia GK'
         : 'Poprosiłem Panel o klucz — połączy się sam w ciągu minuty', w.wynik === 'wylaczone_w_panelu' ? 'blad' : 'ok');
-    setTimeout(() => { if (stan.ekran === 'ustawienia') odswiezEkran(); }, 1500);
+    setTimeout(() => { if (naUstawieniach()) odswiezEkran(); }, 1500);
   };
   we('u-hub-pobierz').onclick = async () => {
     const w = await sprobuj(() => API.post('/api/panel/pobierz', {}));
@@ -744,7 +750,7 @@ async function zapiszUstawienia() {
 async function czekajNaTunel() {
   for (let i = 0; i < 15; i++) {
     await new Promise(r => setTimeout(r, 2000));
-    if (stan.ekran !== 'ustawienia') return;
+    if (!naUstawieniach()) return;
     let u;
     try { u = await API.get('/api/ustawienia'); } catch (e) { return; }
     if (((u.tunel || {}).stan) !== 'uruchamiam') { odswiezEkran(); return; }

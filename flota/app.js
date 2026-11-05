@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-943f526341b9';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-df70ce5be6bd';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -250,8 +250,9 @@ function komunikat(tresc, rodzaj) {
   e.className = 'komunikat ' + (rodzaj || '');
   e.textContent = tresc;                  // textContent — w dymek nie da się wstrzyknąć HTML
   pole.appendChild(e);
-  setTimeout(() => { e.style.opacity = '0'; setTimeout(() => e.remove(), 250); },
-    rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
+  const schowaj = () => { e.style.opacity = '0'; setTimeout(() => e.remove(), 250); };
+  e.onclick = schowaj;                    // STYL-GK §1: dotknięcie dymku zamyka go
+  setTimeout(schowaj, rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
 }
 
 /* ---------------------------------------------- dźwięki (GKDzwieki, 2026-10-16)
@@ -1399,8 +1400,12 @@ async function zaloguj(login, pin) {
     blad.kodBledu = wynik.kod || '';
     blad.kod = odp.status;
     // PIN bez ważnego znacznika albo 5 złych PIN-ów: ten znacznik już nic nie
-    // znaczy — pole wraca do hasła.
-    if (blad.kodBledu === 'wymagane_haslo') Znaczniki.zapomnij(login);
+    // znaczy — pole wraca do hasła. Tak samo, gdy w polu „PIN” (z limitem 4 znaków) wpisano coś z literą albo znakiem:
+    // to nie był PIN, tylko ucięte hasło — znacznik jest już nieważny po stronie programu (zmiana hasła w Panelu),
+    // a bez zapomnienia go pole wracałoby do „PIN” przy każdej próbie (diagnoza logowania 2026-11-04).
+    if (blad.kodBledu === 'wymagane_haslo' || (blad.kodBledu === 'zly_pin' && zn && /\D/.test(String(pin || '').trim()))) {
+      Znaczniki.zapomnij(login);
+    }
     throw blad;
   }
   if (wynik.do_ustawienia && wynik.do_ustawienia.length) {
@@ -1850,17 +1855,18 @@ function jestBiuro() { return !!stan.uz && stan.uz.rola !== 'kierowca'; }
 function jestAdministratorem() { return !!stan.uz && stan.uz.rola === 'admin'; }
 
 /* Pasek dolny (tylko telefon): dokładnie cztery pozycje na rolę,
-   [nazwa_ekranu, emoji, napis]. Menu boczne stoi w HTML-u, pasek dolny nie. */
-const PASEK_BIURA = [['pulpit', '📊', 'Pulpit'], ['pojazdy', '🚗', 'Flota'],
-                     ['terminy', '📅', 'Terminy'], ['przeglady', '🧾', 'Przeglądy']];
+   [nazwa_ekranu, nazwa_ikony, napis]; ikona to nazwa z GKIkony (gk-ikony.js, STYL-GK §8), nie emoji.
+   Menu boczne stoi w HTML-u, pasek dolny nie. Najwyżej 4 ekrany + „Więcej” (STYL-GK §2). */
+const PASEK_BIURA = [['pulpit', 'pulpit', 'Pulpit'], ['pojazdy', 'pojazd', 'Flota'],
+                     ['terminy', 'plan', 'Terminy'], ['przeglady', 'raporty', 'Przeglądy']];
 /* U kierowcy „W razie awarii" zajmuje jedno z czterech miejsc kciuka — i to
    nie jest hojność, tylko jedyny ekran, którego szuka się w pośpiechu, w nocy
    i jedną ręką. Menu boczne kierowcy to te same cztery pozycje (etap 2
    poprawek UI); historia własnych przeglądów i instrukcja awaryjna mają
    jeszcze przyciski na ekranie „Moje auto” — do historii zagląda się raz
    na miesiąc, na spokojnie.                                                 */
-const PASEK_KIEROWCY = [['moj', '🚗', 'Moje auto'], ['przeglad', '📷', 'Przegląd'],
-                        ['usterki', '⚠️', 'Usterka'], ['awaria', '🆘', 'Awaria']];
+const PASEK_KIEROWCY = [['moj', 'pojazd', 'Moje auto'], ['przeglad', 'aparat', 'Przegląd'],
+                        ['usterki', 'awaria', 'Usterka'], ['awaria', 'ratunek', 'Awaria']];
 
 function menuDlaRoli() {
   const biuro = jestBiuro();
@@ -1872,12 +1878,12 @@ function menuDlaRoli() {
   const dolne = (biuro ? PASEK_BIURA : PASEK_KIEROWCY).filter(([e]) => EKRANY[e]);
   const pasek = document.getElementById('pasek-dolny');
   pasek.innerHTML = dolne.map(([e, i, n]) =>
-    `<button data-ekran="${e}"><span class="i">${i}</span><span>${n}</span></button>`).join('');
+    `<button data-ekran="${e}"><span class="i">${GKIkony.html(i, 24)}</span><span>${n}</span></button>`).join('');
   pasek.querySelectorAll('button').forEach(b => b.onclick = () => pokazEkran(b.dataset.ekran));
   // D65: „☰ Więcej” zawsze ostatnie na dolnym pasku — jak w aplikacjach hali
   // (STYL-GK, D64); otwiera menu boczne z resztą ekranów. ☰ w nagłówku zniknęło.
   pasek.insertAdjacentHTML('beforeend',
-    '<button type="button" data-wiecej><span class="i">☰</span><span>Więcej</span></button>');
+    `<button type="button" data-wiecej><span class="i">${GKIkony.html('wiecej', 24)}</span><span>Więcej</span></button>`);
   pasek.querySelector('[data-wiecej]').onclick = otworzMenu;
 
   // Powrót do GK Trasy — tylko kierowca, który przyszedł stamtąd linkiem.
@@ -1903,6 +1909,13 @@ function menuDlaRoli() {
    domyślny roli, i to jest celowe: kierowca po restarcie telefonu ma
    zobaczyć swoje auto, a nie ostatnie okno sprzed tygodnia.                 */
 async function pokazEkran(nazwa, parametry) {
+  // Administrator ma „Konta” i „Ustawienia” jako zakładki jednej pozycji „Administracja” (STYL-GK §8). Stare
+  // wejścia — hasz #ekran=…, wstęgi alarmów („Pokaż w Ustawieniach”), powiadomienia — trafiają tam same;
+  // ekrany `konta` i `ustawienia` zostają w rejestrze, bo to one rysują zawartość zakładek.
+  if ((nazwa === 'konta' || nazwa === 'ustawienia') && jestAdministratorem() && EKRANY.administracja) {
+    parametry = Object.assign({}, parametry, { zakladka: nazwa });
+    nazwa = 'administracja';
+  }
   const ekran = EKRANY[nazwa];
   const tresc = document.getElementById('tresc');
   if (!ekran) {
@@ -2012,7 +2025,7 @@ function trybOffline() {
       wyjasnienie: 'Aplikacja trzyma zdjęcia i odczyty bez zasięgu i wysyła je po powrocie, '
         + 'ale musi być otwarta od wyjazdu. Otwórz ją jeszcze na firmowym wifi. '
         + 'Pełną pracę bez zasięgu włącza dopiero adres z https:// — biuro uruchamia go '
-        + 'w Ustawieniach → Zaawansowane → „Adres HTTPS dla kierowców".',
+        + 'w Administracji → Ustawienia → Zaawansowane → „Adres HTTPS dla kierowców".',
     };
   }
   return {
@@ -2090,7 +2103,7 @@ function stempelWersji() {
       </div>
       ${doPublikacji && osobno ? `<div class="male" style="margin-top:6px">
         Aplikację na GitHub Pages wysyła Panel Kierownika — sprawdź
-        Ustawienia → Zaawansowane → <b>Stały adres dla kierowców</b>.</div>` : ''}
+        Administracja → Ustawienia → Zaawansowane → <b>Stały adres dla kierowców</b>.</div>` : ''}
       ${naprawialne ? `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>` : ''}
     </div>`;
@@ -2136,7 +2149,7 @@ async function sprawdzSpojnoscWersji() {
     // i dostałby ostrzeżenie, z którym nie ma co zrobić.
     if (osobneAdresy && znanyDysk && dysk !== skrypt && jestBiuro()) {
       komunikat('Kierowcy mają starszą wersję aplikacji niż program w biurze. '
-        + 'Aplikację na GitHub Pages wysyła Panel Kierownika — sprawdź Ustawienia → Zaawansowane → Stały adres dla kierowców.', 'blad');
+        + 'Aplikację na GitHub Pages wysyła Panel Kierownika — sprawdź Administracja → Ustawienia → Zaawansowane → Stały adres dla kierowców.', 'blad');
     }
     return;
   }
@@ -3087,7 +3100,6 @@ async function wejdzDoAplikacji() {
   document.getElementById('ekran-logowania').classList.add('ukryty');
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
-  document.getElementById('menu-rola').textContent = NAZWA_ROLI[stan.uz.rola] || stan.uz.rola;
   menuDlaRoli();
   // Zanim cokolwiek narysujemy: czy przeglądarka na pewno ma komplet plików
   // z jednej wersji. Gdy nie — funkcja sama przeładuje aplikację.
