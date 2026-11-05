@@ -2,7 +2,7 @@
    Trzyma kopie samego programu (HTML, style, skrypty, mapa). Danych nie
    buforuje tutaj — od tego jest IndexedDB w kolejka.js.                      */
 
-const WERSJA = 'trasex-faa0fcc50242';
+const WERSJA = 'trasex-65369ff2d05c';
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
    kopia nie ma jak zostać podana. Poprzednio wystarczyło, że przeglądarka
@@ -11,7 +11,7 @@ const WERSJA = 'trasex-faa0fcc50242';
 const ZASOBY = [
   './style.css', './app.js', './kolejka.js', './mapa.js', './podpis.js', './skrot.js',
   './biuro.js', './kierowca.js', './import.js', './eta.js', './dowody.js', './gk-offline.js',
-  './szablony.js', './firma.js', './zaproszenie.js', './gk-dzwieki.js', './ikona.svg', './logo-gkf.png', './logo-strefa.jpg',
+  './szablony.js', './firma.js', './zaproszenie.js', './gk-dzwieki.js', './gk-ikony.js', './ikona.svg', './logo-gkf.png', './logo-strefa.jpg',
   './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
   './manifest.webmanifest', './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/marker-icon.png', './vendor/marker-icon-2x.png', './vendor/marker-shadow.png',

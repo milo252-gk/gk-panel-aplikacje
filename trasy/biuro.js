@@ -202,7 +202,7 @@ EKRANY.trasy = {
         <button id="t-import">📄 Wczytaj z Excela</button>
       </div>
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
-          Nie masz jeszcze żadnego konta kierowcy. Załóż je w Ustawieniach → Konta.</div>`}
+          Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Konta' : 'Ustawieniach → Konta kierowców'}.</div>`}
       ${trasy.length ? trasy.map(t => kartaTrasy(t)).join('')
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">🗺️</span>
              Na ${polskaData(data)} nie ma jeszcze trasy.</div></div>`}`;
@@ -1945,7 +1945,7 @@ async function rysujUstawieniaBiura(pole) {
     let w = null;
     try { w = await sprobuj(() => API.post('/api/ustawienia', dane), 'Zapisano'); }
     finally { zajety(false); }
-    if (w) pokazEkran('ustawienia');
+    if (w) wrocDoUstawien();
   };
   pole.querySelectorAll('.zapisz-ustawienia').forEach(p => p.onclick = zapisz);
   const otwarte = stan.otwarteUstawienia || (stan.otwarteUstawienia = new Set());
@@ -1963,25 +1963,377 @@ EKRANY.ustawienia = {
   dlaBiura: true,
   async rysuj(pole, param) {
     if (!jestAdministratorem()) { await rysujUstawieniaBiura(pole); return; }
-    const [u, ustawienia] = await Promise.all([
-      API.get('/api/uzytkownicy'), API.get('/api/ustawienia'),
-    ]);
-    await odswiezLokalizacje();
-    stan._lokalizatory = ustawienia.ikol_ustawiony
-      ? await API.get('/api/ikol/lokalizatory').catch(() => []) : [];
-    stan.ustawienia = ustawienia;
-    stan._kierowcy = u.filter(x => x.aktywny);
-    stan.pojazdy = await API.get('/api/pojazdy');
+    // Administrator ma ten ekran w Administracji → Ustawienia (pokazEkran przekierowuje stary adres).
+    await rysujUstawieniaAdmina(pole, param, 'ustawienia');
+  },
+};
+
+/* Po zapisie, odblokowaniu, kopii itp. wracamy tam, skąd przyszliśmy: administrator na tę samą zakładkę
+   Administracji (Konta albo Ustawienia — nie na pierwszą), biuro na „Ustawienia firmy”. */
+function wrocDoUstawien() {
+  if (stan.ekran === 'administracja') pokazEkran('administracja', { zakladka: stan.adminZakladka });
+  else pokazEkran('ustawienia');
+}
+
+/* Ustawienia i Konta administratora to jedno miejsce wyrenderowane z jednego zestawu danych, w dwóch zakładkach
+   Administracji (zakladka: 'ustawienia' | 'konta'). Dane i endpointy bez zmian — dotychczasowy ekran Ustawienia
+   został rozdzielony, nic nie jest kopiowane. */
+async function rysujUstawieniaAdmina(pole, param, zakladka) {
+  const naKontach = zakladka === 'konta';
+  const [u, ustawienia] = await Promise.all([
+    API.get('/api/uzytkownicy'), API.get('/api/ustawienia'),
+  ]);
+  await odswiezLokalizacje();
+  stan._lokalizatory = ustawienia.ikol_ustawiony
+    ? await API.get('/api/ikol/lokalizatory').catch(() => []) : [];
+  stan.ustawienia = ustawienia;
+  stan._kierowcy = u.filter(x => x.aktywny);
+  stan.pojazdy = await API.get('/api/pojazdy');
 
 
+  // Zakładka „Konta” (Administracja): ta sama tabela kont i ta sama karta „Konta GK (Panel Kierownika)”, co dotąd
+  // w Ustawieniach (Konta + Zaawansowane → Konta GK) — ten sam render i te same endpointy, tylko wejście na wierzchu.
+  if (naKontach) {
     pole.innerHTML = `
-      ${wstegiAlarmow(ustawienia.alarmy, true)}
-      ${kartaFirmyUst(ustawienia)}
+    ${kartaKontAdmina(ustawienia, u)}
+    ${kartaKontGK(ustawienia)}`;
+  } else pole.innerHTML = `
+    ${wstegiAlarmow(ustawienia.alarmy, true)}
+    ${kartaFirmyUst(ustawienia)}
 
-      ${kartaGodzinUst(ustawienia)}
+    ${kartaGodzinUst(ustawienia)}
 
-      ${kartaPrzerwUst(ustawienia)}
+    ${kartaPrzerwUst(ustawienia)}
 
+    <div class="karta">
+      <div class="karta-gora"><h2>Auta</h2>
+        <div class="przyciski">
+          ${(ustawienia.flotex_stan || {}).polaczony
+            ? '<button class="maly" id="u-flotex-import">Pobierz auta z GK Flota</button>' : ''}
+          <button class="maly glowny" id="u-nowy-bus">+ Nowe auto</button></div></div>
+      <div class="tabela-przewijana"><table>
+        <thead><tr><th>Nazwa</th><th>Rejestracja</th>
+          ${(ustawienia.flotex_stan || {}).polaczony ? '<th>GK Flota</th>' : ''}<th>Uwagi</th><th></th></tr></thead>
+        <tbody>${stan.pojazdy.length ? stan.pojazdy.map(b => `<tr style="${b.aktywny ? '' : 'opacity:.5'}">
+          <td><b>${escHtml(b.nazwa)}</b></td><td>${escHtml(b.rejestracja || '')}</td>
+          ${(ustawienia.flotex_stan || {}).polaczony ? `<td>${b.flotex
+            ? znacznikFlotexu(b.flotex) + powodyFlotexu(b.flotex)
+            : '<span class="male slaby">nie ma w GK Flota</span>'}</td>` : ''}
+          <td class="male">${escHtml(b.uwagi || '')}</td>
+          <td><button class="maly" data-bus="${b.id}">Zmień</button></td>
+        </tr>`).join('') : '<tr><td colspan="5"><div class="pusto">Nie ma jeszcze aut.</div></td></tr>'}</tbody>
+      </table></div>
+    </div>
+
+    <details class="zaawansowane" id="u-zaawansowane">
+      <summary><span class="znak-zwiniecia">▸</span> Zaawansowane
+        <span class="slaby">— połączenia, kopie, tunel, poczta, przechowywanie danych</span></summary>
+      <p class="male slaby">Rzadko zmieniane ustawienia techniczne. Na co dzień nie trzeba
+        tu zaglądać — program sam pokaże wstęgę, gdy coś stąd wymaga uwagi.</p>
+
+    ${zwin('Ślad GPS i przechowywanie danych', '', `
+      <p class="male slaby">Położenie kierowcy to dana osobowa. Program kasuje stare punkty sam,
+         a kierowca sam włącza i wyłącza udostępnianie w swoim telefonie.</p>
+      <div class="dwie">
+        <label>Trzymaj ślad GPS przez (dni)
+          <input type="number" id="u-retencja" min="1" max="730"
+                 value="${escHtml(ustawienia.retencja_pozycji_dni || '30')}">
+          <span class="male slaby">Ślad służy do pokazania, gdzie jest auto. Dłuższe
+            trzymanie nikomu nie służy, a rozdmuchuje kopie zapasowe.</span></label>
+        <label>Trzymaj zdjęcia i podpisy przez (miesiące)
+          <input type="number" id="u-retencja-zal" min="0" max="120"
+                 value="${escHtml(ustawienia.retencja_zalacznikow_mies || '0')}">
+          <span class="male slaby">0 = trzymaj bez końca. Podpisy też są danymi osobowymi,
+            ale bywają jedynym dowodem w sporze — kasuj świadomie.</span></label>
+      </div>
+      <p class="male slaby">Sprzątanie odbywa się przy każdym uruchomieniu programu.</p>
+      <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
+
+    ${zwin('Powiadamianie klienta', ustawienia.poczta_ustawiona
+      ? '<span class="plakietka p-dostarczone">✓ gotowe</span>'
+      : '<span class="plakietka p-oczekuje">nieustawione</span>', `
+      <p class="male slaby">Program potrafi wysłać klientowi e-mail: „planujemy dostawę
+        w środę, orientacyjnie 12:30". Wysyłasz Ty, przyciskiem przy punkcie —
+        <b>nic nie rozsyła się samo</b>. Potrzebne są dane Waszego serwera pocztowego,
+        te same co w programie pocztowym.</p>
+      <div class="dwie">
+        <label>Serwer SMTP
+          <input id="u-poczta-serwer" value="${escHtml(ustawienia.poczta_serwer || '')}"
+                 placeholder="np. smtp.nazwa.pl"></label>
+        <label>Port
+          <input type="number" id="u-poczta-port" value="${escHtml(ustawienia.poczta_port || '587')}"></label>
+        <label>Szyfrowanie
+          <select id="u-poczta-szyfrowanie">
+            <option value="starttls" ${ustawienia.poczta_szyfrowanie === 'starttls' ? 'selected' : ''}>STARTTLS (port 587)</option>
+            <option value="ssl" ${ustawienia.poczta_szyfrowanie === 'ssl' ? 'selected' : ''}>SSL (port 465)</option>
+            <option value="brak" ${ustawienia.poczta_szyfrowanie === 'brak' ? 'selected' : ''}>bez szyfrowania</option>
+          </select></label>
+        <label>Adres nadawcy
+          <input id="u-poczta-nadawca" value="${escHtml(ustawienia.poczta_nadawca || '')}"
+                 placeholder="np. biuro@twojafirma.pl"></label>
+        <label>Login <span class="slaby">(zwykle ten sam co adres)</span>
+          <input id="u-poczta-login" value="${escHtml(ustawienia.poczta_login || '')}"></label>
+        <label>Hasło
+          <input id="u-poczta-haslo" type="password" autocomplete="new-password"
+                 placeholder="${ustawienia.poczta_ustawiona ? 'hasło zapisane — wpisz nowe, żeby zmienić' : ''}"></label>
+      </div>
+      <label>Stopka wiadomości
+        <textarea id="u-poczta-stopka" placeholder="np. Pozdrawiamy, GK Factory · tel. 62 000 00 00">${escHtml(ustawienia.poczta_stopka || '')}</textarea></label>
+      <div class="przyciski">
+        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
+        <button id="u-poczta-test">Wyślij wiadomość próbną</button>
+      </div>
+      <p class="male slaby">Hasło do poczty zapisuje się w pliku <code>dane.db</code>
+        w folderze programu — tak samo jak reszta danych firmy.</p>`)}
+
+    ${kartaKopii(ustawienia)}
+    ${kartaTunelu(ustawienia)}
+    ${kartaPages(ustawienia)}
+    ${kartaIkol(ustawienia)}
+    ${kartaFlotexu(ustawienia)}
+
+    ${zwin('Trasy po drogach', ustawienia.ors_klucz_ustawiony ? 'klucz zapisany' : 'działa bez klucza', `
+      <p class="male slaby">Przycisk „Pokaż przebieg po drogach" na mapie trasy działa
+        <b>bez żadnego klucza</b> — rysuje przejazd po prawdziwych drogach wraz z kilometrami
+        i czasem, korzystając z darmowego routera OpenStreetMap. Wymaga tylko internetu.</p>
+      <p class="male slaby">Klucz poniżej jest nieobowiązkowy i zmienia co innego: <b>kolejność</b>
+        punktów układana przy „Ułóż trasę". Bez klucza kolejność liczy się w linii prostej —
+        dla dostaw do 100 km to zwykle wystarcza. Darmowy klucz z openrouteservice.org
+        układa ją po realnych drogach.</p>
+      <label>Klucz OpenRouteService
+        <input id="u-ors" placeholder="${ustawienia.ors_klucz_ustawiony
+          ? 'klucz jest zapisany — wpisz nowy, żeby zmienić' : 'wklej klucz'}"></label>
+      <div class="male ${ustawienia.ors_klucz_ustawiony ? '' : 'slaby'}">
+        ${ustawienia.ors_klucz_ustawiony ? '✓ Klucz zapisany' : 'Klucz nie jest ustawiony'}</div>
+      <button class="glowny zapisz-ustawienia" style="margin-top:12px">Zapisz ustawienia</button>`)}
+
+    ${zwin('Jak wejść z telefonu', '', `
+      <p class="male">Najprościej: menu <b>📲 Zaproś kierowcę</b> — kierowca skanuje kod QR
+        aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
+        (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
+        a gdy Panel Kierownika jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
+      <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i PIN-em,
+        a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego"</b>. Od tej pory
+        aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}
+    </details>`;
+
+  // Pola są na różnych zakładkach Administracji (Konta: adres i klucz Panelu; Ustawienia: reszta), więc do
+  // zapisu idą tylko te, które są teraz na ekranie — brakujące pole nie może wyzerować ustawienia, którego nie widać.
+  const zapiszWszystko = async () => {
+    const daneUstawien = {};
+    const jest = id => !!document.getElementById(id);
+    if (jest('u-baza')) {
+      daneUstawien.baza_adres = val('u-baza');
+      daneUstawien.baza_lat = ''; daneUstawien.baza_lon = '';
+    }
+    if (jest('u-powody')) daneUstawien.powody_nieudanych = document.getElementById('u-powody').value;
+    [['firma', 'u-firma'],
+      ['retencja_pozycji_dni', 'u-retencja'], ['retencja_zalacznikow_mies', 'u-retencja-zal'],
+      ['godzina_wyjazdu', 'u-wyjazd'], ['srednia_predkosc', 'u-predkosc'], ['czas_rozladunku_min', 'u-rozladunek'],
+      ['czas_zaladunku_min', 'u-zaladunek'], ['cisza_alarm_min', 'u-cisza'],
+      ['jazda_do_przerwy_min', 'u-jazda-przerwa'], ['przerwa_min', 'u-przerwa'],
+      ['praca_do_przerwy_min', 'u-praca-przerwa'], ['przerwa_pracownicza_min', 'u-przerwa-praca'],
+      ['dluga_praca_min', 'u-dluga-praca'], ['przerwa_dlugiej_pracy_min', 'u-przerwa-dluga'],
+      ['dobowy_limit_jazdy_min', 'u-limit-jazdy'], ['doba_pracy_min', 'u-doba'],
+      ['poczta_serwer', 'u-poczta-serwer'], ['poczta_port', 'u-poczta-port'],
+      ['poczta_nadawca', 'u-poczta-nadawca'], ['poczta_login', 'u-poczta-login'],
+      ['poczta_haslo', 'u-poczta-haslo'], ['poczta_stopka', 'u-poczta-stopka'], ['ors_klucz', 'u-ors'],
+      ['tunel_token', 'u-tunel-token'], ['tunel_adres', 'u-tunel-adres'],
+      ['ikol_login', 'u-ikol-login'], ['ikol_haslo', 'u-ikol-haslo'], ['ikol_appkey', 'u-ikol-appkey'],
+      ['flotex_adres', 'u-flotex-adres'], ['flotex_klucz', 'u-flotex-klucz'],
+      ['hub_adres', 'u-hub-adres'], ['hub_klucz', 'u-hub-klucz'], ['kopia_folder', 'u-kopia-folder'],
+    ].forEach(([klucz, id]) => { if (jest(id)) daneUstawien[klucz] = val(id); });
+    if (jest('u-przepisy')) daneUstawien.przerwy_wlaczone = document.getElementById('u-przepisy').checked ? '1' : '0';
+    if (jest('u-poczta-szyfrowanie')) daneUstawien.poczta_szyfrowanie = document.getElementById('u-poczta-szyfrowanie').value;
+    if (jest('u-tunel-token')) {
+      daneUstawien.tunel_tryb = (document.querySelector('input[name=tunel]:checked') || {}).value || 'brak';
+    }
+    if (jest('u-ikol-wlaczony')) daneUstawien.ikol_wlaczony = document.getElementById('u-ikol-wlaczony').checked ? '1' : '';
+    // Serwer odpowiada 409, gdy zapis skasowałby podpisy i zdjęcia przez
+    // retencję. Wtedy pytamy człowieka i dopiero po zgodzie ponawiamy —
+    // to jedyne miejsce w programie, które kasuje dowody dostaw bezpowrotnie.
+    let w = null;
+    zajety(true);
+    try {
+      w = await API.post('/api/ustawienia', daneUstawien);
+      komunikat('Zapisano', 'ok');
+    } catch (e) {
+      zajety(false);
+      if (e.kod === 409 && await potwierdz('Na pewno skasować?', e.message)) {
+        w = await sprobuj(() => API.post('/api/ustawienia',
+          Object.assign({}, daneUstawien, { potwierdzam_kasowanie: true })), 'Zapisano');
+      } else if (e.kod !== 409) {
+        komunikat(poLudzku(e), 'blad');
+      }
+      zajety(true);
+    } finally {
+      zajety(false);
+    }
+    if (w) {
+      if (zmienionoTunel(ustawienia)) {
+        komunikat('Zamknij i uruchom program ponownie, żeby tunel się przestawił', 'ok');
+      }
+      wrocDoUstawien();
+    }
+  };
+  // Kazda karta ma wlasny przycisk zapisu — inaczej trzeba by pamietac
+  // o zjechaniu na sam gorny przycisk, a tego nikt nie robi.
+  pole.querySelectorAll('.zapisz-ustawienia').forEach(p => p.onclick = zapiszWszystko);
+
+  // Otwarte sekcje (także „Zaawansowane”) zostają otwarte po zapisie i po
+  // każdym „Zrób kopię teraz”, „Sprawdź połączenie” — ekran rysuje się wtedy
+  // od nowa i bez tego administrator lądował przed zwiniętym nagłówkiem.
+  const otwarte = stan.otwarteUstawienia || (stan.otwarteUstawienia = new Set());
+  pole.querySelectorAll('details[id]').forEach(d => {
+    if (otwarte.has(d.id)) d.open = true;
+    d.addEventListener('toggle', () => { if (d.open) otwarte.add(d.id); else otwarte.delete(d.id); });
+  });
+  if (param && param.sekcja) otworzSekcjeUstawien(pole, param.sekcja);
+  pole.querySelectorAll('[data-do-ustawien]').forEach(e => e.onclick = () =>
+    otworzSekcjeUstawien(pole, SEKCJA_ALARMU[e.dataset.doUstawien]));
+
+  podepnijKopie(pole);
+
+  // Karty techniczne są tylko na zakładce Ustawienia — na zakładce Konta tych przycisków nie ma.
+  if (!naKontach) {
+    // Przycisk najpierw zapisuje to, co wpisano w pola obok, a dopiero potem
+    // pyta IKOL. Inaczej sprawdzalby dane z bazy, a nie te z ekranu — i mowilby
+    // "nie podano loginu i hasla", mimo ze pola sa wypelnione.
+    pole.querySelector('#u-ikol-sprawdz').onclick = async () => {
+      const login = val('u-ikol-login');
+      const haslo = val('u-ikol-haslo');
+      if (!login) { komunikat('Wpisz login do IKOL-a', 'blad'); return; }
+      if (!haslo && !ustawienia.ikol_ustawiony) {
+        komunikat('Wpisz hasło do IKOL-a', 'blad');
+        return;
+      }
+      const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
+        ikol_login: login,
+        ikol_haslo: haslo,
+        ikol_appkey: val('u-ikol-appkey'),
+        ikol_wlaczony: document.getElementById('u-ikol-wlaczony').checked ? '1' : '',
+      }));
+      if (!zapisane) return;
+
+      const w = await sprobuj(() => API.post('/api/ikol/sprawdz'));
+      if (!w) { wrocDoUstawien(); return; }
+      komunikat(`IKOL odpowiedział — znaleziono ${w.znaleziono} ${
+        odmiana(w.znaleziono, 'lokalizator', 'lokalizatory', 'lokalizatorów')}`, 'ok');
+      if (!document.getElementById('u-ikol-wlaczony').checked) {
+        komunikat('Połączenie działa, ale pobieranie pozycji jest wyłączone — '
+          + 'zaznacz „Pobieraj pozycje z IKOL-a"', 'blad');
+      }
+      wrocDoUstawien();
+    };
+    const pobierzTeraz = pole.querySelector('#u-ikol-pobierz');
+    if (pobierzTeraz) pobierzTeraz.onclick = async () => {
+      if (val('u-ikol-haslo')) {
+        await sprobuj(() => API.post('/api/ustawienia', { ikol_haslo: val('u-ikol-haslo') }));
+      }
+      const w = await sprobuj(() => API.post('/api/ikol/pobierz'));
+      if (w) komunikat(`Zapisano ${w.pobrano} ${
+        odmiana(w.pobrano, 'pozycję', 'pozycje', 'pozycji')}`, 'ok');
+    };
+    const zapomnij = pole.querySelector('#u-ikol-zapomnij');
+    if (zapomnij) zapomnij.onclick = async () => {
+      if (!await potwierdz('Usunąć zapisane dane do IKOL-a?',
+        'Program zapomni login, hasło i listę lokalizatorów. Pobieranie pozycji '
+        + 'z IKOL-a przestanie działać, dopóki nie wpiszesz ich ponownie.')) return;
+      const w = await sprobuj(() => API.post('/api/ikol/zapomnij'), 'Dane usunięte');
+      if (w) wrocDoUstawien();
+    };
+    pole.querySelectorAll('[data-lokalizator]').forEach(b =>
+      b.onclick = () => oknoLokalizatora(b.dataset.lokalizator));
+
+    // GK Flota: jak przy IKOL-u — najpierw zapis tego, co wpisano obok,
+    // dopiero potem pytanie, inaczej sprawdzalibysmy stary klucz z bazy.
+    pole.querySelector('#u-flotex-sprawdz').onclick = async () => {
+      if (!val('u-flotex-klucz') && !ustawienia.flotex_klucz_ustawiony) {
+        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z GK Trasy)', 'blad');
+        return;
+      }
+      const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
+        flotex_adres: val('u-flotex-adres'), flotex_klucz: val('u-flotex-klucz'),
+      }));
+      if (!zapisane) return;
+      const w = await sprobuj(() => API.post('/api/flotex/sprawdz'));
+      if (w) komunikat(w.komunikat, 'ok');
+      wrocDoUstawien();
+    };
+    const flotexPonow = pole.querySelector('#u-flotex-ponow');
+    if (flotexPonow) flotexPonow.onclick = async () => {
+      const w = await sprobuj(() => API.post('/api/flotex/ponow'),
+        'Wysyłam jeszcze raz — odśwież ekran za chwilę');
+      if (w) setTimeout(() => { if (stan.ekran === 'ustawienia' || stan.ekran === 'administracja') wrocDoUstawien(); }, 2500);
+    };
+    const flotexOdlacz = pole.querySelector('#u-flotex-zapomnij');
+    if (flotexOdlacz) flotexOdlacz.onclick = async () => {
+      if (!await potwierdz('Odłączyć GK Trasy od GK Flota?',
+        'GK Trasy zapomni klucz. Kierowcy stracą „Moje auto”, a raporty przestaną iść do '
+        + 'GK Flota, dopóki nie wkleisz klucza ponownie.')) return;
+      const w = await sprobuj(() => API.post('/api/flotex/zapomnij'), 'Odłączono');
+      if (w) wrocDoUstawien();
+    };
+    const flotexImport = pole.querySelector('#u-flotex-import');
+    if (flotexImport) flotexImport.onclick = async () => {
+      const w = await sprobuj(() => API.post('/api/flotex/import-pojazdow'));
+      if (!w) return;
+      komunikat(w.dodane
+        ? `Dodano ${w.dodane} ${odmiana(w.dodane, 'auto', 'auta', 'aut')} z GK Flota`
+        : 'Wszystkie auta z GK Flota już są w programie GK Trasy', 'ok');
+      wrocDoUstawien();
+    };
+
+    const kopiuj = pole.querySelector('#u-kopiuj-adres');
+    if (kopiuj) kopiuj.onclick = () => {
+      navigator.clipboard.writeText((ustawienia.tunel || {}).adres || '')
+        .then(() => komunikat('Adres skopiowany — wyślij go kierowcom', 'ok'))
+        .catch(() => komunikat('Skopiuj adres ręcznie', 'blad'));
+    };
+    pole.querySelector('#u-poczta-test').onclick = async () => {
+      const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
+        poczta_serwer: val('u-poczta-serwer'), poczta_port: val('u-poczta-port'),
+        poczta_szyfrowanie: document.getElementById('u-poczta-szyfrowanie').value,
+        poczta_nadawca: val('u-poczta-nadawca'), poczta_login: val('u-poczta-login'),
+        poczta_haslo: val('u-poczta-haslo'), poczta_stopka: val('u-poczta-stopka'),
+      }));
+      if (!zapisane) return;
+      okno({
+        tytul: 'Wiadomość próbna',
+        tresc: `<label>Wyślij na adres
+            <input id="pt-adres" value="${escHtml(val('u-poczta-nadawca'))}"></label>
+          <p class="male slaby">Sprawdź ustawienia zanim cokolwiek pójdzie do klienta.</p>`,
+        przyciski: [
+          { napis: 'Anuluj', klik: z => z() },
+          { napis: 'Wyślij', klasa: 'glowny', klik: async z => {
+            const w = await sprobuj(() => API.post('/api/poczta/test',
+              { adres: val('pt-adres') }), 'Wysłane — sprawdź skrzynkę');
+            if (w) { z(); wrocDoUstawien(); }
+          } },
+        ],
+      });
+    };
+  }
+  const noweKonto = pole.querySelector('#u-nowe-konto');
+  if (noweKonto) noweKonto.onclick = () => oknoKonta_admin(null);
+  podepnijKontaGK(pole, ustawienia);
+  pole.querySelectorAll('[data-konto]').forEach(b =>
+    b.onclick = () => oknoKonta_admin(u.find(x => x.id === Number(b.dataset.konto))));
+  pole.querySelectorAll('[data-odblokuj]').forEach(b => b.onclick = async () => {
+    const w = await sprobuj(() => API.post(`/api/uzytkownicy/${b.dataset.odblokuj}/odblokuj`),
+      'Odblokowano');
+    if (w) wrocDoUstawien();
+  });
+  if (!naKontach) {
+    pole.querySelector('#u-nowy-bus').onclick = () => oknoBusa(null);
+    pole.querySelectorAll('[data-bus]').forEach(b =>
+      b.onclick = () => oknoBusa(stan.pojazdy.find(x => x.id === Number(b.dataset.bus))));
+  }
+}
+
+/* Tabela kont administratora (dawniej karta „Konta” w Ustawieniach) — teraz zakładka Administracja → Konta. */
+function kartaKontAdmina(ustawienia, u) {
+  return `
       <div class="karta">
         <div class="karta-gora"><h2>Konta</h2>
           ${!ustawienia.konta_z_panelu
@@ -2017,346 +2369,67 @@ EKRANY.ustawienia = {
                 ? `<button class="maly glowny" data-odblokuj="${x.id}">Odblokuj</button>` : ''}</div></td>
           </tr>`).join('')}</tbody>
         </table></div>
+      </div>`;
+}
+
+/* ===================================================== ADMINISTRACJA (administrator)
+
+   Jedna pozycja menu administratora, wszędzie ta sama nazwa i ikona (STYL-GK §8), a w środku zakładki-pigułki jak w Panelu
+   Kierownika → Administracja: Konta · Dane i czyszczenie · Kody QR · Ustawienia. To jest nowe WEJŚCIE do istniejących
+   funkcji, nie nowe funkcje: Konta i Ustawienia rysuje ten sam kod co dotąd (rysujUstawieniaAdmina), czyszczenie tras to
+   to samo okno (oknoCzyszczeniaTras, /api/czyszczenie-tras), kody QR — to samo okno co w „Moje konto”. Stare wejścia
+   (#ustawienia, wstęgi alarmów) trafiają tu przez pokazEkran. Biuro nie ma tego ekranu — ma swoje „Ustawienia firmy”. */
+const ZAKLADKI_ADMINISTRACJI = [
+  { id: 'konta', napis: 'Konta' },
+  { id: 'dane', napis: 'Dane i czyszczenie' },
+  { id: 'kody', napis: 'Kody QR' },
+  { id: 'ustawienia', napis: 'Ustawienia' },
+];
+
+function kartaKodowQRAdmina() {
+  return `<div class="karta" id="a-kody-qr-karta">
+    <h2>Kody QR aplikacji</h2>
+    <p class="male slaby">Kody do zeskanowania aparatem telefonu: aplikacje hali, GK Trasy i GK Flota, z drukiem arkusza A4.
+      To samo okno co w „Moje konto” — tu jest na wierzchu.</p>
+    ${maKodyQR()
+      ? `<div class="przyciski"><button class="glowny" id="a-kody-qr">${napisKodowQR()}</button></div>`
+      : `<div class="wstega info">Kody QR są dla kont z Panelu Kierownika. Zalogowano kontem awaryjnym tego programu —
+          zaloguj się swoim kontem z Panelu (imię i nazwisko), żeby je zobaczyć.</div>`}
+  </div>`;
+}
+
+EKRANY.administracja = {
+  tytul: 'Administracja',
+  tylkoAdministrator: true,
+  async rysuj(pole, param) {
+    const zakladka = ZAKLADKI_ADMINISTRACJI.some(z => z.id === (param || {}).zakladka) ? param.zakladka : 'konta';
+    stan.adminZakladka = zakladka;
+    pole.innerHTML = `<div class="chipy" role="tablist" aria-label="Administracja">
+        ${ZAKLADKI_ADMINISTRACJI.map(z => `<button type="button" class="chip ${z.id === zakladka ? 'wybrany' : ''}"
+          role="tab" aria-selected="${z.id === zakladka}" data-zakladka="${z.id}">${z.napis}</button>`).join('')}
       </div>
-
-      <div class="karta">
-        <div class="karta-gora"><h2>Auta</h2>
-          <div class="przyciski">
-            ${(ustawienia.flotex_stan || {}).polaczony
-              ? '<button class="maly" id="u-flotex-import">Pobierz auta z GK Flota</button>' : ''}
-            <button class="maly glowny" id="u-nowy-bus">+ Nowe auto</button></div></div>
-        <div class="tabela-przewijana"><table>
-          <thead><tr><th>Nazwa</th><th>Rejestracja</th>
-            ${(ustawienia.flotex_stan || {}).polaczony ? '<th>GK Flota</th>' : ''}<th>Uwagi</th><th></th></tr></thead>
-          <tbody>${stan.pojazdy.length ? stan.pojazdy.map(b => `<tr style="${b.aktywny ? '' : 'opacity:.5'}">
-            <td><b>${escHtml(b.nazwa)}</b></td><td>${escHtml(b.rejestracja || '')}</td>
-            ${(ustawienia.flotex_stan || {}).polaczony ? `<td>${b.flotex
-              ? znacznikFlotexu(b.flotex) + powodyFlotexu(b.flotex)
-              : '<span class="male slaby">nie ma w GK Flota</span>'}</td>` : ''}
-            <td class="male">${escHtml(b.uwagi || '')}</td>
-            <td><button class="maly" data-bus="${b.id}">Zmień</button></td>
-          </tr>`).join('') : '<tr><td colspan="5"><div class="pusto">Nie ma jeszcze aut.</div></td></tr>'}</tbody>
-        </table></div>
-      </div>
-
-      <details class="zaawansowane" id="u-zaawansowane">
-        <summary><span class="znak-zwiniecia">▸</span> Zaawansowane
-          <span class="slaby">— połączenia, kopie, tunel, poczta, przechowywanie danych</span></summary>
-        <p class="male slaby">Rzadko zmieniane ustawienia techniczne. Na co dzień nie trzeba
-          tu zaglądać — program sam pokaże wstęgę, gdy coś stąd wymaga uwagi.</p>
-
-      ${zwin('Ślad GPS i przechowywanie danych', '', `
-        <p class="male slaby">Położenie kierowcy to dana osobowa. Program kasuje stare punkty sam,
-           a kierowca sam włącza i wyłącza udostępnianie w swoim telefonie.</p>
-        <div class="dwie">
-          <label>Trzymaj ślad GPS przez (dni)
-            <input type="number" id="u-retencja" min="1" max="730"
-                   value="${escHtml(ustawienia.retencja_pozycji_dni || '30')}">
-            <span class="male slaby">Ślad służy do pokazania, gdzie jest auto. Dłuższe
-              trzymanie nikomu nie służy, a rozdmuchuje kopie zapasowe.</span></label>
-          <label>Trzymaj zdjęcia i podpisy przez (miesiące)
-            <input type="number" id="u-retencja-zal" min="0" max="120"
-                   value="${escHtml(ustawienia.retencja_zalacznikow_mies || '0')}">
-            <span class="male slaby">0 = trzymaj bez końca. Podpisy też są danymi osobowymi,
-              ale bywają jedynym dowodem w sporze — kasuj świadomie.</span></label>
-        </div>
-        <p class="male slaby">Sprzątanie odbywa się przy każdym uruchomieniu programu.</p>
-        <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
-
-      ${zwin('Powiadamianie klienta', ustawienia.poczta_ustawiona
-        ? '<span class="plakietka p-dostarczone">✓ gotowe</span>'
-        : '<span class="plakietka p-oczekuje">nieustawione</span>', `
-        <p class="male slaby">Program potrafi wysłać klientowi e-mail: „planujemy dostawę
-          w środę, orientacyjnie 12:30". Wysyłasz Ty, przyciskiem przy punkcie —
-          <b>nic nie rozsyła się samo</b>. Potrzebne są dane Waszego serwera pocztowego,
-          te same co w programie pocztowym.</p>
-        <div class="dwie">
-          <label>Serwer SMTP
-            <input id="u-poczta-serwer" value="${escHtml(ustawienia.poczta_serwer || '')}"
-                   placeholder="np. smtp.nazwa.pl"></label>
-          <label>Port
-            <input type="number" id="u-poczta-port" value="${escHtml(ustawienia.poczta_port || '587')}"></label>
-          <label>Szyfrowanie
-            <select id="u-poczta-szyfrowanie">
-              <option value="starttls" ${ustawienia.poczta_szyfrowanie === 'starttls' ? 'selected' : ''}>STARTTLS (port 587)</option>
-              <option value="ssl" ${ustawienia.poczta_szyfrowanie === 'ssl' ? 'selected' : ''}>SSL (port 465)</option>
-              <option value="brak" ${ustawienia.poczta_szyfrowanie === 'brak' ? 'selected' : ''}>bez szyfrowania</option>
-            </select></label>
-          <label>Adres nadawcy
-            <input id="u-poczta-nadawca" value="${escHtml(ustawienia.poczta_nadawca || '')}"
-                   placeholder="np. biuro@twojafirma.pl"></label>
-          <label>Login <span class="slaby">(zwykle ten sam co adres)</span>
-            <input id="u-poczta-login" value="${escHtml(ustawienia.poczta_login || '')}"></label>
-          <label>Hasło
-            <input id="u-poczta-haslo" type="password" autocomplete="new-password"
-                   placeholder="${ustawienia.poczta_ustawiona ? 'hasło zapisane — wpisz nowe, żeby zmienić' : ''}"></label>
-        </div>
-        <label>Stopka wiadomości
-          <textarea id="u-poczta-stopka" placeholder="np. Pozdrawiamy, GK Factory · tel. 62 000 00 00">${escHtml(ustawienia.poczta_stopka || '')}</textarea></label>
-        <div class="przyciski">
-          <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
-          <button id="u-poczta-test">Wyślij wiadomość próbną</button>
-        </div>
-        <p class="male slaby">Hasło do poczty zapisuje się w pliku <code>dane.db</code>
-          w folderze programu — tak samo jak reszta danych firmy.</p>`)}
-
-      ${kartaKopii(ustawienia)}
-      ${kartaTunelu(ustawienia)}
-      ${kartaPages(ustawienia)}
-      ${kartaIkol(ustawienia)}
-      ${kartaFlotexu(ustawienia)}
-      ${kartaKontGK(ustawienia)}
-
-      ${zwin('Trasy po drogach', ustawienia.ors_klucz_ustawiony ? 'klucz zapisany' : 'działa bez klucza', `
-        <p class="male slaby">Przycisk „Pokaż przebieg po drogach" na mapie trasy działa
-          <b>bez żadnego klucza</b> — rysuje przejazd po prawdziwych drogach wraz z kilometrami
-          i czasem, korzystając z darmowego routera OpenStreetMap. Wymaga tylko internetu.</p>
-        <p class="male slaby">Klucz poniżej jest nieobowiązkowy i zmienia co innego: <b>kolejność</b>
-          punktów układana przy „Ułóż trasę". Bez klucza kolejność liczy się w linii prostej —
-          dla dostaw do 100 km to zwykle wystarcza. Darmowy klucz z openrouteservice.org
-          układa ją po realnych drogach.</p>
-        <label>Klucz OpenRouteService
-          <input id="u-ors" placeholder="${ustawienia.ors_klucz_ustawiony
-            ? 'klucz jest zapisany — wpisz nowy, żeby zmienić' : 'wklej klucz'}"></label>
-        <div class="male ${ustawienia.ors_klucz_ustawiony ? '' : 'slaby'}">
-          ${ustawienia.ors_klucz_ustawiony ? '✓ Klucz zapisany' : 'Klucz nie jest ustawiony'}</div>
-        <button class="glowny zapisz-ustawienia" style="margin-top:12px">Zapisz ustawienia</button>`)}
-
-      ${zwin('Jak wejść z telefonu', '', `
-        <p class="male">Najprościej: menu <b>📲 Zaproś kierowcę</b> — kierowca skanuje kod QR
-          aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
-          (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
-          a gdy Panel Kierownika jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
-        <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i PIN-em,
-          a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego"</b>. Od tej pory
-          aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}
-      </details>`;
-
-    const zapiszWszystko = async () => {
-      const daneUstawien = {
-        firma: val('u-firma'), baza_adres: val('u-baza'),
-        baza_lat: '', baza_lon: '',
-        powody_nieudanych: document.getElementById('u-powody').value,
-        retencja_pozycji_dni: val('u-retencja'),
-        retencja_zalacznikow_mies: val('u-retencja-zal'),
-        godzina_wyjazdu: val('u-wyjazd'),
-        srednia_predkosc: val('u-predkosc'),
-        czas_rozladunku_min: val('u-rozladunek'),
-        czas_zaladunku_min: val('u-zaladunek'),
-        cisza_alarm_min: val('u-cisza'),
-        przerwy_wlaczone: document.getElementById('u-przepisy')
-          && !document.getElementById('u-przepisy').checked ? '0' : '1',
-        jazda_do_przerwy_min: val('u-jazda-przerwa'),
-        przerwa_min: val('u-przerwa'),
-        praca_do_przerwy_min: val('u-praca-przerwa'),
-        przerwa_pracownicza_min: val('u-przerwa-praca'),
-        dluga_praca_min: val('u-dluga-praca'),
-        przerwa_dlugiej_pracy_min: val('u-przerwa-dluga'),
-        dobowy_limit_jazdy_min: val('u-limit-jazdy'),
-        doba_pracy_min: val('u-doba'),
-        poczta_serwer: val('u-poczta-serwer'),
-        poczta_port: val('u-poczta-port'),
-        poczta_szyfrowanie: document.getElementById('u-poczta-szyfrowanie').value,
-        poczta_nadawca: val('u-poczta-nadawca'),
-        poczta_login: val('u-poczta-login'),
-        poczta_haslo: val('u-poczta-haslo'),
-        poczta_stopka: val('u-poczta-stopka'),
-        ors_klucz: val('u-ors'),
-        tunel_tryb: (document.querySelector('input[name=tunel]:checked') || {}).value || 'brak',
-        tunel_token: val('u-tunel-token'),
-        tunel_adres: val('u-tunel-adres'),
-        ikol_wlaczony: document.getElementById('u-ikol-wlaczony').checked ? '1' : '',
-        ikol_login: val('u-ikol-login'),
-        ikol_haslo: val('u-ikol-haslo'),
-        ikol_appkey: val('u-ikol-appkey'),
-        flotex_adres: val('u-flotex-adres'),
-        flotex_klucz: val('u-flotex-klucz'),
-        hub_adres: val('u-hub-adres'),
-        hub_klucz: val('u-hub-klucz'),
-        kopia_folder: val('u-kopia-folder'),
-      };
-      // Serwer odpowiada 409, gdy zapis skasowałby podpisy i zdjęcia przez
-      // retencję. Wtedy pytamy człowieka i dopiero po zgodzie ponawiamy —
-      // to jedyne miejsce w programie, które kasuje dowody dostaw bezpowrotnie.
-      let w = null;
-      zajety(true);
-      try {
-        w = await API.post('/api/ustawienia', daneUstawien);
-        komunikat('Zapisano', 'ok');
-      } catch (e) {
-        zajety(false);
-        if (e.kod === 409 && await potwierdz('Na pewno skasować?', e.message)) {
-          w = await sprobuj(() => API.post('/api/ustawienia',
-            Object.assign({}, daneUstawien, { potwierdzam_kasowanie: true })), 'Zapisano');
-        } else if (e.kod !== 409) {
-          komunikat(poLudzku(e), 'blad');
-        }
-        zajety(true);
-      } finally {
-        zajety(false);
-      }
-      if (w) {
-        if (zmienionoTunel(ustawienia)) {
-          komunikat('Zamknij i uruchom program ponownie, żeby tunel się przestawił', 'ok');
-        }
-        pokazEkran('ustawienia');
-      }
-    };
-    // Kazda karta ma wlasny przycisk zapisu — inaczej trzeba by pamietac
-    // o zjechaniu na sam gorny przycisk, a tego nikt nie robi.
-    pole.querySelectorAll('.zapisz-ustawienia').forEach(p => p.onclick = zapiszWszystko);
-
-    // Otwarte sekcje (także „Zaawansowane”) zostają otwarte po zapisie i po
-    // każdym „Zrób kopię teraz”, „Sprawdź połączenie” — ekran rysuje się wtedy
-    // od nowa i bez tego administrator lądował przed zwiniętym nagłówkiem.
-    const otwarte = stan.otwarteUstawienia || (stan.otwarteUstawienia = new Set());
-    pole.querySelectorAll('details[id]').forEach(d => {
-      if (otwarte.has(d.id)) d.open = true;
-      d.addEventListener('toggle', () => { if (d.open) otwarte.add(d.id); else otwarte.delete(d.id); });
-    });
-    if (param && param.sekcja) otworzSekcjeUstawien(pole, param.sekcja);
-    pole.querySelectorAll('[data-do-ustawien]').forEach(e => e.onclick = () =>
-      otworzSekcjeUstawien(pole, SEKCJA_ALARMU[e.dataset.doUstawien]));
-
-    podepnijKopie(pole);
-
-    // Przycisk najpierw zapisuje to, co wpisano w pola obok, a dopiero potem
-    // pyta IKOL. Inaczej sprawdzalby dane z bazy, a nie te z ekranu — i mowilby
-    // "nie podano loginu i hasla", mimo ze pola sa wypelnione.
-    pole.querySelector('#u-ikol-sprawdz').onclick = async () => {
-      const login = val('u-ikol-login');
-      const haslo = val('u-ikol-haslo');
-      if (!login) { komunikat('Wpisz login do IKOL-a', 'blad'); return; }
-      if (!haslo && !ustawienia.ikol_ustawiony) {
-        komunikat('Wpisz hasło do IKOL-a', 'blad');
-        return;
-      }
-      const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
-        ikol_login: login,
-        ikol_haslo: haslo,
-        ikol_appkey: val('u-ikol-appkey'),
-        ikol_wlaczony: document.getElementById('u-ikol-wlaczony').checked ? '1' : '',
-      }));
-      if (!zapisane) return;
-
-      const w = await sprobuj(() => API.post('/api/ikol/sprawdz'));
-      if (!w) { pokazEkran('ustawienia'); return; }
-      komunikat(`IKOL odpowiedział — znaleziono ${w.znaleziono} ${
-        odmiana(w.znaleziono, 'lokalizator', 'lokalizatory', 'lokalizatorów')}`, 'ok');
-      if (!document.getElementById('u-ikol-wlaczony').checked) {
-        komunikat('Połączenie działa, ale pobieranie pozycji jest wyłączone — '
-          + 'zaznacz „Pobieraj pozycje z IKOL-a"', 'blad');
-      }
-      pokazEkran('ustawienia');
-    };
-    const pobierzTeraz = pole.querySelector('#u-ikol-pobierz');
-    if (pobierzTeraz) pobierzTeraz.onclick = async () => {
-      if (val('u-ikol-haslo')) {
-        await sprobuj(() => API.post('/api/ustawienia', { ikol_haslo: val('u-ikol-haslo') }));
-      }
-      const w = await sprobuj(() => API.post('/api/ikol/pobierz'));
-      if (w) komunikat(`Zapisano ${w.pobrano} ${
-        odmiana(w.pobrano, 'pozycję', 'pozycje', 'pozycji')}`, 'ok');
-    };
-    const zapomnij = pole.querySelector('#u-ikol-zapomnij');
-    if (zapomnij) zapomnij.onclick = async () => {
-      if (!await potwierdz('Usunąć zapisane dane do IKOL-a?',
-        'Program zapomni login, hasło i listę lokalizatorów. Pobieranie pozycji '
-        + 'z IKOL-a przestanie działać, dopóki nie wpiszesz ich ponownie.')) return;
-      const w = await sprobuj(() => API.post('/api/ikol/zapomnij'), 'Dane usunięte');
-      if (w) pokazEkran('ustawienia');
-    };
-    pole.querySelectorAll('[data-lokalizator]').forEach(b =>
-      b.onclick = () => oknoLokalizatora(b.dataset.lokalizator));
-
-    // GK Flota: jak przy IKOL-u — najpierw zapis tego, co wpisano obok,
-    // dopiero potem pytanie, inaczej sprawdzalibysmy stary klucz z bazy.
-    pole.querySelector('#u-flotex-sprawdz').onclick = async () => {
-      if (!val('u-flotex-klucz') && !ustawienia.flotex_klucz_ustawiony) {
-        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z GK Trasy)', 'blad');
-        return;
-      }
-      const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
-        flotex_adres: val('u-flotex-adres'), flotex_klucz: val('u-flotex-klucz'),
-      }));
-      if (!zapisane) return;
-      const w = await sprobuj(() => API.post('/api/flotex/sprawdz'));
-      if (w) komunikat(w.komunikat, 'ok');
-      pokazEkran('ustawienia');
-    };
-    const flotexPonow = pole.querySelector('#u-flotex-ponow');
-    if (flotexPonow) flotexPonow.onclick = async () => {
-      const w = await sprobuj(() => API.post('/api/flotex/ponow'),
-        'Wysyłam jeszcze raz — odśwież ekran za chwilę');
-      if (w) setTimeout(() => { if (stan.ekran === 'ustawienia') pokazEkran('ustawienia'); }, 2500);
-    };
-    const flotexOdlacz = pole.querySelector('#u-flotex-zapomnij');
-    if (flotexOdlacz) flotexOdlacz.onclick = async () => {
-      if (!await potwierdz('Odłączyć GK Trasy od GK Flota?',
-        'GK Trasy zapomni klucz. Kierowcy stracą „Moje auto”, a raporty przestaną iść do '
-        + 'GK Flota, dopóki nie wkleisz klucza ponownie.')) return;
-      const w = await sprobuj(() => API.post('/api/flotex/zapomnij'), 'Odłączono');
-      if (w) pokazEkran('ustawienia');
-    };
-    const flotexImport = pole.querySelector('#u-flotex-import');
-    if (flotexImport) flotexImport.onclick = async () => {
-      const w = await sprobuj(() => API.post('/api/flotex/import-pojazdow'));
-      if (!w) return;
-      komunikat(w.dodane
-        ? `Dodano ${w.dodane} ${odmiana(w.dodane, 'auto', 'auta', 'aut')} z GK Flota`
-        : 'Wszystkie auta z GK Flota już są w programie GK Trasy', 'ok');
-      pokazEkran('ustawienia');
-    };
-
-    const kopiuj = pole.querySelector('#u-kopiuj-adres');
-    if (kopiuj) kopiuj.onclick = () => {
-      navigator.clipboard.writeText((ustawienia.tunel || {}).adres || '')
-        .then(() => komunikat('Adres skopiowany — wyślij go kierowcom', 'ok'))
-        .catch(() => komunikat('Skopiuj adres ręcznie', 'blad'));
-    };
-    pole.querySelector('#u-poczta-test').onclick = async () => {
-      const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
-        poczta_serwer: val('u-poczta-serwer'), poczta_port: val('u-poczta-port'),
-        poczta_szyfrowanie: document.getElementById('u-poczta-szyfrowanie').value,
-        poczta_nadawca: val('u-poczta-nadawca'), poczta_login: val('u-poczta-login'),
-        poczta_haslo: val('u-poczta-haslo'), poczta_stopka: val('u-poczta-stopka'),
-      }));
-      if (!zapisane) return;
-      okno({
-        tytul: 'Wiadomość próbna',
-        tresc: `<label>Wyślij na adres
-            <input id="pt-adres" value="${escHtml(val('u-poczta-nadawca'))}"></label>
-          <p class="male slaby">Sprawdź ustawienia zanim cokolwiek pójdzie do klienta.</p>`,
-        przyciski: [
-          { napis: 'Anuluj', klik: z => z() },
-          { napis: 'Wyślij', klasa: 'glowny', klik: async z => {
-            const w = await sprobuj(() => API.post('/api/poczta/test',
-              { adres: val('pt-adres') }), 'Wysłane — sprawdź skrzynkę');
-            if (w) { z(); pokazEkran('ustawienia'); }
-          } },
-        ],
-      });
-    };
-    const noweKonto = pole.querySelector('#u-nowe-konto');
-    if (noweKonto) noweKonto.onclick = () => oknoKonta_admin(null);
-    podepnijKontaGK(pole, ustawienia);
-    pole.querySelectorAll('[data-konto]').forEach(b =>
-      b.onclick = () => oknoKonta_admin(u.find(x => x.id === Number(b.dataset.konto))));
-    pole.querySelectorAll('[data-odblokuj]').forEach(b => b.onclick = async () => {
-      const w = await sprobuj(() => API.post(`/api/uzytkownicy/${b.dataset.odblokuj}/odblokuj`),
-        'Odblokowano');
-      if (w) pokazEkran('ustawienia');
-    });
-    pole.querySelector('#u-nowy-bus').onclick = () => oknoBusa(null);
-    pole.querySelectorAll('[data-bus]').forEach(b =>
-      b.onclick = () => oknoBusa(stan.pojazdy.find(x => x.id === Number(b.dataset.bus))));
+      <div id="admin-tresc"><div class="pusto">Wczytuję…</div></div>`;
+    pole.querySelectorAll('[data-zakladka]').forEach(b =>
+      b.onclick = () => { if (b.dataset.zakladka !== stan.adminZakladka) pokazEkran('administracja', { zakladka: b.dataset.zakladka }); });
+    const tresc = pole.querySelector('#admin-tresc');
+    if (zakladka === 'dane') {
+      tresc.innerHTML = kartaCzyszczeniaTras();
+      podepnijCzyszczenieTras(tresc);
+    } else if (zakladka === 'kody') {
+      tresc.innerHTML = kartaKodowQRAdmina();
+      const b = tresc.querySelector('#a-kody-qr');
+      if (b) b.onclick = oknoKodowAplikacji;
+    } else {
+      await rysujUstawieniaAdmina(tresc, param || {}, zakladka);
+    }
   },
 };
 
-/* Logowanie z internetu (tunel): po 10 złych PIN-ach w 15 min konto czeka
-   kwadrans, po trzech takich seriach w ciągu doby jest zamknięte z internetu,
-   aż administrator kliknie „Odblokuj” (albo minie doba). Z firmowego wifi
-   ta osoba wchodzi cały czas. */
+
+/* Logowanie z internetu (tunel): po 10 złych PIN-ach w 15 min konto czeka minutę
+   (od 2026-11-03 nie ma już blokady do „Odblokuj”; dawne wpisy blokad dobowych
+   serwer ignoruje, a poniższe opisy stanu zostają dla zgodności). Z firmowego
+   wifi ta osoba wchodzi cały czas. */
 function opisBlokadyZInternetu(s) {
   s = s || {};
   const godzina = String(s.do || '').slice(11, 16);
@@ -2447,7 +2520,7 @@ function oknoKonta_admin(k) {
         };
         dane.baza = (document.getElementById('ko-baza') || {}).value || null;
         const w = await sprobuj(() => API.post('/api/uzytkownicy', dane), 'Zapisano');
-        if (w) { stan.kierowcy = null; z(); pokazEkran('ustawienia'); }
+        if (w) { stan.kierowcy = null; z(); wrocDoUstawien(); }
       } },
     ],
   });
@@ -2541,7 +2614,7 @@ function oknoKontaZespolu(k) {
               : `Wylogowano ${k.imie} ze wszystkich urządzeń`, 'ok');
           if (w.uwaga) komunikat(w.uwaga, 'blad');
           zamknijOkno();
-          pokazEkran('ustawienia');
+          wrocDoUstawien();
         } catch (e) {
           pokazBlad(poLudzku(e));
         } finally {
@@ -2579,7 +2652,7 @@ function oknoKontaZespolu(k) {
           if (w && w.uwaga) komunikat(w.uwaga, 'blad');
           stan.kierowcy = null;
           z();
-          pokazEkran('ustawienia');
+          wrocDoUstawien();
         } catch (e) {
           pokazBlad(poLudzku(e));
         } finally {
@@ -2616,7 +2689,7 @@ function oknoBusa(b) {
           aktywny: nowy ? 1 : (document.getElementById('bu-aktywny').checked ? 1 : 0),
           czas_pracy: document.getElementById('bu-czas-pracy').checked ? 1 : 0,
         }), 'Zapisano');
-        if (w) { z(); pokazEkran('ustawienia'); }
+        if (w) { z(); wrocDoUstawien(); }
       } },
     ],
   });
@@ -2709,6 +2782,67 @@ function kartaKopii(u) {
       punkt 15.</p>`, 'u-kopie');
 }
 
+/* Czyszczenie tras (administrator, 2026-11-04): jak „Czyszczenie zleceń” w Panelu Kierownika — wybór konkretnych tras
+   z listy i usunięcie ich na stałe (z punktami, zdjęciami i podpisami). Serwer przed usunięciem robi kopię bazy. */
+function kartaCzyszczeniaTras() {
+  // Zakładka Administracja → Dane i czyszczenie: przycisk na wierzchu (nie w zwijanej sekcji pod „Zaawansowane”).
+  return `<div class="karta" id="u-czyszczenie-tras">
+    <h2>Czyszczenie tras</h2>
+    <p class="male slaby">Usuwa wybrane trasy <b>na stałe</b> — razem z punktami, zdjęciami i podpisami. Przed usunięciem
+      program robi pełną kopię bazy w folderze <code>kopie/</code>. Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy,
+      które już ruszyły.</p>
+    <div class="przyciski"><button class="glowny" id="u-czysc-wybierz">Wybierz trasy do usunięcia…</button></div>
+  </div>`;
+}
+
+function podepnijCzyszczenieTras(pole) {
+  const b = pole.querySelector('#u-czysc-wybierz');
+  if (!b) return;
+  b.onclick = async () => {
+    const w = await sprobuj(() => API.post('/api/czyszczenie-tras', { lista: true }));
+    if (w) oknoCzyszczeniaTras(w.trasy || [], !!w.ucieto);
+  };
+}
+
+function oknoCzyszczeniaTras(trasy, ucieto) {
+  const wiersz = t => `<label class="plaska" style="display:flex;gap:8px;align-items:flex-start;padding:4px 0">
+      <input type="checkbox" data-trasa="${t.id}"> <span>${escHtml(t.data)} · ${escHtml(t.nazwa || 'bez nazwy')}
+      <span class="slaby">· ${escHtml(t.kierowca_imie || 'bez kierowcy')} · ${t.ile_punktow} pkt · ${escHtml(t.status)}</span></span></label>`;
+  okno({
+    tytul: 'Czyszczenie tras',
+    szerokie: true,
+    tresc: trasy.length
+      ? `<label class="plaska"><input type="checkbox" id="cz-wszystkie"> <b>Zaznacz wszystkie (${trasy.length})</b></label>
+         <div style="max-height:50vh;overflow:auto">${trasy.map(wiersz).join('')}</div>
+         ${ucieto ? '<p class="male slaby">Pokazuję 500 najnowszych tras.</p>' : ''}`
+      : '<p class="slaby">Nie ma tras do wyboru.</p>',
+    przyciski: [
+      { napis: 'Zamknij', klik: z => z() },
+      ...(trasy.length ? [{ napis: 'Usuń zaznaczone', klasa: 'czerwony', klik: async z => {
+        const ids = [...document.querySelectorAll('#okno-tresc [data-trasa]:checked')].map(x => Number(x.dataset.trasa));
+        if (!ids.length) { komunikat('Zaznacz trasy do usunięcia', 'blad'); return; }
+        if (!await potwierdz('Usunąć zaznaczone trasy?', `${ids.length} tras zniknie na stałe, razem ze zdjęciami i podpisami. Program najpierw robi kopię bazy.`, { tak: 'Usuń', groznie: true })) return;
+        const w = await sprobuj(() => API.post('/api/czyszczenie-tras', { ids, potwierdz: true }));
+        if (w) { z(); komunikat(`Usunięto ${w.liczba} tras`, 'ok'); }
+      } }] : []),
+    ],
+    poOtwarciu: pole => {
+      const wszystkie = pole.querySelector('#cz-wszystkie');
+      // „Usuń zaznaczone (N)” — licznik przy przycisku rośnie z każdym zaznaczeniem (STYL-GK §8).
+      const licznik = () => {
+        const n = pole.querySelectorAll('[data-trasa]:checked').length;
+        const przycisk = document.querySelector('#okno-stopka button.czerwony');
+        if (przycisk) przycisk.textContent = n ? `Usuń zaznaczone (${n})` : 'Usuń zaznaczone';
+      };
+      pole.querySelectorAll('[data-trasa]').forEach(x => { x.onchange = licznik; });
+      if (wszystkie) wszystkie.onchange = () => {
+        pole.querySelectorAll('[data-trasa]').forEach(x => { x.checked = wszystkie.checked; });
+        licznik();
+      };
+    },
+  });
+}
+
 function podepnijKopie(pole) {
   const teraz = pole.querySelector('#u-kopia-teraz');
   if (!teraz) return;
@@ -2722,7 +2856,7 @@ function podepnijKopie(pole) {
     if (w.trwa) komunikat('Kopia w toku — wynik zobaczysz tu za chwilę (odśwież Ustawienia)', 'ok');
     else if (w.blad) komunikat(w.blad, 'blad');
     else komunikat(w.folder ? `Kopia zrobiona: ${w.plik}` : 'Kopia zrobiona w folderze kopie/', 'ok');
-    pokazEkran('ustawienia');
+    wrocDoUstawien();
   };
 }
 
@@ -2807,6 +2941,8 @@ function kartaTunelu(u) {
 }
 
 function zmienionoTunel(poprzednie) {
+  // Na zakładce Konta karty tunelu nie ma — nic nie mogło się zmienić.
+  if (!document.getElementById('u-tunel-token')) return false;
   const wybrany = (document.querySelector('input[name=tunel]:checked') || {}).value || 'brak';
   return wybrany !== (poprzednie.tunel_tryb || 'brak') || !!val('u-tunel-token');
 }
@@ -2985,7 +3121,7 @@ function oknoLokalizatora(klucz) {
           kierowca: document.getElementById('lk-kierowca').value || null,
           aktywny: document.getElementById('lk-aktywny').checked ? 1 : 0,
         }), 'Zapisano');
-        if (w) { z(); pokazEkran('ustawienia'); }
+        if (w) { z(); wrocDoUstawien(); }
       } },
     ],
   });
@@ -3190,7 +3326,7 @@ function podepnijKontaGK(pole, ustawienia) {
     if (!zapisane) return;
     const w = await sprobuj(() => API.post('/api/konta-gk/sprawdz'));
     if (w) komunikat(w.komunikat, 'ok');
-    pokazEkran('ustawienia');
+    wrocDoUstawien();
   };
   const lokalnie = przycisk('u-hub-lokalnie');
   if (lokalnie) lokalnie.onclick = async () => {
@@ -3199,7 +3335,7 @@ function podepnijKontaGK(pole, ustawienia) {
     komunikat(['polaczono', 'polaczony'].includes(w.wynik) ? 'Połączono z Panelem na tym komputerze — konta przyjdą za chwilę'
       : w.wynik === 'wylaczone_w_panelu' ? 'Połączenie jest wyłączone w Panelu → Administracja → Połączenia GK'
         : 'Poprosiłem Panel o klucz — połączy się sam w ciągu minuty', w.wynik === 'wylaczone_w_panelu' ? 'blad' : 'ok');
-    setTimeout(() => { if (stan.ekran === 'ustawienia') pokazEkran('ustawienia'); }, 1500);
+    setTimeout(() => { if (stan.ekran === 'ustawienia' || stan.ekran === 'administracja') wrocDoUstawien(); }, 1500);
   };
   const pobierz = przycisk('u-hub-pobierz');
   if (pobierz) pobierz.onclick = async () => {
@@ -3208,7 +3344,7 @@ function podepnijKontaGK(pole, ustawienia) {
       const x = w.wynik || {};
       komunikat(`Pobrano ${x.konta || 0} ${odmiana(x.konta || 0, 'konto', 'konta', 'kont')} z Panelu`
         + ` (nowe ${x.dodane || 0}, połączone ${x.polaczone || 0}, wyłączone ${x.wylaczone || 0})`, 'ok');
-      pokazEkran('ustawienia');
+      wrocDoUstawien();
     }
   };
   const przenies = przycisk('u-hub-przenies');
@@ -3220,7 +3356,7 @@ function podepnijKontaGK(pole, ustawienia) {
     if (w) {
       komunikat(`Przeniesiono: nowe ${w.dodane}, połączone ${w.polaczone}, konflikty `
         + `${(w.konflikty || []).length}`, (w.konflikty || []).length ? 'blad' : 'ok');
-      setTimeout(() => { if (stan.ekran === 'ustawienia') pokazEkran('ustawienia'); }, 1500);
+      setTimeout(() => { if (stan.ekran === 'ustawienia' || stan.ekran === 'administracja') wrocDoUstawien(); }, 1500);
     }
   };
   const odlacz = przycisk('u-hub-zapomnij');
@@ -3229,7 +3365,7 @@ function podepnijKontaGK(pole, ustawienia) {
       'Program zapomni klucz Panelu i nie połączy się sam od nowa. Konta z Panelu zostają i działają, '
       + 'ale od teraz zmienia się je tutaj — Panel przestanie je aktualizować.')) return;
     const w = await sprobuj(() => API.post('/api/konta-gk/zapomnij'), 'Odłączono');
-    if (w) pokazEkran('ustawienia');
+    if (w) wrocDoUstawien();
   };
 }
 

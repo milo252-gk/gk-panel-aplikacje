@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-faa0fcc50242';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-65369ff2d05c';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -314,6 +314,10 @@ button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line
 .menu-stopka .ikona-menu svg{display:block}
 .zaslona{position:fixed; inset:0; background:var(--zaslona); z-index:1050; display:none}
 .zaslona.widoczna{display:block}
+/* Poza blokiem wspólnym z GK Flota (test t_konta_poprawki pilnuje jego skrótu): */
+/* Ikony liniowe GKIkony (gk-ikony.js, STYL-GK §8) w menu bocznym: 20 px, currentColor — biel menu; tak samo jak „Wyloguj”. */
+.menu .ikona-menu{display:inline-flex; justify-content:center}
+.menu .ikona-menu svg{display:block}
 
 main{padding:16px; max-width:1180px; margin:0 auto; padding-bottom:calc(var(--dol-wys) + 24px)}
 
@@ -329,11 +333,17 @@ main{padding:16px; max-width:1180px; margin:0 auto; padding-bottom:calc(var(--do
   color:var(--tekst-slaby); padding:6px 2px; min-height:auto;
 }
 .pasek-dolny button .i{font-size:20px; line-height:1}
+/* Dolny pasek: ikona liniowa 24 px (GKIkony), kolor jak napis pod nią (currentColor). */
+.pasek-dolny button .i{display:inline-flex}
+.pasek-dolny button .i svg{display:block}
 /* Napisy pod ikonami co najmniej 13 px — 11 px w słońcu w busie było nie do
    przeczytania. Długi napis („Raport pracy”) łamie się na dwie linie, stąd
    wyższy pasek na telefonie (--dol-wys niżej). */
 .pasek-dolny button>span:last-child{font-size:13px; line-height:1.15; text-align:center}
 .pasek-dolny button.wybrany{color:var(--granat-tekst)}
+/* STYL-GK §1: zaznaczony ekran ma pomarańczową kreskę 3 px u góry dolnego paska (jak w GK Szkolenia i aplikacjach hali). */
+.pasek-dolny button{position:relative}
+.pasek-dolny button.wybrany::before{content:""; position:absolute; top:0; left:28%; right:28%; height:3px; border-radius:0 0 3px 3px; background:var(--pomarancz)}
 
 /* D65: pasek połączenia pod nagłówkiem — te same słowa i kolory co w aplikacjach
    hali (hala.css → .hala-polaczenie); przy „wszystko wysłane” go nie ma. */
@@ -641,6 +651,7 @@ body.okno-otwarte .mapa{visibility:hidden}
             display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
 .komunikat{background:var(--toast-tlo); color:var(--toast-tekst); padding:12px 17px; border-radius:11px; font-size:14px;
            box-shadow:var(--cien-mocny); max-width:480px; animation:wjazd .18s}
+.komunikat{pointer-events:auto; cursor:pointer}   /* dotknięcie zamyka (STYL-GK §1) */
 .komunikat.blad{background:var(--czerwony); color:var(--na-barwie)}
 .komunikat.ok{background:var(--zielony); color:var(--na-barwie)}
 .komunikat.uwaga{background:var(--zolty); color:var(--na-barwie)}

@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-faa0fcc50242';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-65369ff2d05c';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -226,8 +226,9 @@ function komunikat(tresc, rodzaj) {
   e.className = 'komunikat ' + (rodzaj || '');
   e.textContent = tresc;                  // textContent — w dymek nie da się wstrzyknąć HTML
   pole.appendChild(e);
-  setTimeout(() => { e.style.opacity = '0'; setTimeout(() => e.remove(), 250); },
-    rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
+  const schowaj = () => { e.style.opacity = '0'; setTimeout(() => e.remove(), 250); };
+  e.onclick = schowaj;                    // STYL-GK §1: dotknięcie dymku zamyka go
+  setTimeout(schowaj, rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
 }
 
 /* ---------------------------------------------- dźwięki (GKDzwieki, 2026-10-16)
@@ -1456,8 +1457,12 @@ async function zaloguj(login, pin) {
     blad.kodBledu = wynik.kod || '';
     blad.kod = odp.status;
     // PIN bez ważnego znacznika albo 5 złych PIN-ów: ten znacznik już nic nie
-    // znaczy — pole wraca do hasła.
-    if (blad.kodBledu === 'wymagane_haslo') Znaczniki.zapomnij(login);
+    // znaczy — pole wraca do hasła. Tak samo, gdy w polu „PIN” (z limitem 4 znaków) wpisano coś z literą albo znakiem:
+    // to nie był PIN, tylko ucięte hasło — znacznik jest już nieważny po stronie programu (zmiana hasła w Panelu),
+    // a bez zapomnienia go pole wracałoby do „PIN” przy każdej próbie (diagnoza logowania 2026-11-04).
+    if (blad.kodBledu === 'wymagane_haslo' || (blad.kodBledu === 'zly_pin' && zn && /\D/.test(String(pin || '').trim()))) {
+      Znaczniki.zapomnij(login);
+    }
     throw blad;
   }
   if (wynik.do_ustawienia && wynik.do_ustawienia.length) {
@@ -1841,6 +1846,10 @@ function menuDlaRoli() {
   document.querySelectorAll('.tylko-biuro').forEach(e => e.classList.toggle('ukryty', !biuro));
   document.querySelectorAll('.tylko-administrator')
     .forEach(e => e.classList.toggle('ukryty', !jestAdministratorem()));
+  // Administrator ma jedną pozycję „Administracja” (z zakładką Ustawienia w środku); biuro zachowuje
+  // swoje „Ustawienia” (firmy) — osobny znacznik, żeby nie mieszać go z tylko-biuro / tylko-administrator.
+  document.querySelectorAll('.tylko-ustawienia-firmy')
+    .forEach(e => e.classList.toggle('ukryty', !(biuro && !jestAdministratorem())));
   document.querySelectorAll('.tylko-kierowca').forEach(e => e.classList.toggle('ukryty', biuro));
   // Arkusz powieksza na telefonie male przyciski kierowcy (style.css, rola-kierowca).
   document.body.classList.toggle('rola-kierowca', !biuro);
@@ -1851,25 +1860,32 @@ function menuDlaRoli() {
 
   // D65: najwyżej cztery ekrany + „☰ Więcej” (jak w hali). Kierowca z GK Flota
   // ma „Moje auto” zamiast „Klientów” — Klienci są w menu „Więcej”.
+  // Ikony liniowe GKIkony (24 px, currentColor) zamiast emoji — STYL-GK §8.
   const dolne = biuro
-    ? [['pulpit', '📊', 'Pulpit'], ['trasy', '🗺️', 'Trasy'],
-       ['zalegle', '⏰', 'Zaległe'], ['klienci', '🏢', 'Klienci']]
-    : [['moja', '🚚', 'Moja trasa'], ['zaladunek', '📦', 'Załadunek'],
-       mojeAuto ? ['mojeauto', '🔧', 'Moje auto'] : ['klienci', '🏢', 'Klienci'],
-       ['raporty', '🕒', 'Raport pracy']];
+    ? [['pulpit', 'pulpit', 'Pulpit'], ['trasy', 'mapa', 'Trasy'],
+       ['zalegle', 'zegar', 'Zaległe'], ['klienci', 'firma', 'Klienci']]
+    : [['moja', 'ciezarowka', 'Moja trasa'], ['zaladunek', 'paczka', 'Załadunek'],
+       mojeAuto ? ['mojeauto', 'pojazd', 'Moje auto'] : ['klienci', 'firma', 'Klienci'],
+       ['raporty', 'zegar', 'Raport pracy']];
   const pasek = document.getElementById('pasek-dolny');
   pasek.innerHTML = dolne.map(([e, i, n]) =>
-    `<button data-ekran="${e}"><span class="i">${i}</span><span>${n}</span></button>`).join('');
+    `<button data-ekran="${e}"><span class="i">${GKIkony.html(i, 24)}</span><span>${n}</span></button>`).join('');
   pasek.querySelectorAll('button').forEach(b =>
     b.onclick = () => pokazEkran(b.dataset.ekran));
   // D65: „☰ Więcej” zawsze ostatnie na dolnym pasku — jak w aplikacjach hali
   // (STYL-GK, D64); otwiera menu boczne z resztą ekranów. ☰ w nagłówku zniknęło.
   pasek.insertAdjacentHTML('beforeend',
-    '<button type="button" data-wiecej><span class="i">☰</span><span>Więcej</span></button>');
+    `<button type="button" data-wiecej><span class="i">${GKIkony.html('wiecej', 24)}</span><span>Więcej</span></button>`);
   pasek.querySelector('[data-wiecej]').onclick = otworzMenu;
 }
 
 async function pokazEkran(nazwa, parametry) {
+  // Stary adres ekranu „ustawienia” (hasz #ustawienia, wstęgi „Pokaż”, alarmy z pulpitu): administrator ma te
+  // ustawienia teraz w Administracji → Ustawienia; biuro dalej na ekranie „Ustawienia firmy”.
+  if (nazwa === 'ustawienia' && jestAdministratorem()) {
+    nazwa = 'administracja';
+    parametry = Object.assign({}, parametry, { zakladka: 'ustawienia' });
+  }
   const ekran = EKRANY[nazwa];
   if (!ekran) return;
   if (ekran.tylkoBiuro && !jestBiuro()) return;
@@ -2798,7 +2814,6 @@ async function wejdzDoAplikacji() {
   document.getElementById('ekran-logowania').classList.add('ukryty');
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
-  document.getElementById('menu-rola').textContent = NAZWA_ROLI[stan.uz.rola] || stan.uz.rola;
   menuDlaRoli();
   // Zanim cokolwiek narysujemy: czy przegladarka na pewno ma komplet plikow
   // z jednej wersji. Gdy nie — funkcja sama przeladuje aplikacje.

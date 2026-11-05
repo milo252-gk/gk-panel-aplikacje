@@ -25,7 +25,7 @@ EKRANY.lokalizacje = {
       <div class="pasek-narzedzi">
         <div class="male slaby" style="flex:1">
           Miejsca, z których wyjeżdżamy. Jedno z nich jest domyślną bazą całej firmy,
-          a każdemu kierowcy można przypisać własne (Ustawienia → Konta).</div>
+          a każdemu kierowcy można przypisać własne (${jestAdministratorem() ? 'Administracja → Konta' : 'Ustawienia → Konta kierowców'}).</div>
         <button class="glowny" id="l-nowa">+ Nowa lokalizacja</button>
       </div>
       ${lista.length ? lista.map(l => `
