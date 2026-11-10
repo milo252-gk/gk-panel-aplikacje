@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-65369ff2d05c';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-dfaab12d8601';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -81,6 +81,7 @@ const stan = {
   online: navigator.onLine,
   bezSerwera: false,       // sieć jest, a program w biurze nie odpowiada (pasek połączenia)
   wKolejce: 0,
+  zdjecWKolejce: 0,        // ile zdjęć leży w zapisach czekających w tym urządzeniu (pasek połączenia)
   synchronizuje: false,
   trybOffline: null,       // D78: {login, id, do} — zalogowano PIN-em bez sieci (bez tokenu)
   // D43: konta z Panelu mają hasło + PIN (z /api/zyje; zapamiętane na start bez sieci).
@@ -89,6 +90,13 @@ const stan = {
 
 const EKRANY = {};          // wypelniaja go biuro.js i kierowca.js
 const MAKS_PROB = 5;        // po tylu nieudanych probach zapis ladzie wsrod odrzuconych
+/* Blad SERWERA (5xx, `serwer: true` w odpowiedzi) nie jest wina zapisu: nie liczy sie do MAKS_PROB, tylko
+   wydluza odstep (30 s, 1 min, 2 min ... najwyzej 30 min). Dowod i tak lezy na serwerze (odrzucone/) i w telefonie. */
+const ODSTEP_BLEDU_SERWERA_S = 30;
+const MAKS_ODSTEP_BLEDU_SERWERA_S = 30 * 60;
+function odstepBleduSerwera(ile) {
+  return Math.min(MAKS_ODSTEP_BLEDU_SERWERA_S, ODSTEP_BLEDU_SERWERA_S * Math.pow(2, Math.max(0, ile - 1))) * 1000;
+}
 
 /* ------------------------------------------------------------- drobiazgi */
 
@@ -109,6 +117,16 @@ function poLudzku(e) {
   if (nazwa === 'QuotaExceededError' || /quota|full disk|exceeded its quota/i.test(tekst)) {
     return 'Brak miejsca w pamięci telefonu. Usuń stare zdjęcia albo nieużywane aplikacje '
       + '— zapisy czekające na wysłanie zostają nietknięte.';
+  }
+  if (e.przekroczonoCzas) {
+    // Limit czasu zapytania (etap 3): program w biurze nie odpowiedział — to NIE jest błąd zapisu kierowcy,
+    // jego zapisy leżą w kolejce telefonu i wyślą się same.
+    return 'Program w biurze nie odpowiedział na czas. Sprawdź zasięg i spróbuj za chwilę '
+      + '— zapisy w kolejce wyślą się same.';
+  }
+  // Pamięć urządzenia (IndexedDB) przerwała zapis — przed gałęzią „AbortError”, bo przerwana transakcja też się tak nazywa.
+  if (/indexeddb|object stores|database|transaction/i.test(tekst)) {
+    return 'Pamięć telefonu nie odpowiada. Zamknij i otwórz aplikację jeszcze raz.';
   }
   if (nazwa === 'AbortError' || /abort/i.test(tekst)) {
     return 'Przerwane w połowie. Spróbuj jeszcze raz.';
@@ -219,7 +237,7 @@ Motyw.przejmij();
    inaczej niż w pozostałych aplikacjach GK). Te same czasy w GK Flota. */
 const CZAS_KOMUNIKATU_MS = 4000;
 const CZAS_BLEDU_MS = 7000;
-function komunikat(tresc, rodzaj) {
+function komunikat(tresc, rodzaj, trwaly) {
   const pole = document.getElementById('komunikaty');
   if (!pole) return;
   const e = document.createElement('div');
@@ -228,7 +246,9 @@ function komunikat(tresc, rodzaj) {
   pole.appendChild(e);
   const schowaj = () => { e.style.opacity = '0'; setTimeout(() => e.remove(), 250); };
   e.onclick = schowaj;                    // STYL-GK §1: dotknięcie dymku zamyka go
-  setTimeout(schowaj, rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
+  // `trwaly` — dymek zostaje, dopóki człowiek go nie dotknie (etap 3: „NIE ZAPISANO” nie może zniknąć sam
+  // po kilku sekundach, bo kierowca patrzy wtedy na klienta, a nie na telefon).
+  if (!trwaly) setTimeout(schowaj, rodzaj === 'blad' ? CZAS_BLEDU_MS : CZAS_KOMUNIKATU_MS);
 }
 
 /* ---------------------------------------------- dźwięki (GKDzwieki, 2026-10-16)
@@ -563,7 +583,7 @@ function adresDanychGotowy() {
    jedyny plik, który MUSI być świeży — także w pamięci serwerów GitHuba. */
 async function czytajPlikAdresu() {
   try {
-    const odp = await fetch('adres.json?t=' + Date.now(), { cache: 'no-store' });
+    const odp = await fetchZLimitem('adres.json?t=' + Date.now(), { cache: 'no-store' }, LIMIT_ADRESU_MS);
     if (odp.status === 404) return 'brak';
     if (!odp.ok) return null;
     const opis = await odp.json();
@@ -621,21 +641,71 @@ function adresAplikacji() { return new URL('./', location.href).href; }
    albo stronę błędu Cloudflare 530/1033 — 502, gdy tunel stoi, a program nie. */
 const KODY_MARTWEGO_TUNELU = [502, 530];
 
+/* Limity czasu zapytań (etap 3, recenzja 2026-11-09 W7). „Wifi jest, internetu brak” zawieszało dotąd ekran
+   i logowanie na minuty: fetch bez limitu czeka, aż system zerwie połączenie. Limit liczy się do nagłówków
+   odpowiedzi; po jego upływie zapytanie kończy się błędem `przekroczonoCzas`, który wszędzie znaczy to samo co
+   brak połączenia (odczyt z pamięci urządzenia, zapis do kolejki, logowanie PIN-em bez sieci) i NIGDY nie jest
+   błędem zapisu: do MAKS_PROB liczą się tylko odmowy, które program sam odesłał w odpowiedzi na /api/sync.
+   Odczyty 10 s, logowanie 12 s. Zapisy dłużej (30 s): po limicie nie wiadomo, czy program zdążył zapis przyjąć,
+   a krótki limit zachęcałby do podwójnych zapisów. Zdjęcia i podpisy (duże ciało, głównie /api/sync) — limit
+   rośnie z rozmiarem, żeby 6 MB zdjęć na słabym LTE nie przepadało w pół drogi. */
+const LIMIT_ZAPYTANIA_MS = 10 * 1000;
+const LIMIT_LOGOWANIA_MS = 12 * 1000;
+const LIMIT_ADRESU_MS = 6 * 1000;
+const LIMIT_ZAPISU_MS = 30 * 1000;
+const LIMIT_SYNCHRONIZACJI_MS = 15 * 1000;       // podstawa dla /api/sync i zapisów z załącznikami
+const LIMIT_DLUGIEJ_OPERACJI_MS = 120 * 1000;     // import, geokodowanie, trasa po drogach, poczta, Panel, Flota
+const LIMIT_NAJDLUZSZY_MS = 180 * 1000;
+const DLUGIE_OPERACJE = /^\/api\/(import\/|klienci\/plik-|czyszczenie-tras|kopie\/teraz|poczta\/|ikol\/|flotex\/|konta-gk\/|eksport\/token|trasy\/\d+\/(optymalizuj|przebieg|kopiuj|szablon)|lokalizacje\/\d+\/geokoduj|klienci\/\d+\/geokoduj)/;
+const CIEZKIE_ODCZYTY = /^\/api\/(raporty|pozycje|pulpit|szukaj|tablica|zalegle|braki|ikol\/|flotex\/|pages\/|kopie|odrzucone|aplikacje-gk)|\/historia$/;
+
+function limitCzasuZapytania(sciezka, opcje) {
+  const s = String(sciezka).split('?')[0];
+  const metoda = String((opcje && opcje.method) || 'GET').toUpperCase();
+  if (s === '/api/logowanie') return LIMIT_LOGOWANIA_MS;
+  if (metoda === 'GET' || metoda === 'HEAD') return CIEZKIE_ODCZYTY.test(s) ? LIMIT_ZAPISU_MS : LIMIT_ZAPYTANIA_MS;
+  if (DLUGIE_OPERACJE.test(s)) return LIMIT_DLUGIEJ_OPERACJI_MS;
+  const rozmiar = opcje && typeof opcje.body === 'string' ? opcje.body.length : 0;
+  if (rozmiar > 64 * 1024) {
+    return Math.min(LIMIT_NAJDLUZSZY_MS, LIMIT_SYNCHRONIZACJI_MS + Math.ceil(rozmiar / 20000) * 1000);
+  }
+  return s === '/api/sync' ? LIMIT_SYNCHRONIZACJI_MS : LIMIT_ZAPISU_MS;
+}
+
+function fetchZLimitem(adres, opcje, limitMs) {
+  if (!limitMs || typeof AbortController === 'undefined') return fetch(adres, opcje);
+  const przerwanie = new AbortController();
+  let uplynal = false;
+  const zegar = setTimeout(() => { uplynal = true; przerwanie.abort(); }, limitMs);
+  return fetch(adres, Object.assign({}, opcje, { signal: przerwanie.signal })).then(odp => {
+    clearTimeout(zegar);
+    return odp;
+  }, e => {
+    clearTimeout(zegar);
+    if (!uplynal) throw e;
+    const blad = new Error('Program nie odpowiedział w ciągu ' + Math.round(limitMs / 1000) + ' s.');
+    blad.name = 'TimeoutError';
+    blad.przekroczonoCzas = true;
+    throw blad;
+  });
+}
+
 /* fetch do programu w biurze. Przy błędzie sieci sprawdza, czy program nie
    dostał nowego adresu — i jeśli tak, ponawia zapytanie JEDEN raz pod nowym.
    Ponowienie jest bezpieczne: zapisy z kolejki mają swój numer (uuid). */
 async function pobierz(sciezka, opcje) {
   await adresDanychGotowy();
+  const limit = limitCzasuZapytania(sciezka, opcje);
   let odp;
   try {
     try {
-      odp = await fetch(API_BAZA + sciezka, opcje);
+      odp = await fetchZLimitem(API_BAZA + sciezka, opcje, limit);
     } catch (e) {
       if (!await odswiezAdresDanych()) throw e;
-      odp = await fetch(API_BAZA + sciezka, opcje);
+      odp = await fetchZLimitem(API_BAZA + sciezka, opcje, limit);
     }
     if (KODY_MARTWEGO_TUNELU.indexOf(odp.status) >= 0 && await odswiezAdresDanych()) {
-      odp = await fetch(API_BAZA + sciezka, opcje);
+      odp = await fetchZLimitem(API_BAZA + sciezka, opcje, limit);
     }
   } catch (e) {
     oznaczSerwer(false);
@@ -743,9 +813,15 @@ async function zapomnijOdpowiedzi(zostaw) {
    poczekają w telefonie”) jest prawdziwy tylko dla kolejki kierowcy. */
 function bladBezProgramu(e, metoda, sciezka) {
   if (metoda === 'GET' || String(sciezka).split('?')[0] === '/api/sync') return e;
-  const blad = new Error('Brak połączenia z programem w biurze — nie zapisano. '
-    + 'Spróbuj ponownie, gdy połączenie wróci.');
+  // Po limicie czasu nie wiadomo, czy program zdążył zapis przyjąć — nie mówimy „nie zapisano”, tylko
+  // „sprawdź”. Zapis biura z numerem operacji (zapisBiura) i tak trafia wtedy do kolejki i jest bezpieczny.
+  const nieWiadomo = !!(e && e.przekroczonoCzas);
+  const blad = new Error(nieWiadomo
+    ? 'Program w biurze nie odpowiedział na czas — nie wiem, czy zmiana doszła. '
+      + 'Odśwież ekran i sprawdź, zanim zapiszesz jeszcze raz.'
+    : 'Brak połączenia z programem w biurze — nie zapisano. Spróbuj ponownie, gdy połączenie wróci.');
   blad.bezPolaczenia = true;
+  if (nieWiadomo) blad.przekroczonoCzas = true;
   return blad;
 }
 
@@ -905,7 +981,13 @@ async function zapisBiura(metoda, sciezka, dane, opcje) {
     const kopia = await odpowiedzZPamieci(z);
     op.zrodla.push({ sciezka: z, odcisk: kopia ? odcisk(kopia.dane) : '' });
   }
-  await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+  try {
+    await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+  } catch (e) {
+    // Pamięć urządzenia nie przyjęła zapisu (przerwana transakcja, pełna pamięć, zamknięta baza):
+    // mówimy wprost, że zmiana NIE została nigdzie zapisana — zamiast kręcącego się koła albo ciszy.
+    throw new Error('NIE ZAPISANO. ' + poLudzku(e));
+  }
   if (o.popraw) await poprawPamiec(o.popraw).catch(() => { /* ekran pokaże stare dane */ });
   await pokazZapisyBiura();
   if (!bezProgramu.od) wyslijZapisyBiura();
@@ -1193,7 +1275,7 @@ async function doKolejki(op, komunikatSukcesu) {
   } catch (e) {
     // Cicha porazka w tym miejscu jest najgorsza z mozliwych: kierowca widzi
     // ptaszka, a podpisu i zdjec nie ma nigdzie. Mowimy wprost i przerywamy.
-    komunikat('NIE ZAPISANO. ' + poLudzku(e), 'blad');
+    komunikat('NIE ZAPISANO. ' + poLudzku(e), 'blad', true);
     Dzwiek.zagraj('blad');
     throw e;
   }
@@ -1222,14 +1304,27 @@ async function synchronizuj(cicho = true) {
     const paczka = (await Kolejka.lista()).filter(o => o.uzytkownik === stan.uz.id);
     if (!paczka.length || !navigator.onLine) { await odswiezStanSieci(); return; }
     await odswiezStanSieci();
+    // Zapis po bledzie serwera czeka swoj odstep (`nast`), a razem z nim to, co dotyczy tego samego punktu albo
+    // trasy — inaczej kolejny zapis tego punktu ("najpierw zaladunek") zuzywalby proby. Reczne "Wyslij" (nie cicho)
+    // ponawia od razu.
+    const teraz = Date.now();
+    const wstrzymane = new Set();
+    const gotowe = [];
+    for (const o of paczka) {
+      const klucz = o.przystanek ? 'p' + o.przystanek : (o.trasa ? 't' + o.trasa : '');
+      if (cicho && o.nast && o.nast > teraz) { if (klucz) wstrzymane.add(klucz); continue; }
+      if (cicho && klucz && wstrzymane.has(klucz)) continue;
+      gotowe.push(o);
+    }
+    if (!gotowe.length) return;
     // Paczke dobieramy wedlug wagi, a nie liczby. Dwanascie potwierdzen bez
     // zdjec wazy tyle co nic, ale dwanascie ze zdjeciami przekroczyloby limit
     // serwera i utknelyby na zawsze.
     const LIMIT = 6 * 1024 * 1024;
     const wysylka = [];
     let waga = 0;
-    for (const o of paczka) {
-      const czysta = Object.assign({}, o, { dodano: undefined, prob: undefined });
+    for (const o of gotowe) {
+      const czysta = Object.assign({}, o, { dodano: undefined, prob: undefined, nast: undefined, serw: undefined });
       const ile = JSON.stringify(czysta).length;
       if (wysylka.length && waga + ile > LIMIT) break;
       wysylka.push(czysta);
@@ -1252,6 +1347,9 @@ async function synchronizuj(cicho = true) {
       if (!op) continue;
       if (o.trwaly) {
         await Kolejka.odrzuc(op, o.blad);
+      } else if (o.serwer) {
+        // Blad serwera: zapis zostaje w kolejce, proba NIE liczy sie do MAKS_PROB — tylko dluzszy odstep.
+        await Kolejka.oznaczBladSerwera(op, odstepBleduSerwera((op.serw || 0) + 1));
       } else {
         await Kolejka.oznaczProbe(op);
         // po kilku nieudanych probach tez odkladamy, zeby nie krecic sie
@@ -1284,6 +1382,7 @@ async function odswiezStanSieci() {
     const wszystkie = await Kolejka.lista();
     const moje = stan.uz ? wszystkie.filter(o => o.uzytkownik === stan.uz.id) : wszystkie;
     stan.wKolejce = moje.length;
+    stan.zdjecWKolejce = moje.reduce((suma, o) => suma + ((o && Array.isArray(o.zdjecia)) ? o.zdjecia.length : 0), 0);
     stan.obceWKolejce = wszystkie.length - moje.length;
     stan.odrzucone = await Kolejka.ileOdrzuconych();
     stan.bezPamieci = false;
@@ -1292,7 +1391,7 @@ async function odswiezStanSieci() {
     // znaczy, że kierowca NIE MA gdzie odłożyć podpisu i zdjęć bez zasięgu. Zamiast
     // wywrócić start aplikacji — ta funkcja leci przed ekranem logowania — mówimy
     // o tym wprost i wpuszczamy do środka (tak samo jak GK Flota, 2026-10-16).
-    stan.wKolejce = 0; stan.obceWKolejce = 0; stan.odrzucone = 0;
+    stan.wKolejce = 0; stan.zdjecWKolejce = 0; stan.obceWKolejce = 0; stan.odrzucone = 0;
     if (!stan.bezPamieci) {
       stan.bezPamieci = true;
       komunikat(`Pamięć ${slowoUrzadzenia('dopelniacz')} nie odpowiada — bez zasięgu nie zapiszę `
@@ -2288,9 +2387,12 @@ function tytulKropkiSieci({ online, wKolejce, odrzucone, bezPamieci, komputer })
   return n ? `${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')} w wysyłce` : 'Połączono';
 }
 
-function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, bezPolaczenia }) {
+function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, bezPolaczenia, zdjecia }) {
   const n = wKolejce || 0;
-  const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
+  const z = zdjecia || 0;
+  // Zdjęcia z rampy to jedyne dane nie do odtworzenia — kierowca ma widzieć, że czekają (etap 3).
+  const wTym = z ? ` (w tym ${z} ${odmiana(z, 'zdjęcie', 'zdjęcia', 'zdjęć')})` : '';
+  const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie${wTym}`;
   const czesci = [];
   let klasa = 'ok';
   if (bezPolaczenia) {
@@ -2306,7 +2408,7 @@ function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, b
     czesci.push(`Brak połączenia z serwerem${n ? ` — ${czeka}` : ''}`);
   } else if (n) {
     klasa = 'kolejka';
-    czesci.push(`Wysyłanie: ${n}`);
+    czesci.push(`Wysyłanie: ${n}${wTym}`);
   }
   if (odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${odrzucone} — dotknij`); }
   return { klasa, tekst: czesci.join(' · ') };
@@ -2315,7 +2417,8 @@ function odswiezPasekPolaczenia() {
   const el = document.getElementById('pasek-polaczenia');
   if (!el) return;
   const p = tekstPaskaPolaczenia({ online: stan.online, wKolejce: stan.wKolejce,
-    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera, bezPolaczenia: !!stan.trybOffline });
+    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera, bezPolaczenia: !!stan.trybOffline,
+    zdjecia: stan.zdjecWKolejce });
   el.className = 'pasek-polaczenia ' + p.klasa;
   el.textContent = p.tekst;
   el.hidden = !p.tekst;

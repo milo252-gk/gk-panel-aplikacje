@@ -2,7 +2,7 @@
    Trzyma kopie samego programu (HTML, style, skrypty, mapa). Danych nie
    buforuje tutaj — od tego jest IndexedDB w kolejka.js.                      */
 
-const WERSJA = 'trasex-65369ff2d05c';
+const WERSJA = 'trasex-dfaab12d8601';
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
    kopia nie ma jak zostać podana. Poprzednio wystarczyło, że przeglądarka
@@ -16,6 +16,8 @@ const ZASOBY = [
   './manifest.webmanifest', './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/marker-icon.png', './vendor/marker-icon-2x.png', './vendor/marker-shadow.png',
 ];
+/* Ile czekamy na siec, zanim oddamy kopie z pamieci (jesli ja mamy). */
+const LIMIT_SIECI_MS = 4000;
 const SZKIELET = ['./', './index.html'].concat(ZASOBY.map(a => a + '?v=' + WERSJA));
 
 /* Instalacja pliku po pliku, a NIE addAll.
@@ -60,24 +62,36 @@ self.addEventListener('fetch', e => {
   // Szkielet: najpierw siec (zeby poprawki dochodzily), kopia jako zabezpieczenie.
   // index.html oddajemy awaryjnie tylko przy wchodzeniu na strone — nigdy
   // w miejsce brakujacego skryptu czy obrazka.
-  e.respondWith(
-    fetch(e.request)
-      .then(odp => {
-        if (odp && odp.ok) {
-          const kopia = odp.clone();
-          caches.open(WERSJA).then(c => c.put(e.request, kopia));
-        }
-        return odp;
-      })
-      // Kopia awaryjna szuka NAJPIERW w pamieci biezacej wersji. Bez tego
-      // caches.match przeszukiwal wszystkie pamieci po kolei i przy jednym
-      // mrugnieciu sieci potrafil podac plik ze starej paczki — aplikacja
-      // chodzila wtedy jako mieszanka wersji i nic tego nie zglaszalo.
-      .catch(() => caches.open(WERSJA).then(c => c.match(e.request))
-        .then(k => k || caches.match(e.request))
-        .then(k => k || (e.request.mode === 'navigate' ? caches.match('./index.html')
-                                                       : Promise.reject())))
-  );
+  //
+  // Wyscig z kopia (etap 3, 2026-11-09): „wifi jest, internetu brak” trzymalo dotad start aplikacji na
+  // minuty — fetch bez limitu czeka, az system zerwie polaczenie, a kopia lezy gotowa. Gdy siec nie odpowie
+  // w LIMIT_SIECI_MS, a kopia istnieje, oddajemy kopie; zapytanie do sieci biegnie dalej i odswieza kopie
+  // na nastepny raz (waitUntil). Bez kopii (pierwsze uruchomienie) czekamy na siec jak dotad.
+  const doSieci = fetch(e.request).then(odp => {
+    if (odp && odp.ok) {
+      const kopia = odp.clone();
+      caches.open(WERSJA).then(c => c.put(e.request, kopia)).catch(() => { /* kopia to tylko zapas */ });
+    }
+    return odp;
+  });
+  doSieci.catch(() => { /* wynik ocenia wyscig nizej; tu tylko bez „unhandled rejection” */ });
+  e.waitUntil(doSieci.catch(() => null));
+
+  // Kopia awaryjna szuka NAJPIERW w pamieci biezacej wersji. Bez tego
+  // caches.match przeszukiwal wszystkie pamieci po kolei i przy jednym
+  // mrugnieciu sieci potrafil podac plik ze starej paczki — aplikacja
+  // chodzila wtedy jako mieszanka wersji i nic tego nie zglaszalo.
+  const zKopii = () => caches.open(WERSJA).then(c => c.match(e.request))
+    .then(k => k || caches.match(e.request))
+    .then(k => k || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined));
+
+  const poLimicie = new Promise(ok => setTimeout(ok, LIMIT_SIECI_MS))
+    .then(() => zKopii().then(k => k || doSieci));
+  const poBledzie = doSieci.catch(() => zKopii().then(k => {
+    if (k) return k;
+    throw new Error('brak sieci i kopii');
+  }));
+  e.respondWith(Promise.race([poBledzie, poLimicie]));
 });
 
 /* Powiadomienia przy ZAMKNIĘTEJ aplikacji — ten sam sposób co aplikacje hali

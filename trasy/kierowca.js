@@ -377,6 +377,9 @@ function oknoPrzystanku(id) {
   if (!p) return;
   const zamkniety = p.status !== 'oczekuje';
   const odwolany = p.status === 'odwolany';
+  /* R12 (2026-11-09): dostawę, którą biuro już przyjęło („Przyjmij”), kierowca z telefonu nie cofa — serwer
+     odłożyłby taki zapis do „Odrzuconych”. Zamiast przycisku, który i tak nie zadziała, jest wyjaśnienie. */
+  const przyjetaPrzezBiuro = zamkniety && !odwolany && !!p.przyjeto_o && !p.do_przyjecia && !p.czeka_na_wyslanie;
 
   okno({
     tytul: (p.nasze ? '🏭 ' : '') + p.klient_nazwa,
@@ -403,7 +406,10 @@ function oknoPrzystanku(id) {
           ${p.odebral ? '<br>Odebrał: ' + escHtml(p.odebral) : ''}
           ${p.notatka ? '<br>' + escHtml(p.notatka) : ''}
         </div>
-        <button class="tekstowy" id="btn-cofnij">Pomyłka — otwórz ten punkt ponownie</button>` : ''}
+        ${przyjetaPrzezBiuro
+          ? `<div class="male slaby" id="info-przyjete">✓ Biuro przyjęło tę dostawę. Jeśli to pomyłka, zadzwoń do biura —
+              biuro może ją zwrócić do poprawy.</div>`
+          : '<button class="tekstowy" id="btn-cofnij">Pomyłka — otwórz ten punkt ponownie</button>'}` : ''}
       <a class="glowny" href="${linkNawigacji(p)}" target="_blank" rel="noopener"
          style="display:block;text-align:center;padding:15px;border-radius:10px;
                 background:var(--granat);color:var(--na-marce);text-decoration:none;font-weight:600;margin-top:8px">
@@ -694,6 +700,7 @@ async function zapiszDostawe(p, dane) {
   Object.assign(p, {
     status: dane.status, powod: dane.powod || '', notatka: dane.notatka || '',
     odebral: dane.odebral || '', zamkniete_o: dane.status === 'oczekuje' ? null : czasTeraz(),
+    przyjeto_o: null, do_przyjecia: dane.status === 'oczekuje' ? 0 : 1,     // nowy zapis czeka na przyjęcie biura
     ile_zalacznikow: (p.ile_zalacznikow || 0) +
       (dane.podpis ? 1 : 0) + ((dane.zdjecia || []).length),
   });

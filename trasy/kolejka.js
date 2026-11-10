@@ -8,10 +8,12 @@ const Kolejka = (() => {
   const NAZWA_BAZY = 'trasy-offline';
   const WERSJA = 2;
   let baza = null;
+  let otwieranie = null;      // otwarcie w toku — kolejne wywolania czekaja na to samo (jedno polaczenie, nie kilka)
 
   function otworz() {
     if (baza) return Promise.resolve(baza);
-    return new Promise((zwroc, odrzuc) => {
+    if (otwieranie) return otwieranie;
+    otwieranie = new Promise((zwroc, odrzuc) => {
       const zadanie = indexedDB.open(NAZWA_BAZY, WERSJA);
       zadanie.onupgradeneeded = () => {
         const db = zadanie.result;
@@ -22,18 +24,55 @@ const Kolejka = (() => {
         // programie, ktorych nie da sie odtworzyc.
         if (!db.objectStoreNames.contains('odrzucone')) db.createObjectStore('odrzucone', { keyPath: 'uuid' });
       };
-      zadanie.onsuccess = () => { baza = zadanie.result; zwroc(baza); };
-      zadanie.onerror = () => odrzuc(zadanie.error);
+      zadanie.onsuccess = () => {
+        const db = zadanie.result;
+        baza = db;
+        otwieranie = null;
+        // Przegladarka potrafi zamknac polaczenie sama (aktualizacja, brak miejsca, czyszczenie danych witryny).
+        // Zapamietane, martwe polaczenie psuloby kazdy kolejny zapis az do przeladowania strony — zapominamy je,
+        // nastepna operacja otworzy baze od nowa. Inna karta (albo zmiana wersji bazy) prosi o zwolnienie bazy:
+        // zamykamy TO polaczenie, zeby nie blokowac cudzej operacji.
+        db.onclose = () => { if (baza === db) baza = null; };
+        db.onversionchange = () => { try { db.close(); } catch (e) { /* i tak zapominamy */ } if (baza === db) baza = null; };
+        zwroc(db);
+      };
+      zadanie.onerror = () => { otwieranie = null; odrzuc(zadanie.error); };
+      // Baza zablokowana przez stara karte tej samej aplikacji: bez tego zapis czekalby bez konca.
+      zadanie.onblocked = () => { otwieranie = null; odrzuc(new Error('Pamięć telefonu jest zajęta przez inną kartę aplikacji (IndexedDB blocked).')); };
     });
+    return otwieranie;
   }
 
-  function dzialanie(magazyn, tryb, praca) {
+  /* Jedna operacja na bazie. Obietnica ZAWSZE sie rozstrzyga: oncomplete, onerror ALBO onabort (przerwana
+     transakcja, np. QuotaExceededError przy pelnej pamieci — dawniej nie wolalo wtedy nic i kierowca patrzyl
+     na kreconce kolo, a podpis i zdjecia nie byly nigdzie zapisane). Zamkniete polaczenie (db.transaction rzuca
+     InvalidStateError) otwieramy od nowa JEDEN raz. */
+  function dzialanie(magazyn, tryb, praca, ponowione) {
     return otworz().then(db => new Promise((zwroc, odrzuc) => {
-      const t = db.transaction(magazyn, tryb);
-      const zadanie = praca(t.objectStore(magazyn));
+      let t;
+      try {
+        t = db.transaction(magazyn, tryb);
+      } catch (e) {
+        baza = null;
+        odrzuc(e);
+        return;
+      }
+      let zadanie;
+      try {
+        zadanie = praca(t.objectStore(magazyn));
+      } catch (e) {
+        try { t.abort(); } catch (x) { /* transakcja i tak sie nie powiedzie */ }
+        odrzuc(e);
+        return;
+      }
       t.oncomplete = () => zwroc(zadanie ? zadanie.result : undefined);
-      t.onerror = () => odrzuc(t.error);
-    }));
+      // Blad zadania bąbelkuje do transakcji: tu t.error bywa jeszcze puste, powod jest w zdarzeniu.
+      t.onerror = ev => odrzuc((ev && ev.target && ev.target.error) || t.error);
+      t.onabort = () => odrzuc(t.error || new DOMException('IndexedDB: transakcja przerwana (transaction aborted).', 'AbortError'));
+    })).catch(e => {
+      if (!ponowione && e && e.name === 'InvalidStateError') return dzialanie(magazyn, tryb, praca, true);
+      throw e;
+    });
   }
 
   function numer() {
@@ -58,6 +97,13 @@ const Kolejka = (() => {
     ile() { return dzialanie('kolejka', 'readonly', s => s.count()); },
     oznaczProbe(op) {
       op.prob = (op.prob || 0) + 1;
+      return dzialanie('kolejka', 'readwrite', s => s.put(op));
+    },
+    /* Blad serwera (5xx): nie liczy sie do limitu prob, zapis czeka `odstepMs` (pole `nast`, opcjonalne —
+       stary kod je pomija, format kolejki i uuid bez zmian). */
+    oznaczBladSerwera(op, odstepMs) {
+      op.serw = (op.serw || 0) + 1;
+      op.nast = Date.now() + (odstepMs || 30000);
       return dzialanie('kolejka', 'readwrite', s => s.put(op));
     },
 
@@ -93,6 +139,8 @@ const Kolejka = (() => {
         if (!op) return null;
         delete op.blad;
         delete op.odrzucono;
+        delete op.nast;
+        delete op.serw;
         op.prob = 0;
         return dzialanie('kolejka', 'readwrite', s => s.put(op))
           .then(() => dzialanie('odrzucone', 'readwrite', s => s.delete(uuid)));

@@ -499,7 +499,8 @@ EKRANY.trasa = {
           <div class="przyciski">
             <button class="maly" id="tr-szablon">Zapisz jako trasę stałą</button>
             <button class="maly" id="tr-kopiuj">Kopiuj na inny dzień</button>
-            <button class="maly" id="tr-usun">Usuń trasę</button>
+            ${t.status === 'odwolana' ? '' : '<button class="maly" id="tr-odwolaj">Odwołaj trasę</button>'}
+            ${jestAdministratorem() ? '<button class="maly" id="tr-usun">Usuń trasę</button>' : ''}
           </div>
         </details>
       </div>` : `<div class="karta scisla">
@@ -611,7 +612,21 @@ EKRANY.trasa = {
         }), 'Zapisano');
         if (w) pokazEkran('trasa', { id: t.id });
       };
-      pole.querySelector('#tr-usun').onclick = async () => {
+      // R11 (2026-11-09): „Odwołaj trasę” — biuro i administrator (miękko: trasa znika z planu i z telefonu kierowcy,
+      // zostaje w historii razem z dowodami). „Usuń trasę” (kasowanie) — tylko administrator; biuro tego przycisku
+      // nie ma, a serwer i tak odmówi.
+      const przyciskOdwolaj = pole.querySelector('#tr-odwolaj');
+      if (przyciskOdwolaj) przyciskOdwolaj.onclick = async () => {
+        if (!await potwierdz('Odwołać całą trasę?',
+          'Trasa zniknie z planu i z telefonu kierowcy (dostanie powiadomienie), ale zostanie na liście '
+          + 'tego dnia razem ze zdjęciami i historią. Tego nie cofniesz tym przyciskiem.')) return;
+        const w = await sprobuj(() => API.del('/api/trasy/' + t.id + '?odwolaj=1'));
+        if (!w) return;
+        komunikat('Trasa odwołana', 'ok');
+        pokazEkran('trasy', { data: t.data });
+      };
+      const przyciskUsun = pole.querySelector('#tr-usun');
+      if (przyciskUsun) przyciskUsun.onclick = async () => {
         if (!await potwierdz('Usunąć całą trasę?',
           'Trasa z załadunkiem, zdjęciami albo czekającymi zapisami telefonu '
           + 'zostanie tylko odwołane — dowody zostają w historii.')) return;
@@ -1611,7 +1626,8 @@ function oknoKlienta(k) {
         stan.klienci = []; await odswiezLokalizacje();
         pokazEkran('lokalizacje');
       } }]),
-      ...(nowy ? [] : [{ napis: 'Usuń', klasa: 'niszczacy', klik: async z => {
+      // R11: kasowanie klientów tylko administrator (biuro chowa klienta odznaczeniem „Klient aktywny”).
+      ...(nowy || !jestAdministratorem() ? [] : [{ napis: 'Usuń', klasa: 'niszczacy', klik: async z => {
         if (!await potwierdz('Usunąć klienta?',
           'Jeśli był na jakiejś trasie, zostanie tylko ukryty — historia dostaw musi się zgadzać.')) return;
         const w = await sprobuj(() => API.del('/api/klienci/' + k.id));
@@ -1890,6 +1906,7 @@ function kartaKontKierowcow(ustawienia, konta) {
       ? 'Kierowcę zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby we wszystkich aplikacjach GK. Hasło startowe: <b>haslo123</b>.'
       : powod === 'awaryjny' ? 'Kierowców zakłada osoba z kontem z Panelu — zaloguj się swoim kontem z Panelu.'
         : 'Teraz kierowców zakłada się w <b>Panelu → Administracja</b> (brak połączenia z Panelem).'}</div>
+    ${blokKierowcowZablokowanych(konta)}
     <div class="tabela-przewijana"><table>
       <thead><tr><th>Imię</th><th>Login</th><th>Telefon</th><th></th></tr></thead>
       <tbody>${(konta || []).map(x => `<tr style="${x.aktywny ? '' : 'opacity:.5'}">
@@ -1901,6 +1918,19 @@ function kartaKontKierowcow(ustawienia, konta) {
         <td>${x.mozna_zmienic && mozna ? `<button class="maly" data-kierowca-konto="${x.id}">Zmień</button>` : ''}</td>
       </tr>`).join('') || '<tr><td colspan="4" class="slaby">Nie ma jeszcze kierowców.</td></tr>'}</tbody>
     </table></div></div>`;
+}
+
+/* „Kierowcy zablokowani” (2026-11-09, jak w GK Flota): kto z kierowców czeka albo jest zablokowany przy logowaniu
+   z internetu, z przyciskiem „Odblokuj”. Biuro odblokowuje tylko kierowców (serwer pilnuje tego samego); administrator
+   ma „Odblokuj” przy każdym koncie w Administracji → Konta. Z firmowego wifi kierowca wchodzi normalnie. */
+function blokKierowcowZablokowanych(konta) {
+  const zablokowani = (konta || []).filter(x => (x.z_internetu || {}).blokada);
+  if (!zablokowani.length) return '<p class="male slaby" style="margin:8px 0">Nikt z kierowców nie jest zablokowany przy logowaniu z internetu.</p>';
+  return `<div class="wstega blad" id="u-kierowcy-zablokowani"><b>Kierowcy zablokowani</b> przy logowaniu z internetu
+    (z firmowego wifi wchodzą normalnie):
+    ${zablokowani.map(x => `<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:6px">
+      <span><b>${escHtml(x.imie)}</b>${opisBlokadyZInternetu(x.z_internetu)}</span>
+      <button class="maly glowny" data-odblokuj="${x.id}">Odblokuj</button></div>`).join('')}</div>`;
 }
 
 async function rysujUstawieniaBiura(pole) {
@@ -1919,6 +1949,10 @@ async function rysujUstawieniaBiura(pole) {
   if (nowyKierowca) nowyKierowca.onclick = () => oknoKontaZespolu(null);
   pole.querySelectorAll('[data-kierowca-konto]').forEach(b =>
     b.onclick = () => oknoKontaZespolu(konta.find(x => x.id === Number(b.dataset.kierowcaKonto))));
+  pole.querySelectorAll('[data-odblokuj]').forEach(b => b.onclick = async () => {
+    const w = await sprobuj(() => API.post(`/api/uzytkownicy/${b.dataset.odblokuj}/odblokuj`), 'Odblokowano');
+    if (w) wrocDoUstawien();
+  });
   const zapisz = async () => {
     // Tylko pola, które są na tym ekranie — i tylko klucze operacyjne.
     const dane = {
@@ -2789,7 +2823,9 @@ function kartaCzyszczeniaTras() {
   return `<div class="karta" id="u-czyszczenie-tras">
     <h2>Czyszczenie tras</h2>
     <p class="male slaby">Usuwa wybrane trasy <b>na stałe</b> — razem z punktami, zdjęciami i podpisami. Przed usunięciem
-      program robi pełną kopię bazy w folderze <code>kopie/</code>. Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy,
+      program robi pełną kopię bazy w folderze <code>kopie/</code> — <b>ale ta kopia nie zawiera zdjęć ani podpisów</b>, a usunięte pliki
+      znikają też z archiwów zdjęć (<code>kopie/pliki-*.zip</code>) i z kopii poza komputerem, więc nie da się ich odzyskać. Kopie bazy sprzed
+      czyszczenia (<code>dane-przed-czyszczeniem-*</code>) program trzyma 30 dni. Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy,
       które już ruszyły.</p>
     <div class="przyciski"><button class="glowny" id="u-czysc-wybierz">Wybierz trasy do usunięcia…</button></div>
   </div>`;
@@ -2821,9 +2857,16 @@ function oknoCzyszczeniaTras(trasy, ucieto) {
       ...(trasy.length ? [{ napis: 'Usuń zaznaczone', klasa: 'czerwony', klik: async z => {
         const ids = [...document.querySelectorAll('#okno-tresc [data-trasa]:checked')].map(x => Number(x.dataset.trasa));
         if (!ids.length) { komunikat('Zaznacz trasy do usunięcia', 'blad'); return; }
-        if (!await potwierdz('Usunąć zaznaczone trasy?', `${ids.length} tras zniknie na stałe, razem ze zdjęciami i podpisami. Program najpierw robi kopię bazy.`, { tak: 'Usuń', groznie: true })) return;
+        if (!await potwierdz('Usunąć zaznaczone trasy?', `${ids.length} tras zniknie na stałe, razem ze zdjęciami i podpisami. Pliki znikną też z archiwów zdjęć w folderze kopie/ i z kopii poza komputerem; kopia bazy ich nie zawiera, więc nie wrócą. Program najpierw robi pełną kopię bazy (trzyma ją 30 dni).`, { tak: 'Usuń', groznie: true })) return;
         const w = await sprobuj(() => API.post('/api/czyszczenie-tras', { ids, potwierdz: true }));
-        if (w) { z(); komunikat(`Usunięto ${w.liczba} tras`, 'ok'); }
+        if (w) {
+          z();
+          const a = w.archiwa || {};
+          // Dysk poza komputerem niedostępny albo kopia w toku: program dokończy oczyszczanie przy najbliższej kopii.
+          const dopisek = (a.oczekuje || a.zewnetrzne === 'niedostepna')
+            ? ' Kopia poza komputerem oczyści się przy najbliższej kopii (dysk musi być podłączony).' : '';
+          komunikat(`Usunięto ${w.liczba} tras. Pliki zniknęły też z archiwów zdjęć; kopia bazy ich nie zawiera.` + dopisek, 'ok');
+        }
       } }] : []),
     ],
     poOtwarciu: pole => {
