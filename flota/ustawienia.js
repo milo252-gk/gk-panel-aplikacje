@@ -57,6 +57,10 @@ EKRANY.ustawienia = {
         <p class="slaby male">Próg skoku niczego nie blokuje — przegląd z większym
         przebiegiem przejdzie, ale auto pokaże się na pulpicie do sprawdzenia.
         Zablokowanie zapisu kończyłoby się telefonem kierowcy do biura zamiast zdjęciami.</p>
+        <label class="male"><input type="checkbox" id="u-poranne"${
+          String(u.poranne_przypomnienia || '1') !== '0' ? ' checked' : ''}> poranne przypomnienia o terminach</label>
+        <p class="slaby male">W dni robocze o 7:00 biuro dostaje jedno powiadomienie z terminami po terminie
+        i w oknie ostrzegania, a kierowca — ze swoim autem. Nic, gdy nie ma spraw.</p>
       </div>
 
       <div class="karta">
@@ -656,7 +660,7 @@ function sekcjaGithub(u) {
 
       <p class="slaby male">Nowy adres tunelu (po każdym uruchomieniu) i nową wersję
       programu (po aktualizacji) Panel wysyła sam, zwykle w ciągu minuty. Szczegóły i błędy:
-      Panel → Administracja → Serwis → Dostęp z telefonów.</p>
+      Panel → Administracja → Ustawienia → Dostęp z telefonów.</p>
     </div>`;
 }
 
@@ -679,7 +683,7 @@ function stanPages(p, tunel) {
     </div>` : '<div class="wstega uwaga">Panel Kierownika jeszcze nie wysłał aplikacji na Pages.</div>'}
     ${p.adres_blad ? `<div class="wstega blad">Panel Kierownika nie wysłał adresu na GitHub:
       ${escHtml(p.adres_blad)} Panel ponawia sam — szczegóły w Panelu → Administracja →
-      Serwis → Dostęp z telefonów.</div>`
+      Ustawienia → Dostęp z telefonów.</div>`
       : staryAdres ? `<div class="wstega uwaga">Na Pages jest jeszcze poprzedni adres
       tunelu (<code>${escHtml(p.adres_api)}</code>). Panel zwykle poprawia go sam w ciągu
       minuty.</div>` : ''}`;
@@ -690,6 +694,7 @@ async function zapiszUstawienia() {
   const dane = {
     firma: we('u-firma').value.trim(),
     poczta_wlaczona: we('u-poczta-wlaczona').checked ? '1' : '0',
+    poranne_przypomnienia: we('u-poranne').checked ? '1' : '0',
     mail_biura: we('u-mail-biura').value.trim(),
     poczta_nadawca: we('u-poczta-nadawca').value.trim(),
     poczta_serwer: we('u-poczta-serwer').value.trim(),

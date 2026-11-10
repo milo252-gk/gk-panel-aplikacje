@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-28d6cd86f42b';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-a9f75603d8f9';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -145,6 +145,11 @@ const MAKS_PROB = 5;        // po tylu nieudanych probach zapis ladzie wsrod odr
 
 /* ------------------------------------------------------------- drobiazgi */
 
+/* Ikona liniowa (gk-ikony.js, STYL-GK §8) przed napisem przycisku — zamiast emoji. */
+function ikonka(nazwa, rozmiar) {
+  return '<span class="ik">' + GKIkony.html(nazwa, rozmiar || 16) + '</span>';
+}
+
 function escHtml(t) {
   return String(t == null ? '' : t)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -167,7 +172,7 @@ function poLudzku(e) {
   }
   if (/failed to fetch|load failed|networkerror|network connection was lost|could not be found/i
       .test(tekst)) {
-    return 'Brak połączenia z programem. Sprawdź zasięg — zapisy poczekają w telefonie '
+    return 'Brak połączenia z programem. Sprawdź zasięg — zapisy poczekają na tym urządzeniu '
       + 'i wyślą się same.';
   }
   if (/unexpected token|json parse|json\.parse|not valid json/i.test(tekst)) {
@@ -1551,7 +1556,7 @@ async function zakonczBezSieci(zostaw) {
     pokazLogowanie();
     const pole = document.getElementById('pole-loginu');
     if (pole && !pole.value) { pole.value = zostaw; if (stan.poleLogowania) stan.poleLogowania.odswiez(); }
-    komunikat('Połączenie wróciło — wpisz PIN, żeby wysłać zapisy z telefonu.', 'ok');
+    komunikat('Połączenie wróciło — wpisz PIN, żeby wysłać zapisy z tego urządzenia.', 'ok');
   }
   odswiezPasekPolaczenia();
 }
@@ -1952,9 +1957,9 @@ const PASEK_BIURA = [['pulpit', 'pulpit', 'Pulpit'], ['pojazdy', 'pojazd', 'Flot
 /* U kierowcy „W razie awarii" zajmuje jedno z czterech miejsc kciuka — i to
    nie jest hojność, tylko jedyny ekran, którego szuka się w pośpiechu, w nocy
    i jedną ręką. Menu boczne kierowcy to te same cztery pozycje (etap 2
-   poprawek UI); historia własnych przeglądów i instrukcja awaryjna mają
-   jeszcze przyciski na ekranie „Moje auto” — do historii zagląda się raz
-   na miesiąc, na spokojnie.                                                 */
+   poprawek UI); instrukcja awaryjna to zakładka „Awaria”, a historia
+   własnych przeglądów to odnośnik na dole ekranu „Przegląd” — do historii
+   zagląda się raz na miesiąc, na spokojnie.                                 */
 const PASEK_KIEROWCY = [['moj', 'pojazd', 'Moje auto'], ['przeglad', 'aparat', 'Przegląd'],
                         ['usterki', 'awaria', 'Usterka'], ['awaria', 'ratunek', 'Awaria']];
 
@@ -2091,7 +2096,7 @@ async function wczytajSlowniki() {
     } else {
       stan.pojazdy = []; stan.kierowcy = []; stan.ustawienia = {};
       stan.instrukcje = [];
-      komunikat('Brak połączenia i brak kopii danych w telefonie', 'blad');
+      komunikat('Brak połączenia i brak kopii danych na tym urządzeniu', 'blad');
     }
   }
 }
@@ -2427,7 +2432,7 @@ function oknoKodowAplikacji() {
             ${a.adres || a.siec ? `<a href="${escHtml(a.adres || a.siec)}" target="_blank" rel="noopener">${escHtml(a.adres || a.siec)}</a>` : ''}
             ${!a.adres && a.siec ? '<span class="konto-drobne">Tylko w firmowym wifi.</span>' : ''}
             ${a.opis ? `<span class="konto-drobne">${escHtml(a.opis)}</span>` : ''}
-            ${a.qr ? `<button type="button" data-drukuj="${i}">🖨 Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
+            ${a.qr ? `<button type="button" data-drukuj="${i}">${ikonka('drukuj')}Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
         || '<p class="konto-drobne">To konto nie ma aplikacji na telefon.</p>';
       el.querySelectorAll('[data-drukuj]').forEach(b =>
         b.onclick = () => drukujArkuszQR(arkuszKodowQR([lista[+b.dataset.drukuj]])));

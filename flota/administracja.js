@@ -65,9 +65,12 @@ function kartaCzyszczenia() {
   return `<div class="karta" id="a-czyszczenie">
     <h2>Czyszczenie danych</h2>
     <p class="male slaby">Usuwa wybrane <b>usterki</b> i <b>wpisy historii przeglądów</b> <b>na stałe</b> — razem z ich zdjęciami.
-      Aut i terminów to czyszczenie nie rusza. Przed usunięciem program robi pełną kopię bazy w folderze
-      <code>kopie/</code> i trzyma ją 30 dni. Kopia bazy obejmuje dane, <b>nie pliki zdjęć</b> — dlatego zdjęcia znikają
-      też z archiwów zip w <code>kopie/</code> i z kopii poza komputerem (jeśli jest ustawiona) i <b>nie da się ich odzyskać</b>.</p>
+      Aut i terminów to czyszczenie nie rusza.</p>
+    <ul class="male slaby" style="margin:6px 0 12px;padding-left:20px">
+      <li>Przed usunięciem program robi pełną kopię bazy w folderze <code>kopie/</code> i trzyma ją 30 dni.</li>
+      <li>Kopia bazy obejmuje dane, <b>nie pliki zdjęć</b> — zdjęcia znikają też z archiwów zip w <code>kopie/</code>
+        i z kopii poza komputerem (jeśli jest ustawiona) i <b>nie da się ich odzyskać</b>.</li>
+    </ul>
     <div class="przyciski"><button class="glowny" id="a-czysc-wybierz">Wybierz pozycje do usunięcia…</button></div>
   </div>`;
 }

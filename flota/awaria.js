@@ -52,7 +52,7 @@ function rysujAwarie(pole, lista, biuro) {
           + 'W nagłym wypadku dzwoń pod <b>112</b>, potem do biura.'}
     </div>` : ''}
 
-    ${!biuro ? `<div class="wstega info male">Ta instrukcja jest zapisana w telefonie
+    ${!biuro ? `<div class="wstega info male">Ta instrukcja jest zapisana na tym urządzeniu
       i otwiera się także bez zasięgu.</div>` : ''}
 
     ${biuro ? `<div class="pasek-narzedzi">
@@ -94,7 +94,7 @@ function punktAwarii(p, biuro) {
         ${p.aktywna ? '' : '<span class="plakietka">ukryty</span>'}
         ${biuro ? `<span class="uchwyty">
           <button data-edytuj="${p.id}">Zmień</button>
-          <button data-skasuj="${p.id}">Skasuj</button></span>` : ''}
+          <button data-skasuj="${p.id}">Usuń</button></span>` : ''}
       </summary>
       <div class="zwijana-tresc">
         ${(p.tresc || '').trim()
@@ -180,12 +180,12 @@ function oknoPunktuAwarii(p) {
 
 async function skasujPunktAwarii(p) {
   if (!p) return;
-  const tak = await potwierdz('Skasować punkt „' + p.tytul + '"?',
+  const tak = await potwierdz('Usunąć punkt „' + p.tytul + '”?',
     'Zniknie z instrukcji, którą czytają kierowcy. Jeśli chcesz go tylko '
-    + 'schować, odznacz „pokazuj kierowcom" zamiast kasować.',
-    { tak: 'Skasuj', groznie: true });
+    + 'schować, odznacz „pokazuj kierowcom” zamiast usuwać.',
+    { tak: 'Usuń', groznie: true });
   if (!tak) return;
-  if (!await sprobuj(() => API.del('/api/instrukcje/' + p.id), 'Punkt skasowany')) return;
+  if (!await sprobuj(() => API.del('/api/instrukcje/' + p.id), 'Punkt usunięty')) return;
   await wczytajSlowniki().catch(() => {});
   odswiezEkran();
 }

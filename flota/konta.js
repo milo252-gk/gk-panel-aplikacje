@@ -39,7 +39,7 @@ function oknoKontaZPanelu(u) {
         <label class="pole">Telefon
           <input value="${escHtml(u.telefon || '')}" disabled></label>
         <label class="pole">Rola
-          <input value="${escHtml(u.rola)}" disabled></label>
+          <input value="${escHtml(NAZWA_ROLI[u.rola] || u.rola)}" disabled></label>
       </div>
       <p class="slaby male">Konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
@@ -62,7 +62,7 @@ function oknoKontaZTrasexu(u) {
         <label class="pole">Telefon
           <input value="${escHtml(u.telefon || '')}" disabled></label>
         <label class="pole">Rola
-          <input value="${escHtml(u.rola)}" disabled></label>
+          <input value="${escHtml(NAZWA_ROLI[u.rola] || u.rola)}" disabled></label>
       </div>
       <p class="slaby male">Konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
@@ -132,7 +132,7 @@ EKRANY.konta = {
               ? ' <span class="plakietka p-zatwierdzony">z Panelu</span>' : ''}
               ${u.telefon ? `<br><span class="slaby male">${escHtml(u.telefon)}</span>` : ''}</td>
             <td>${escHtml(u.login)}</td>
-            <td><span class="plakietka">${escHtml(u.rola)}</span></td>
+            <td><span class="plakietka">${escHtml(NAZWA_ROLI[u.rola] || u.rola)}</span></td>
             <td>${u.pojazdy ? escHtml(u.pojazdy) : '<span class="slaby">—</span>'}</td>
             <td>${u.ostatnio ? escHtml(polskaData(u.ostatnio))
               : '<span class="slaby">nigdy</span>'}</td>
@@ -282,7 +282,7 @@ function oknoEdycjiKonta(u, adminow) {
           <select id="k-rola"${ostatniAdmin ? ' disabled' : ''}>
             ${['kierowca', 'biuro', 'admin'].map(r =>
               `<option value="${r}"${(u ? u.rola : 'kierowca') === r ? ' selected' : ''}>${
-                escHtml(r)}</option>`).join('')}
+                escHtml(NAZWA_ROLI[r] || r)}</option>`).join('')}
           </select></label>
       </div>
       <p class="slaby male" id="k-opis-roli"></p>

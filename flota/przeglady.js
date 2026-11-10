@@ -252,10 +252,12 @@ EKRANY.protokol = {
 
       <div class="przyciski rozstaw">
         <button id="pr-wroc">← Wróć</button>
-        ${biuro && (g.status === 'wykonany' || g.status === 'odrzucony')
-          ? '<button class="glowny" id="pr-zatwierdz">Zatwierdź</button>' : ''}
-        ${biuro && (g.status === 'wykonany' || g.status === 'zatwierdzony')
-          ? '<button class="niszczacy" id="pr-odrzuc">Odrzuć</button>' : ''}
+        <span class="przyciski">
+          ${biuro && (g.status === 'wykonany' || g.status === 'zatwierdzony')
+            ? '<button class="niszczacy" id="pr-odrzuc">Odrzuć</button>' : ''}
+          ${biuro && (g.status === 'wykonany' || g.status === 'odrzucony')
+            ? '<button class="glowny" id="pr-zatwierdz">Zatwierdź</button>' : ''}
+        </span>
       </div>`;
 
     pole.querySelector('#pr-wroc').onclick = () => pokazEkran('przeglady');
@@ -516,7 +518,7 @@ EKRANY.usterki = {
               ? `<span class="uchwyty"><button data-zamknij="${u.id}">Zajmij się</button></span>`
               : ''}
           </span>
-        </div>`).join('') : `<div class="pusto"><span class="duza-ikona">🔧</span>
+        </div>`).join('') : `<div class="pusto"><span class="duza-ikona">${GKIkony.html('przeglady', 38)}</span>
           ${biuro ? 'Nic nie wisi na flocie.' : 'Nie masz zgłoszonych usterek.'}</div>`}`;
 
     pole.querySelectorAll('[data-status]').forEach(b => {

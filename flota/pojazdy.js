@@ -98,8 +98,7 @@ EKRANY.pulpit = {
 
       ${d.instrukcja_gotowa === false ? `<div class="wstega blad">
         <b>Instrukcja w razie awarii jest pusta.</b>
-        Kierowca, który otworzy ją w nocy na poboczu, nic tam nie znajdzie —
-        a wtedy jest już za późno.
+        Kierowca na poboczu nic w niej nie znajdzie.
         <button class="tekstowy" id="p-do-instrukcji">Uzupełnij teraz</button></div>` : ''}
 
       ${(d.do_sprawdzenia || []).length ? `<div class="wstega uwaga">
@@ -182,7 +181,7 @@ function otworzKafelPulpitu(kafel, pole) {
 
 function listaAlarmow(alarmy) {
   if (!alarmy.length) {
-    return `<div class="pusto"><span class="duza-ikona">📅</span>
+    return `<div class="pusto"><span class="duza-ikona">${GKIkony.html('kalendarz', 38)}</span>
             Żaden termin nie zbliża się do końca. Nic nie wymaga reakcji.</div>`;
   }
   return alarmy.map(a => `
@@ -213,7 +212,7 @@ function listaZaleglych(zalegle) {
         <span class="nazwa">${escHtml(z.rejestracja)} · ${escHtml(
           [z.marka, z.model].filter(Boolean).join(' ') || 'bez opisu')}</span>
         <span class="adres">${z.kierowca_imie
-          ? escHtml(z.kierowca_imie) : 'nikt nie ma przypisanego tego auta'}</span>
+          ? escHtml(z.kierowca_imie) : 'brak — auto nie jest nikomu przypisane'}</span>
         ${z.powod ? `<span class="dopisek">Odrzucony: ${escHtml(z.powod)}</span>` : ''}
       </span>
       <span class="prawo">
@@ -269,7 +268,7 @@ EKRANY.pojazdy = {
         <button class="glowny" id="p-nowy">+ Dodaj auto</button>` : ''}
       </div>
       ${lista.length ? tabelaFloty(lista, biuro) : `<div class="pusto">
-        <span class="duza-ikona">🚗</span>
+        <span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
         ${f.szukaj || f.rodzaj ? 'Nic nie pasuje do tych warunków.'
           : (biuro ? 'Nie ma jeszcze żadnego auta — dodaj pierwsze.'
                    : 'Nie masz przypisanego żadnego auta. Zgłoś to biuru.')}</div>`}
@@ -353,13 +352,13 @@ EKRANY.pojazd = {
           </div>
           <div class="uchwyty">
             ${biuro ? '<button id="p-edytuj">Edytuj</button>' : ''}
-            ${biuro ? '<button id="p-kierowca">Kierowca</button>' : ''}
+            ${biuro ? `<button id="p-kierowca">${p.kierowca_imie ? 'Zmień kierowcę' : 'Przypisz kierowcę'}</button>` : ''}
           </div>
         </div>
         <div class="dwie-kolumny">
           <div>
             <p><b>Kierowca:</b> ${p.kierowca_imie ? escHtml(p.kierowca_imie)
-              : '<span class="slaby">nikt nie ma przypisanego tego auta</span>'}</p>
+              : '<span class="slaby">brak — auto nie jest nikomu przypisane</span>'}</p>
             <p><b>Przebieg:</b> ${p.przebieg != null ? escHtml(kilometry(p.przebieg)) : '—'}
               ${p.przebieg_o ? `<span class="slaby male">(spisany ${
                 escHtml(polskaData(p.przebieg_o))})</span>` : ''}</p>
@@ -686,6 +685,7 @@ EKRANY.terminy = {
             data-rodzaj="${escHtml(kod)}">${escHtml(rodzaje[kod] || kod)}</button>`).join('')}
         </div>
         <div class="chipy">
+          <span class="slaby male" style="align-self:center">Widok:</span>
           <button class="chip${f.widok === 'lista' ? ' wybrany' : ''}" data-widok="lista">Lista</button>
           <button class="chip${f.widok === 'kalendarz' ? ' wybrany' : ''}"
                   data-widok="kalendarz">Kalendarz</button>
@@ -752,7 +752,7 @@ function chipyTerminow(rodzaje, wpisy, wybrany) {
 
 function listaTerminow(lista) {
   if (!lista.length) {
-    return `<div class="pusto"><span class="duza-ikona">📅</span>
+    return `<div class="pusto"><span class="duza-ikona">${GKIkony.html('kalendarz', 38)}</span>
       Nie ma żadnych pilnowanych dat. Dodaj termin — badanie techniczne, OC
       i inne daty wpisuje się tutaj.</div>`;
   }
@@ -787,7 +787,7 @@ function listaTerminow(lista) {
 function kalendarzTerminow(lista) {
   const zTerminem = lista.filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.termin || ''));
   if (!zTerminem.length) {
-    return '<div class="pusto"><span class="duza-ikona">📅</span>Brak dat do pokazania.</div>';
+    return `<div class="pusto"><span class="duza-ikona">${GKIkony.html('kalendarz', 38)}</span>Brak dat do pokazania.</div>`;
   }
   const wgMiesiaca = {};
   zTerminem.forEach(t => {

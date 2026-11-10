@@ -25,7 +25,7 @@ EKRANY.moj = {
     // Kierowca z GK Trasy wraca stąd do swojego planu dnia — przycisk stoi na
     // górze, bo po obejrzeniu auta to jest następny ruch, a nie ostatni.
     if (!auta.length) {
-      pole.innerHTML = `${przyciskPowrotu()}<div class="pusto"><span class="duza-ikona">🚗</span>
+      pole.innerHTML = `${przyciskPowrotu()}<div class="pusto"><span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
         Nie masz przypisanego auta.<br>
         <span class="male">Zgłoś to biuru — bez przypisanego auta nie da się
         oddać przeglądu ani zgłosić usterki.</span></div>`;
@@ -37,26 +37,16 @@ EKRANY.moj = {
     // jeszcze nie wie i dalej każe go zrobić. Bez tej wstęgi kierowca robił
     // cały obchód auta drugi raz.
     const czeka = await przegladyWTelefonie(auta);
-    // „Moje przeglądy” i „Instrukcja w razie awarii” stoją tu jako przyciski,
-    // bo menu boczne kierowcy to od etapu 2 tylko cztery pozycje paska
-    // dolnego — historia przeglądów nie ma już własnej pozycji, a instrukcja
-    // ma być pod ręką także na komputerze, gdzie paska dolnego nie ma.
-    pole.innerHTML = przyciskPowrotu() + auta.map(p => kartaMojegoAuta(p, d.okres, czeka)).join('')
-      + `<div class="przyciski">
-           <button id="m-usterka">Zgłoś usterkę</button>
-           <button id="m-przeglady">Moje przeglądy</button>
-           <button id="m-awaria">🆘 Instrukcja w razie awarii</button>
-         </div>`;
+    // Pod kartą nie ma przycisków „Zgłoś usterkę” ani „Instrukcja w razie awarii”:
+    // to te same ekrany, co „Usterka” i „Awaria” w pasku dolnym i w menu
+    // kierowcy (dwie drogi do jednego miejsca tylko mnożyły przyciski).
+    // Historia przeglądów jest na ekranie „Przegląd”.
+    pole.innerHTML = przyciskPowrotu() + auta.map(p => kartaMojegoAuta(p, d.okres, czeka)).join('');
     podepnijPowrot(pole);
 
     pole.querySelectorAll('[data-protokol-pojazd]').forEach(b => {
       b.onclick = () => pokazEkran('przeglad', { pojazd: Number(b.dataset.protokolPojazd) });
     });
-    // Cała lista, nie pierwsze auto: kierowca ciągnika z przyczepą zgłaszał
-    // usterkę przyczepy zawsze na ciągnik, bo okno nie dawało wyboru.
-    pole.querySelector('#m-usterka').onclick = () => oknoZgloszeniaUsterki(auta);
-    pole.querySelector('#m-przeglady').onclick = () => pokazEkran('przeglady');
-    pole.querySelector('#m-awaria').onclick = () => pokazEkran('awaria');
   },
 };
 
@@ -100,8 +90,8 @@ function kartaMojegoAuta(p, okres, czeka) {
                        : ''}</p>
 
       ${pr.do_zrobienia && wTelefonie ? `<div class="wstega info">
-          Przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))} czeka w telefonie
-          na wysłanie — wyślę go sam, gdy wróci zasięg. Nie rób go drugi raz.</div>`
+          Przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))} czeka na wysłanie
+          na tym urządzeniu — wyślę go sam, gdy wróci zasięg. Nie rób go drugi raz.</div>`
       : pr.do_zrobienia ? `
         <button class="glowny duzy" data-protokol-pojazd="${p.id}" style="width:100%">
           ${odrzucony ? 'Popraw i wyślij ponownie'
@@ -152,7 +142,7 @@ EKRANY.przeglad = {
   async rysuj(pole, param) {
     const d = await sprobuj(() => API.get('/api/moj-pojazd'));
     if (!d || !(d.pojazdy || []).length) {
-      pole.innerHTML = `<div class="pusto"><span class="duza-ikona">🚗</span>
+      pole.innerHTML = `<div class="pusto"><span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
         Nie masz przypisanego auta.</div>`;
       return;
     }
@@ -176,7 +166,7 @@ EKRANY.przeglad = {
 
     pole.innerHTML = `
       ${czeka ? `<div class="wstega uwaga">Przegląd za ${escHtml(miesiacSlownie(okres))}
-        czeka w telefonie na wysłanie — wyślę go sam, gdy wróci zasięg.
+        czeka na wysłanie na tym urządzeniu — wyślę go sam, gdy wróci zasięg.
         Nie rób go drugi raz.</div>` : ''}
       ${pr.status === 'odrzucony' ? `<div class="wstega blad">
         Biuro odrzuciło poprzednią wysyłkę.<br><b>${escHtml(pr.powod || '')}</b></div>` : ''}
@@ -184,7 +174,7 @@ EKRANY.przeglad = {
         ${naSerwerze.map(k => escHtml(Zdjecia.opisKadru(k).etykieta)).join(', ')}.
         Dorób tylko brakujące albo te, o które prosi biuro.</div>` : ''}
       ${szkic ? `<div class="wstega info">Wróciłem do niedokończonego przeglądu —
-        zdjęcia i licznik czekały w telefonie.</div>` : ''}
+        zdjęcia i licznik czekały na tym urządzeniu.</div>` : ''}
       ${!stan.online ? `<div class="wstega uwaga">Nie ma teraz zasięgu.
         Zrób przegląd normalnie — wyślę go sam, gdy sieć wróci.</div>` : ''}
 
@@ -220,7 +210,9 @@ EKRANY.przeglad = {
       <div class="przyciski rozstaw">
         <button id="pg-usterka">Zgłoś przy okazji usterkę</button>
         <button class="glowny duzy" id="pg-wyslij">Wyślij przegląd</button>
-      </div>`;
+      </div>
+      <p style="text-align:center;margin:14px 0 0">
+        <button class="tekstowy" id="pg-historia">Moje wcześniejsze przeglądy</button></p>`;
 
     const wePrzebieg = pole.querySelector('#pg-przebieg');
     const zbierz = () => ({
@@ -259,6 +251,7 @@ EKRANY.przeglad = {
         pokazEkran('przeglad', { pojazd: Number(e.target.value) });
     }
     pole.querySelector('#pg-usterka').onclick = () => oknoZgloszeniaUsterki(p);
+    pole.querySelector('#pg-historia').onclick = () => pokazEkran('przeglady');
     pole.querySelector('#pg-wyslij').onclick = () => wyslijProtokol(p, okres, komplet, pole);
   },
 };
@@ -388,8 +381,9 @@ async function wyslijZgloszenieUsterki(tresc, auta, zdjecia) {
   return true;
 }
 
-/* `pojazd`: jedno auto (zgłoszenie z ekranu przeglądu), lista aut (z ekranu
-   „Moje auto" — przy kilku jest wybór) albo nic (pobieramy listę).        */
+/* `pojazd`: jedno auto (zgłoszenie z ekranu przeglądu), lista aut (przy kilku
+   jest wybór) albo nic (pobieramy listę). Pełny formularz na ekranie
+   „Usterka” wybiera auto z całej listy kierowcy.                          */
 async function oknoZgloszeniaUsterki(pojazd) {
   let auta = Array.isArray(pojazd) ? pojazd : (pojazd ? [pojazd] : null);
   if (!auta) {
@@ -435,7 +429,7 @@ async function formularzUsterkiNaEkranie(kontener) {
   const d = await API.get('/api/moj-pojazd').catch(() => null);
   const auta = (d && d.pojazdy) || [];
   if (!auta.length) {
-    kontener.innerHTML = `<div class="pusto"><span class="duza-ikona">🚗</span>
+    kontener.innerHTML = `<div class="pusto"><span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
       Nie masz przypisanego auta.<br><span class="male">Zgłoś to biuru — bez
       przypisanego auta nie da się zgłosić usterki.</span></div>`;
     return;

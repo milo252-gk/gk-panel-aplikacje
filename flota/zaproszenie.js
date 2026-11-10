@@ -18,7 +18,7 @@ EKRANY.zaproszenie = {
   async rysuj(pole) {
     const z = await sprobuj(() => API.get('/api/zaproszenie'));
     if (!z) {
-      pole.innerHTML = '<div class="pusto">Nie udało się ustalić adresu programu.</div>';
+      pole.innerHTML = '<div class="pusto">Nie udało się ustalić adresu aplikacji.</div>';
       return;
     }
     const tunelowy = z.skad === 'tunel';
@@ -31,14 +31,14 @@ EKRANY.zaproszenie = {
     pole.innerHTML = `
       ${z.skad === 'siec' ? `<div class="wstega uwaga">
         <b>Ten adres działa tylko w firmowym wifi.</b>
-        Kierowca spod domu albo z drogi się nie połączy. Żeby program otwierał się
+        Kierowca spod domu albo z drogi się nie połączy. Żeby aplikacja otwierała się
         z dowolnej sieci, włącz tunel w <b>Administracji → Ustawienia → Zaawansowane → Adres HTTPS dla kierowców</b>.
         </div>` : ''}
 
       ${naGithubie && daneWSwiat ? `<div class="wstega ok">
         <b>Ten adres jest stały i działa na całym świecie, w dowolnym wifi.</b>
         Kod można wydrukować i powiesić w szatni — będzie prowadził w to samo
-        miejsce także za rok. Telefony kierowców same znajdują program w biurze,
+        miejsce także za rok. Telefony kierowców same znajdują aplikację w biurze,
         nawet gdy tunel dostanie po drodze nowy adres.
         </div>` : ''}
 
@@ -70,7 +70,7 @@ EKRANY.zaproszenie = {
         <div class="zaproszenie">
           <div class="zaproszenie-kod">${z.qr}</div>
           <div class="zaproszenie-obok">
-            <p class="slaby male" style="margin:0 0 6px">Adres programu:</p>
+            <p class="slaby male" style="margin:0 0 6px">Adres aplikacji:</p>
             <p class="zaproszenie-adres" id="zp-adres">${escHtml(z.adres)}</p>
             <div class="przyciski">
               <button id="zp-kopiuj">Skopiuj adres</button>
@@ -84,7 +84,7 @@ EKRANY.zaproszenie = {
 
       <div class="karta">
         <h3>Powiedz kierowcy, żeby zrobił to raz</h3>
-        <p class="slaby male">Bez tego kroku program otwiera się jako zwykła strona.
+        <p class="slaby male">Bez tego kroku aplikacja otwiera się jako zwykła strona.
         Po nim wygląda i działa jak aplikacja: własna ikona, pełny ekran,
         i — pod adresem <code>https://</code> — otwiera się też bez zasięgu.</p>
 

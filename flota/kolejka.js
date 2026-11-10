@@ -91,7 +91,7 @@ const Kolejka = (() => {
       const zadanie = praca(t.objectStore(magazyn));
       t.oncomplete = () => zwroc(zadanie ? zadanie.result : undefined);
       t.onerror = () => odrzuc(t.error);
-      t.onabort = () => odrzuc(t.error || new Error('Zapis w telefonie został przerwany'));
+      t.onabort = () => odrzuc(t.error || new Error('Zapis na tym urządzeniu został przerwany'));
     })).catch(e => {
       if (e && e.zamknietaBaza && !drugaProba) {
         const stara = baza;

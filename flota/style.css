@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-28d6cd86f42b';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-a9f75603d8f9';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -447,6 +447,8 @@ main h3{scroll-margin-top:calc(var(--gora-wys) + 12px)}
    w jednym wierszu z podpisem i w Przeglądach „Miesiąc” wchodził na pole
    (UI etap 3) — tak samo w GK Trasy. */
 .pasek-narzedzi label>input,.pasek-narzedzi label>select{display:block}
+/* Pole wyboru („pokaż wycofane”) nie jest polem tekstowym: bez tego rozciągało się do 150 px nad swoim podpisem. */
+.pasek-narzedzi input[type=checkbox]{display:inline-block; min-width:0; width:auto; margin-right:6px}
 .slaby{color:var(--tekst-slaby)}
 .male{font-size:14px}
 .pusto{text-align:center; padding:36px 16px; color:var(--tekst-slaby)}
@@ -972,3 +974,8 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   .komunikaty{bottom:18px}
   .pasek-polaczenia{margin-left:224px; width:auto}
 }
+
+/* Ikona liniowa przed napisem przycisku (ikonka() w app.js). */
+.ik{display:inline-flex; vertical-align:-3px; margin-right:6px}
+.ik svg{display:block; width:16px; height:16px}
+.pusto .duza-ikona svg{display:inline-block}
