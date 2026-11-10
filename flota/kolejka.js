@@ -53,7 +53,17 @@ const Kolejka = (() => {
         if (!db.objectStoreNames.contains('odrzucone'))
           db.createObjectStore('odrzucone', { keyPath: 'uuid' });
       };
-      zadanie.onsuccess = () => { baza = zadanie.result; zwroc(baza); };
+      zadanie.onsuccess = () => {
+        const db = zadanie.result;
+        baza = db;
+        // Przeglądarka potrafi zamknąć połączenie sama (przepełniona pamięć, czyszczenie danych
+        // witryny, aktualizacja bazy w innej karcie). Trzymane dalej „na pamięć” połączenie
+        // odrzucałoby KAŻDY zapis aż do przeładowania — zdjęcia z placu nie miałyby gdzie leżeć.
+        // Obsługa dotyczy TEGO połączenia (db), a nie tego, które akurat leży w `baza`.
+        db.onversionchange = () => { try { db.close(); } catch (e) { /* i tak zamknięte */ } if (baza === db) baza = null; };
+        db.onclose = () => { if (baza === db) baza = null; };
+        zwroc(db);
+      };
       zadanie.onerror = () => odrzuc(zadanie.error);
     });
   }
@@ -66,14 +76,31 @@ const Kolejka = (() => {
      Czekamy na `oncomplete` transakcji, a NIE na `onsuccess` żądania:
      żądanie melduje sukces, zanim transakcja się zatwierdzi, więc telefon
      wygaszony w tej szczelinie gubi zapis bez jednego komunikatu.           */
-  function dzialanie(magazyn, tryb, praca) {
+  function dzialanie(magazyn, tryb, praca, drugaProba) {
     return otworz().then(db => new Promise((zwroc, odrzuc) => {
-      const t = db.transaction(magazyn, tryb);
+      let t;
+      try {
+        t = db.transaction(magazyn, tryb);
+      } catch (e) {
+        // Połączenie zamknięte, zanim dotknęliśmy bazy: nic jeszcze nie zapisano, więc można bezpiecznie
+        // otworzyć je od nowa i powtórzyć (raz).
+        if (e && e.name === 'InvalidStateError') e.zamknietaBaza = true;
+        odrzuc(e);
+        return;
+      }
       const zadanie = praca(t.objectStore(magazyn));
       t.oncomplete = () => zwroc(zadanie ? zadanie.result : undefined);
       t.onerror = () => odrzuc(t.error);
       t.onabort = () => odrzuc(t.error || new Error('Zapis w telefonie został przerwany'));
-    }));
+    })).catch(e => {
+      if (e && e.zamknietaBaza && !drugaProba) {
+        const stara = baza;
+        baza = null;
+        try { if (stara) stara.close(); } catch (err) { /* i tak zamknięte */ }
+        return dzialanie(magazyn, tryb, praca, true);
+      }
+      throw e;
+    });
   }
 
   function numer() {

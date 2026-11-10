@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-df70ce5be6bd';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-28d6cd86f42b';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -128,6 +128,7 @@ const stan = {
   instrukcje: [],           // instrukcja awaryjna — trzymana takze bez zasiegu
   online: navigator.onLine,
   wKolejce: 0,              // moje zapisy czekajace w telefonie
+  zdjecWKolejce: 0,         // ile zdjec leży w tych zapisach (etap 3 — pasek mówi też o zdjęciach)
   obceWKolejce: 0,          // zapisy poprzedniej osoby z tego telefonu
   odrzucone: 0,             // zapisy, ktorych serwer nie przyjal
   bezPamieci: false,        // IndexedDB nie odpowiada — tryb offline nie dziala
@@ -549,6 +550,79 @@ function potwierdz(pytanie, opis, opcje) {
    pod starym, bez żadnej drogi powrotu. Stały front to rozwiązuje.         */
 let API_BAZA = '';
 
+/* Limity czasu zapytań (etap 3, 2026-11-09).
+
+   „Wifi jest, internetu brak” (albo tunel stoi, a komputer w biurze nie
+   odpowiada) znaczyło dotąd: zapytanie wisi, aż przeglądarka sama się
+   podda — pół minuty i dłużej. Start aplikacji i logowanie czekały na adres.json,
+   a kierowca na placu patrzył na kółko. Teraz każde zapytanie ma limit; po jego
+   przekroczeniu aplikacja zachowuje się tak, jak przy braku sieci (pamięć
+   odpowiedzi, kolejka, logowanie PIN-em bez sieci).
+
+   Limit NIGDY nie jest powodem utraty zapisu:
+   - zapisy kierowcy idą przez kolejkę w IndexedDB i znikają z niej dopiero po
+     potwierdzeniu przez program — przekroczenie czasu to dla kolejki zwykły
+     błąd sieci (zapis zostaje, wyśle się ponownie; program rozpoznaje powtórkę
+     po numerze operacji, a zdjęcia po odcisku),
+   - zapisy biura z numerem operacji (zapisBiura) po przekroczeniu czasu idą do
+     pamięci urządzenia i ponawiają się z tym samym numerem,
+   - pozostałe zapisy biura mówią wprost, że NIE WIADOMO, czy przeszły (program
+     mógł zdążyć) — i nie są ponawiane same, żeby niczego nie podwoić,
+   - wysyłka paczki zdjęć (/api/sync) ma limit rosnący z jej wagą, żeby wolne,
+     ale działające łącze zdążyło ją donieść.                                  */
+const LIMIT_ODCZYTU_MS = 10 * 1000;
+const LIMIT_ZAPISU_MS = 20 * 1000;
+const LIMIT_SPRAWDZENIA_MS = 8 * 1000;            // /api/zyje — „czy program stoi”
+const LIMIT_LOGOWANIA_MS = 12 * 1000;             // logowanie i wejście z GK Trasy
+const LIMIT_DLUGICH_ZAPISOW_MS = 60 * 1000;       // program woła wtedy Panel, pocztę albo kasuje pliki
+const LIMIT_WYSYLKI_MIN_MS = 60 * 1000;           // /api/sync: tyle przy pustej paczce...
+const LIMIT_WYSYLKI_MAKS_MS = 10 * 60 * 1000;
+const BAJTOW_NA_MS_WYSYLKI = 15;                  // ...plus 1 ms na każde 15 B (≈ 120 kb/s)
+const LIMIT_ADRESU_MS = 6 * 1000;                 // adres.json leży na Pages — bez internetu wisiałby bez końca
+const ZAPISY_Z_PANELEM = /^\/api\/(ustaw-konto|zmien-pin|zmien-haslo|panel\/|czyszczenie|poczta\/|kopia|ustawienia|uzytkownicy)/;
+
+function limitCzasu(sciezka, opcje) {
+  const s = String(sciezka).split('?')[0];
+  const metoda = String((opcje && opcje.method) || 'GET').toUpperCase();
+  if (s === '/api/sync') {
+    const bajtow = opcje && typeof opcje.body === 'string' ? opcje.body.length : 0;
+    return Math.min(LIMIT_WYSYLKI_MAKS_MS, LIMIT_WYSYLKI_MIN_MS + Math.round(bajtow / BAJTOW_NA_MS_WYSYLKI));
+  }
+  if (s === '/api/zyje') return LIMIT_SPRAWDZENIA_MS;
+  if (s === '/api/logowanie' || s === '/api/wejscie') return LIMIT_LOGOWANIA_MS;
+  if (metoda === 'GET' || metoda === 'HEAD') return LIMIT_ODCZYTU_MS;
+  return ZAPISY_Z_PANELEM.test(s) ? LIMIT_DLUGICH_ZAPISOW_MS : LIMIT_ZAPISU_MS;
+}
+
+/* Powtórka NIE podwoi zapisu: odczyt, logowanie, paczka kolejki (uuid operacji) i zapis z numerem operacji. */
+function mozeBycPonowione(sciezka, opcje) {
+  const s = String(sciezka).split('?')[0];
+  const metoda = String((opcje && opcje.method) || 'GET').toUpperCase();
+  if (metoda === 'GET' || metoda === 'HEAD' || s === '/api/sync' || s === '/api/logowanie') return true;
+  return !!(opcje && opcje.headers && opcje.headers['X-GK-Operacja']);
+}
+
+/* fetch z limitem czasu. Po przekroczeniu zapytanie jest przerywane, a błąd ma
+   `przekroczonyCzas` — odróżnia „nie odpowiada” od „nie ma sieci”. Limit liczy się do
+   nagłówków odpowiedzi (odczyt treści już nie), czyli do chwili, w której wiadomo,
+   że ktoś po drugiej stronie żyje. */
+async function fetchZLimitem(adres, opcje, limitMs) {
+  if (typeof AbortController === 'undefined') return fetch(adres, opcje);     // bardzo stara przeglądarka
+  const kontroler = new AbortController();
+  let przekroczono = false;
+  const zegar = setTimeout(() => { przekroczono = true; kontroler.abort(); }, limitMs);
+  try {
+    return await fetch(adres, Object.assign({}, opcje, { signal: kontroler.signal }));
+  } catch (e) {
+    if (!przekroczono) throw e;
+    const blad = new Error(`Program w biurze nie odpowiedział w ciągu ${Math.round(limitMs / 1000)} s.`);
+    blad.przekroczonyCzas = true;
+    throw blad;
+  } finally {
+    clearTimeout(zegar);
+  }
+}
+
 /* Ustalenie adresu danych jest WARUNKIEM każdego zapytania, nie krokiem
    startowym obok nich. Formularz logowania jest podpięty od pierwszej chwili,
    a odczyt adres.json trwa — kierowca, który kliknie „Zaloguj" szybciej,
@@ -573,7 +647,7 @@ async function ustalBazeApi() {
   try {
     // no-store, bo to jedyny plik, który MUSI być świeży: po nim aplikacja
     // wie, gdzie dziś stoi program.
-    const odp = await fetch('adres.json?t=' + Date.now(), { cache: 'no-store' });
+    const odp = await fetchZLimitem('adres.json?t=' + Date.now(), { cache: 'no-store' }, LIMIT_ADRESU_MS);
     if (odp.ok) {
       const opis = await odp.json();
       if (opis && opis.api) {
@@ -620,7 +694,7 @@ async function sprawdzAdresPonownie() {
   if (teraz - _adresSprawdzony < ODSTEP_SPRAWDZANIA_ADRESU_MS) return false;
   _adresSprawdzony = teraz;
   try {
-    const odp = await fetch('adres.json?t=' + teraz, { cache: 'no-store' });
+    const odp = await fetchZLimitem('adres.json?t=' + teraz, { cache: 'no-store' }, LIMIT_ADRESU_MS);
     if (!odp.ok) return false;
     const opis = await odp.json();
     if (!opis || typeof opis.api !== 'string' || !/^https?:\/\//.test(opis.api)) return false;
@@ -649,16 +723,20 @@ function toBladAdresu(odp) {
    uuid operacji). Przy niezmienionym adresie oddajemy błąd jak dotąd.       */
 async function zapytajProgram(sciezka, opcje) {
   await adresDanychGotowy();
+  const limit = limitCzasu(sciezka, opcje);
   let odp;
   try {
     try {
-      odp = await fetch(API_BAZA + sciezka, opcje);
+      odp = await fetchZLimitem(API_BAZA + sciezka, opcje, limit);
     } catch (e) {
       if (!await sprawdzAdresPonownie()) throw e;
-      odp = await fetch(API_BAZA + sciezka, opcje);
+      // Po PRZEKROCZENIU czasu (nie po błędzie sieci) zapis mógł jednak dojść do starego adresu —
+      // pod nowym powtarzamy tylko to, co niczego nie podwoi.
+      if (e && e.przekroczonyCzas && !mozeBycPonowione(sciezka, opcje)) throw e;
+      odp = await fetchZLimitem(API_BAZA + sciezka, opcje, limit);
     }
     if (toBladAdresu(odp) && await sprawdzAdresPonownie()) {
-      odp = await fetch(API_BAZA + sciezka, opcje);
+      odp = await fetchZLimitem(API_BAZA + sciezka, opcje, limit);
     }
   } catch (e) {
     oznaczSerwer(false);
@@ -763,9 +841,14 @@ async function zapomnijOdpowiedzi(zostaw) {
    poczekają w telefonie”) jest prawdziwy tylko dla kolejki kierowcy. */
 function bladBezProgramu(e, metoda, sciezka) {
   if (metoda === 'GET' || String(sciezka).split('?')[0] === '/api/sync') return e;
-  const blad = new Error('Brak połączenia z programem w biurze — nie zapisano. '
-    + 'Spróbuj ponownie, gdy połączenie wróci.');
+  const naCzas = !!(e && e.przekroczonyCzas);
+  // Po przekroczeniu czasu program mógł zapis przyjąć, tylko odpowiedź nie doszła — nie mówimy „nie zapisano”.
+  const blad = new Error(naCzas
+    ? 'Program w biurze nie odpowiedział na czas — nie wiadomo, czy zapis przeszedł. '
+      + 'Sprawdź na liście, zanim zapiszesz jeszcze raz.'
+    : 'Brak połączenia z programem w biurze — nie zapisano. Spróbuj ponownie, gdy połączenie wróci.');
   blad.bezPolaczenia = true;
+  blad.przekroczonyCzas = naCzas;
   return blad;
 }
 
@@ -936,7 +1019,12 @@ async function zapisBiura(metoda, sciezka, dane, opcje) {
     const kopia = await odpowiedzZPamieci(z);
     op.zrodla.push({ sciezka: z, odcisk: kopia ? odciskZrodla(kopia.dane) : '' });
   }
-  await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+  try {
+    await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
+  } catch (e) {
+    // Ani program, ani pamięć urządzenia nie przyjęły zapisu — mówimy to wprost.
+    throw new Error('NIE ZAPISANO. ' + poLudzku(e));
+  }
   if (o.popraw) await poprawPamiec(o.popraw).catch(() => { /* ekran pokaże stare dane */ });
   await pokazZapisyBiura();
   if (!bezProgramu.od) wyslijZapisyBiura();
@@ -1219,6 +1307,7 @@ async function odswiezStanSieci() {
     const wszystkie = await Kolejka.lista();
     const moje = stan.uz ? wszystkie.filter(o => o.uzytkownik === stan.uz.id) : wszystkie;
     stan.wKolejce = moje.length;
+    stan.zdjecWKolejce = liczbaZdjec(moje);
     stan.obceWKolejce = wszystkie.length - moje.length;
     stan.odrzucone = await Kolejka.ileOdrzuconych();
     stan.bezPamieci = false;
@@ -1227,7 +1316,7 @@ async function odswiezStanSieci() {
     // pamięć) znaczy, że kierowca NIE MA gdzie odłożyć zdjęć bez zasięgu.
     // Zamiast wywrócić start aplikacji — bo ta funkcja leci przed ekranem
     // logowania — mówimy o tym wprost i wpuszczamy go do środka.
-    stan.wKolejce = 0; stan.obceWKolejce = 0; stan.odrzucone = 0;
+    stan.wKolejce = 0; stan.zdjecWKolejce = 0; stan.obceWKolejce = 0; stan.odrzucone = 0;
     if (!stan.bezPamieci) {
       stan.bezPamieci = true;
       komunikat(`Pamięć ${slowoUrzadzenia('dopelniacz')} nie odpowiada — bez zasięgu nie zapiszę zdjęć. `
@@ -1239,9 +1328,10 @@ async function odswiezStanSieci() {
   kropka.className = 'stan-sieci' + ((stan.odrzucone || stan.bezPamieci) ? ' odrzucone'
     : (!stan.online ? ' offline' : (stan.wKolejce ? ' czeka' : '')));
   kropka.title = tytulKropkiSieci({ online: stan.online, wKolejce: stan.wKolejce, odrzucone: stan.odrzucone,
-    bezPamieci: stan.bezPamieci, komputer: naKomputerze() });
+    bezPamieci: stan.bezPamieci, komputer: naKomputerze(), zdjecia: stan.zdjecWKolejce });
   const znacznik = document.getElementById('znacznik-kolejki');
   if (znacznik) znacznik.textContent = stan.wKolejce ? `⏳ ${stan.wKolejce}` : '';
+  if (znacznik) znacznik.title = stan.zdjecWKolejce ? opisZdjecWKolejce(stan.zdjecWKolejce) : '';
   odswiezPasekPolaczenia();
 }
 
@@ -1873,6 +1963,9 @@ function menuDlaRoli() {
   document.querySelectorAll('.tylko-biuro').forEach(e => e.classList.toggle('ukryty', !biuro));
   document.querySelectorAll('.tylko-administrator')
     .forEach(e => e.classList.toggle('ukryty', !jestAdministratorem()));
+  // R13: „Konta kierowców” to wejście BIURA; administrator ma te konta w Administracja → Konta.
+  document.querySelectorAll('.tylko-biuro-bez-admina')
+    .forEach(e => e.classList.toggle('ukryty', !biuro || jestAdministratorem()));
   document.querySelectorAll('.tylko-kierowca').forEach(e => e.classList.toggle('ukryty', biuro));
 
   const dolne = (biuro ? PASEK_BIURA : PASEK_KIEROWCY).filter(([e]) => EKRANY[e]);
@@ -2360,25 +2453,39 @@ function slowoUrzadzenia(przypadek, komputer) {
   return k ? 'urządzeniu' : 'telefonie';
 }
 
+/* Ile zdjęć leży w zapisach czekających na wysłanie (paczka przeglądu: pary kadr+obraz, usterka: lista
+   obrazów). Tylko liczymy — format kolejki się nie zmienia. */
+function liczbaZdjec(zapisy) {
+  let n = 0;
+  for (const o of zapisy || []) if (o && Array.isArray(o.zdjecia)) n += o.zdjecia.length;
+  return n;
+}
+
+function opisZdjecWKolejce(n) {
+  return `${n} ${odmiana(n, 'zdjęcie czeka', 'zdjęcia czekają', 'zdjęć czeka')} na wysłanie`;
+}
+
 /* Podpowiedź kropki w nagłówku — te same słowa i odmiana co pasek (R5 2026-10-16;
-   dawniej „telefon” także na komputerze). Ta sama funkcja w GK Trasy. */
-function tytulKropkiSieci({ online, wKolejce, odrzucone, bezPamieci, komputer }) {
+   dawniej „telefon” także na komputerze). Ta sama funkcja w GK Trasy. Etap 3: dopisek o zdjęciach. */
+function tytulKropkiSieci({ online, wKolejce, odrzucone, bezPamieci, komputer, zdjecia }) {
   const n = wKolejce || 0;
+  const wTym = zdjecia ? ` (w tym ${zdjecia} ${odmiana(zdjecia, 'zdjęcie', 'zdjęcia', 'zdjęć')})` : '';
   if (bezPamieci) return `Pamięć ${slowoUrzadzenia('dopelniacz', komputer)} nie odpowiada — dotknij ikony konta`;
   if (odrzucone) {
     return `${odrzucone} ${odmiana(odrzucone, 'zapis nie przeszedł', 'zapisy nie przeszły',
       'zapisów nie przeszło')} — dotknij ikony konta`;
   }
   if (!online) {
-    return n ? `Brak sieci — ${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`
+    return n ? `Brak sieci — ${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie${wTym}`
       : `Brak sieci — zapisy zostają w ${slowoUrzadzenia('', komputer)}`;
   }
-  return n ? `${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')} w wysyłce` : 'Połączono';
+  return n ? `${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')} w wysyłce${wTym}` : 'Połączono';
 }
 
-function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, bezPolaczenia }) {
+function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, bezPolaczenia, zdjecia }) {
   const n = wKolejce || 0;
-  const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
+  const wTym = zdjecia ? ` (w tym ${zdjecia} ${odmiana(zdjecia, 'zdjęcie', 'zdjęcia', 'zdjęć')})` : '';
+  const czeka = `${n} ${odmiana(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie${wTym}`;
   const czesci = [];
   let klasa = 'ok';
   if (bezPolaczenia) {
@@ -2394,7 +2501,7 @@ function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, b
     czesci.push(`Brak połączenia z serwerem${n ? ` — ${czeka}` : ''}`);
   } else if (n) {
     klasa = 'kolejka';
-    czesci.push(`Wysyłanie: ${n}`);
+    czesci.push(`Wysyłanie: ${n}${wTym}`);
   }
   if (odrzucone) { klasa = 'odrzucone'; czesci.push(`Nie wysłane: ${odrzucone} — dotknij`); }
   return { klasa, tekst: czesci.join(' · ') };
@@ -2403,7 +2510,8 @@ function odswiezPasekPolaczenia() {
   const el = document.getElementById('pasek-polaczenia');
   if (!el) return;
   const p = tekstPaskaPolaczenia({ online: stan.online, wKolejce: stan.wKolejce,
-    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera, bezPolaczenia: !!stan.trybOffline });
+    odrzucone: stan.odrzucone, komputer: naKomputerze(), serwer: !stan.bezSerwera, bezPolaczenia: !!stan.trybOffline,
+    zdjecia: stan.zdjecWKolejce });
   el.className = 'pasek-polaczenia ' + p.klasa;
   el.textContent = p.tekst;
   el.hidden = !p.tekst;

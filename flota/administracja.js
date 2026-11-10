@@ -66,7 +66,8 @@ function kartaCzyszczenia() {
     <h2>Czyszczenie danych</h2>
     <p class="male slaby">Usuwa wybrane <b>usterki</b> i <b>wpisy historii przeglądów</b> <b>na stałe</b> — razem z ich zdjęciami.
       Aut i terminów to czyszczenie nie rusza. Przed usunięciem program robi pełną kopię bazy w folderze
-      <code>kopie/</code> (kopia obejmuje dane, nie pliki zdjęć).</p>
+      <code>kopie/</code> i trzyma ją 30 dni. Kopia bazy obejmuje dane, <b>nie pliki zdjęć</b> — dlatego zdjęcia znikają
+      też z archiwów zip w <code>kopie/</code> i z kopii poza komputerem (jeśli jest ustawiona) i <b>nie da się ich odzyskać</b>.</p>
     <div class="przyciski"><button class="glowny" id="a-czysc-wybierz">Wybierz pozycje do usunięcia…</button></div>
   </div>`;
 }
@@ -126,8 +127,10 @@ function oknoCzyszczenia(dane) {
                     przIds.length ? `${przIds.length} ${odmiana(przIds.length, 'wpis historii przeglądów', 'wpisy historii przeglądów', 'wpisów historii przeglądów')}` : '']
           .filter(Boolean).join(' i ');
         if (!await potwierdz('Usunąć zaznaczone pozycje?',
-          `${co} zniknie na stałe${zdj ? `, razem z ${zdj} ${odmiana(zdj, 'zdjęciem', 'zdjęciami', 'zdjęciami')} (zdjęć kopia bazy nie obejmuje)` : ''}. `
-          + 'Program najpierw robi pełną kopię bazy.', { tak: 'Usuń', groznie: true })) return;
+          `${co} zniknie na stałe${zdj ? `, razem z ${zdj} ${odmiana(zdj, 'zdjęciem', 'zdjęciami', 'zdjęciami')}` : ''}. `
+          + (zdj ? 'Zdjęcia znikną też z archiwów w folderze kopie/ i z kopii poza komputerem, a kopia bazy ich nie zawiera — '
+                   + 'nie da się ich odzyskać. ' : '')
+          + 'Program najpierw robi pełną kopię bazy (leży w folderze kopie/ przez 30 dni).', { tak: 'Usuń', groznie: true })) return;
         if (otwarte && !await potwierdz('Wśród nich są niezamknięte usterki',
           `${otwarte} ${odmiana(otwarte, 'zaznaczona usterka nie jest zamknięta', 'zaznaczone usterki nie są zamknięte', 'zaznaczonych usterek nie jest zamkniętych')} — `
           + 'nikt jej jeszcze nie naprawił albo auto stoi w warsztacie. Usunąć je mimo to?',
@@ -137,7 +140,8 @@ function oknoCzyszczenia(dane) {
         if (w) {
           z();
           komunikat(`Usunięto: ${w.usterki} ${odmiana(w.usterki, 'usterka', 'usterki', 'usterek')}, `
-            + `${w.przeglady} ${odmiana(w.przeglady, 'wpis historii', 'wpisy historii', 'wpisów historii')}. Kopia bazy: ${w.kopia}`, 'ok');
+            + `${w.przeglady} ${odmiana(w.przeglady, 'wpis historii', 'wpisy historii', 'wpisów historii')}. Kopia bazy: ${w.kopia}`
+            + (w.archiwa === 'czeka' ? ' Kopia poza komputerem zostanie oczyszczona, gdy folder będzie dostępny.' : ''), 'ok');
           odswiezEkran();
         }
       } }] : []),

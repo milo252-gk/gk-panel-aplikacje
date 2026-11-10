@@ -374,11 +374,23 @@ const Zdjecia = (() => {
      i przeładowanie. Zwrócone `rozlacz` MUSI zostać zawołane przy wyjściu
      z ekranu: bez tego każde otwarcie przeglądu dokłada kolejny nasłuch
      zapisujący brudnopis nieistniejącego już formularza.                    */
+  let ostrzezenieSzkicu = 0;
+  function ostrzezOSzkicu(e) {
+    // Najwyżej raz na minutę — zapis leci przy każdej zmianie, a komunikat ma być zauważony, nie męczący.
+    if (Date.now() - ostrzezenieSzkicu < 60 * 1000) return;
+    ostrzezenieSzkicu = Date.now();
+    try {
+      komunikat('NIE ZAPISANO brudnopisu przeglądu: ' + poLudzku(e)
+        + ' Zdjęcia zostają na ekranie — nie zamykaj tego okna i wyślij przegląd.', 'blad');
+    } catch (err) { /* brudnopis jest zapasem — nie może wywrócić ekranu */ }
+  }
+
   function pilnujSzkicu(pojazdId, zbierz) {
     const zapisz = () => {
       try {
         const szkic = zbierz();
-        if (szkic) zapiszSzkic(pojazdId, szkic);
+        // Odrzucona obietnica (pamięć pełna albo zamknięta) dotąd znikała bez śladu.
+        if (szkic) zapiszSzkic(pojazdId, szkic).catch(ostrzezOSzkicu);
       } catch (e) { /* brudnopis jest zapasem — nie może wywrócić ekranu */ }
     };
     const naWidocznosci = () => { if (document.hidden) zapisz(); };

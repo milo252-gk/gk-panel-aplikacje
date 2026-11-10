@@ -26,7 +26,8 @@ function oknoKontaZPanelu(u) {
     tytul: 'Konto ' + u.imie,
     tresc: `
       <div class="wstega info">Konto prowadzi <b>Panel Kierownika</b> — imię i nazwisko,
-        rolę, telefon i wyłączenie zmieniasz w Panelu → <b>Administracja</b>. PIN osoba
+        rolę, telefon i wyłączenie zmieniasz w Panelu → <b>Administracja</b>${jestAdministratorem()
+          ? '' : ' (albo prosisz o to administratora)'}. PIN osoba
         zmienia sama w „Moje konto”. Auto przypisujesz tutaj: Flota → karta auta →
         <b>Kierowca</b>.${stan.zespolGk ? `<br>Ta osoba ma też role spoza GK Floty
         (albo jest administratorem), więc jej konta nie zmienisz tutaj.` : ''}</div>
@@ -143,15 +144,68 @@ EKRANY.konta = {
     pole.querySelector('#k-nowy').onclick = () => oknoEdycjiKonta(null, adminow);
     const przyciskZespolu = pole.querySelector('#k-zespol');
     if (przyciskZespolu) przyciskZespolu.onclick = () => oknoKontaZespolu(null);
-    pole.querySelectorAll('[data-odblokuj]').forEach(b => {
-      b.onclick = async () => {
-        if (await sprobuj(() => API.post(`/api/uzytkownicy/${b.dataset.odblokuj}/odblokuj`, {}),
-                          'Odblokowane — można się logować także z internetu')) odswiezEkran();
-      };
-    });
+    podepnijOdblokowanie(pole);
     pole.querySelectorAll('[data-konto]').forEach(b => {
       b.onclick = () => oknoEdycjiKonta(konta.find(u => u.id === Number(b.dataset.konto)),
                                         adminow);
+    });
+  },
+};
+
+/* „Konta kierowców” — ekran BIURA (R13, właściciel 2026-11-09): biuro GK Floty odblokowuje kierowców i zakłada
+   ich konta, tak jak biuro GK Trasy. Konto powstaje w Panelu Kierownika (POST /api/panel/osoba); konta biura
+   i administratorów oraz ustawienia programu zostają przy administratorze (Administracja). Administrator ma
+   te same konta w Administracja → Konta, więc w jego menu tego ekranu nie ma.                                  */
+EKRANY.kierowcy = {
+  tytul: 'Konta kierowców',
+  tylkoBiuro: true,
+
+  async rysuj(pole) {
+    const [dane, blokady] = await Promise.all([
+      sprobuj(() => API.get('/api/konta-kierowcow')),
+      API.get('/api/blokady').catch(() => null),
+    ]);
+    const konta = (dane && dane.konta) || [];
+    const zespol = (dane && dane.zespol) || {};
+    stan.zespolGk = !!zespol.mozna;
+    stan.kontaZPanelu = true;
+    const czynnych = konta.filter(u => u.aktywny).length;
+    pole.innerHTML = `
+      <div class="wstega info">Tu zakładasz konta <b>kierowców</b> i odblokowujesz im logowanie z internetu.
+        Konto powstaje w <b>Panelu Kierownika</b> (jedna osoba, jedno konto we wszystkich aplikacjach GK; hasło
+        startowe <code>haslo123</code>). Konta biura i administratorów prowadzi administrator.
+        ${zespol.mozna ? '' : `<br>${escHtml(zespol.powod || 'Konta kierowców można tu zakładać, gdy GK Flota jest połączona z Panelem.')}`}</div>
+      <div class="pasek-narzedzi">
+        ${zespol.mozna ? '<button class="glowny" id="kk-nowy">+ Dodaj kierowcę</button>' : ''}
+        <span class="slaby male">${czynnych} ${odmiana(czynnych, 'czynny kierowca', 'czynni kierowcy',
+          'czynnych kierowców')}</span>
+      </div>
+      ${rysujBlokady(blokady)}
+      <div class="karta scisla"><div class="tabela-przewijana"><table>
+        <thead><tr><th>Kto</th><th>Login</th><th>Auta</th><th>Ostatnio</th><th></th></tr></thead>
+        <tbody>${konta.length ? konta.map(u => `
+          <tr${u.aktywny ? '' : ' class="slaby"'}>
+            <td><b>${escHtml(u.imie)}</b>${u.aktywny ? '' : ' <span class="plakietka">wyłączone</span>'}${u.zrodlo
+              === 'trasex' ? ' <span class="plakietka p-wykonany">z GK Trasy</span>' : ''}${u.zrodlo === 'gk'
+              ? ' <span class="plakietka p-zatwierdzony">z Panelu</span>' : ''}
+              ${u.telefon ? `<br><span class="slaby male">${escHtml(u.telefon)}</span>` : ''}</td>
+            <td>${escHtml(u.login)}</td>
+            <td>${u.pojazdy ? escHtml(u.pojazdy) : '<span class="slaby">—</span>'}</td>
+            <td>${u.ostatnio ? escHtml(polskaData(u.ostatnio)) : '<span class="slaby">nigdy</span>'}</td>
+            <td><button data-kierowca="${u.id}">${u.mozna_zmienic ? 'Zmień' : 'Pokaż'}</button></td>
+          </tr>`).join('') : '<tr><td colspan="5" class="slaby">Nie ma jeszcze kont kierowców.</td></tr>'}
+        </tbody></table></div></div>`;
+    const nowy = pole.querySelector('#kk-nowy');
+    if (nowy) nowy.onclick = () => oknoKontaZespolu(null);
+    podepnijOdblokowanie(pole);
+    pole.querySelectorAll('[data-kierowca]').forEach(b => {
+      b.onclick = () => {
+        const u = konta.find(x => x.id === Number(b.dataset.kierowca));
+        if (u.mozna_zmienic) return oknoKontaZespolu(u);
+        if (u.zrodlo === 'trasex') return oknoKontaZTrasexu(u);
+        if (u.zrodlo === 'gk') return oknoKontaZPanelu(u);
+        return oknoKontaLokalnegoKierowcy(u);
+      };
     });
   },
 };
@@ -170,11 +224,20 @@ function rysujBlokady(b) {
     <b>Logowanie z internetu</b> — złe PIN-y z internetu w ostatniej godzinie:
     <b>${zle}</b>.
     ${konta.length ? `<br>Zablokowane z internetu (z firmowego wifi wchodzą normalnie):
-      <ul>${konta.map(k => `<li><b>${escHtml(k.imie)}</b> — ${k.dobowa
-        ? 'do odblokowania (trzecia seria złych PIN-ów w ciągu doby)'
-        : 'do ' + escHtml(String(k.do || '').slice(11, 16))}
+      <ul>${konta.map(k => `<li><b>${escHtml(k.imie)}</b> — do ${escHtml(String(k.do || '').slice(11, 16))}
         <button data-odblokuj="${k.id}">Odblokuj</button></li>`).join('')}</ul>` : ''}
   </div>`;
+}
+
+/* „Odblokuj” przy koncie zablokowanym z internetu — administrator (wszystkie konta) i biuro (R13: tylko kierowcy;
+   serwer odmawia reszty). Jedno miejsce dla ekranu Kont i ekranu „Konta kierowców”. */
+function podepnijOdblokowanie(pole) {
+  pole.querySelectorAll('[data-odblokuj]').forEach(b => {
+    b.onclick = async () => {
+      if (await sprobuj(() => API.post(`/api/uzytkownicy/${b.dataset.odblokuj}/odblokuj`, {}),
+                        'Odblokowane — można się logować także z internetu')) odswiezEkran();
+    };
+  });
 }
 
 /* Konto z GK Trasy zawsze, konto z Panelu — dopóki GK Flota jest z nim połączona
@@ -287,6 +350,19 @@ function oknoEdycjiKonta(u, adminow) {
   });
 }
 
+/* Konto kierowcy założone w samym GK Flota (przed połączeniem z Panelem) — biuro tylko je ogląda. */
+function oknoKontaLokalnegoKierowcy(u) {
+  okno({
+    tytul: 'Konto ' + u.imie,
+    tresc: `
+      <div class="wstega info">To konto prowadzi sam <b>GK Flota</b> (nie pochodzi z Panelu Kierownika) — zmienia je
+        administrator: Administracja → Konta. Auto przypisujesz tutaj: Flota → karta auta → <b>Kierowca</b>.</div>
+      <p class="slaby male">${escHtml(u.login)} · konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
+        ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
+    przyciski: [{ napis: 'Zamknij', klik: z => z() }],
+  });
+}
+
 /* Konto biura albo kierowcy zakładane i zmieniane PRZEZ PANEL (D49, GK-KONTA.md §3.5).
    Zapis idzie do huba (POST /api/panel/osoba), a konto wraca do GK Flota zwykłym
    pobraniem kont — od razu, serwer pobiera je po każdym zapisie. Hasła ani PIN-u nikt
@@ -300,6 +376,8 @@ const ROLE_ZESPOLU = [
 
 function oknoKontaZespolu(u) {
   const nowy = !u;
+  // R13: biuro zaklada i zmienia tylko kierowcow — rola jest jedna, stala, bez pol wyboru (administrator ma oba).
+  const tylkoKierowcy = !jestAdministratorem();
   const role = new Set(nowy ? [] : (u.role_zespolu || []));
   okno({
     tytul: nowy ? 'Nowe konto' : 'Konto ' + u.imie,
@@ -314,13 +392,15 @@ function oknoKontaZespolu(u) {
           <input id="kz-telefon" maxlength="30" inputmode="tel" autocomplete="off"
                  value="${escHtml(u ? u.telefon || '' : '')}"></label>
       </div>
-      <fieldset class="kz-role"><legend>Rola *</legend>
+      ${tylkoKierowcy ? `<p class="kz-rola-stala"><b>Rola:</b> Kierowca <span class="slaby">— swoje auto,
+          przeglądy i usterki; jest też kierowcą w GK Trasy. Konta biura i administratorów prowadzi
+          administrator.</span></p>` : `<fieldset class="kz-role"><legend>Rola *</legend>
         ${ROLE_ZESPOLU.map(([kod, nazwa, opis]) => `
           <label class="plaska"><input type="checkbox" data-rola="${kod}"${role.has(kod)
             ? ' checked' : ''}> <span><b>${nazwa}</b> <span class="slaby">— ${opis}</span></span></label>
           ${kod === 'trasy_kierowca' ? '<p class="slaby male kz-podpowiedz">Kierowca jest też '
             + 'kierowcą w GK Trasy.</p>' : ''}`).join('')}
-      </fieldset>
+      </fieldset>`}
       ${nowy ? `<p class="wstega ok">Hasło startowe: <b>haslo123</b> — przy pierwszym logowaniu
           osoba ustawi własne hasło i PIN.</p>` : `
         <label class="plaska"><input type="checkbox" id="kz-aktywny"${u.aktywny ? ' checked' : ''}>
@@ -374,8 +454,8 @@ function oknoKontaZespolu(u) {
           akcja: 'zapisz',
           nazwa: document.getElementById('kz-imie').value.trim(),
           telefon: document.getElementById('kz-telefon').value.trim(),
-          role: [...document.querySelectorAll('.kz-role [data-rola]')]
-            .filter(p => p.checked).map(p => p.dataset.rola),
+          role: tylkoKierowcy ? ['trasy_kierowca']
+            : [...document.querySelectorAll('.kz-role [data-rola]')].filter(p => p.checked).map(p => p.dataset.rola),
         };
         if (!nowy) {
           dane.id = u.id;

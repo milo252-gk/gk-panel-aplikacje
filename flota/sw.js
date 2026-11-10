@@ -7,7 +7,7 @@
    nie siega, a zasieg komorkowy bywa jednokreskowy. Program ma sie tam otworzyc
    i przyjac komplet zdjec.                                                   */
 
-const WERSJA = 'flotex-df70ce5be6bd';
+const WERSJA = 'flotex-28d6cd86f42b';
 
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
@@ -65,10 +65,42 @@ self.addEventListener('activate', e => {
    programu w biurze (tak jak app.js). Otwarta wprost z programu nie ma tego pliku —
    program oddaje wtedy stronę aplikacji zamiast JSON-a — a dane są pod tym samym
    adresem co worker.                                                          */
+const LIMIT_SIECI_MS = 5000;           // szkielet aplikacji: tyle czekamy na sieć, potem kopia
+const LIMIT_PUSH_MS = 8000;            // adres.json i „co nowego” przy pushu — bez internetu nie wiszą
+
+/* fetch z limitem czasu (zwykły adres, nie nawigacja — tylko takie wołamy z workera poza szkieletem). */
+async function pobierzZLimitem(adres, opcje, limitMs) {
+  if (typeof AbortController === 'undefined') return fetch(adres, opcje);
+  const kontroler = new AbortController();
+  const zegar = setTimeout(() => kontroler.abort(), limitMs);
+  try {
+    return await fetch(adres, Object.assign({}, opcje, { signal: kontroler.signal }));
+  } finally {
+    clearTimeout(zegar);
+  }
+}
+
+/* Wyścig sieci z kopią (etap 3, 2026-11-09). „Najpierw sieć” bez limitu znaczyło: wifi jest, internetu
+   brak → plik wisi, aż przeglądarka się podda, i aplikacja nie startuje, choć kopia leży w pamięci.
+   Sieć, która odpowie w limicie (także błędem 404), wygrywa jak dotąd. Gdy limit minie, a kopia jest —
+   oddajemy kopię, a spóźnioną odpowiedź sieci i tak zapisujemy do pamięci (następny start będzie świeży).
+   Gdy kopii nie ma, czekamy na sieć jak dotąd. */
+async function wyscigSieciZKopia(siec, zKopii, limitMs) {
+  const wynik = await Promise.race([
+    siec.then(odp => ({ odp }), blad => ({ blad })),
+    new Promise(ok => setTimeout(() => ok({ czas: true }), limitMs)),
+  ]);
+  if (wynik.odp) return wynik.odp;
+  const kopia = await zKopii().catch(() => undefined);
+  if (kopia) return kopia;
+  if (wynik.blad) throw wynik.blad;
+  return siec;
+}
+
 async function adresDanych() {
   try {
-    const odp = await fetch(new URL('adres.json', self.registration.scope).href + '?t=' + Date.now(),
-                            { cache: 'no-store' });
+    const odp = await pobierzZLimitem(new URL('adres.json', self.registration.scope).href + '?t=' + Date.now(),
+                                    { cache: 'no-store' }, LIMIT_PUSH_MS);
     if (odp.ok) {
       const opis = await odp.json();
       if (opis && typeof opis.api === 'string' && /^https?:\/\//.test(opis.api)) {
@@ -84,9 +116,9 @@ self.addEventListener('push', e => {
     let wiadomosci = [];
     try {
       const sub = await self.registration.pushManager.getSubscription();
-      const odp = await fetch((await adresDanych()) + '/api/push/co-nowego', {
+      const odp = await pobierzZLimitem((await adresDanych()) + '/api/push/co-nowego', {
         method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: sub ? sub.endpoint : '' }) });
+        body: JSON.stringify({ endpoint: sub ? sub.endpoint : '' }) }, LIMIT_PUSH_MS);
       if (odp.ok) wiadomosci = (await odp.json()).wiadomosci || [];
     } catch (err) { /* program nieosiągalny — i tak coś pokażemy, żeby zajrzeć do aplikacji */ }
     // Aplikacja GK Flota jest na ekranie — sama pyta o zdarzenia (app.js → sprawdzZdarzenia)
@@ -188,22 +220,20 @@ self.addEventListener('fetch', e => {
   // Szkielet: najpierw siec (zeby poprawki dochodzily), kopia jako zabezpieczenie.
   // index.html oddajemy awaryjnie tylko przy wchodzeniu na strone — nigdy
   // w miejsce brakujacego skryptu czy obrazka.
-  e.respondWith(
-    fetch(e.request)
-      .then(odp => {
-        if (odp && odp.ok) {
-          const kopia = odp.clone();
-          caches.open(WERSJA).then(c => c.put(e.request, kopia));
-        }
-        return odp;
-      })
-      // Kopia awaryjna szuka NAJPIERW w pamieci biezacej wersji. Bez tego
-      // caches.match przeszukuje wszystkie pamieci po kolei i przy jednym
-      // mrugnieciu sieci potrafi podac plik ze starej paczki — aplikacja
-      // chodzi wtedy jako mieszanka wersji i nic tego nie zglasza.
-      .catch(() => caches.open(WERSJA).then(c => c.match(e.request))
-        .then(k => k || caches.match(e.request))
-        .then(k => k || (e.request.mode === 'navigate' ? caches.match('./index.html')
-                                                       : Promise.reject())))
-  );
+  const siec = fetch(e.request).then(odp => {
+    if (odp && odp.ok) {
+      const kopia = odp.clone();
+      caches.open(WERSJA).then(c => c.put(e.request, kopia)).catch(() => {});
+    }
+    return odp;
+  });
+  // Kopia awaryjna szuka NAJPIERW w pamieci biezacej wersji. Bez tego
+  // caches.match przeszukuje wszystkie pamieci po kolei i przy jednym
+  // mrugnieciu sieci potrafi podac plik ze starej paczki — aplikacja
+  // chodzi wtedy jako mieszanka wersji i nic tego nie zglasza.
+  const zKopii = () => caches.open(WERSJA).then(c => c.match(e.request))
+    .then(k => k || caches.match(e.request))
+    .then(k => k || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined));
+  e.waitUntil(siec.catch(() => {}));        // spóźniona odpowiedź sieci i tak odświeża kopię
+  e.respondWith(wyscigSieciZKopia(siec, zKopii, LIMIT_SIECI_MS));
 });
