@@ -228,7 +228,7 @@
         <img src="${esc(await hala.adresPliku(id))}" alt="Zdjęcie">
         <button type="button" class="usun" data-usun="${esc(id)}" aria-label="Usuń zdjęcie">✕</button></figure>`));
       kontener.innerHTML = `<div class="zdjecia">${miniatury.join('')}
-        ${lista.length < o.maks ? `<label class="przycisk dodaj-zdjecie">📷 ${esc(o.etykieta)}
+        ${lista.length < o.maks ? `<label class="przycisk dodaj-zdjecie">${window.GKIkony ? `<span class="ik">${window.GKIkony.html('aparat', 18)}</span>` : ''}${esc(o.etykieta)}
           <input type="file" accept="image/*" capture="environment" hidden></label>` : ''}</div>`;
       const input = kontener.querySelector('input[type=file]');
       if (input) input.addEventListener('change', async () => {

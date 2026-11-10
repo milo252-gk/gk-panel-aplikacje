@@ -157,7 +157,7 @@
   /* Pole zdjęć w formularzu: <div class="zdjecia" data-zdjecia="klucz"> z miniaturami i „+ Zdjęcie”.
      Ids trzyma ukryte pole (JSON), więc przechodzą przez FormData i brudnopis jak tekst.  */
   UR.poleZdjec = (nazwa, ids) => `<div class="zdjecia" data-zdjecia="${esc(nazwa)}">${UR.miniatury(ids, true)}
-      <button type="button" class="zrob-zdjecie" data-dodaj-zdjecie><span class="ikona" aria-hidden="true">📷</span>Zdjęcie</button>
+      <button type="button" class="zrob-zdjecie" data-dodaj-zdjecie><span class="ikona" aria-hidden="true">${window.GKIkony ? GKIkony.html('aparat', 28) : ''}</span>Zdjęcie</button>
       <input type="hidden" name="${esc(nazwa)}" value="${esc(JSON.stringify(ids || []))}"></div>`;
   UR.zdjeciaZ = (dane, nazwa) => { try { return JSON.parse(dane.get(nazwa) || '[]'); } catch (e) { return []; } };
   document.addEventListener('click', async ev => {

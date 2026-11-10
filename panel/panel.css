@@ -678,3 +678,7 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 .czysc-tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .czysc-znacznik { flex: none; align-self: center; white-space: nowrap; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ramka); color: var(--tekst-slaby); }
 .czysc-znacznik.w-toku { color: var(--uwaga); border-color: var(--uwaga); }
+
+/* Ikony liniowe zamiast emoji (poprawki po audycie 10.11): ikona sama w przycisku/wierszu nie potrzebuje odstępu od napisu. */
+#dzwiek .ik, .pozycja-glowna .ikony .ik { margin-right: 2px; }
+#dzwiek { display: inline-flex; align-items: center; gap: 4px; }

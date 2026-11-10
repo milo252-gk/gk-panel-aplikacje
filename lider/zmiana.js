@@ -12,7 +12,10 @@
   const prog = () => hala.ustawienie('prog_zolty_min', 30);
 
   // ▣ = skan QR, 🔬 = próba — te same znaki co w Zleceniach (STYL-GK §2 D64), żeby ta sama pozycja nie miała dwóch ikon.
-  const IKONY = { obchod: '▣', proba: '🔬', bhp: '⛑', obsada: '👥', przekazanie: '📋', zadanie: '✓' };
+  // Ikony typów pozycji: liniowe z gk-ikony.js (obchód to ▣ — znak skanu QR, zlecenie zwykłe ✓); bez pliku ikon — znaki zastępcze.
+  const IKONY_NAZWY = { proba: 'proba', bhp: 'ratunek', obsada: 'konta', przekazanie: 'zlecenia' };
+  const IKONY = { obchod: '▣', zadanie: '✓' };
+  const ikonaTypu = typ => (IKONY_NAZWY[typ] && window.GKIkony ? window.GKIkony.html(IKONY_NAZWY[typ], 20) : IKONY[typ] || '✓');
   const OPIS_STANU = { wykonana: 'Zrobione', pominieta: 'Pominięte', opozniona: 'Po terminie', bliska: 'Wkrótce', czeka: '', przed: 'Później' };
 
   // ------------------------------------------------------------ zapisy checklisty
@@ -86,7 +89,7 @@
     L.okno({
       tytul: p.nazwa,
       html: `<p><span class="znacznik ${esc({ wykonana: 'ok', pominieta: 'neutral', opozniona: 'alarm', bliska: 'uwaga' }[p.stan] || 'info')}">${esc(OPIS_STANU[p.stan] || 'Do zrobienia')}</span>
-          Termin <b>${esc(p.godz)}</b>${p.wymaga_qr ? ' · wymaga skanu QR' : ''}${p.cel ? ` · punkt ${esc(p.cel)}` : ''}${p.wymagaj_zdjecia ? ' · 📷 zdjęcie' : ''}${p.wymagaj_notatki ? ' · 📝 notatka' : ''}</p>
+          Termin <b>${esc(p.godz)}</b>${p.wymaga_qr ? ' · wymaga skanu QR' : ''}${p.cel ? ` · punkt ${esc(p.cel)}` : ''}${p.wymagaj_zdjecia ? ' · zdjęcie' : ''}${p.wymagaj_notatki ? ' · notatka' : ''}</p>
         ${p.opis ? `<p class="opis-pozycji">${esc(p.opis)}</p>` : ''}
         ${zrobiona ? `<p class="ok-tekst">Zrobione ${esc(W.godzina(wpis.czas))}${kto ? ' · ' + esc(kto) : ''}${p.poTerminie ? ' (po terminie)' : ''}</p>
           ${wpis.qr ? `<p class="slaby">Kod: ${esc(wpis.qr)}</p>` : ''}${wpis.uwagi ? `<p>${esc(wpis.uwagi)}</p>` : ''}` : ''}
@@ -238,7 +241,7 @@
       </article>
       <ul class="lista checklista">${c.wiersze.map(w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">
           <span class="czas">${esc(w.godz)}</span>
-          <span class="ikona-typu" aria-hidden="true">${IKONY[w.typ] || '✓'}</span>
+          <span class="ikona-typu" aria-hidden="true">${ikonaTypu(w.typ)}</span>
           <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
             w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
           <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>

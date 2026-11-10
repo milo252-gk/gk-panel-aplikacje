@@ -440,7 +440,7 @@
     const opis = z => {
       const d = z.dane || {};
       switch (z.typ) {
-        case 'awaria.zgloszona': return `Zgłoszona${d.opis ? ': ' + d.opis : ''}${(d.zdjecia || []).length ? ' (📷 ' + d.zdjecia.length + ')' : ''}`;   // notatka i zdjęcie nieobowiązkowe (D47)
+        case 'awaria.zgloszona': return `Zgłoszona${d.opis ? ': ' + d.opis : ''}${(d.zdjecia || []).length ? ' (zdjęcia: ' + d.zdjecia.length + ')' : ''}`;   // notatka i zdjęcie nieobowiązkowe (D47)
         case 'awaria.przyjeta': return 'Jadę';
         case 'awaria.naprawa_rozpoczeta': return d.qr ? 'Na miejscu (skan maszyny)' : 'Na miejscu (bez skanu)';
         case 'awaria.wstrzymana': return `Wstrzymana: ${nazwaZeStalej(stale, 'powody_wstrzymania', d.powod) || ''}${d.opis ? ' — ' + d.opis : ''}`;

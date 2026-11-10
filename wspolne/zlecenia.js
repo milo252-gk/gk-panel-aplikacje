@@ -693,8 +693,8 @@
     if (z.wymagajSkanu) for (const m of z.maszyny) wymogi.push(krok(skany.has(m), `▣ ${esc(nazwa(m))}`));
     if (z.wymagajZdjecia) wymogi.push(krok(z.juz.zdjecia > 0, `zdjęcie${z.juz.zdjecia > 1 ? ` (${z.juz.zdjecia})` : ''}`));
     if (z.wymagajNotatki) wymogi.push(krok(z.juz.notatka, 'notatka'));
-    const CZYNNOSCI = { proba: '🔬 Zaliczy się samo, gdy zapiszesz próbę jakościową', przeglad: '🔧 Zaliczy się samo po przeglądzie UR' };
-    const ostatnie = z.postep.slice(-3).map(e => `${esc(godzinaLok(e.czas))} ${e.skan ? `▣ ${esc(nazwa(e.skan))}` : ''}${[].concat(e.zdjecia || []).length ? ' 📷' : ''}${e.uwagi ? ` 📝 ${esc(String(e.uwagi).slice(0, 60))}` : ''}`);
+    const CZYNNOSCI = { proba: ikona('proba', 16) + 'Zaliczy się samo, gdy zapiszesz próbę jakościową', przeglad: ikona('przeglady', 16) + 'Zaliczy się samo po przeglądzie UR' };
+    const ostatnie = z.postep.slice(-3).map(e => `${esc(godzinaLok(e.czas))} ${e.skan ? `▣ ${esc(nazwa(e.skan))}` : ''}${[].concat(e.zdjecia || []).length ? ' ' + ikona('aparat', 14) : ''}${e.uwagi ? ` ${ikona('notatka', 14)}${esc(String(e.uwagi).slice(0, 60))}` : ''}`);
     return `${wymogi.length ? `<div class="hala-zlecenie-wymogi" aria-label="Wymagania">${wymogi.join('')}</div>` : ''}
       ${z.czynnosc ? `<p class="hala-zlecenie-czynnosc">${CZYNNOSCI[z.czynnosc] || ''}${z.maszyny.length ? ` na: ${esc(z.maszyny.map(nazwa).join(', '))}` : ''}</p>` : ''}
       ${ostatnie.length ? `<p class="hala-zlecenie-postep slaby">Zrobione dotąd: ${ostatnie.join(' · ')}${z.postep.length > 3 ? ` (+${z.postep.length - 3})` : ''}</p>` : ''}`;
@@ -708,8 +708,10 @@
      formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Lider); próba i przegląd
      odhaczają się też same (hub). Ostatnia pozycja wysyła „Zrobione” sama (odhaczPozycje → zakonczJesliGotowe). */
   const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', 'po-terminie': '○', czeka: '○', przed: '⏳' };
-  const OPIS_CZYNNOSCI = { obsada: '👥 Raport obsady', obchod: '▣ Obchód — skan QR', proba: '🔬 Próba jakościowa',
-                           bhp: '⛑ Audyt BHP', przekazanie: '📋 Przekazanie zmiany', przeglad: '🔧 Przegląd UR' };
+  const OPIS_CZYNNOSCI = { obsada: 'Raport obsady', obchod: '▣ Obchód — skan QR', proba: 'Próba jakościowa',
+                           bhp: 'Audyt BHP', przekazanie: 'Przekazanie zmiany', przeglad: 'Przegląd UR' };
+  // Ikona czynności pozycji (liniowa, gk-ikony.js); obchód to ▣ — znak skanu QR jak na naklejkach.
+  const IKONA_CZYNNOSCI = { obsada: 'konta', proba: 'proba', bhp: 'ratunek', przekazanie: 'zlecenia', przeglad: 'przeglady' };
 
   function checklista(z, maszyny, s, opcje) {
     const nazwaM = m => (maszyny[m] || {}).nazwa || m;
@@ -728,7 +730,7 @@
           ${q.odGodz || q.godz ? `<span class="hala-pozycja-godz">${esc(q.odGodz ? (q.godz ? `${q.odGodz}–${q.godz}` : `od ${q.odGodz}`) : q.godz)}</span>` : ''}
           <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
             : q.maszyny.length > 1 ? ` <span class="slaby">· ${q.maszyny.length} maszyn${q.wymagajSkanu ? ` · ▣ ${q.maszyny.filter(m => q.skany.includes(m)).length}/${q.maszyny.length}` : ''}</span>` : ''}</span>
-          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? esc((OPIS_CZYNNOSCI[q.czynnosc] || '').split(' ')[0]) : ''}${q.wymagajZdjecia ? '📷' : ''}${q.wymagajNotatki ? '📝' : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? '▣' : ''}</span>
+          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? (IKONA_CZYNNOSCI[q.czynnosc] ? ikona(IKONA_CZYNNOSCI[q.czynnosc], 16) : '▣') : ''}${q.wymagajZdjecia ? ikona('aparat', 16) : ''}${q.wymagajNotatki ? ikona('notatka', 16) : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? '▣' : ''}</span>
         </button>${otwarta && otwarta.pozycja === q.id ? formularzPozycji(z, q, otwarta, opcje, nazwaM) : ''}`).join('')}
     </div>`;
   }
@@ -758,7 +760,7 @@
     const pole = (wymagane, nazwa) => `${nazwa} <span class="slaby">(${wymagane ? 'wymagane' : 'można pominąć'})</span>`;
     const cz = q.czynnosc && opcje && opcje.czynnosc && (opcje.czynnosc.nazwy || {})[q.czynnosc];
     const samo = !cz && (q.czynnosc === 'proba' || q.czynnosc === 'przeglad')
-      ? `<p class="hala-zlecenie-czynnosc">${q.czynnosc === 'proba' ? '🔬 Odhaczy się samo, gdy zapiszesz próbę' : '🔧 Odhaczy się samo po przeglądzie UR'}${q.maszyna ? ` na: ${esc(nazwaM(q.maszyna))}` : ''}</p>` : '';
+      ? `<p class="hala-zlecenie-czynnosc">${q.czynnosc === 'proba' ? ikona('proba', 16) + 'Odhaczy się samo, gdy zapiszesz próbę' : ikona('przeglady', 16) + 'Odhaczy się samo po przeglądzie UR'}${q.maszyna ? ` na: ${esc(nazwaM(q.maszyna))}` : ''}</p>` : '';
     return `<div class="hala-pozycja-panel">
       ${opisPozycji}
       ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
@@ -955,7 +957,7 @@
     for (const n of obiekty('narzedzia')) {
       const d = n.dane || {};
       if (d.odlozyl !== ja || Date.parse(d.czas_odlozenia) < od) continue;
-      wynik.push({ typ: 'narzedzia', id: n.id, tytul: `🧰 ${d.co || ''}`, czas: d.czas_odlozenia, status: n.etykieta || n.status,
+      wynik.push({ typ: 'narzedzia', id: n.id, tytul: `Narzędzia: ${d.co || ''}`, czas: d.czas_odlozenia, status: n.etykieta || n.status,
                    klasa: n.status === 'odebrane' ? 'ok' : 'info', odpowiedz: '' });
     }
     return wynik.sort((a, b) => String(b.czas).localeCompare(String(a.czas))).slice(0, 8);

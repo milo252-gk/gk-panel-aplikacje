@@ -66,7 +66,7 @@
   <header class="naglowek">
     <div class="zmiana" id="zmiana"></div>
     <div class="zegar" id="zegar">--:--</div>
-    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false">🔕</button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
+    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false"><span class="ik" data-ikona="dzwonek-wyl" data-rozmiar="18"></span></button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
   <div id="na-zywo" class="na-zywo">
@@ -124,7 +124,7 @@
           <label id="filtr-okres">Okres<select name="okres">
             <option value="2">2 dni</option><option value="7">7 dni</option><option value="30">30 dni</option><option value="90">90 dni</option>
           </select></label>
-          <label class="zaznacz"><input type="checkbox" name="spoznione"> ⏰ tylko spóźnione</label>
+          <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
         </form>
         <div id="lista-zlecen" class="lista"></div>
       </div>
@@ -230,7 +230,7 @@
     </section>
     <!-- D56: próby jakościowe (Lider i KJ) widoczne dla kierownika zakładu i administratora. -->
     <section aria-labelledby="t-proby" class="sekcja-prob">
-      <h2 id="t-proby">🔬 Próby jakościowe</h2>
+      <h2 id="t-proby"><span class="ik" data-ikona="proba" data-rozmiar="20"></span>Próby jakościowe</h2>
       <form class="filtry-zlecen" id="filtry-prob" autocomplete="off">
         <label>Okres<select name="okres"><option value="1">dziś i wczoraj</option><option value="7">7 dni</option><option value="30">30 dni</option></select></label>
         <label>Kto<select name="zrodlo"><option value="">Lider i KJ</option><option value="lider">Lider</option><option value="kj">KJ</option></select></label>
@@ -291,20 +291,20 @@
              które ma czynność z D56 (wtedy widać, że zaliczy się samo). -->
         <label id="zlecenie-czynnosc" hidden>Czynność, która zaliczy zlecenie sama<select name="czynnosc">
           <option value="">— zwykłe zlecenie (dział klika „Zrobione”) —</option>
-          <option value="proba">🔬 Próba jakościowa — zaliczy się po zapisaniu próby</option>
-          <option value="przeglad">🔧 Przegląd UR — zaliczy się po zakończeniu przeglądu</option>
+          <option value="proba">Próba jakościowa — zaliczy się po zapisaniu próby</option>
+          <option value="przeglad">Przegląd UR — zaliczy się po zakończeniu przeglądu</option>
         </select></label>
         <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
              miniatura i nazwa pliku (panel.js → poleZdjecia). -->
         <div class="hala-zdjecie" id="zlecenie-zdjecie">
-          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" capture="environment" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
+          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" capture="environment" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dodaj zdjęcie</span></label>
           <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
         </div>
         <!-- D31: jak dowód dostawy w GK Trasy — dział nie zamknie zlecenia bez tego, co tu zaznaczone. -->
         <fieldset><legend>Do zakończenia potrzebne</legend>
           <div class="zaznaczenia">
-            <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia" checked> 📷 Wymagaj zdjęcia</label>
-            <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki" checked> 📝 Wymagaj notatki</label>
+            <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia" checked> <span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Wymagaj zdjęcia</label>
+            <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki" checked> <span class="ik" data-ikona="notatka" data-rozmiar="16"></span>Wymagaj notatki</label>
             <label class="zaznacz" title="Dział zamknie zlecenie dopiero po zeskanowaniu naklejki QR tej maszyny"><input type="checkbox" name="wymagaj_skanu"> ▣ Wymagaj skanu QR maszyny</label>
           </div>
           <p class="slaby konto-drobne" data-bez-maszyny>Skan QR — najpierw wybierz maszynę.</p>
@@ -328,7 +328,7 @@
     <label>Co zrobić<input name="tytul" list="podpowiedzi-czynnosci" required maxlength="200" placeholder="np. Sprzątanie stanowisk po zmianie"></label>
     <label>Opis<textarea name="opis" rows="2" maxlength="4000"></textarea></label>
     <!-- 2026-10-27: jedno okno dla zapisanego zlecenia i checklisty — checklista to to samo zlecenie z listą pozycji. -->
-    <label class="zaznacz" id="stale-jako-checklista"><input type="checkbox" name="jako_checklista"> ☑ Checklista — lista pozycji do odhaczenia (godzina, maszyny i wymagania każdej osobno)</label>
+    <label class="zaznacz" id="stale-jako-checklista"><input type="checkbox" name="jako_checklista"> <span class="ik" data-ikona="lista" data-rozmiar="16"></span>Checklista — lista pozycji do odhaczenia (godzina, maszyny i wymagania każdej osobno)</label>
     <!-- Trwające zlecenie (Zlecenia → ✎ Zmień): termin i „od” zamiast harmonogramu; zmiana trafia też do wzorca. -->
     <fieldset id="stale-instancja" hidden><legend>To zlecenie trwa</legend>
       <div class="dwie">
@@ -441,8 +441,8 @@
     </fieldset>
     <fieldset id="stale-wymagania"><legend>Do zakończenia potrzebne</legend>
       <div class="zaznaczenia">
-        <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia"> 📷 Wymagaj zdjęcia</label>
-        <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki"> 📝 Wymagaj notatki</label>
+        <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia"> <span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Wymagaj zdjęcia</label>
+        <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki"> <span class="ik" data-ikona="notatka" data-rozmiar="16"></span>Wymagaj notatki</label>
         <label class="zaznacz" title="Dział zamknie zlecenie dopiero po zeskanowaniu naklejki QR tej maszyny"><input type="checkbox" name="wymagaj_skanu"> ▣ Wymagaj skanu QR maszyny</label>
       </div>
       <p class="slaby konto-drobne" data-bez-maszyny>Skan QR — najpierw wybierz maszynę.</p>
@@ -494,7 +494,7 @@
     <!-- D47: notatka i zdjęcie nieobowiązkowe — brak nie blokuje zgłoszenia (liczy się czas: przestój biegnie od „Zgłoś”). -->
     <label>Notatka (opcjonalnie)<textarea name="opis" rows="3" maxlength="2000" placeholder="Co się dzieje? (np. dźwięk, błąd na panelu)"></textarea></label>
     <div class="hala-zdjecie">
-      <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis>📷 Dodaj zdjęcie</span></label>
+      <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dodaj zdjęcie</span></label>
       <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
     </div>
     <p class="blad" role="alert" hidden></p>

@@ -271,7 +271,7 @@
     const box = el.querySelector('#p-zdjecia');
     if (!box) return;
     box.innerHTML = KJ.miniatury(f.zdjecia, true) + (f.zdjecia.length < W.MAKS_ZDJEC
-      ? '<button type="button" class="zrob-zdjecie" data-akcja="zdjecie-wady"><span class="ikona" aria-hidden="true">📷</span>Dodaj</button>'
+      ? '<button type="button" class="zrob-zdjecie" data-akcja="zdjecie-wady"><span class="ikona" aria-hidden="true">' + (window.GKIkony ? GKIkony.html('aparat', 28) : '') + '</span>Dodaj</button>'
       : `<p class="slaby">Najwyżej ${W.MAKS_ZDJEC} zdjęć.</p>`);
     KJ.wypelnijZdjecia(box);
   }
@@ -281,7 +281,7 @@
     if (!box) return;
     box.innerHTML = f.zdjecie_zlecenia
       ? `<div class="zdjecia" data-zdjecie-zlecenia>${KJ.miniatury([f.zdjecie_zlecenia], true)}</div>`
-      : '<button type="button" data-akcja="zdjecie-zlecenia">📷 Zdjęcie przewodnika</button>';
+      : '<button type="button" data-akcja="zdjecie-zlecenia">' + (window.GKIkony ? '<span class="ik">' + GKIkony.html('aparat', 18) + '</span>' : '') + 'Zdjęcie przewodnika</button>';
     KJ.wypelnijZdjecia(box);
   }
 

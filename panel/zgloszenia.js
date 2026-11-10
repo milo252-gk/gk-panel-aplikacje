@@ -61,14 +61,14 @@
           ${miniatury([].concat(x.zdjecia_odbioru || []), `Odebrane: ${x.co || ''}`)}
         </div>
         <div class="numer slaby">${esc(W.dataKrotka(x.czas_odlozenia))} ${esc(W.godzina(x.czas_odlozenia))}${x.czas_odbioru ? `<br>odebrane ${esc(W.godzina(x.czas_odbioru))}` : ''}</div>
-        <div class="akcje">${czeka && kier ? '<button type="button" class="maly glowny" data-akcja="odbierz">📷 Odebrałem</button>' : ''}</div>
+        <div class="akcje">${czeka && kier ? '<button type="button" class="maly glowny" data-akcja="odbierz">Odebrałem</button>' : ''}</div>
       </article>`;
   }
 
   function htmlBhp(b, moze) {
     return `<article class="zlecenie ${b.otwarte && b.pilne ? 'pilne' : ''}" data-rodzaj="bhp" data-id="${esc(b.id)}">
         <div class="opis">
-          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia">⛑ ${esc(b.rodzajNazwa)}</button> <span class="slaby">${esc(b.numer)}</span></div>
+          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia">${P.ik('ratunek')}${esc(b.rodzajNazwa)}</button> <span class="slaby">${esc(b.numer)}</span></div>
           <div class="szczegoly">
             ${znacznikRodzaju('bhp')}
             <span class="znacznik ${b.otwarte ? (b.pilne ? 'alarm' : 'uwaga') : 'ok'}">${esc(b.etykieta)}</span>
@@ -153,7 +153,7 @@
 
   async function akcjaBhp(nazwa, id, b) {
     if (nazwa === 'historia') {
-      const t = b.textContent.replace(/^⛑\s*/, '');
+      const t = b.textContent.trim();
       return DZ().historia(hala, 'bhp_zgloszenie', id, { tytul: `BHP: ${t}` });
     }
     const d = P.dane ? P.dane() : {};

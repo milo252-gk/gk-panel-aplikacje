@@ -29,6 +29,9 @@
 
   /* f — formularz okna; o: { lista: element z wierszami, linia: () => kod linii albo '', zmianaOd: () => 'HH:MM' pierwszej
      zaznaczonej zmiany, zmiana: () => odświeżenie okna, instancja: () => czy trwa edycja zlecenia (godzin nie zmieniamy) }. */
+  // Czynność pozycji → ikona liniowa z gk-ikony.js (obchód to ▣ — znak skanu QR, jak na naklejkach).
+  const IKONA_CZYNNOSCI = { obsada: 'konta', proba: 'proba', bhp: 'ratunek', przekazanie: 'zlecenia', przeglad: 'przeglady' };
+
   function utworz(f, o) {
     const lista = o.lista;
 
@@ -52,8 +55,8 @@
           <label class="pozycja-od" title="Przed tą godziną pozycji nie da się odhaczyć (okno od–do)">⏳ Od godziny (po starcie zmiany)
             <input class="od" value="${esc(p.od || '')}" placeholder="0:15" inputmode="numeric" aria-label="Pozycja do zrobienia od godziny po starcie zmiany (g:mm)"></label>
           ${maszynyPozycjiHtml(p, maszyny)}
-          <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> 📷 zdjęcie</label>
-          <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> 📝 notatka</label>
+          <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> ${P.ik('aparat')}zdjęcie</label>
+          <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> ${P.ik('notatka')}notatka</label>
           <label class="zaznacz" title="Pozycja odhaczy się sama po zeskanowaniu naklejek QR wszystkich wybranych maszyn"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ▣ skan QR wszystkich wybranych maszyn</label>
         </div>
       </div>`;
@@ -81,8 +84,8 @@
           : instancja && w.dataset.terminIso ? W.godzina(Date.parse(w.dataset.terminIso)) : '';
         const cz = w.dataset.czynnosc;
         const ile = w.querySelectorAll('.maszyna-wybor:checked').length;
-        w.querySelector('.ikony').textContent = [cz ? (W.CZYNNOSCI_POZYCJI.find(([k]) => k === cz) || ['', ''])[1].split(' ')[0] : '',
-          w.querySelector('.zdjecie').checked ? '📷' : '', w.querySelector('.notatka').checked ? '📝' : '', w.querySelector('.skan').checked ? '▣' : '',
+        w.querySelector('.ikony').innerHTML = [cz ? (IKONA_CZYNNOSCI[cz] ? P.ik(IKONA_CZYNNOSCI[cz]) : '▣') : '',
+          w.querySelector('.zdjecie').checked ? P.ik('aparat') : '', w.querySelector('.notatka').checked ? P.ik('notatka') : '', w.querySelector('.skan').checked ? '▣' : '',
           ile ? `⚙${ile}` : '', w.querySelector('.od').value.trim() || w.dataset.odIso ? '⏳' : '', w.querySelector('.opis').value.trim() ? '✎' : ''].join('');
         const licznik = w.querySelector('[data-liczba-maszyn]');
         if (licznik) licznik.textContent = ile ? `(zaznaczone: ${ile})` : '';

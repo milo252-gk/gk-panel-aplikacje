@@ -43,7 +43,7 @@
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
           ${s.checklista ? `<div class="slaby">☑ Checklista · ${esc(ile(s.pozycji, 'pozycja', 'pozycje', 'pozycji'))}</div>` : ''}
-          <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">📷</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">📝</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">▣</span>' : ''}</div>
+          <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">' + P.ik('aparat') + '</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">' + P.ik('notatka') + '</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">▣</span>' : ''}</div>
           <div class="szczegoly">
             <span class="znacznik ${s.aktywny ? 'ok' : ''}">${!s.aktywny ? 'Wstrzymane' : s.reczny ? (s.checklista ? 'Ręczna' : 'Pojedyncze') : (s.checklista ? 'Stała' : 'Stałe')}</span>
             ${s.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}

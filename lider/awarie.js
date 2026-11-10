@@ -297,7 +297,7 @@
       let miejsce = el.querySelector('.zgloszenie-awarii [data-formularz]');
       if (!miejsce) {
         el.innerHTML = `<section class="karta zgloszenie-awarii" aria-labelledby="zgloszenie-tytul">
-            <h2 id="zgloszenie-tytul">⚠️ Zgłoś awarię</h2><div data-formularz></div></section>
+            <h2 id="zgloszenie-tytul">${window.GKIkony ? `<span class="ik">${window.GKIkony.html('awaria', 22)}</span>` : ''}Zgłoś awarię</h2><div data-formularz></div></section>
           <div data-lista></div>`;
         miejsce = el.querySelector('[data-formularz]');
       }

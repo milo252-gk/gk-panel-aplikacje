@@ -77,7 +77,7 @@
     const wyst = s.wystapienia.map(x => `<li><b>${esc(x.zmiana || 'Zlecenie')}</b> ${esc(x.start)}${x.termin ? `–${esc(x.termin)}` : ''}${x.od ? ` <span class="slaby">(do zrobienia od ${esc(x.od)})</span>` : ''}${
       x.pozycje.length ? `<ol class="kal-pozycje">${x.pozycje.map(q => `<li><span class="slaby">${esc(q.od ? `${q.od}–${q.godz}` : q.godz)}</span> <b>${esc(q.nazwa)}</b>${
         q.maszyny.length ? ` <span class="slaby">· ${q.maszyny.length > 3 ? `${q.maszyny.length} maszyn` : esc(q.maszyny.join(', '))}${q.skan ? ' · ▣ skan każdej' : ''}</span>` : ''}${
-        q.zdjecie ? ' 📷' : ''}${q.notatka ? ' 📝' : ''}${q.opis ? `<div class="slaby kal-opis">${esc(q.opis)}</div>` : ''}</li>`).join('')}</ol>` : ''}</li>`).join('');
+        q.zdjecie ? ' ' + P.ik('aparat') : ''}${q.notatka ? ' ' + P.ik('notatka') : ''}${q.opis ? `<div class="slaby kal-opis">${esc(q.opis)}</div>` : ''}</li>`).join('')}</ol>` : ''}</li>`).join('');
     return `<details class="kal-szczegoly"><summary>Szczegóły</summary>
       ${s.opis ? `<p class="kal-opis">${esc(s.opis)}</p>` : ''}
       <ul class="kal-wyst">${wyst}</ul>
@@ -106,7 +106,7 @@
           <button type="button" class="maly" data-akcja="zmien">Zmień</button></div>` : ''}
       </article>`).join('');
     const zlecone = (c.zlecone || []).map(z => `<li><span class="slaby">${esc(z.godz)}</span> <b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)} · ${esc(z.status)}${
-      z.postep ? ` · ☑ ${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · 🔁' : ''}</span></li>`).join('');
+      z.postep ? ` · ☑ ${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · ' + P.ik('powtarzaj') : ''}</span></li>`).join('');
     el.innerHTML = `<h3>${c.przeszly ? 'Było zaplanowane' : 'Zaplanowane'}</h3>`
       + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Nowe stałe zlecenie: Zapisane → „+ Nowe zapisane”.' : ''}</p>`)
       + (zlecone ? `<h3>Zlecone tego dnia (${c.zlecone.length})</h3><ul class="kal-zlecone">${zlecone}</ul>` : '');

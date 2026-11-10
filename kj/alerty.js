@@ -145,7 +145,7 @@
       const opis = k === 'zdjecie_wzorcowe' ? 'Wzór — tak ma być' : 'Wada — tak nie może być';
       pole.innerHTML = id
         ? `<span class="podpis">${opis}</span>${KJ.miniatury([id], true)}`
-        : `<button type="button" class="zrob-zdjecie"><span class="ikona" aria-hidden="true">📷</span>${opis}</button>`;
+        : `<button type="button" class="zrob-zdjecie"><span class="ikona" aria-hidden="true">${window.GKIkony ? GKIkony.html('aparat', 28) : ''}</span>${opis}</button>`;
     }
     KJ.wypelnijZdjecia(el);
   }

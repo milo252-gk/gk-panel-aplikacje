@@ -43,7 +43,7 @@
       <div class="blokada-gora">
         <span class="znacznik alarm">Alert jakości</span>
         <span class="slaby">${esc(a.numer || '—')} · ${esc(W.godzina(d.czas_publikacji || a.utworzono))}${lista.length > 1 ? ` · 1 z ${lista.length}` : ''}</span>
-        <button type="button" class="alarm maly" data-awaria>⚠️ Awaria</button>
+        <button type="button" class="alarm maly" data-awaria>${window.GKIkony ? `<span class="ik">${window.GKIkony.html('awaria', 18)}</span>` : ''}Awaria</button>
       </div>
       <h2 id="blokada-tytul">${esc(d.tytul || 'Alert jakościowy')}</h2>
       ${d.wyrob ? `<p class="slaby">Wyrób: ${esc(d.wyrob)}</p>` : ''}

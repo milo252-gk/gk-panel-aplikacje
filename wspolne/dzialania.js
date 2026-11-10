@@ -98,7 +98,7 @@
       el.setAttribute('role', 'button');
       el.tabIndex = 0;
       el.hidden = true;
-      el.innerHTML = '<span class="ikona" aria-hidden="true">🔇</span><span>Dźwięk powiadomień wyłączony — <u>dotknij, żeby włączyć</u></span>';
+      el.innerHTML = '<span class="ikona" aria-hidden="true">' + (global.GKIkony ? global.GKIkony.html('glos-wyl', 26) : '') + '</span><span>Dźwięk powiadomień wyłączony — <u>dotknij, żeby włączyć</u></span>';
       const miejsce = o.przed || doc.querySelector('#aplikacja > main, #aplikacja > .ekrany');
       if (miejsce && miejsce.parentNode) miejsce.parentNode.insertBefore(el, miejsce); else doc.body.prepend(el);
       const wlacz = () => { odblokuj(); setTimeout(() => { zagraj('pilne'); pokaz(); }, 150); };
@@ -154,7 +154,7 @@
   /* Pole zdjęcia: przycisk ze wspólnego hala.css (.hala-zdjecie) z miniaturą. wymagane — napis i czerwona ramka. */
   const poleZdjecia = (nazwa, wymagane) => `<div class="hala-zdjecie">
       <label class="hala-zdjecie-przycisk"><input name="${nazwa}" type="file" accept="image/*" capture="environment"
-        aria-label="Zdjęcie"><span data-napis>📷 ${wymagane ? 'Zrób zdjęcie (wymagane)' : 'Dodaj zdjęcie'}</span></label>
+        aria-label="Zdjęcie"><span data-napis>${global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('aparat', 18)}</span>` : ''}${wymagane ? 'Zrób zdjęcie (wymagane)' : 'Dodaj zdjęcie'}</span></label>
       <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">${wymagane ? '' : '(opcjonalnie)'}</span></div>`;
   function podlaczZdjecie(f, nazwa) {
     const input = f.querySelector(`input[name="${nazwa}"]`);
@@ -164,7 +164,7 @@
       const plik = input.files && input.files[0];
       if (img.src) { try { URL.revokeObjectURL(img.src); } catch (e) { /* – */ } }
       img.hidden = !plik;
-      if (plik) { img.src = URL.createObjectURL(plik); napis.textContent = '📷 Zmień zdjęcie'; }
+      if (plik) { img.src = URL.createObjectURL(plik); napis.innerHTML = (global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('aparat', 18)}</span>` : '') + 'Zmień zdjęcie'; }
     });
   }
 

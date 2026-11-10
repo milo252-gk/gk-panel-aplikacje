@@ -796,7 +796,7 @@
       { kod: 'pn-pt', etykieta: 'Pn–pt', h: { rodzaj: 'dni_tygodnia', dni: [1, 2, 3, 4, 5] } },
       { kod: 'tydzien', etykieta: `Co tydzień: ${DNI[dt - 1]}`, h: { rodzaj: 'dni_tygodnia', dni: [dt] } },
       { kod: 'miesiac', etykieta: `Co miesiąc: ${ktoryDzienPoLudzku(tydzien, dt).replace(' miesiąca', '')}`, h: { rodzaj: 'miesiecznie', tydzien, dzien_tygodnia: dt } },
-      { kod: 'daty', etykieta: '📅 Wybieram dni', h: { rodzaj: 'daty', daty: [] } },
+      { kod: 'daty', etykieta: 'Wybieram dni', h: { rodzaj: 'daty', daty: [] } },
     ];
   }
 
@@ -851,7 +851,7 @@
       opis: s.opis || '', pilne: s.priorytet === 'pilne', dla: dlaKogoPoLudzku(s, stale, pracownicy),
       linia: s.linia === LINIA_KAZDA ? 'każda linia osobno' : s.linia ? nazwaLinii(slowniki, s.linia) : '',
       maszyny: maszynyNazwy(H().maszynyPozycji(s)),
-      wymagania: [s.wymagaj_zdjecia === true ? '📷 zdjęcie' : '', s.wymagaj_notatki === true ? '📝 notatka' : '', s.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
+      wymagania: [s.wymagaj_zdjecia === true ? 'zdjęcie' : '', s.wymagaj_notatki === true ? 'notatka' : '', s.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
       harmonogram: harmonogramPoLudzku(s, slowniki),
       wystapienia: lista.map(w => ({
         zmiana: (zm[String(w.zmiana).split('/')[1]] || {}).nazwa || (String(w.zmiana).split('/')[1] ? `Zmiana ${String(w.zmiana).split('/')[1]}` : ''),
@@ -866,7 +866,7 @@
     const maszyny = (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
       .map(m => (((slowniki && slowniki.maszyny) || {})[m] || {}).nazwa || m);
     return { opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyny,
-             wymagania: [d.wymagaj_zdjecia === true ? '📷 zdjęcie' : '', d.wymagaj_notatki === true ? '📝 notatka' : '', d.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
+             wymagania: [d.wymagaj_zdjecia === true ? 'zdjęcie' : '', d.wymagaj_notatki === true ? 'notatka' : '', d.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
              wystapienia: [{ zmiana: '', start: godzina(start), termin: d.termin ? godzina(Date.parse(d.termin)) : '', od: '', pozycje: [] }] };
   }
 
@@ -1666,7 +1666,7 @@
   }
 
   /* Gdzie w Administracji naprawia się alarm (UI etap 2): część (chip) i miejsce w niej. Dostęp z telefonów jest od
-     teraz w „Serwis” — tekst z huba („Administracja → Dostęp z telefonów”) poprawiamy tutaj, bo te same zdania idą też
+     teraz w „Ustawienia” (kod części: serwis) — tekst z huba („Administracja → Dostęp z telefonów”) poprawiamy tutaj, bo te same zdania idą też
      w pushu, a hub i Panel mają mówić o tym samym miejscu. Miejsce na dysku i tunel bez odpowiedzi naprawia się poza
      Panelem — tunel prowadzi do stanu tunelu, miejsce nigdzie. */
   const GDZIE_ALARMU = {
@@ -2455,8 +2455,8 @@
      (dział, linia, osoba), kiedy (codziennie, w wybrane dni albo ręcznie; zmiany) i pozycje — każda to godzina od startu
      zmiany i co zrobić; czynność, maszyna i wymagania (📷 📝 ▣) tylko, gdy potrzebne. → { bledy, kod, wartosc } do
      slownik.zapisany zlecenia_stale (jeden wpis z pozycjami). Te same zasady sprawdza hub (blad_pozycji). */
-  const CZYNNOSCI_POZYCJI = [['', 'zwykła pozycja'], ['obsada', '👥 Raport obsady'], ['obchod', '▣ Obchód (skan QR)'],
-    ['proba', '🔬 Próba jakościowa'], ['bhp', '⛑ Audyt BHP'], ['przekazanie', '📋 Przekazanie zmiany'], ['przeglad', '🔧 Przegląd UR']];
+  const CZYNNOSCI_POZYCJI = [['', 'zwykła pozycja'], ['obsada', 'Raport obsady'], ['obchod', '▣ Obchód (skan QR)'],
+    ['proba', 'Próba jakościowa'], ['bhp', 'Audyt BHP'], ['przekazanie', 'Przekazanie zmiany'], ['przeglad', 'Przegląd UR']];
   /* D72 (właściciel 2026-10-15: „Takie rzeczy jak raport obsady, obchód bhp itp to wszystko czynności, które zlecam.
      Wszystkie mają mieć jedną kategorię, a ja je opisuję (jeśli chcę inaczej niż jak są zapisane) i wybieram co
      wymagam”): przy tworzeniu nie ma typów czynności — są GOTOWE CZYNNOŚCI jako podpowiedzi nazwy z domyślnymi
@@ -2699,8 +2699,8 @@
     const zdjecia = p.reduce((n, e) => n + [].concat(e.zdjecia || []).length, 0);
     const czesci = [`${p.length} ${p.length === 1 ? 'krok' : p.length < 5 ? 'kroki' : 'kroków'}`];
     if (maszyny.length && skany.size) czesci.push(`▣ ${maszyny.filter(m => skany.has(m)).length}/${maszyny.length}`);
-    if (zdjecia) czesci.push(`📷 ${zdjecia}`);
-    if (p.some(e => e.uwagi)) czesci.push('📝');
+    if (zdjecia) czesci.push(`zdjęcia: ${zdjecia}`);
+    if (p.some(e => e.uwagi)) czesci.push('notatka');
     const ost = p[p.length - 1];
     return { opis: czesci.join(' · '), ostatni: godzina(ost.czas), zdjecia: p.flatMap(e => [].concat(e.zdjecia || [])),
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };

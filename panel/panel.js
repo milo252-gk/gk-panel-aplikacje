@@ -469,7 +469,7 @@
           <dt>Checklista</dt><dd>${r.checklista.wszystkie !== null ? `${esc(r.checklista.zrobione)}/${esc(r.checklista.wszystkie)}, opóźnione: ${esc(r.checklista.opoznione)}, pominięte: ${esc(r.checklista.pominiete)}` : '—'}</dd>
           <dt>Awarie</dt><dd>${r.awarieLista.map(a => `${esc(a.numer)} ${esc(a.maszyna)} (${esc(Hala.formatCzasu(a.przestojMin * 60000))})`).join(', ') || 'brak'}</dd>
           <dt>Próby</dt><dd>${r.proby.liczba ? `${esc(r.proby.liczba)}, sprawdzone ${esc(r.proby.sprawdzone)}, braki ${esc(r.proby.braki)}${r.proby.proc !== null ? ` (${esc(W.procent(r.proby.proc))} %)` : ''}` : 'brak'}</dd>
-          ${r.bhp ? `<dt>BHP</dt><dd>${esc(r.bhp)} ${r.bhp === 1 ? 'zgłoszenie' : r.bhp < 5 ? 'zgłoszenia' : 'zgłoszeń'} <button type="button" class="maly" data-bhp-raport>⛑ Zobacz zgłoszenia BHP</button></dd>` : ''}
+          ${r.bhp ? `<dt>BHP</dt><dd>${esc(r.bhp)} ${r.bhp === 1 ? 'zgłoszenie' : r.bhp < 5 ? 'zgłoszenia' : 'zgłoszeń'} <button type="button" class="maly" data-bhp-raport>${ik('ratunek')}Zobacz zgłoszenia BHP</button></dd>` : ''}
           ${r.uwagi ? `<dt>Uwagi lidera</dt><dd>${esc(r.uwagi)}</dd>` : ''}
           <dt>Zamknięta</dt><dd>${esc(W.dataKrotka(r.czas))} ${esc(W.godzina(r.czas))}</dd>
         </dl>
@@ -811,7 +811,7 @@
           <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button> <span class="slaby">${esc(z.numer)}</span>${z.naZmiane ? ` <span class="znacznik neutral">${esc(z.naZmiane)}</span>` : ''}</div>
           ${window.HalaZlecenia ? window.HalaZlecenia.krokiStatusu(z.status) : ''}
           ${z.postep && z.otwarte ? `<div class="postep-zlecenia">▶ W toku: ${esc(z.postep.opis)} <span class="slaby">(ostatnio ${esc(z.postep.ostatni)})</span></div>` : ''}
-          ${z.czynnosc && z.otwarte ? `<div class="slaby">${z.czynnosc === 'proba' ? '🔬 zaliczy się samo po próbie jakościowej' : '🔧 zaliczy się samo po przeglądzie UR'}</div>` : ''}
+          ${z.czynnosc && z.otwarte ? `<div class="slaby">${z.czynnosc === 'proba' ? ik('proba') + 'zaliczy się samo po próbie jakościowej' : ik('przeglady') + 'zaliczy się samo po przeglądzie UR'}</div>` : ''}
           <div class="szczegoly">
             <span class="znacznik rodzaj-zadania">${esc(rodzajNapis)}</span>
             ${maszynyPasek}${z.okno ? ` <span class="znacznik neutral" title="Wcześniej nie da się go zrobić">⏳ ${esc(z.okno)}</span>` : ''}
@@ -822,7 +822,7 @@
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
             ${z.doKierownika ? '<span class="znacznik uwaga" title="Kierownik działu je przekaże albo rozdzieli">Do rozdzielenia</span>' : ''}
-            ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">📷${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">📝${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
+            ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">${ik('aparat')}${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">${ik('notatka')}${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
           ${pozycje}
@@ -834,7 +834,7 @@
             z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="pozycje-zlecenia czesci-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Części — szczegóły</summary>
             <ul>${z.rozdzial.czesci.map(c => `<li class="stan-${c.znak === '✓' ? 'wykonana' : 'czeka'}"><span aria-hidden="true">${esc(c.znak)}</span> <b>${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? ` <span class="tekst-alarm">— ${esc(c.powod)}</span>` : ''}${c.notatka ? `<div class="slaby">📝 ${esc(c.notatka)}</div>` : ''}${zdjecia(c.zdjecia, '', [z.tytul, c.kto, c.notatka].filter(Boolean).join(' · '))}</li>`).join('')}</ul></details>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
-          ${z.notatka ? `<div class="odpowiedz">📝 ${esc(z.notatka)}</div>` : ''}
+          ${z.notatka ? `<div class="odpowiedz">${ik('notatka')}${esc(z.notatka)}</div>` : ''}
           ${z.uwagiZwrotu && z.otwarte ? `<div class="slaby">Zwrócone: ${esc(z.uwagiZwrotu)}</div>` : ''}
           ${zdjecia(z.zdjecia, 'Od działu:', [z.tytul, z.kto, z.notatka].filter(Boolean).join(' · '))}${zdjecia(z.zdjeciaKierownika, 'Do zlecenia:', z.tytul)}
         </div>
@@ -1117,7 +1117,7 @@
     for (const pole of ['dzial', 'linia', 'maszyna']) fz[pole].disabled = !!edycja;
     $('zlecenie-zdjecie').hidden = !!edycja;
     $('zlecenie-ze-stalego').hidden = !w.stale || !!edycja;
-    $('zlecenie-ze-stalego').textContent = w.stale ? '🔁 Z zapisanego zlecenia — termin dla bieżącej zmiany, możesz go zmienić. Zlecisz je tak ile razy trzeba.' : '';
+    $('zlecenie-ze-stalego').textContent = w.stale ? 'Z zapisanego zlecenia — termin dla bieżącej zmiany, możesz go zmienić. Zlecisz je tak ile razy trzeba.' : '';
     $('t-okno-zlecenia').textContent = edycja ? 'Zmień zaplanowane zlecenie' : w.stale ? 'Zleć teraz' : 'Nowe zlecenie';
     pokazPlan();
     otworzOkno($('okno-zlecenia'));
@@ -1132,7 +1132,7 @@
   /* D72: jedna lista podpowiedzi „Co zrobić” (gotowe czynności + zapisane) dla wszystkich okien zleceń. */
   Panel.podpowiedziCzynnosci = () => {
     $('podpowiedzi-czynnosci').innerHTML = W.podpowiedziCzynnosci(hala.slowniki)
-      .map(c => `<option value="${esc(c.nazwa)}">${esc([c.zdjecie ? '📷' : '', c.notatka ? '📝' : ''].join(''))}</option>`).join('');
+      .map(c => `<option value="${esc(c.nazwa)}">${esc([c.zdjecie ? 'zdjęcie' : '', c.notatka ? 'notatka' : ''].filter(Boolean).join(', '))}</option>`).join('');
   };
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
   $('pulpit-nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
@@ -1269,7 +1269,7 @@
     const pole = input.closest('.hala-zdjecie');
     const napis = pole.querySelector('[data-zdjecie-napis]'), img = pole.querySelector('.hala-zdjecie-miniatura');
     const nazwa = pole.querySelector('.hala-zdjecie-nazwa');
-    const pusto = { napis: napis.textContent, nazwa: nazwa.textContent };
+    const pusto = { napis: napis.innerHTML, nazwa: nazwa.textContent };
     const pliki = [];
     plikiPola.set(input, pliki);
     const miniatury = document.createElement('div');
@@ -1288,7 +1288,7 @@
         x.addEventListener('click', () => { pliki.splice(i, 1); pokaz(); });
         poz.append(im, x); miniatury.appendChild(poz);
       });
-      napis.textContent = !pliki.length ? pusto.napis : pliki.length < MAKS_ZDJEC_FORMULARZA ? '📷 Dodaj kolejne' : '📷 Komplet';
+      napis.innerHTML = !pliki.length ? pusto.napis : pliki.length < MAKS_ZDJEC_FORMULARZA ? ik('aparat') + 'Dodaj kolejne' : ik('aparat') + 'Komplet';
       nazwa.textContent = pliki.length ? `${pliki.length} z ${MAKS_ZDJEC_FORMULARZA}` : pusto.nazwa;
       input.disabled = pliki.length >= MAKS_ZDJEC_FORMULARZA;
     };
@@ -1402,7 +1402,7 @@
     const b = $('dzwiek');
     const wl = dzwiekWlaczony();
     const czeka = wl && !dzwiekGotowy();
-    b.textContent = wl ? (czeka ? '🔔 Kliknij' : '🔔') : '🔕';
+    b.innerHTML = wl ? (czeka ? ik('alerty', 18) + 'Kliknij' : ik('alerty', 18)) : ik('dzwonek-wyl', 18);
     const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
     b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zleceniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
     b.setAttribute('aria-label', b.title);

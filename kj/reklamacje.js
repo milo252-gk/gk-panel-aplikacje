@@ -160,7 +160,7 @@
     const box = el.querySelector('#r-zdjecia');
     if (!box) return;
     box.innerHTML = KJ.miniatury(f.zdjecia, true) + (f.zdjecia.length < W.MAKS_ZDJEC
-      ? '<button type="button" class="zrob-zdjecie" data-akcja="zdjecie"><span class="ikona" aria-hidden="true">📷</span>Zdjęcie wady</button>'
+      ? '<button type="button" class="zrob-zdjecie" data-akcja="zdjecie"><span class="ikona" aria-hidden="true">' + (window.GKIkony ? GKIkony.html('aparat', 28) : '') + '</span>Zdjęcie wady</button>'
       : `<p class="slaby">Najwyżej ${W.MAKS_ZDJEC} zdjęć.</p>`);
     KJ.wypelnijZdjecia(box);
   }

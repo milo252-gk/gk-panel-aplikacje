@@ -52,6 +52,9 @@
 
   const esc = s => String(s === null || s === undefined ? '' : s)
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Ikona liniowa z gk-ikony.js zamiast emoji (STYL-GK §8); bez załadowanego pliku nic — napis obok mówi to samo.
+  const ikonaKonta = (nazwa, rozmiar) => (global.GKIkony && global.GKIkony.html(nazwa, rozmiar || 16)
+    ? `<span class="ik">${global.GKIkony.html(nazwa, rozmiar || 16)}</span>` : '');
 
   function okno(id) {
     let o = document.getElementById(id);
@@ -327,7 +330,7 @@
           <p class="hala-konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
         </fieldset>
         ${d.pin ? '<div data-pin></div>' : ''}
-        ${d.pin ? `<button type="button" class="hala-konto-aplikacje" data-aplikacje>${d.komputer ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon — kody QR'}</button>` : ''}
+        ${d.pin ? `<button type="button" class="hala-konto-aplikacje" data-aplikacje>${ikonaKonta('telefon', 18)}${d.komputer ? 'Kody QR aplikacji' : 'Aplikacje na telefon — kody QR'}</button>` : ''}
         <div data-dodatki></div>
         <fieldset><legend>Dane w tym urządzeniu</legend>
           <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} od innych osób)` : ''}</p>
@@ -513,11 +516,11 @@
       document.body.appendChild(d);
     }
     // D64: tytuł jak przycisk, który je otworzył — na komputerze „Kody QR aplikacji” (STYL-GK §6: bez „telefon” na komputerze).
-    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">${naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon'}</h2>
+    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">${ikonaKonta('telefon', 22)}${naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon'}</h2>
       <p class="hala-okno-opis">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego. Aplikacje hali, GK Trasy
         i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
       <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>
-      <div class="hala-okno-przyciski"><button type="button" data-drukuj-wszystkie hidden>🖨 Drukuj wszystkie</button>
+      <div class="hala-okno-przyciski"><button type="button" data-drukuj-wszystkie hidden>${ikonaKonta('drukuj')}Drukuj wszystkie</button>
         <button type="button" data-zamknij>Zamknij</button></div></form>`;   /* Zamknij zawsze obrysowany (STYL-GK §3) */
     d.querySelector('[data-zamknij]').addEventListener('click', () => d.close());
     d.showModal();
@@ -525,12 +528,12 @@
     try {
       const w = wierszeAplikacji((await hala.aplikacje()).aplikacje);
       el.innerHTML = w.map((a, i) => `<figure class="hala-aplikacja">
-          ${a.adres ? `<div class="hala-aplikacja-qr" data-qr="${esc(a.adres)}"></div>` : `<div class="hala-aplikacja-qr brak">${a.komputer ? '💻' : '—'}</div>`}
+          ${a.adres ? `<div class="hala-aplikacja-qr" data-qr="${esc(a.adres)}"></div>` : `<div class="hala-aplikacja-qr brak">${a.komputer ? ikonaKonta('komputer', 28) : '—'}</div>`}
           <figcaption><b>${esc(a.nazwa)}</b>
             ${a.adres ? `<a href="${esc(a.adres)}" target="_blank" rel="noopener">${esc(a.adres)}</a>` : ''}
             ${a.tylkoSiec ? '<span class="hala-konto-drobne">Tylko w firmowym wifi.</span>' : ''}
             ${a.opis ? `<span class="hala-konto-drobne">${esc(a.opis)}</span>` : ''}
-            ${a.adres ? `<button type="button" class="hala-aplikacja-drukuj" data-drukuj="${i}">🖨 Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
+            ${a.adres ? `<button type="button" class="hala-aplikacja-drukuj" data-drukuj="${i}">${ikonaKonta('drukuj')}Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
         || '<p class="hala-okno-opis">To konto nie ma aplikacji na telefon.</p>';
       const pola = [...el.querySelectorAll('[data-qr]')];
       if (pola.length) {
@@ -588,7 +591,7 @@
     const dzwieki = o.dzwieki !== false && !!(global.HalaDzwieki && global.HalaDzwieki.sprawdz);
     el.innerHTML = `<fieldset class="hala-konto-push"><legend>Powiadomienia</legend>
         ${o.opis ? `<p class="hala-konto-drobne">${esc(o.opis)}</p>` : ''}<div data-push-stan></div>
-        ${dzwieki ? '<button type="button" data-test-dzwieku>🔊 Sprawdź dźwięki</button>' : ''}</fieldset>`;
+        ${dzwieki ? `<button type="button" data-test-dzwieku>${ikonaKonta('glos')}Sprawdź dźwięki</button>` : ''}</fieldset>`;
     const miejsce = el.querySelector('[data-push-stan]');
     const test = el.querySelector('[data-test-dzwieku]');
     if (test) test.addEventListener('click', () => global.HalaDzwieki.sprawdz());
