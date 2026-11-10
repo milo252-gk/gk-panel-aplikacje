@@ -415,7 +415,7 @@ function sekcjaKontGk(u) {
       ${lok.auto ? `<div class="wstega ok">Połączono samo z Panelem na tym komputerze
         (<code>${escHtml(u.hub_adres || '')}</code>).</div>`
         : lok.plik === 'wylaczone' ? `<div class="wstega uwaga">Połączenie jest wyłączone w Panelu →
-          Administracja → Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
+          Administracja → Ustawienia → Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
         : lok.plik === 'reczny' && !polaczone ? `<div class="wstega uwaga">W Panelu utworzono klucz ręcznie — wklej
           go niżej albo w Panelu kliknij „Połącz na tym komputerze”.</div>`
         : lok.odlaczony ? '<p class="slaby male">Odłączono ręcznie — program nie łączy się sam.</p>' : ''}
@@ -437,7 +437,7 @@ function sekcjaKontGk(u) {
           <input id="u-hub-adres" maxlength="200" autocapitalize="none" spellcheck="false"
                  value="${escHtml(u.hub_adres || '')}"
                  placeholder="np. https://panel.twojafirma.pl"></label>
-        <label class="pole">Klucz z Panelu (Administracja → Połączenia GK)
+        <label class="pole">Klucz z Panelu (Administracja → Ustawienia → Połączenia GK)
           <input id="u-hub-klucz" type="password" autocomplete="off" spellcheck="false"
                  placeholder="${u.hub_klucz_ustawiony
                    ? 'klucz jest zapisany — zostaw puste, żeby go nie zmieniać'
@@ -480,7 +480,7 @@ function podepnijKontaGk(pole) {
     const w = await sprobuj(() => API.post('/api/panel/lokalnie', {}));
     if (!w) return;
     komunikat(['polaczono', 'polaczony'].includes(w.wynik) ? 'Połączono z Panelem na tym komputerze — konta przyjdą za chwilę'
-      : w.wynik === 'wylaczone_w_panelu' ? 'Połączenie jest wyłączone w Panelu → Administracja → Połączenia GK'
+      : w.wynik === 'wylaczone_w_panelu' ? 'Połączenie jest wyłączone w Panelu → Administracja → Ustawienia → Połączenia GK'
         : 'Poprosiłem Panel o klucz — połączy się sam w ciągu minuty', w.wynik === 'wylaczone_w_panelu' ? 'blad' : 'ok');
     setTimeout(() => { if (naUstawieniach()) odswiezEkran(); }, 1500);
   };
