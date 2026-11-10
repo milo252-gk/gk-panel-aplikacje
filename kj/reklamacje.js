@@ -182,7 +182,7 @@
       return;
     }
     const u = ev.target.closest('#r-zdjecia [data-usun-zdjecie]');
-    if (u) { f.zdjecia = f.zdjecia.filter(x => x !== u.dataset.usunZdjecie); rysujZdjecia(el); hala.brudnopis.zapisz(BRUDNOPIS, f); }
+    if (u) { hala.usunPlik(u.dataset.usunZdjecie).catch(() => {}); f.zdjecia = f.zdjecia.filter(x => x !== u.dataset.usunZdjecie); rysujZdjecia(el); hala.brudnopis.zapisz(BRUDNOPIS, f); }
   });
 
   async function zarejestruj(form) {

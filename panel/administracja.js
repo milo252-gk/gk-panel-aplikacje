@@ -17,8 +17,8 @@
        (tokeny nigdy nie wracają z huba).
      · Połączenia GK (D32): klucze programów GK Trasy i GK Flota, które biorą konta z huba (wspolne/GK-KONTA.md §3).
        Jedno konto osoby we wszystkich aplikacjach GK — role transportu w oknie osoby, w osobnych grupach.
-       GK Foto (D40, GK-KONTA.md §6) loguje się samym kontem GK, bez klucza — tu tylko informacja. GK Czytnik od 3.13
-       działa bez logowania (D52).
+       GK Foto (od 2026-10-23) i GK Czytnik (od 3.13, D52) działają bez logowania i bez klucza — tu tylko informacja
+       (dawniej, D40, logowały się kontem GK — GK-KONTA.md §6, D79).
    - Nad wszystkim czerwona wstęga alarmów huba (GET /api/v1/admin/alarmy): kopia, adres na Pages, token GitHub, miejsce —
      przy alarmie „Pokaż” prowadzi do części, w której się go naprawia (W.alarmyAdmina → gdzie).
    Co pokazać i czy formularz jest dobry, liczy widok.js (testy: panel/testy/widok-testy.js). */
@@ -135,7 +135,7 @@
     el.innerHTML = `<section class="admin-linia" data-karta="dane">
         <h3>Czyszczenie zleceń</h3>
         <p class="slaby">Usuwa wybrane zlecenia (albo całą historię sprzed wybranej chwili) z Panelu i telefonów. Zapisanych zleceń stałych nie rusza.
-          Serwer najpierw robi pełną kopię bazy, a po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → 🧹 Czyszczenie.</p>
+          Serwer najpierw robi pełną kopię bazy (folder Odlozone na serwerze: 5 ostatnich, najwyżej 90 dni; zawiera też klucze i skróty haseł) i po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → 🧹 Czyszczenie.</p>
         <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-czyszczenie">🧹 Czyszczenie zleceń</button></div>
       </section>`;
   }
@@ -926,9 +926,8 @@
             <button type="button" class="maly" data-akcja="kopiuj-klucz">Kopiuj</button></div>` : ''}
         </section>`;
       }).join('')}
-      <p class="slaby">GK Foto (Marketing) loguje się kontem GK z listy Pracownicy — imię i nazwisko, hasło raz na 16 godzin, na co dzień PIN.
-        Klucza nie potrzebuje. Osobie, która pracuje tylko w nim, nadaj rolę „Marketing”. GK Czytnik od wersji 3.13
-        działa bez logowania — konta nie potrzebuje.</p>
+      <p class="slaby">GK Foto i GK Czytnik działają bez logowania — nie potrzebują ani klucza, ani konta GK. Rola „Marketing”
+        na liście Pracowników zostaje tylko dla starszych instalacji tych aplikacji.</p>
       <div class="admin-pasek"><button type="button" data-akcja="odswiez-polaczenia">Odśwież stan</button></div>`;
   }
 

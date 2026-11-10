@@ -330,6 +330,7 @@
     const usun = ev.target.closest('[data-usun-zdjecie]');
     if (usun) {
       const id = usun.dataset.usunZdjecie;
+      hala.usunPlik(id).catch(() => {});          // etap 3: ✕ naprawdę usuwa plik z telefonu (zdjęcie ze zlecenia, jeśli jest tylko tu, też)
       if (usun.closest('[data-zdjecie-zlecenia]')) { f.zdjecie_zlecenia = null; rysujZdjecieZlecenia(el); }
       else { f.zdjecia = f.zdjecia.filter(x => x !== id); rysujZdjecia(el); }
       zapiszBrudnopis();

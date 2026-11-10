@@ -233,9 +233,12 @@
   let zaplanowane = false, zmianySlownikow = false, czekaNaFokus = false;
   /* powod: 'slowniki' (zmienił się słownik), 'wymus' (ekran sam prosi o przerysowanie, np. po zmianie filtra). */
   let wymus = false;
+  // Etap 3: osłona „palec na ekranie” (wspolne/palec.js, wzór: UR) — przerysowanie spod palca podmieniało przycisk i połykało dotknięcie w rękawicy.
+  const palec = global.HalaPalec.zainstaluj(() => KJ.odswiez());
   KJ.odswiez = powod => {
     if (powod === 'slowniki') zmianySlownikow = true;
     if (powod === 'wymus') wymus = true;
+    if (palec.zajety()) return;                // flagi wyżej zostają — po puszczeniu rysujemy z nimi
     if (zaplanowane) return;
     zaplanowane = true;
     requestAnimationFrame(() => {
@@ -360,12 +363,12 @@
     const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
     // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia); tylko zapisy zalogowanej osoby (moje).
     const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska,
-                                            komputer: !global.matchMedia('(max-width: 820px)').matches });
+                                            komputer: !global.matchMedia('(max-width: 820px)').matches, zadzwon: 'do kierownika KJ' });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
-    pasek.disabled = !kolejka.odrzucone;
+    pasek.disabled = !(kolejka.odrzucone || kolejka.plikiOdrzucone);
   }
-  $('pasek').addEventListener('click', () => { if (kolejka.odrzucone) KJ.idz('odrzucone'); });
+  $('pasek').addEventListener('click', () => { if (kolejka.odrzucone || kolejka.plikiOdrzucone) KJ.idz('odrzucone'); });
 
   // „Nie wysłane” = zapisy odrzucone przez serwer (na ekranie nie „hub” — tak mówią ludzie): nic nie znika samo — człowiek czyta powód i decyduje (KONTRAKT §5.2).
   KJ.ekran('odrzucone', {
@@ -373,15 +376,18 @@
     async rysuj(el) {
       el.innerHTML = '<h1>Nie wysłane</h1><div class="lista" id="lista-odrzuconych"><p class="pusto">Wczytuję…</p></div>';
       const lista = await hala.odrzucone();
-      $('lista-odrzuconych').innerHTML = lista.map(o => `
+      const zdjecia = await hala.odrzuconePliki();
+      $('lista-odrzuconych').innerHTML = (lista.map(o => `
         <article class="karta">
           <div><b>${esc(opisTypu(o.zd.typ))}</b> <span class="slaby">${esc(W.kiedy(o.zd.czas, hala.teraz()))}</span></div>
           <p class="blad">${esc(o.powod)}</p>
           <details><summary>Co było w zapisie</summary><pre>${esc(JSON.stringify(o.zd.dane, null, 1))}</pre></details>
-          <button type="button" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button>
-        </article>`).join('') || '<p class="pusto ok">Wszystko wysłane</p>';
+          ${global.HalaKolejkaUI.przyciskPonow(o.id)} <button type="button" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button>
+        </article>`).join('') + global.HalaKolejkaUI.zdjeciaHtml(zdjecia)) || '<p class="pusto ok">Wszystko wysłane</p>';
     },
   });
+  // „Spróbuj ponownie” przy zapisie i zdjęciu (etap 3) — wspólny kolejka-ui.js; po akcji lista czyta IndexedDB od nowa.
+  global.HalaKolejkaUI.podlacz(document, hala, { odswiez: () => pokazEkran(), komunikat: (t, r) => KJ.komunikat(t, r === 'ok' ? 'ok' : 'alarm') });
   document.addEventListener('click', async ev => {
     const b = ev.target.closest && ev.target.closest('[data-usun-odrzucone]');
     if (!b) return;

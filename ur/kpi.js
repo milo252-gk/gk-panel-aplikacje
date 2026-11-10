@@ -61,8 +61,9 @@
 
   UR.ekran('kpi', {
     rysuj(el) {
-      // UI etap 2: KPI ogląda kierownik UR (zakładka schowana mechanikom) — stary adres #kpi u mechanika nic nie liczy.
-      if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">KPI ogląda kierownik UR.</p>'; return; }
+      // R3 (2026-11-09): KPI ogląda kierownik zakładu i administrator (zakładka schowana pozostałym) — stary adres #kpi
+      // u kierownika UR albo mechanika nic nie liczy i nie pyta serwera.
+      if (!UR.mozeKpi()) { el.innerHTML = '<p class="pusto">KPI ogląda kierownik zakładu.</p>'; return; }
       const k = UR.kontekst();
       const u = Object.assign({ okres: '30', linia: '', maszyna: '' }, ustawienia.czytaj());
       // Filtr z pamięci telefonu sprawdzony ze słownikami: linia/maszyna, której już nie ma, dawała same zera przy
@@ -110,7 +111,7 @@
           <p class="slaby stopka">${esc(zrodlo)} MTTR: od zgłoszenia do „Zakończona przez UR”. Przestój: do potwierdzenia lidera. Anulowane się nie liczą.</p>`
           : `<p class="pusto" id="kpi-hub">${UR.online() ? 'Liczę na serwerze…' : 'Dłuższe okresy liczy serwer — potrzebna sieć. Bez sieci wybierz 7 albo 30 dni.'}</p>`}</div>
         <div id="eksport-csv"></div>`;
-      // Kierownik UR: awarie do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32; mechanik go nie widzi).
+      // Kierownik zakładu i administrator: awarie do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32, R3).
       global.HalaEksport.rysuj(el.querySelector('#eksport-csv'), hala, { rodzaje: ['awarie'], komunikat: (t, r) => UR.komunikat(t, r) });
       el.querySelector('#okres').addEventListener('click', ev => {
         const b = ev.target.closest('[data-okres]');

@@ -308,7 +308,8 @@
           przestojMs: H().przestojMs(a, o.teraz),
           doPotwierdzenia: a.status === 'oczekuje_potwierdzenia',
           // D55: anuluje tylko zgłaszający (pomyłka) albo administrator — reszta przez UR (hub odrzuca innych).
-          mozeAnulowac: (a.status === 'zgloszona' || a.status === 'przyjeta') && ((!!o.ja && d.zglosil === o.ja) || !!o.admin),
+          // R7 (2026-11-09): także kierownik zakładu (o.kierownik) — jak Hala.moznaAnulowacAwarie i blad_anulowania_awarii w hubie.
+          mozeAnulowac: (a.status === 'zgloszona' || a.status === 'przyjeta') && ((!!o.ja && d.zglosil === o.ja) || !!o.admin || !!o.kierownik),
           czeka: !!a._oczekuje,
           odrzucenia: (d.odrzucenia || []).length,
         };

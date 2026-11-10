@@ -597,15 +597,27 @@
 <dialog id="okno-czyszczenia" class="okno" aria-labelledby="t-okno-czyszczenia">
   <form method="dialog">
     <h2 id="t-okno-czyszczenia">🧹 Czyszczenie zleceń</h2>
-    <p class="slaby">Usuwa zlecenia zlecone <b>przed</b> wybraną chwilą (razem z historią). Zapisane zlecenia i checklisty zostają, zaplanowane na później też.
-      Przed usunięciem serwer robi pełną kopię bazy.</p>
-    <label>Usuń zlecenia zlecone przed<input type="datetime-local" id="czysc-przed"></label>
-    <div class="admin-pasek"><button type="button" class="maly glowny" data-akcja="czysc-policz">Policz, ile usunę</button></div>
-    <div id="czysc-wynik" aria-live="polite"></div>
-    <hr>
-    <p class="slaby">Albo wybierz <b>konkretne zlecenia</b> do usunięcia (bez względu na datę).</p>
-    <div class="admin-pasek"><button type="button" class="maly" data-akcja="czysc-wybor">Wybierz zlecenia…</button></div>
-    <div id="czysc-wybor" aria-live="polite"></div>
+    <p class="slaby">Zaznacz zlecenia, które mają zniknąć <b>na stałe</b> (razem z historią). Zapisane i stałe zlecenia oraz zaplanowane na później
+      zostają. Przed usunięciem serwer robi pełną kopię bazy i zostawia ją na swoim dysku w folderze Odlozone (5 ostatnich, najwyżej 90 dni). To cała baza, także klucze i skróty haseł — nie wysyłaj jej nikomu.</p>
+    <div class="czysc-krok">
+      <b>1. Które pokazać?</b>
+      <div class="chipy" id="czysc-grupy" role="group" aria-label="Które zlecenia pokazać"></div>
+      <label>Zlecone <select id="czysc-wiek"></select></label>
+      <p class="slaby" id="czysc-ostrzezenie" hidden>To zlecenia, które dział jeszcze robi albo które czekają na przyjęcie — usuwaj tylko pomyłki.</p>
+    </div>
+    <div class="czysc-krok">
+      <b>2. Zaznacz, co usunąć</b> <span class="slaby" id="czysc-licznik" aria-live="polite">Zaznaczono 0 z 0</span>
+      <div class="admin-pasek">
+        <button type="button" class="maly" data-akcja="czysc-wszystkie">Zaznacz wszystkie widoczne</button>
+        <button type="button" class="maly" data-akcja="czysc-zadne">Odznacz</button>
+      </div>
+      <div id="czysc-lista" class="czysc-lista"></div>
+      <p class="slaby" id="czysc-ucieto" hidden>Pokazuję 500 najnowszych — po ich usunięciu wczytam kolejne.</p>
+    </div>
+    <div class="czysc-krok">
+      <b>3. Usuń</b>
+      <div class="admin-pasek"><button type="button" class="maly czerwony" id="czysc-usun" data-akcja="czysc-usun" disabled>Usuń zaznaczone</button></div>
+    </div>
     <div class="przyciski"><button type="button" data-zamknij>Zamknij</button></div>
   </form>
 </dialog>
@@ -639,6 +651,8 @@
 <script src="../wspolne/gk-ikony.js"></script>
 <script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/reakcje.js"></script>
+<script src="../wspolne/kolejka-ui.js"></script>
+<script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="widok.js"></script>

@@ -279,6 +279,11 @@
   /* Kierownik UR (albo admin) — Plan i KPI. Mechanik KPI nie ogląda (UI etap 2): liczby są dla tego, kto rozlicza dział. */
   const kierownikUR = p => !!p && (p.role || []).some(r => r === 'kierownik_ur' || r === 'admin');
 
+  /* R3 (właściciel 2026-11-09): KPI i zestawienia CSV ma TYLKO kierownik zakładu i administrator — także w UR. Kierownik UR
+     i mechanik KPI nie widzą (wcześniej: kierownik UR; kierownik zakładu nie widział go w UR, choć hub mu pozwalał). Plan
+     przeglądów zostaje przy kierowniku UR (kierownikUR). Serwer: tryb „tylko loguj” (HALA_KPI_CSV_TYLKO_KIEROWNIK=1 = odmowa). */
+  const mozeKpi = p => !!p && (p.role || []).some(r => r === 'kierownik' || r === 'admin');
+
   /* Gotowe opisy naprawy — mechanik w rękawicach dotyka, a nie pisze (instrukcja §7). */
   const GOTOWE_OPISY = ['Wymiana części', 'Regulacja', 'Czyszczenie', 'Dokręcenie połączeń', 'Smarowanie',
     'Reset i kalibracja', 'Wymiana bezpiecznika', 'Uszczelnienie', 'Naprawa przewodu', 'Wymiana czujnika'];
@@ -948,7 +953,7 @@
     raz, odmiana, liczba, linie, maszyny, nazwaLinii, nazwaMaszyny, nazwaKarty, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
     dzienZakladu, koniecDnia, dodajDni, mozna, dozwolonyZ, kodZNazwy, priorytetInfo, nazwaPriorytetu, napisStoi, nazwaZeStalej, zatrzymuje,
     wierszAwarii, listaAwarii, ostatnioZamkniete, akcjeAwarii, GOTOWE_OPISY, POWODY_ANULOWANIA, MAKS_POWODU, powodAnulowania, MAKS_ZDJEC,
-    ukladAkcji, KROKI_WIECEJ, kierownikUR,
+    ukladAkcji, KROKI_WIECEJ, kierownikUR, mozeKpi,
     opisNaprawy, bledyZakonczenia, daneZakonczenia, kodZeSkanu, sprawdzMaszyne, mechanicy, komunikatKonfliktu, powiadomienie, historiaAwarii,
     kpi, OKRESY, okresKpi,
     statusPrzegladu, kartaDla, kartyDlaMaszyny, wierszPrzegladu, listaPrzegladow, wynikPomiaru, zakres, danePunktu, postepPrzegladu,

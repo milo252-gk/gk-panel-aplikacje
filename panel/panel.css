@@ -143,6 +143,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .awaria .maszyna { font-size: 1.05em; }
 .awaria .szczegoly { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: .9em; }
 .awaria .numer { text-align: right; font-size: .8em; }
+.awaria .akcje-awarii { margin-top: 8px; }
 .tekst-opisu { font-size: .85em; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .awaria.alarm-potwierdzenia { outline: 3px solid var(--czerwony); outline-offset: -3px; animation: pulsuj 2s ease-in-out infinite; }
 @keyframes pulsuj { 50% { outline-color: transparent; } }
@@ -642,3 +643,14 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 .wykres-wartosc { font-size: 11px; fill: var(--tekst); font-variant-numeric: tabular-nums; font-weight: 600; }
 .wykres-siatka { stroke: var(--ramka); stroke-width: 1; stroke-dasharray: 3 3; }
 .wykres-oska { stroke: var(--ramka-mocna); stroke-width: 1.5; }
+
+/* Okno „Czyszczenie zleceń” (2026-11-09): trzy kroki, lista z polami wyboru. */
+.czysc-krok { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.czysc-lista { max-height: 40vh; overflow: auto; border: 1px solid var(--ramka); border-radius: 10px; }
+dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.czysc-wiersz { display: flex; gap: 10px; align-items: center; padding: 10px 12px; min-height: var(--dotyk); border-bottom: 1px solid var(--ramka); cursor: pointer; }
+.czysc-wiersz:last-child { border-bottom: 0; }
+.czysc-wiersz input { flex: none; width: 20px; height: 20px; }
+.czysc-tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.czysc-znacznik { flex: none; align-self: center; white-space: nowrap; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ramka); color: var(--tekst-slaby); }
+.czysc-znacznik.w-toku { color: var(--uwaga); border-color: var(--uwaga); }

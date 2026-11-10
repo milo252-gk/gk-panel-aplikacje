@@ -10,11 +10,9 @@
   const P = window.Panel;
   const { hala, W, esc } = P;
 
-  function osobyHali() {
-    const dzialy = ((hala.kontrakt.stale || {}).dzialy || []);
-    return (hala.pracownicy || []).filter(p => p.aktywny !== false && (p.role || []).some(r => dzialy.some(d => (d.role || []).includes(r))))
-      .sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
-  }
+  // R5 (2026-11-09, D82): kierownik UR/KJ widzi i wpisuje urlopy tylko osób ze swojego działu; kierownik zakładu i admin — wszystkich.
+  const dzialyHali = () => ((hala.kontrakt.stale || {}).dzialy || []);
+  const osobyHali = () => W.osobyDoUrlopow(hala.pracownicy, hala.pracownik, dzialyHali());
 
   const wierszeUrlopow = lista => lista.map(u => `<article class="zlecenie ${u.stan === 'minal' ? 'wyslane' : ''}" data-kod="${esc(u.kod)}">
           <div class="opis"><div class="tytul"><b>${esc(u.nazwa)}</b></div>
@@ -24,14 +22,15 @@
         </article>`).join('') || '<p class="pusto">Brak urlopów.</p>';
 
   function rysuj(el) {
-    const lista = W.urlopyLista(hala.slowniki, hala.pracownicy, hala.teraz());
+    const swoi = new Set(osobyHali().map(p => p.id));
+    const lista = W.urlopyLista(hala.slowniki, hala.pracownicy, hala.teraz()).filter(u => swoi.has(u.osoba));
     // Panel przerysowuje Administrację przy każdym zdarzeniu — formularz zostaje (wpisane daty), odświeżamy tylko listę.
     const jest = el.querySelector('#formularz-urlopu');
     if (jest) { const l = el.querySelector('.lista-urlopow'); const h = wierszeUrlopow(lista); if (l.innerHTML !== h) l.innerHTML = h; return; }
     const dzis = W.dzienZakladu(hala.teraz());
     el.innerHTML = `<section class="urlopy">
       <p class="slaby opis-widoku">W czasie urlopu serwer nie zleca osobie zadań stałych ani „Podsumuj zmianę”, jej zlecenia widzi cały dział,
-        a statystyki osoby pomijają te dni.</p>
+        a statystyki osoby pomijają te dni.${Hala.dzialyKierownika(hala.pracownik && hala.pracownik.role, dzialyHali()) !== null ? ' Wpisujesz urlopy osób ze swojego działu; pozostałym wpisuje je kierownik zakładu.' : ''}</p>
       <form id="formularz-urlopu" class="urlop-formularz" autocomplete="off">
         <label>Osoba<select name="osoba" required><option value="">— wybierz —</option>${osobyHali().map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('')}</select></label>
         <label>Od<input name="od" type="date" required value="${esc(dzis)}"></label>

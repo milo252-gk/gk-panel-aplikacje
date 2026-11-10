@@ -21,6 +21,7 @@
   function wiersze(filtr) {
     return W.awarie(hala.obiekty('awaria', filtr), {
       linia: L.linia(), ja: hala.pracownik && hala.pracownik.id, admin: ((hala.pracownik || {}).role || []).includes('admin'),
+      kierownik: ((hala.pracownik || {}).role || []).includes('kierownik'),
       teraz: hala.teraz(),
       slowniki: hala.slowniki, pracownicy: hala.pracownicy, stale: stale() });
   }

@@ -246,6 +246,7 @@
         b.addEventListener('click', () => {
           const i = lista.indexOf(b.dataset.usun);
           if (i >= 0) lista.splice(i, 1);
+          hala.usunPlik(b.dataset.usun).catch(() => {});      // etap 3: ✕ naprawdę usuwa plik z telefonu, nie tylko z listy
           naZmiane();
           rysuj();
         });
@@ -505,22 +506,27 @@
 
   async function pokazOdrzucone() {
     const lista = await hala.odrzucone();
+    const zdjecia = await hala.odrzuconePliki();
     const konf = Lider.stan.konflikty;
     Lider.okno({
       tytul: 'Nie wysłane',          // D64: jedna nazwa we wszystkich aplikacjach hali
       html: `<h3>Nie wysłane</h3>
-        ${lista.length ? `<p class="slaby">Serwer nie przyjął tych zapisów. Przepisz je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>` : '<p class="slaby">Brak.</p>'}
+        ${lista.length ? `<p class="slaby">Serwer nie przyjął tych zapisów. „Spróbuj ponownie” wysyła je jeszcze raz; jeśli powód mówi o błędzie w treści — przepisz zapis poprawnie i usuń ten z listy.</p>` : '<p class="slaby">Brak.</p>'}
         <ul class="lista-prosta">${lista.map(o => `<li><b>${esc(Lider.nazwaTypu(o.zd.typ))}</b> ${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}
           <div class="tekst-alarm">${esc(o.powod)}</div>
           <details><summary>Treść</summary><pre>${esc(JSON.stringify(o.zd.dane, null, 1))}</pre></details>
-          <button type="button" class="maly" data-usun="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>
+          ${HalaKolejkaUI.przyciskPonow(o.id)} <button type="button" class="maly" data-usun="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>
+        ${HalaKolejkaUI.zdjeciaHtml(zdjecia)}
         <h3>Konflikty (od uruchomienia)</h3>
         ${konf.length ? '<p class="slaby">Serwer zapisał zdarzenie, ale stan się nie zmienił — ktoś inny zdążył wcześniej.</p>' : '<p class="slaby">Brak.</p>'}
         <ul class="lista-prosta">${konf.map(k => `<li><b>${esc(Lider.nazwaTypu(k.typ))}</b> ${esc(W.godzina(k.czas))}<div>${esc(k.uwaga)}</div></li>`).join('')}</ul>`,
-      poOtwarciu: el => el.querySelectorAll('[data-usun]').forEach(b => b.addEventListener('click', async () => {
-        await hala.usunOdrzucone(b.dataset.usun);
-        pokazOdrzucone();
-      })),
+      poOtwarciu: el => {
+        el.querySelectorAll('[data-usun]').forEach(b => b.addEventListener('click', async () => {
+          await hala.usunOdrzucone(b.dataset.usun);
+          pokazOdrzucone();
+        }));
+        HalaKolejkaUI.podlacz(el, hala, { odswiez: pokazOdrzucone, komunikat: (t, r) => Lider.komunikat(t, r === 'ok' ? 'ok' : 'blad') });
+      },
     });
   }
 
@@ -571,7 +577,10 @@
   }
 
   let zaplanowane = false;
+  // Etap 3: osłona „palec na ekranie” (wspolne/palec.js, wzór: UR) — przerysowanie spod palca podmieniało przycisk i połykało dotknięcie w rękawicy.
+  const palec = window.HalaPalec.zainstaluj(() => Lider.narysuj());
   Lider.narysuj = () => {
+    if (palec.zajety()) return;
     // Strumień potrafi przynieść kilkadziesiąt zdarzeń naraz (np. po powrocie sieci) — rysujemy raz na klatkę.
     if (zaplanowane) return;
     zaplanowane = true;
@@ -591,7 +600,12 @@
     });
   };
 
-  Lider.pokazEkran = nazwa => {
+  /* Przycisk Wstecz telefonu (etap 3): każde przejście na inny ekran dopisuje wpis do historii przeglądarki, a „wstecz” wraca
+     do poprzedniego ekranu (albo zamyka otwarte okno), zamiast wyrzucać z aplikacji — wcześniej lider dotykał Wstecz w połowie
+     obchodu i lądował na ekranie głównym telefonu, z niedokończonym formularzem. Wpisy trzymają tylko nazwę ekranu. */
+  const wHistorii = nazwa => { try { history.pushState({ lider: nazwa }, ''); } catch (e) { /* bez historii — Wstecz wychodzi jak dotąd */ } };
+  Lider.pokazEkran = (nazwa, opcje) => {
+    if (nazwa !== Lider.stan.ekran && !(opcje && opcje.bezHistorii)) wHistorii(nazwa);
     Lider.stan.ekran = nazwa;
     // Ekrany schowane w „☰ Więcej” (D74) podświetlają w menu „Więcej”.
     const wMenu = nazwa === 'koniec' ? 'wiecej' : nazwa;
@@ -602,6 +616,13 @@
     Lider.narysuj();
   };
   for (const b of document.querySelectorAll('.dolny [data-ekran]')) b.addEventListener('click', () => Lider.pokazEkran(b.dataset.ekran));
+  const EKRAN_STARTOWY = Lider.stan.ekran;
+  window.addEventListener('popstate', ev => {
+    // Otwarte okno (formularz, pytanie) zamyka się Wstecz-em i zostajemy na tym samym ekranie.
+    if (Lider.oknoOtwarte()) { Lider.zamknijOkno(); wHistorii(Lider.stan.ekran); return; }
+    const cel = ev.state && ev.state.lider && Lider.ekrany[ev.state.lider] ? ev.state.lider : EKRAN_STARTOWY;
+    if (cel !== Lider.stan.ekran) Lider.pokazEkran(cel, { bezHistorii: true });
+  });
 
   /* Zlecenia od kierownika: wspólny ekran z wspolne/zlecenia.js. Lider — dział „produkcja”, tylko jego linia;
      mistrz (przełożony liderów, D34) — dział „mistrz”, jego linie (bez zaznaczonych — wszystkie): to dwa stanowiska
@@ -629,7 +650,7 @@
       el.querySelector('[data-a=niewyslane]').addEventListener('click', () => pokazOdrzucone());
     },
   };
-  Lider.poRysowaniu.push(() => Lider.plakietka('wiecej', (Lider.stan.kolejka || {}).odrzucone || 0));
+  Lider.poRysowaniu.push(() => Lider.plakietka('wiecej', ((Lider.stan.kolejka || {}).odrzucone || 0) + ((Lider.stan.kolejka || {}).plikiOdrzucone || 0)));
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (window.HalaDzialania) HalaDzialania.przyciskSkanu(hala, { zlecenia: Lider.dzialZlecen, otworzZlecenia: () => Lider.pokazEkran('zlecenia'),
@@ -701,6 +722,7 @@
       otworzZAdresu(location.hash);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* zostaje w adresie */ }
     }
+    try { history.replaceState({ lider: Lider.stan.ekran }, ''); } catch (e) { /* bez historii */ }      // wpis startowy — Wstecz do niego wraca na ekran główny
     pokazSesje();
     // D64: pasek „Dźwięk powiadomień wyłączony — dotknij” jak w UR i KJ (HalaDzwieki.pasek).
     if (window.HalaDzwieki) window.HalaDzwieki.pasek(hala);

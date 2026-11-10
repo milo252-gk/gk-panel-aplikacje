@@ -180,6 +180,7 @@
       const id = await KJ.zrobZdjecie();
       if (id && f === cel) { f[pole.dataset.zdjecie] = id; rysujZdjecia(KJ.$('ekran')); hala.brudnopis.zapisz(BRUDNOPIS, f, { odrazu: true }); }
     } else if (ev.target.closest('[data-usun-zdjecie]')) {
+      if (f[pole.dataset.zdjecie]) hala.usunPlik(f[pole.dataset.zdjecie]).catch(() => {});      // etap 3: ✕ naprawdę usuwa plik z telefonu
       f[pole.dataset.zdjecie] = null; rysujZdjecia(el); hala.brudnopis.zapisz(BRUDNOPIS, f);
     }
   });

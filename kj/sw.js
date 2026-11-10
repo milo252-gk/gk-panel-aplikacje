@@ -10,7 +10,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                    */
 
-const WERSJA = 'kj-311c702f94d0';
+const WERSJA = 'kj-1608726257a8';
 
 self.HALA_PUSH_OBSLUZ_KLIK = true;   // KJ nie ma własnej obsługi dotknięcia powiadomienia
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.
@@ -18,12 +18,14 @@ importScripts('../wspolne/hala-push-sw.js');
 // Kolejka po powrocie sieci bez otwierania aplikacji (D78, Background Sync — Android/Chromium; iPhone: przy otwarciu).
 self.HALA_APLIKACJA = 'kj';
 importScripts('../wspolne/hala-sync-sw.js');
+// Odpowiedź „sieć albo kopia” z limitem czasu (etap 3) — wspólna dla Panelu, Lidera, UR i KJ.
+importScripts('../wspolne/hala-siec-sw.js');
 
 const ZASOBY = [
   './', './index.html', './kj.css', './kj.js', './widok.js',
   './alerty.js', './proba.js', './reklamacje.js', './analiza.js', './katalog.js',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
-  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/hala-push-sw.js', '../wspolne/hala-sync-sw.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/gk-ikony.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png', '../wspolne/skaner.js',
+  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/hala-push-sw.js', '../wspolne/hala-sync-sw.js', '../wspolne/hala-siec-sw.js', '../wspolne/kolejka-ui.js', '../wspolne/palec.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/gk-ikony.js', '../wspolne/reakcje.js', '../wspolne/dzialania.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png', '../wspolne/skaner.js',
   '../wspolne/skaner-zxing.js',          // zapasowy dekoder (iPhone) — bez sieci też musi czytać kody
 ];
 
@@ -51,20 +53,7 @@ self.addEventListener('fetch', e => {
   // i stara, i rosła bez końca (przy padniętym tunelu ~2880 wpisów na dobę). Bez sieci hala.js bierze adres z pamięci.
   if (adres.pathname.endsWith('/konfiguracja.json')) return;
 
-  // Najpierw sieć (poprawki docierają od razu), kopia tylko gdy sieci nie ma.
-  e.respondWith(
-    // cache: 'no-cache' — pytamy serwer zawsze (304, gdy bez zmian). Bez tego na GitHub Pages (max-age=600) odświeżenie
-    // po nowej wersji brało pliki z pamięci HTTP przeglądarki sprzed wysyłki i zapisywało je do pamięci NOWEJ wersji
-    // (przegląd 2026-10-06).
-    fetch(e.request, { cache: 'no-cache' })
-      .then(odp => {
-        if (odp && odp.ok) { const kopia = odp.clone(); caches.open(WERSJA).then(c => c.put(e.request, kopia)); }
-        return odp;
-      })
-      // Najpierw kopia BIEŻĄCEJ wersji — inaczej przy mrugnięciu sieci aplikacja mogłaby
-      // złożyć się z plików dwóch różnych wersji.
-      .catch(() => caches.open(WERSJA).then(c => c.match(e.request))
-        .then(k => k || caches.match(e.request))
-        .then(k => k || (e.request.mode === 'navigate' ? caches.match('./index.html') : Promise.reject(new Error('brak kopii')))))
-  );
+  // Najpierw sieć (poprawki docierają od razu), kopia gdy sieci nie ma ALBO nie odpowiada w 4 s (etap 3: wifi bez internetu
+  // nie wiesza już otwarcia aplikacji). Logika, `cache: 'no-cache'` i kopia bieżącej wersji — wspolne/hala-siec-sw.js.
+  e.respondWith(self.halaOdpowiedzSieciowa(e.request, WERSJA));
 });

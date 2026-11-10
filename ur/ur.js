@@ -24,8 +24,10 @@
 
   UR.ja = () => (hala.pracownik ? hala.pracownik.id : null);
   UR.mozna = (typ, slownik) => W.mozna(hala.kontrakt, hala.pracownik, typ, slownik);
-  // Plan i KPI (UI etap 2: KPI też tylko kierownik UR) — jedna reguła w widok.js (W.kierownikUR, testowana).
+  // Plan przeglądów: kierownik UR (UI etap 2) — jedna reguła w widok.js (W.kierownikUR, testowana).
   UR.kierownikUR = () => W.kierownikUR(hala.pracownik);
+  // R3 (2026-11-09): KPI i CSV tylko kierownik zakładu i administrator (W.mozeKpi) — nie kierownik UR ani mechanik.
+  UR.mozeKpi = () => W.mozeKpi(hala.pracownik);
   UR.stale = () => (hala.kontrakt && hala.kontrakt.stale) || {};
   UR.kontekst = () => ({ slowniki: hala.slowniki, pracownicy: hala.pracownicy, stale: UR.stale(), teraz: hala.teraz(),
                          ja: UR.ja(), kontrakt: hala.kontrakt, pracownik: hala.pracownik });
@@ -169,7 +171,7 @@
     }
     const ukryte = pole.querySelector('input[type=hidden]');
     let ids = []; try { ids = JSON.parse(ukryte.value || '[]'); } catch (e) { ids = []; }
-    if (usun) ids = ids.filter(x => x !== usun.dataset.usunZdjecie);
+    if (usun) { ids = ids.filter(x => x !== usun.dataset.usunZdjecie); hala.usunPlik(usun.dataset.usunZdjecie).catch(() => {}); }   // etap 3: ✕ naprawdę usuwa plik z telefonu
     if (dodaj) {
       if (ids.length >= W.MAKS_ZDJEC) { UR.komunikat(`Najwyżej ${W.MAKS_ZDJEC} zdjęć.`, 'uwaga'); return; }
       const id = await UR.zrobZdjecie();
@@ -348,14 +350,11 @@
   /* Palec na ekranie: przerysowanie między dotknięciem a puszczeniem podmienia przycisk i „click”
      nie przychodzi — mechanik w rękawicy musi dotknąć drugi raz (błąd z przeglądu kodu). Czekamy,
      aż palec zejdzie z ekranu, i dopiero wtedy rysujemy. */
-  let palec = false, poPalcu = false;
-  document.addEventListener('pointerdown', () => { palec = true; }, true);
-  const puscil = () => { palec = false; if (poPalcu) { poPalcu = false; setTimeout(() => UR.odswiez(), 60); } };
-  document.addEventListener('pointerup', puscil, true);
-  document.addEventListener('pointercancel', puscil, true);
+  // Etap 3: osłona jest wspólna dla Panelu, Lidera, UR i KJ (wspolne/palec.js) — z zabezpieczeniem na zgubione puszczenie.
+  const palec = global.HalaPalec.zainstaluj(() => UR.odswiez());
   UR.odswiez = powod => {
     if (powod === 'wymus') wymus = true;
-    if (palec) { poPalcu = true; return; }
+    if (palec.zajety()) return;
     if (zaplanowane) return;
     zaplanowane = true;
     requestAnimationFrame(() => {
@@ -481,6 +480,7 @@
     $('logowanie').hidden = z;
     $('aplikacja').hidden = !z;
     document.body.classList.toggle('kierownik-ur', z && UR.kierownikUR());
+    document.body.classList.toggle('kpi-ur', z && UR.mozeKpi());
     rysujPasek();
     pokazDzwonek();
     if (z) { rysujNaglowek(); rysujPlakietki(); pokazEkran(); } else if (global.matchMedia && global.matchMedia('(pointer: fine)').matches) { setTimeout(() => $('identyfikator').focus(), 0); }   // na telefonie fokus = klawiatura zasłania pół ekranu
@@ -496,13 +496,13 @@
     // Tuż po otwarciu strumień dopiero się łączy — bez okresu łaski każde odświeżenie mignęłoby „Brak sieci”.
     const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
     // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia); tylko zapisy zalogowanej osoby (moje).
-    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska,
+    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska, zadzwon: 'do kierownika UR',
                                             komputer: !global.matchMedia('(max-width: 820px)').matches });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
-    pasek.disabled = !kolejka.odrzucone;
+    pasek.disabled = !(kolejka.odrzucone || kolejka.plikiOdrzucone);
   }
-  $('pasek').addEventListener('click', () => { if (kolejka.odrzucone) UR.idz('odrzucone'); });
+  $('pasek').addEventListener('click', () => { if (kolejka.odrzucone || kolejka.plikiOdrzucone) UR.idz('odrzucone'); });
   UR.online = () => !!hala.polaczenie.strumien || !!(hala.polaczenie.dociaganie && !hala.polaczenie.blad) || (hala.polaczenie.online && !hala.polaczenie.blad);
 
   // „Nie wysłane” = zapisy odrzucone przez serwer (na ekranie nie „hub” — tak mówią ludzie): nic nie znika samo — człowiek czyta powód i decyduje (KONTRAKT §5.2).
@@ -511,16 +511,19 @@
     async rysuj(el) {
       el.innerHTML = '<h1>Nie wysłane</h1><div class="lista" id="lista-odrzuconych"><p class="pusto">Wczytuję…</p></div>';
       const lista = await hala.odrzucone();
-      $('lista-odrzuconych').innerHTML = lista.map(o => `
+      const zdjecia = await hala.odrzuconePliki();
+      $('lista-odrzuconych').innerHTML = (lista.map(o => `
         <article class="karta">
           <div><b>${esc(opisTypu(o.zd.typ))}</b> <span class="slaby">${esc(W.kiedy(o.zd.czas, hala.teraz()))}</span></div>
           <p class="blad">${esc(o.powod)}</p>
           <details><summary>Co było w zapisie</summary><pre>${esc(JSON.stringify(o.zd.dane, null, 1))}</pre></details>
-          <button type="button" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button>
-        </article>`).join('') || '<p class="pusto ok">Wszystko wysłane</p>';
+          ${global.HalaKolejkaUI.przyciskPonow(o.id)} <button type="button" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button>
+        </article>`).join('') + global.HalaKolejkaUI.zdjeciaHtml(zdjecia)) || '<p class="pusto ok">Wszystko wysłane</p>';
     },
     odswiez() { /* lista czyta IndexedDB — przerysowanie na każde zdarzenie migałoby */ },
   });
+  // „Spróbuj ponownie” przy zapisie i zdjęciu (etap 3) — wspólny kolejka-ui.js; po akcji lista czyta IndexedDB od nowa.
+  global.HalaKolejkaUI.podlacz(document, hala, { odswiez: () => pokazEkran(), komunikat: (t, r) => UR.komunikat(t, r === 'ok' ? 'ok' : 'alarm') });
   document.addEventListener('click', async ev => {
     const b = ev.target.closest && ev.target.closest('[data-usun-odrzucone]');
     if (!b) return;

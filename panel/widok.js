@@ -117,7 +117,7 @@
   /* Najpierw zatrzymania linii, potem od najdłuższego przestoju (KONTRAKT §6.1).
      Awaria, którą UR skończył, a lider nie potwierdził dłużej niż
      alarm_potwierdzenia_min, dostaje alarm — linia pewnie już stoi „na papierze”. */
-  function awarie({ awarie: lista, slowniki, pracownicy, stale, teraz, alarmMin }) {
+  function awarie({ awarie: lista, slowniki, pracownicy, stale, teraz, alarmMin, ja }) {
     const zatrzymuje = kodyZatrzymujace(stale);
     const priorytety = new Map(((stale && stale.priorytety) || []).map(p => [p.kod, p]));
     const powody = new Map(((stale && stale.powody_wstrzymania) || []).map(p => [p.kod, p.nazwa]));
@@ -146,6 +146,9 @@
         godzZgloszenia: godzina(d.czas_zgloszenia),
         przestojMs: H().przestojMs(a, teraz),
         czeka,
+        // R7 (2026-11-09, D80): kierownik zakładu anuluje awarię (fałszywy alarm, zgłoszenie podwójne), także cudzą — jak UR,
+        // admin i zgłaszający (Hala.moznaAnulowacAwarie ↔ blad_anulowania_awarii). Status jak w Liderze: zgłoszona / przyjęta.
+        mozeAnulowac: !!ja && (a.status === 'zgloszona' || a.status === 'przyjeta') && H().moznaAnulowacAwarie(a, ja),
       };
     });
     return wiersze.sort((x, y) => (y.zatrzymuje - x.zatrzymuje) || ((y.przestojMs || 0) - (x.przestojMs || 0)));
@@ -383,7 +386,11 @@
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
-        moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && H().moznaAnulowacZlecenie(z, ja, pracownicy),
+        // R2 (2026-11-09, D82): kierownik UR/KJ przyjmuje, zamyka i zwraca tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
+        moznaOdebrac: H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true,
+        // Audyt ról 2026-11-09 (D80): zlecenie anuluje tylko kierownik zakładu i admin (kontrakt: zlecenie.anulowane) — kierownik
+        // UR/KJ widział „Anuluj” przy swoich zleceniach, a hub odmawiał (403). moznaAnulowacZlecenie zostaje regułą D45 „czyje”.
+        moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && zZakladu && H().moznaAnulowacZlecenie(z, ja, pracownicy),
         // D47: zaplanowane — kiedy hub je zleci i jaki dostanie termin; zmienia i „Zleć teraz” tylko kierownik zakładu (admin).
         zaplanowane, zaplanowaneMs: zaplanowane && !isNaN(start) ? start : null,
         zaplanowaneNa: zaplanowane && !isNaN(start) ? `${dataDluga(start)} ${godzina(start)}` : null,
@@ -1994,6 +2001,9 @@
         if (k.moje) tekst += ` · ${H().czekaNaWyslanie(k.moje)}`;
       }
     }
+    // Etap 3: zdjęcia w kolejce widoczne także na pasku Panelu („2 zdjęcia czekają”, „Zdjęcia nie wysłane: N — dotknij”).
+    if (zalogowany && k.pliki) { tekst = (tekst ? tekst + ' · ' : '') + H().zdjeciaCzekaja(k.pliki); if (klasa === 'ok') klasa = 'kolejka'; }
+    if (zalogowany && k.plikiOdrzucone) { klasa = 'odrzucone'; tekst = (tekst ? tekst + ' · ' : '') + H().zdjeciaNieWyslane(k.plikiOdrzucone); }
     // D64: „Nie wysłane” — ta sama nazwa co w Liderze, UR i KJ (wcześniej „Odrzucone”).
     if (zalogowany && k.odrzucone) { klasa = 'odrzucone'; tekst = (tekst ? tekst + ' · ' : '') + H().nieWyslane(k.odrzucone); }
     return { klasa, tekst };
@@ -2076,12 +2086,15 @@
 
   /* Części Administracji dla tej osoby, w kolejności chipów. Checklisty (szablony obchodów lidera) zeszły z górnego menu
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
-     admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Kody QR, Ustawienia, Serwis); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; szablony (kontrakt: zapis
-     szablony_checklist) — Checklisty. */
-  function czesciAdministracji({ admin, zespol, szablony, urlopy } = {}) {
+     admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Kody QR, Ustawienia, Serwis); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; maszyny (R10, kontrakt: zapis
+     słownika maszyn — kierownik zakładu) — Maszyny; szablony (kontrakt: zapis szablony_checklist) — Checklisty. */
+  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny } = {}) {
     const c = [];
     if (admin || zespol) c.push('pracownicy');
     if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
+    // R10 (2026-11-09): słownik maszyn zapisuje też kierownik zakładu (kontrakt: slowniki.maszyny.zapis = admin, kierownik).
+    // Admin dostaje je niżej razem z Danymi, Kodami QR i Ustawieniami (kolejność chipów jak dotąd).
+    if (maszyny && !admin) c.push('maszyny');
     // STYL-GK §8 (2026-11-04): „Dane” (czyszczenie zleceń) i „Kody QR” mają wejście także tutaj — to te same okna co
     // Zlecenia → 🧹 i ☰ Więcej → Kody QR (chip tylko je otwiera). Zespół (kierownicy) ich nie dostaje: D49 — tylko Pracownicy.
     if (admin) c.push('maszyny', 'dane', 'kody', 'ustawienia');
@@ -2266,6 +2279,13 @@
       return { kod, osoba: u.osoba, nazwa: p ? p.nazwa : u.osoba, od: u.od, do: u.do, uwagi: u.uwagi || '', stan,
                opis: stan === 'trwa' ? 'Trwa' : stan === 'minal' ? 'Minął' : 'Zaplanowany' };
     }).sort((a, b) => ((a.stan === 'minal') - (b.stan === 'minal')) || a.od.localeCompare(b.od) || a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+  /* R5 (2026-11-09, D82): kto może dostać urlop od tej osoby — kierownik zakładu i admin: wszyscy z działami hali; kierownik UR/KJ:
+     tylko osoby z jego działu (hub: blad_urlopu_osoby). Lista i formularz Urlopów pokazują tylko te osoby. */
+  function osobyDoUrlopow(pracownicy, ja, dzialy) {
+    const wDzialach = (p) => (p.role || []).some(r => (dzialy || []).some(d => (d.role || []).includes(r)));
+    return (pracownicy || []).filter(p => p && p.aktywny !== false && wDzialach(p) && H().mozeUrlopOsoby(p, ja, dzialy))
+      .sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
   function urlopZFormularza(f, slowniki) {
     const bledy = [];
@@ -2588,7 +2608,7 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,

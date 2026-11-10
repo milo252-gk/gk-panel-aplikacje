@@ -75,7 +75,8 @@
         : '<p class="pusto">Brak wad w wybranym okresie i filtrach.</p>'}
         <p class="slaby">${esc(W.stopkaPareto(filtry.okres))}</p>
         <div id="eksport-csv"></div>`;
-      // Kierownik KJ: próby i partie brakowe do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32).
+      // Próby i partie brakowe do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32) — od R3 (2026-11-09) tylko kierownik
+      // zakładu i administrator (kierownik KJ pasek nie dostaje: HalaEksport.dlaRol zwraca pustą listę).
       window.HalaEksport.rysuj(el.querySelector('#eksport-csv'), hala, { rodzaje: ['proby', 'partie'], komunikat: (t, r) => KJ.komunikat(t, r) });
       const form = el.querySelector('#f-pareto');
       form.addEventListener('change', () => {

@@ -21,6 +21,16 @@
   'use strict';
   const TAG = 'hala-kolejka';
   const PACZKA = 50;
+  /* Limity czasu (etap 3, jak w hala.js): fetch bez końca trzymałby worker do końca jego czasu życia, a przeglądarka i tak
+     ponowi sync. Wysyłka zdjęcia 60 s, zdarzeń 10 s, adres huba 5 s. Przerwanie = błąd sieci (wyjątek jak dotąd). */
+  const LIMIT_PLIKU_MS = 60000, LIMIT_ZDARZEN_MS = 10000, LIMIT_ADRESU_MS = 5000;
+  function zLimitem(adres, opcje, ms) {
+    const stop = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const zegar = stop ? setTimeout(() => stop.abort(), ms) : null;
+    return fetch(adres, stop ? Object.assign({}, opcje, { signal: stop.signal }) : opcje)
+      .then(r => r.json().then(j => ({ r, j }), () => ({ r, j: null })))
+      .finally(() => clearTimeout(zegar));
+  }
   const aplikacja = () => self.HALA_APLIKACJA
     || new URL(self.registration.scope).pathname.split('/').filter(Boolean).pop();
 
@@ -52,9 +62,8 @@
   async function adresHuba(db, opcje) {
     if (opcje && opcje.hub) return opcje.hub;
     try {
-      const r = await fetch(new URL('../konfiguracja.json?t=' + Date.now(), self.registration.scope).href, { cache: 'no-store' });
+      const { r, j: k } = await zLimitem(new URL('../konfiguracja.json?t=' + Date.now(), self.registration.scope).href, { cache: 'no-store' }, LIMIT_ADRESU_MS);
       if (r.ok) {
-        const k = await r.json();
         if (k && typeof k.hub === 'string' && /^https?:\/\//.test(k.hub)) return k.hub.replace(/\/$/, '');
       }
     } catch (e) { /* bez pliku albo bez sieci */ }
@@ -84,14 +93,12 @@
       const przes = zegar && typeof zegar.p === 'number' && Date.now() - zegar.kiedy < 7 * 86400000 ? zegar.p : 0;
       const nag = { Authorization: 'Bearer ' + token };
       for (const p of pliki) {
-        let r;
+        let r, json = null;
         try {
-          r = await fetch(`${hub}/api/v1/pliki/${encodeURIComponent(p.id)}`, { method: 'PUT', cache: 'no-store', body: p.blob,
-                          headers: Object.assign({ 'Content-Type': p.mime || 'image/jpeg' }, nag) });
+          ({ r, j: json } = await zLimitem(`${hub}/api/v1/pliki/${encodeURIComponent(p.id)}`, { method: 'PUT', cache: 'no-store', body: p.blob,
+                          headers: Object.assign({ 'Content-Type': p.mime || 'image/jpeg' }, nag) }, LIMIT_PLIKU_MS));
         } catch (e) { break; }                      // zdjęcie poczeka, zdarzenia idą dalej (jak hala.js, etap 1)
         if (r.status === 401) { wynik.powod = 'sesja'; return wynik; }
-        let json = null;
-        try { json = await r.json(); } catch (e) { json = null; }
         if (r.ok) { p.wyslany = true; p.wyslanyKiedy = Date.now(); }
         else if (r.status < 500 && json && typeof json === 'object') p.odrzucony = json.blad || `HTTP ${r.status}`;
         else break;
@@ -99,12 +106,11 @@
       }
       while (moje.length) {
         const paczka = moje.slice(0, PACZKA);
-        const r = await fetch(`${hub}/api/v1/zdarzenia`, {
+        const { r, j: dane } = await zLimitem(`${hub}/api/v1/zdarzenia`, {
           method: 'POST', cache: 'no-store', headers: Object.assign({ 'Content-Type': 'application/json' }, nag),
-          body: JSON.stringify({ wyslano: iso(Date.now() + przes), zdarzenia: paczka.map(w => w.zd) }) });
+          body: JSON.stringify({ wyslano: iso(Date.now() + przes), zdarzenia: paczka.map(w => w.zd) }) }, LIMIT_ZDARZEN_MS);
         if (r.status === 401) { wynik.powod = 'sesja'; break; }
-        if (!r.ok) throw new Error('HTTP ' + r.status);      // 5xx, brama Cloudflare — przeglądarka ponowi
-        const dane = await r.json();
+        if (!r.ok || !dane) throw new Error('HTTP ' + r.status);      // 5xx, brama Cloudflare, odpowiedź bez treści — przeglądarka ponowi
         const wyniki = new Map((dane.wyniki || []).map(w => [w.id, w]));
         await new Promise((ok, zle) => {
           const t = db.transaction(['kolejka', 'odrzucone'], 'readwrite');

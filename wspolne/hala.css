@@ -491,6 +491,12 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
 .komunikat.znika { opacity: 0; }
 @keyframes hala-wjazd { from { opacity: 0; transform: translateY(10px); } }
 @media (min-width: 821px) { .komunikaty { bottom: 18px; } }
+/* Etap 3 (2026-11-09): globalny pasek błędów (hala.js → pilnujBledow) — u góry strony, nad paskiem połączenia i oknami; dotknięcie go zamyka.
+   „NIE ZAPISANO” (alarm) jest czerwony, inne nieoczekiwane błędy żółte. */
+.hala-blad-globalny { position: fixed; z-index: 1130; top: env(safe-area-inset-top, 0px); left: 0; right: 0; padding: 12px 16px; font-size: 15px;
+                      font-weight: 600; text-align: center; background: var(--zolty); color: var(--na-barwie); box-shadow: var(--cien-mocny); cursor: pointer; }
+.hala-blad-globalny.alarm { background: var(--czerwony); }
+.hala-blad-globalny[hidden] { display: none; }
 /* D64: przy pływającym „▣ Skanuj” (body.hala-ma-skan) komunikat stoi nad nim, a koniec listy da się przewinąć spod
    przycisku — ostatnie „Zrobione / Nie mogę” nie leżą już pod nim. */
 body.hala-ma-skan .komunikaty { bottom: calc(var(--dol-wys) + 84px + env(safe-area-inset-bottom, 0px)); }

@@ -70,10 +70,10 @@
     </div>
     <a href="#awarie" data-ekran="awarie"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awarie<b id="licznik-nowych" class="plakietka" hidden></b></a>
     <a href="#przeglady" data-ekran="przeglady"><span class="ikona" data-ikona="przeglady" aria-hidden="true"></span>Przeglądy<b id="licznik-opoznionych" class="plakietka" hidden></b></a>
-    <!-- KPI i Plan tylko dla kierownika UR (UI etap 2) — mechanik ma w pasku Awarie, Przeglądy, Zlecenia i Więcej.
+    <!-- Plan tylko dla kierownika UR (UI etap 2), KPI tylko dla kierownika zakładu i administratora (R3, 2026-11-09) — mechanik ma w pasku Awarie, Przeglądy, Zlecenia i Więcej.
          STYL-GK §8 (2026-11-04): na telefonie najwyżej 4 ekrany + Więcej — Plan (`.w-wiecej`) jest tam tylko w „Więcej”,
          na komputerze zostaje w menu bocznym. -->
-    <a href="#kpi" data-ekran="kpi" class="tylko-kierownik"><span class="ikona" data-ikona="kpi" aria-hidden="true"></span>KPI</a>
+    <a href="#kpi" data-ekran="kpi" class="tylko-kpi"><span class="ikona" data-ikona="kpi" aria-hidden="true"></span>KPI</a>
     <a href="#plan" data-ekran="plan" class="tylko-kierownik w-wiecej"><span class="ikona" data-ikona="plan" aria-hidden="true"></span>Plan</a>
     <a href="#zlecenia" data-ekran="zlecenia"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span>Zlecenia<b id="licznik-zlecen" class="plakietka" hidden></b></a>
     <!-- D64: „Więcej” = ☰ (⚙️ to Administracja w Panelu), zawsze ostatnie. -->
@@ -94,6 +94,8 @@
 <script src="../wspolne/gk-ikony.js"></script>
 <script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/reakcje.js"></script>
+<script src="../wspolne/kolejka-ui.js"></script>
+<script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="../wspolne/skaner.js"></script>

@@ -371,6 +371,16 @@
     if (p) { p.textContent = tekstBraku(brak); p.hidden = !brak.length; }
   }
 
+  /* „🧰 Odłóż narzędzia”: mistrz i — od R10 (właściciel 2026-11-09, D80) — kierownik zakładu; hub (kontrakt:
+     narzedzia.odlozone.role) od początku dopuszczał obie role, ekran dawał przycisk tylko mistrzowi. Role z kontraktu
+     (bez niego te same dwie), żeby ekran i hub nie rozjechały się znowu. */
+  function mozeOdlozycNarzedzia(hala) {
+    const role = (hala && hala.pracownik && hala.pracownik.role) || [];
+    const spec = hala && hala.kontrakt && hala.kontrakt.zdarzenia && hala.kontrakt.zdarzenia['narzedzia.odlozone'];
+    const dozwolone = (spec && spec.role) || ['mistrz', 'kierownik'];
+    return role.some(r => dozwolone.includes(r));
+  }
+
   function rysuj(el, hala, opcje) {
     const s = stan(el);
     s.opcje = opcje;
@@ -444,7 +454,7 @@
     // D55: skan QR maszyny (menu: wykonaj zadanie / zgłoś awarię / nieprawidłowość), zgłoszenie do kierownika, narzędzia (mistrz).
     const narzedziaGory = DZ && !opcje.bezDzialan ? `<div class="hala-zlecenia-dzialania">
         <button type="button" data-gora="zglos">📝 Zgłoś nieprawidłowość</button>
-        ${role.includes('mistrz') ? '<button type="button" data-gora="narzedzia">🧰 Odłóż narzędzia</button>' : ''}
+        ${mozeOdlozycNarzedzia(hala) ? '<button type="button" data-gora="narzedzia">🧰 Odłóż narzędzia</button>' : ''}
       </div>${s.info ? `<p class="hala-zlecenia-info" role="status">${esc(s.info)}</p>` : ''}` : '';
     const moje = mojeZgloszenia(hala, ja, opcje.opcjeZgloszen);
     // D60: opcje.tylko — jedno zlecenie (okno „▶ Wykonaj” w Panelu): bez nagłówka, filtra i zgłoszeń osoby.
@@ -965,7 +975,7 @@
 
   const HalaZlecenia = { maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
                          brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
-                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza };
+                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -48,10 +48,16 @@ self.addEventListener('push', e => {
     let wiadomosci = [];
     try {
       const sub = await self.registration.pushManager.getSubscription();
-      const odp = await fetch((await halaPushHub()) + '/api/v1/push/co-nowego', {
-        method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: sub ? sub.endpoint : '' }) });
-      if (odp.ok) wiadomosci = (await odp.json()).wiadomosci || [];
+      // Limit 8 s (etap 3): hub, który nie odpowiada, nie może trzymać powiadomienia w nieskończoność — po limicie pokazujemy
+      // ogólne „Nowe zdarzenie na hali” (niżej), jak przy każdym innym błędzie.
+      const stop = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const zegar = stop ? setTimeout(() => stop.abort(), 8000) : null;
+      try {
+        const odp = await fetch((await halaPushHub()) + '/api/v1/push/co-nowego', {
+          method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub ? sub.endpoint : '' }), signal: stop ? stop.signal : undefined });
+        if (odp.ok) wiadomosci = (await odp.json()).wiadomosci || [];
+      } finally { clearTimeout(zegar); }
     } catch (err) { /* hub nieosiągalny — i tak coś pokażemy, żeby mechanik zajrzał do aplikacji */ }
 
     // Aplikacja na ekranie sama zadzwoniła i pokazała komunikat (strumień) — drugie powiadomienie tylko by dublowało.

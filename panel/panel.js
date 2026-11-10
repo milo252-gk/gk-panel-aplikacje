@@ -195,11 +195,14 @@
      (jak „Odrzucone” w Liderze) — „Moje konto” ma tylko przycisk „Odrzucone przez hub: N”. */
   async function rysujOdrzucone() {
     const lista = await hala.odrzucone();
-    $('lista-odrzuconych').innerHTML = lista.length ? `<p class="slaby">Wprowadź je jeszcze raz, poprawiając to, co mówi powód, a potem usuń z listy.</p>
+    const zdjecia = await hala.odrzuconePliki();
+    $('lista-odrzuconych').innerHTML = (lista.length ? `<p class="slaby">„Spróbuj ponownie” wysyła zapis jeszcze raz; jeśli powód mówi o błędzie w treści — wprowadź go poprawnie i usuń ten z listy.</p>
       <ul class="lista-odrzuconych">${lista.map(o => `<li><b>${esc(nazwaTypu(o.zd.typ))}</b> <span class="slaby">${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}</span>
         <div class="blad">${esc(o.powod)}</div>
-        <button type="button" class="maly" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>` : '<p class="slaby">Brak.</p>';
+        ${HalaKolejkaUI.przyciskPonow(o.id)} <button type="button" class="maly" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>` : '')
+      + HalaKolejkaUI.zdjeciaHtml(zdjecia) || '<p class="slaby">Brak.</p>';
   }
+  HalaKolejkaUI.podlacz($('lista-odrzuconych'), hala, { odswiez: () => rysujOdrzucone(), komunikat });
   async function pokazOdrzucone() {
     await rysujOdrzucone();
     if (!$('okno-odrzucone').open) $('okno-odrzucone').showModal();
@@ -238,8 +241,12 @@
     const role = (hala.pracownik && hala.pracownik.role) || [];
     const zapisSzablonow = (((hala.kontrakt || {}).slowniki || {}).szablony_checklist || {}).zapis || [];
     const zapisUrlopow = (((hala.kontrakt || {}).slowniki || {}).urlopy || {}).zapis || [];
+    // R10 (2026-11-09): „Maszyny” (kod, nazwa, etykieta QR) ma każdy, komu kontrakt pozwala zapisywać ten słownik — kierownik
+    // zakładu i admin (hub od początku to dopuszczał; ekran dawał tylko adminowi).
+    const zapisMaszyn = (((hala.kontrakt || {}).slowniki || {}).maszyny || {}).zapis || [];
     return { admin: role.includes('admin'), zespol: HalaZespol.zarzadzaKontami(role, (hala.kontrakt || {}).stale),
-             szablony: role.some(r => zapisSzablonow.includes(r)), urlopy: role.some(r => zapisUrlopow.includes(r)) };
+             szablony: role.some(r => zapisSzablonow.includes(r)), urlopy: role.some(r => zapisUrlopow.includes(r)),
+             maszyny: role.some(r => zapisMaszyn.includes(r)) };
   };
 
   const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja', 'wiecej'];
@@ -279,7 +286,7 @@
     $('wiecej-administracja').hidden = $('menu-administracja').hidden;
     // Właściciel 2026-10-20: wszystkie kody QR do druku w jednym miejscu — dla kierownika zakładu i administratora.
     $('wiecej-kody').hidden = !(Panel.widoki.kody && Panel.widoki.kody.dostepne());
-    const n = (kolejka && kolejka.odrzucone) || 0;
+    const n = ((kolejka && kolejka.odrzucone) || 0) + ((kolejka && kolejka.plikiOdrzucone) || 0);
     $('wiecej-niewyslane').textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
     $('plakietka-wiecej').hidden = !n;
     $('plakietka-wiecej').textContent = n ? String(n) : '';
@@ -351,6 +358,7 @@
           </div>
           ${w.opis ? `<div class="slaby tekst-opisu">${esc(w.opis)}</div>` : ''}
           ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc([w.maszynaNazwa, w.opis].filter(Boolean).join(' · '))}" aria-label="Powiększ zdjęcie awarii"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
+          ${w.mozeAnulowac ? `<div class="akcje-awarii"><button type="button" class="maly" data-akcja="anuluj-awarie" data-id="${esc(w.id)}" title="Fałszywy alarm albo zgłoszenie podwójne — awaria znika z listy">Anuluj zgłoszenie</button></div>` : ''}
         </div>
         <div class="numer slaby">${esc(w.numer)}<br> od ${esc(w.godzZgloszenia)}</div>
       </article>`).join('') || '<p class="pusto ok">Brak aktywnych awarii</p>';
@@ -456,15 +464,18 @@
     if (!hala.zalogowany()) return;
     const d = dane();
     const wiersze = W.awarie({ awarie: hala.obiekty('awaria', a => a.aktywny), slowniki: d.slowniki, pracownicy: d.pracownicy,
-                               stale: d.stale, teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30) });
+                               stale: d.stale, teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30) });   // bez „ja”: tylko sygnał
     const jakosc = W.incydenty({ partie: hala.obiekty('partia'), alerty: hala.obiekty('alert'), slowniki: d.slowniki, zmiana: d.zmiana, teraz: d.teraz });
     sprawdzAlarmy(wiersze, jakosc.lista);
   }
 
   let zaplanowane = false;
+  // Etap 3: osłona „palec na ekranie” (wspolne/palec.js, wzór: UR) — przerysowanie spod palca (tablet kierownika) podmieniało przycisk i połykało dotknięcie.
+  const palec = window.HalaPalec.zainstaluj(() => narysuj());
   function narysuj() {
     try { rysujWiecej(); } catch (e) { /* kolejka jeszcze nieznana przy pierwszym rysowaniu */ }
     if (document.hidden) sygnalWTle();
+    if (palec.zajety()) return;
     // Strumień potrafi przynieść kilkadziesiąt zdarzeń naraz (np. po powrocie sieci) — rysujemy raz na klatkę.
     if (zaplanowane) return;
     zaplanowane = true;
@@ -476,7 +487,7 @@
       // Awarie i incydenty liczymy zawsze — nowe zatrzymanie ma dać sygnał także na zakładce „Raporty”.
       const awarie = hala.obiekty('awaria', a => a.aktywny);
       const wiersze = W.awarie({ awarie, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
-                                 teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30) });
+                                 teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30), ja: hala.pracownik });
       const jakosc = W.incydenty({ partie: hala.obiekty('partia'), alerty: hala.obiekty('alert'), slowniki: d.slowniki, zmiana: d.zmiana, teraz: d.teraz });
       sprawdzAlarmy(wiersze, jakosc.lista);
       const bhpOtwarte = W.bhpLista({ zgloszenia: hala.obiekty('bhp_zgloszenie', g => g.status === 'otwarte'), slowniki: d.slowniki,
@@ -777,9 +788,11 @@
           ${kier && z.moznaEdytowac && mozeWyslac('zlecenie.edytowane') ? '<button type="button" class="maly" data-akcja="edytuj" title="Popraw treść, opis, pozycje, godziny — także w zapisanym wzorcu">✎ Zmień</button>' : ''}
           ${z.moznaZmienic ? `<button type="button" class="maly" data-akcja="zmien-plan">Zmień</button>
             <button type="button" class="maly glowny" data-akcja="zlec-teraz" title="Zleć od razu — dział dostanie powiadomienie">Zleć teraz</button>` : ''}
-          ${kier && z.doZamkniecia ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
+          ${kier && z.doZamkniecia && z.moznaOdebrac ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
             <button type="button" class="maly" data-akcja="zwroc">Zwróć</button>` : ''}
-          ${kier && z.moznaAnulowac ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
+          ${/* Audyt ról 2026-11-09 (D80): „Anuluj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
+               i admin). Kierownik UR/KJ widział przycisk, a hub odpowiadał 403. */
+            z.moznaAnulowac && mozeWyslac('zlecenie.anulowane') ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
           ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)">💾 Zapisz</button>' : ''}
         </div>
       </article>`;
@@ -814,9 +827,20 @@
   });
 
   // Zdjęcie ze zgłoszenia awarii (D47) — dotknięcie miniatury powiększa, jak w zleceniach.
-  $('lista-awarii').addEventListener('click', ev => {
+  $('lista-awarii').addEventListener('click', async ev => {
     const foto = ev.target.closest('[data-zdjecie]');
-    if (foto) pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis);
+    if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
+    // R7 (2026-11-09): kierownik zakładu anuluje awarię (fałszywy alarm). Powód jest obowiązkowy (kontrakt: ≤ 1000 znaków).
+    const b = ev.target.closest('[data-akcja="anuluj-awarie"]');
+    if (!b) return;
+    try {
+      const powod = await Panel.zapytajTekst({ tytul: 'Anulować zgłoszenie awarii?', etykieta: 'Dlaczego? (np. fałszywy alarm, zgłoszenie podwójne)',
+                                               wymagany: true, przycisk: 'Anuluj zgłoszenie' });
+      if (powod === null) return;
+      if (powod.length > 1000) { komunikat(`Powód za długi: ${powod.length} znaków, najwyżej 1000. Skróć opis.`, 'blad'); return; }
+      await hala.zapisz('awaria.anulowana', b.dataset.id, { powod });
+      komunikat('Zgłoszenie awarii anulowane', 'ok');
+    } catch (e) { komunikat(komunikatBledu(e), 'blad'); }
   });
   $('lista-zlecen').addEventListener('click', async ev => {
     const foto = ev.target.closest('[data-zdjecie]');
@@ -1393,9 +1417,9 @@
     const w = W.pasekPolaczenia({ zalogowany, polaczenie: p, kolejka, laska, ostatnio: ostatnioPolaczony, teraz: hala.teraz() });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
-    pasek.disabled = !kolejka.odrzucone;            // D64: przycisk jak w Liderze, UR i KJ (dotknięcie — lista „Nie wysłane”)
+    pasek.disabled = !(kolejka.odrzucone || kolejka.plikiOdrzucone);            // D64: przycisk jak w Liderze, UR i KJ (dotknięcie — lista „Nie wysłane”)
   }
-  $('pasek').addEventListener('click', () => { if (hala.zalogowany() && kolejka.odrzucone) pokazOdrzucone(); });
+  $('pasek').addEventListener('click', () => { if (hala.zalogowany() && (kolejka.odrzucone || kolejka.plikiOdrzucone)) pokazOdrzucone(); });
 
   // ------------------------------------------------------------ monitor w biurze
 

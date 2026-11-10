@@ -175,6 +175,9 @@ pre { white-space: pre-wrap; font-size: .8em; background: var(--tlo); padding: 8
 
 .tylko-kierownik { display: none !important; }
 body.kierownik-ur .tylko-kierownik { display: flex !important; }
+/* R3 (2026-11-09): KPI — kierownik zakładu i administrator (nie kierownik UR); jak .tylko-kierownik, osobna klasa na <body>. */
+.tylko-kpi { display: none !important; }
+body.kpi-ur .tylko-kpi { display: flex !important; }
 
 /* Plakietka na zakładce: nowe (nieprzyjęte) awarie / opóźnione przeglądy. */
 .nawigacja a { position: relative; }

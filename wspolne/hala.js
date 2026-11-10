@@ -32,12 +32,13 @@
      alertAktywny        <-> alert_aktywny
      moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)
      dzialyKierownika    <-> dzialy_kierownika (D76: zakres kierownika działu)
+     dzialyOsoby         <-> dzialy_osoby (D82: działy osoby); mozeOdebracZlecenie <-> blad_odbioru_zlecenia (R2); mozeUrlopOsoby <-> blad_urlopu_osoby (R5)
      postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia) */
 
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.29.0';
+  const WERSJA_KLIENTA = '0.31.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -754,13 +755,35 @@
     return (dzialyKontraktu || []).some(x => x && x.kod === d.dzial && x.rola_kierownika);
   }
 
-  /* D55: awarię anuluje tylko UR (mechanik, kierownik UR), administrator albo osoba, która ją zgłosiła (pomyłka).
+  /* D55: awarię anuluje tylko UR (mechanik, kierownik UR), administrator albo osoba, która ją zgłosiła (pomyłka);
+     R7 (2026-11-09, D80): także kierownik zakładu (fałszywy alarm widoczny w Panelu).
      Status (zgłoszona/przyjęta) sprawdza ekran. Bliźniak: blad_anulowania_awarii w hala.py. */
-  const ROLE_ANULUJACE_AWARIE = ['mechanik', 'kierownik_ur', 'admin'];
+  const ROLE_ANULUJACE_AWARIE = ['mechanik', 'kierownik_ur', 'kierownik', 'admin'];
   function moznaAnulowacAwarie(awaria, pracownik) {
     if (!pracownik) return false;
     if ((pracownik.role || []).some(r => ROLE_ANULUJACE_AWARIE.includes(r))) return true;
     return ((awaria && awaria.dane) || {}).zglosil === pracownik.id;
+  }
+
+  /* Etap 2b (D82, 2026-11-09). Działy, w których pracuje osoba (ma rolę z listy `role` działu). Bliźniak: dzialy_osoby w hala.py. */
+  function dzialyOsoby(role, dzialyKontraktu) {
+    const r = [].concat(role || []);
+    return (dzialyKontraktu || []).filter(d => d && ((d.role || []).some(x => r.includes(x)))).map(d => d.kod);
+  }
+
+  /* R2: kierownik UR/KJ zamyka i zwraca (Przyjmij / Zamknij / Zwróć) tylko zlecenia swojego działu; kierownik zakładu i admin —
+     wszystkie. Ekran pokazuje przyciski tylko wtedy; hub: blad_odbioru_zlecenia (najpierw „tylko loguj”, potem 403). */
+  function mozeOdebracZlecenie(zlecenie, pracownik, dzialyKontraktu) {
+    const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
+    return zakres === null || zakres.includes(((zlecenie && zlecenie.dane) || {}).dzial);
+  }
+
+  /* R5: urlop osobie wpisuje kierownik UR/KJ tylko z działu, którym kieruje; kierownik zakładu i admin — każdej.
+     Bliźniak: blad_urlopu_osoby w hala.py. */
+  function mozeUrlopOsoby(osoba, pracownik, dzialyKontraktu) {
+    const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
+    if (zakres === null) return true;
+    return dzialyOsoby(osoba && osoba.role, dzialyKontraktu).some(k => zakres.includes(k));
   }
 
   /* D71: niedziela Wielkanocna (Meeus/Jones/Butcher) i dni ustawowo wolne w Polsce {'RRRR-MM-DD': nazwa} — Wigilia od 2025.
@@ -1015,7 +1038,11 @@
      → { klasa: ok|kolejka|brak-huba|offline|odrzucone, tekst }. */
   const czekaNaWyslanie = n => `${liczebnik(n, 'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na wysłanie`;
   const nieWyslane = n => `Nie wysłane: ${n} — dotknij`;
-  function pasekPolaczenia({ zalogowany, polaczenie, kolejka, laska, komputer } = {}) {
+  // Etap 3: zdjęcia w kolejce są widoczne („2 zdjęcia czekają”) — wcześniej pasek pokazywał „0 czeka”, a awaria szła bez zdjęcia.
+  const zdjeciaCzekaja = n => liczebnik(n, 'zdjęcie czeka', 'zdjęcia czekają', 'zdjęć czeka');
+  const zdjeciaNieWyslane = n => `Zdjęcia nie wysłane: ${n} — dotknij`;
+  const godzinaZakladu = ms => { const l = lokalny(ms); return `${dwie(l.godz)}:${dwie(l.min)}`; };
+  function pasekPolaczenia({ zalogowany, polaczenie, kolejka, laska, komputer, zadzwon } = {}) {
     const p = polaczenie || {}, k = kolejka || {}, n = k.moje || 0;
     if (!zalogowany) return { klasa: 'ok', tekst: '' };
     const czesci = [];
@@ -1035,11 +1062,15 @@
       czesci.push('Odświeżanie co kilka sekund' + (n ? ` · Wysyłanie: ${n}` : ''));
     } else if (!p.strumien && !laska) {
       klasa = 'brak-huba';
-      czesci.push(`Brak połączenia z serwerem${n ? ` — ${czekaNaWyslanie(n)}` : ''}`);
+      // Etap 3: urządzenie ma sieć, a serwer milczy — mówimy od kiedy i do kogo zadzwonić (zamiast ogólnego „brak połączenia”).
+      if (p.bladOd) czesci.push(`Serwer nie odpowiada od ${godzinaZakladu(p.bladOd)} — zadzwoń ${zadzwon || 'na UR'}${n ? ` · ${czekaNaWyslanie(n)}` : ''}`);
+      else czesci.push(`Brak połączenia z serwerem${n ? ` — ${czekaNaWyslanie(n)}` : ''}`);
     } else if (n) {
       klasa = 'kolejka';
       czesci.push(`Wysyłanie: ${n}`);
     }
+    if (k.pliki) { if (klasa === 'ok') klasa = 'kolejka'; czesci.push(zdjeciaCzekaja(k.pliki)); }
+    if (k.plikiOdrzucone) { klasa = 'odrzucone'; czesci.push(zdjeciaNieWyslane(k.plikiOdrzucone)); }
     if (k.odrzucone) { klasa = 'odrzucone'; czesci.push(nieWyslane(k.odrzucone)); }
     return { klasa, tekst: czesci.join(' · ') };
   }
@@ -1057,7 +1088,42 @@
     return t;
   }
 
+  // ---------------------------------------------------------------- limity czasu zapytań (etap 3, 2026-11-09)
+
+  /* Telefon „z wifi, ale bez internetu” (hala bywa tak całymi godzinami) czeka na fetch bez końca: ekran logowania i start
+     wiszą, a kolejka nie próbuje ponownie. Każde zapytanie do huba ma więc limit czasu — po nim to zwykły błąd sieci
+     (TypeError z `limitCzasu: true`), czyli kolejka zostaje, a próba powtarza się za 20 s. Zapisy mają uuid i hub je
+     deduplikuje, więc zapytanie, które hub zdążył przyjąć, a telefon już porzucił, nie zdubluje danych.
+     Logowanie 12 s, zwykłe 10 s, listy stanu (do 5000 obiektów) 20 s, wysyłka zdjęcia 60 s, pobranie CSV 60 s. */
+  const LIMIT_ZAPYTANIA_MS = 10000, LIMIT_LOGOWANIA_MS = 12000, LIMIT_LISTY_MS = 20000, LIMIT_PLIKU_MS = 60000;
+  function limitZapytania(metoda, sciezka, extra) {
+    if (extra && extra.limitMs > 0) return extra.limitMs;
+    const m = String(metoda || 'GET').toUpperCase(), sc = String(sciezka || '');
+    if (/^\/api\/v1\/(logowanie|ustaw-konto)(\?|$)/.test(sc)) return LIMIT_LOGOWANIA_MS;
+    if (m === 'PUT' && sc.startsWith('/api/v1/pliki/')) return LIMIT_PLIKU_MS;
+    if (m === 'GET' && /^\/api\/v1\/(stan|zdarzenia|slowniki|kontrakt)(\/|\?|$)/.test(sc)) return LIMIT_LISTY_MS;
+    return LIMIT_ZAPYTANIA_MS;
+  }
+  function bladLimitu(ms) {
+    const e = new TypeError(`Serwer nie odpowiedział w ${Math.round(ms / 1000)} s`);
+    e.limitCzasu = true;
+    return e;
+  }
+
   // ---------------------------------------------------------------- IndexedDB
+
+  const NIE_ZAPISANO = 'NIE ZAPISANO — telefon nie zapisał tego w swojej pamięci (brak miejsca albo przeglądarka zamknęła bazę). '
+    + 'Spróbuj jeszcze raz; jeśli się powtarza, zamknij aplikację i otwórz ją ponownie.';
+  /* Błąd, po którym warto otworzyć bazę od nowa: przeglądarka (iOS po długim uśpieniu karty, czyszczenie pamięci) potrafi
+     zamknąć połączenie z IndexedDB — kolejne transakcje rzucają InvalidStateError. */
+  const bazaZamknieta = e => !!e && (e.name === 'InvalidStateError' || e.name === 'TransactionInactiveError'
+    || /closing|closed|connection/i.test(String(e.message || '')));
+  function bladZapisu(e) {
+    const b = new Error(NIE_ZAPISANO);
+    b.nieZapisano = true;
+    b.przyczyna = e;
+    return b;
+  }
 
   function otworzBaze(nazwa) {
     return new Promise((ok, zle) => {
@@ -1070,8 +1136,15 @@
         if (!db.objectStoreNames.contains('pamiec')) db.createObjectStore('pamiec', { keyPath: 'klucz' });
         if (!db.objectStoreNames.contains('pliki')) db.createObjectStore('pliki', { keyPath: 'id' });
       };
-      z.onsuccess = () => ok(z.result);
+      z.onsuccess = () => {
+        const db = z.result;
+        // Inna karta chce podnieść wersję bazy albo przeglądarka ją zamyka: oddajemy połączenie, żeby nie blokować (zapis
+        // spróbuje otworzyć bazę od nowa — zapisBezpiecznie).
+        db.onversionchange = () => { try { db.close(); } catch (e) { /* już zamknięta */ } };
+        ok(db);
+      };
       z.onerror = () => zle(z.error);
+      z.onblocked = () => zle(new Error('Baza aplikacji jest zablokowana przez inną kartę — zamknij pozostałe karty z tą aplikacją.'));
     });
   }
 
@@ -1130,6 +1203,7 @@
                               czekajWitajMs: 5000, dociaganieMs: 4000, ponowStrumienMs: 300000,
                               sprawdzAdresCoMs: 30000 }, opcje || {});
     if (!o.aplikacja) throw new Error('Hala.utworz: podaj aplikacja');
+    if (!o.bezHandleraBledow) pilnujBledow();
     const nazwaPamieci = o.pamiec || o.aplikacja;
     const ls = bezpiecznyLocalStorage();
     const sluchacze = {};
@@ -1146,7 +1220,7 @@
     const h = {
       aplikacja: o.aplikacja, pracownik: null, kontrakt: null, slowniki: {}, pracownicy: [],
       // dociaganie: strumień zatrzymany przez sieć, zmiany przychodzą co kilka sekund (nie „na żywo”, ale nie brak połączenia).
-      polaczenie: { online: navigator.onLine, strumien: false, dociaganie: false, ostatniaSynchronizacja: null, blad: null, bladPlikow: null },
+      polaczenie: { online: navigator.onLine, strumien: false, dociaganie: false, ostatniaSynchronizacja: null, blad: null, bladPlikow: null, bladOd: null },
       wersja: WERSJA_KLIENTA,
     };
 
@@ -1208,7 +1282,12 @@
        zapis w pamięci telefonu, strumień od nowa pod nowym adresem, kolejka jedzie dalej (to ta sama IndexedDB —
        źródło aplikacji się nie zmienia, zmienia się tylko adres huba). */
     let bledySieci = 0, ostatnieSprawdzenie = 0, sprawdzanie = null, synchronizujPonownie = false;
-    function bladSieci() { bledySieci++; if (bledySieci >= 2) h.sprawdzAdresHuba().catch(() => {}); }
+    function bladSieci() {
+      bledySieci++;
+      // Od kiedy serwer nie odpowiada (pasek: „Serwer nie odpowiada od 14:32 — zadzwoń na UR”); kasuje je pierwsza dobra odpowiedź.
+      if (!h.polaczenie.bladOd) h.polaczenie.bladOd = Date.now();
+      if (bledySieci >= 2) h.sprawdzAdresHuba().catch(() => {});
+    }
     /* Odpowiedź, która nie przyszła od huba: brak JSON-a przy 404/5xx (Cloudflare 530/1033 po zgaszonym tunelu,
        502 bramy, strona 404 GitHub Pages przy pustym adresie). Hub zawsze odpowiada JSON-em {"blad": …}. */
     const toNieHub = (status, dane) => status === 530 || (!dane && (status === 404 || status >= 500));
@@ -1253,12 +1332,17 @@
       let body = cialo;
       if (cialo !== undefined && !(cialo instanceof Blob)) { nag['Content-Type'] = 'application/json'; body = JSON.stringify(cialo); }
       const t0 = Date.now();
-      let r;
-      try { r = await fetch(hub + sciezka, { method: metoda, headers: nag, body, cache: 'no-store' }); }
-      catch (e) { bladSieci(); throw e; }
-      let dane = null;
-      try { dane = await r.json(); } catch (e) { dane = null; }
-      if (toNieHub(r.status, dane)) bladSieci(); else bledySieci = 0;
+      let r, dane = null;
+      // Limit czasu (etap 3): AbortController przerywa też czytanie treści odpowiedzi, więc zegar zdejmujemy dopiero po r.json().
+      const limit = limitZapytania(metoda, sciezka, extra);
+      const stop = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const zegar = stop ? setTimeout(() => stop.abort(), limit) : null;
+      try {
+        try { r = await fetch(hub + sciezka, { method: metoda, headers: nag, body, cache: 'no-store', signal: stop ? stop.signal : undefined }); }
+        catch (e) { bladSieci(); throw (stop && stop.signal.aborted ? bladLimitu(limit) : e); }
+        try { dane = await r.json(); } catch (e) { dane = null; if (stop && stop.signal.aborted) { bladSieci(); throw bladLimitu(limit); } }
+      } finally { clearTimeout(zegar); }
+      if (toNieHub(r.status, dane)) bladSieci(); else { bledySieci = 0; h.polaczenie.bladOd = null; }
       if (dane && dane.czas_serwera) ustawZegar(Date.parse(dane.czas_serwera) - (t0 + Date.now()) / 2);
       // 401 dotyczy sesji, z którą zapytanie wyszło. Spóźniona odpowiedź na zapytanie osoby,
       // która już wyszła, nie może wylogować następnej osoby na tym samym telefonie.
@@ -1361,8 +1445,11 @@
       const tokenZapytania = token;
       if (tokenZapytania) nag.Authorization = 'Bearer ' + tokenZapytania;
       let r;
-      try { r = await fetch(hub + sciezka, { method: 'GET', headers: nag, cache: 'no-store' }); }
-      catch (e) { bladSieci(); throw e; }
+      const stop = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const zegar = stop ? setTimeout(() => stop.abort(), LIMIT_PLIKU_MS) : null;
+      try { r = await fetch(hub + sciezka, { method: 'GET', headers: nag, cache: 'no-store', signal: stop ? stop.signal : undefined }); }
+      catch (e) { clearTimeout(zegar); bladSieci(); throw (stop && stop.signal.aborted ? bladLimitu(LIMIT_PLIKU_MS) : e); }
+      clearTimeout(zegar);
       if (!r.ok) {
         let dane = null;
         try { dane = await r.json(); } catch (e) { dane = null; }
@@ -1476,12 +1563,39 @@
     }
 
     // --- kolejka
+    /* Zapis do pamięci telefonu, który NIE może zawieść po cichu (etap 3). Przeglądarka potrafi zamknąć połączenie z IndexedDB
+       (uśpiona karta, brak miejsca, czyszczenie pamięci): wtedy raz otwieramy bazę od nowa i powtarzamy; jeśli dalej nie
+       wychodzi — błąd z napisem „NIE ZAPISANO” (e.nieZapisano), który aplikacja pokazuje, zamiast kręcić kołem bez końca. */
+    async function zapisBezpiecznie(praca) {
+      try { return await praca(); } catch (e) {
+        if (bazaZamknieta(e)) {
+          try { db = await otworzBaze('hala-' + nazwaPamieci); return await praca(); } catch (e2) { e = e2; }
+        }
+        throw bladZapisu(e);
+      }
+    }
+
+    /* Zdjęcia osoby w telefonie: czekają na wysłanie (pliki) i odrzucone przez serwer (plikiOdrzucone, z powodem). Liczymy
+       tylko zdjęcia zalogowanej osoby (jak zapisy — telefon bywa wspólny), bez zdjęć sprzed pola `autor`. */
+    let plikiLiczniki = { czeka: 0, odrzucone: 0 }, plikiBrudne = true, plikiDla = null;     // brudne: pliki się zmieniły od ostatniego liczenia
+    async function policzPliki() {
+      const ja = h.pracownik && h.pracownik.id;
+      if (!plikiBrudne && plikiDla === ja) return;    // sama kolejka zdarzeń nie zmienia zdjęć — bez drugiej transakcji na każdy zapis
+      plikiBrudne = false; plikiDla = ja;
+      try {
+        const wszystkie = await dzialanie(db, 'pliki', 'readonly', s => s.getAll());
+        const moje = wszystkie.filter(p => !p.autor || !ja || p.autor === ja);
+        plikiLiczniki = { czeka: moje.filter(p => !p.wyslany && !p.odrzucony).length, odrzucone: moje.filter(p => !p.wyslany && p.odrzucony).length };
+      } catch (e) { plikiBrudne = true; /* baza chwilowo niedostępna — zostaje poprzednia liczba, policzymy przy następnym razie */ }
+    }
+
     async function odswiezKolejke() {
       kolejkaCache = await dzialanie(db, 'kolejka', 'readonly', s => s.getAll());
       przeliczWidok();
       const odrz = (await mojeOdrzucone()).length;
+      await policzPliki();
       // moje = zapisy zalogowanej osoby — tylko te wysyłamy; cudze czekają na jej powrót (telefon bywa wspólny).
-      emituj('kolejka', { oczekuje: kolejkaCache.length, moje: mojeWKolejce(), odrzucone: odrz });
+      emituj('kolejka', { oczekuje: kolejkaCache.length, moje: mojeWKolejce(), odrzucone: odrz, pliki: plikiLiczniki.czeka, plikiOdrzucone: plikiLiczniki.odrzucone });
     }
 
     h.nowyId = uuid;
@@ -1502,7 +1616,7 @@
       const zd = { id: uuid(), typ, obiekt, czas: iso((opcjeZapisu && opcjeZapisu.czas) || h.teraz()), dane: dane || {} };
       // D78: telefon zna przesunięcie swojego zegara — hub po długiej przerwie przyjmie ten czas zamiast swojego.
       if (zegarZnany) zd.czas_pewny = true;
-      await dzialanie(db, 'kolejka', 'readwrite', s => s.add({ zd, autor: h.pracownik.id, proby: 0, dodano: iso(Date.now()) }));
+      await zapisBezpiecznie(() => dzialanie(db, 'kolejka', 'readwrite', s => s.add({ zd, autor: h.pracownik.id, proby: 0, dodano: iso(Date.now()) })));
       await odswiezKolejke();
       const spec = h.kontrakt && h.kontrakt.zdarzenia[typ];
       if (spec) emituj('zmiana', { typ: spec.obiekt, id: obiekt, obiekt: h.obiekt(spec.obiekt, obiekt) });
@@ -1517,9 +1631,52 @@
       let blob = plik;
       if (plik.type && plik.type.startsWith('image/') && op.maks) blob = await zmniejszZdjecie(plik, op.maks, op.jakosc);
       const id = uuid();
-      await dzialanie(db, 'pliki', 'readwrite', s => s.put({ id, blob, mime: blob.type || plik.type, wyslany: false, autor: h.pracownik && h.pracownik.id }));
+      await zapisBezpiecznie(() => dzialanie(db, 'pliki', 'readwrite', s => s.put({ id, blob, mime: blob.type || plik.type, wyslany: false, autor: h.pracownik && h.pracownik.id })));
+      plikiBrudne = true;
+      await odswiezKolejke();                       // „2 zdjęcia czekają” widać od razu, nie dopiero po wysyłce
       h.synchronizuj();
       return id;
+    };
+
+    /* Zdjęcie usunięte przyciskiem ✕ w formularzu NAPRAWDĘ znika z telefonu (wcześniej znikało tylko z listy w formularzu,
+       a plik i tak jechał do huba). Tylko plik, który jeszcze nie wyszedł i którego nie wskazuje żaden zapis w kolejce
+       (wtedy zapis trafiłby do huba z odwołaniem do nieistniejącego zdjęcia). → true, gdy usunięto. */
+    h.usunPlik = async id => {
+      if (!id || kolejkaCache.some(w => JSON.stringify(w.zd.dane || {}).includes(id))) return false;
+      const p = await dzialanie(db, 'pliki', 'readonly', s => s.get(id));
+      if (!p || p.wyslany) return false;
+      await dzialanie(db, 'pliki', 'readwrite', s => s.delete(id));
+      plikiBrudne = true;
+      const u = adresyLokalne.get(id);
+      if (u) { adresyLokalne.delete(id); try { URL.revokeObjectURL(u); } catch (e) { /* stara przeglądarka */ } }
+      await odswiezKolejke();
+      return true;
+    };
+    /* Zdjęcia, których serwer nie przyjął (zły typ, za duże) — z powodem; „Spróbuj ponownie” (h.ponowPlik) zdejmuje znacznik
+       odrzucenia i wysyła od nowa; „Usuń” — h.usunOdrzuconyPlik. */
+    h.odrzuconePliki = async () => {
+      const ja = h.pracownik && h.pracownik.id;
+      return (await dzialanie(db, 'pliki', 'readonly', s => s.getAll()))
+        .filter(p => !p.wyslany && p.odrzucony && (!p.autor || !ja || p.autor === ja))
+        .map(p => ({ id: p.id, powod: p.odrzucony, mime: p.mime || '', rozmiar: (p.blob && p.blob.size) || 0 }));
+    };
+    h.ponowPlik = async id => {
+      const p = await dzialanie(db, 'pliki', 'readonly', s => s.get(id));
+      if (!p || p.wyslany) return false;
+      delete p.odrzucony;
+      await dzialanie(db, 'pliki', 'readwrite', s => s.put(p));
+      plikiBrudne = true;
+      await odswiezKolejke();
+      h.synchronizuj();
+      return true;
+    };
+    h.usunOdrzuconyPlik = async id => {
+      const p = await dzialanie(db, 'pliki', 'readonly', s => s.get(id));
+      if (!p || p.wyslany || !p.odrzucony) return false;
+      await dzialanie(db, 'pliki', 'readwrite', s => s.delete(id));
+      plikiBrudne = true;
+      await odswiezKolejke();
+      return true;
     };
 
     /* Adresy blob: podglądów zdjęć z telefonu. Najwyżej MAKS_ADRESOW naraz — najstarszy zwalniamy: telefon lidera i monitor
@@ -1550,17 +1707,35 @@
     }
     h.odrzucone = () => mojeOdrzucone();
     h.usunOdrzucone = async id => { await dzialanie(db, 'odrzucone', 'readwrite', s => s.delete(id)); await odswiezKolejke(); };
+    /* „Spróbuj ponownie” przy odrzuconym zapisie (etap 3): zapis wraca do kolejki z tym samym uuid i czasem zdarzenia, a wpis z
+       listy „Nie wysłane” znika. Hub rozstrzygnie jeszcze raz (np. po zmianie roli, po dojściu zdjęcia albo gdy konflikt ustąpił);
+       jeśli nadal odmówi, trafi na listę z nowym powodem. Tylko zapis tej osoby — cudzych nie przerzucamy na jej konto. */
+    h.ponowOdrzucone = async id => {
+      const w = (await mojeOdrzucone()).find(x => x.id === id);
+      if (!w || !w.zd || !h.pracownik || (w.autor && w.autor !== h.pracownik.id)) return false;
+      await new Promise((ok, zle) => {
+        const t = db.transaction(['kolejka', 'odrzucone'], 'readwrite');
+        t.objectStore('kolejka').add({ zd: w.zd, autor: w.autor || h.pracownik.id, proby: 0, dodano: iso(Date.now()) });
+        t.objectStore('odrzucone').delete(id);
+        t.oncomplete = ok; t.onerror = () => zle(t.error); t.onabort = () => zle(t.error || new Error('przerwane'));
+      }).catch(e => { throw bladZapisu(e); });
+      await odswiezKolejke();
+      h.synchronizuj();
+      return true;
+    };
     const mojeWKolejce = () => (h.pracownik ? kolejkaCache.filter(w => w.autor === h.pracownik.id).length : 0);
-    h.stanKolejki = () => ({ oczekuje: kolejkaCache.length, moje: mojeWKolejce(), pozycje: kolejkaCache.map(w => w.zd) });
+    h.stanKolejki = () => ({ oczekuje: kolejkaCache.length, moje: mojeWKolejce(), pozycje: kolejkaCache.map(w => w.zd),
+                             pliki: plikiLiczniki.czeka, plikiOdrzucone: plikiLiczniki.odrzucone });
 
     // --- synchronizacja: najpierw pliki, potem zdarzenia, potem to, co nowego w hubie
     /* Pliki (zdjęcia) osoby `autor` — tym tokenem, który jest teraz. Zwraca błąd plików (czekają) albo null.
        tylkoAutora: przy przekazaniu (D78) tylko pliki tej osoby (bez starych plików bez autora). */
     async function wyslijPliki(autor, innaOsoba, tylkoAutora) {
       const pliki = await dzialanie(db, 'pliki', 'readonly', s => s.getAll());
-      let bladPlikow = null;
+      let bladPlikow = null, ruszono = false;
       for (const p of pliki.filter(p => !p.wyslany && !p.odrzucony && (tylkoAutora ? p.autor === autor : (!p.autor || p.autor === autor)))) {
         if (innaOsoba()) break;
+        ruszono = true;
         try {
           await api('PUT', `/api/v1/pliki/${encodeURIComponent(p.id)}`, p.blob, { naglowki: { 'Content-Type': p.mime || 'image/jpeg' } });
           p.wyslany = true; p.wyslanyKiedy = Date.now();
@@ -1574,8 +1749,10 @@
           p.odrzucony = e.message;
           emituj('odrzucone', { plik: p.id, powod: e.message });
         }
-        await dzialanie(db, 'pliki', 'readwrite', s => s.put(p));
+        // Zapis wyniku tylko dla pliku, który nadal jest w telefonie: ✕ (h.usunPlik) w trakcie wysyłki nie może go wskrzesić.
+        if (await dzialanie(db, 'pliki', 'readonly', s => s.get(p.id))) await dzialanie(db, 'pliki', 'readwrite', s => s.put(p));
       }
+      if (ruszono) { plikiBrudne = true; await odswiezKolejke(); }        // „N zdjęć czeka” maleje w miarę wysyłki
       return bladPlikow;
     }
 
@@ -1777,7 +1954,7 @@
           // Strumienia nie czytamy jako JSON — o „to nie hub” mówią same kody bram Cloudflare i strona 404/405 Pages.
           if ([404, 405, 502, 504, 521, 522, 523, 524, 530].includes(r.status)) bladSieci();
           if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
-          h.polaczenie.strumien = true; emituj('polaczenie', Object.assign({}, h.polaczenie));
+          h.polaczenie.strumien = true; h.polaczenie.bladOd = null; emituj('polaczenie', Object.assign({}, h.polaczenie));
           przerwa = 2000;
           pilnuj();
           /* Szybki tunel Cloudflare i niektóre pośredniki oddają nagłówki, a treść trzymają (buforują SSE):
@@ -2344,13 +2521,53 @@
     return h;
   }
 
+  /* Globalny handler błędów (etap 3). Bez niego wyjątek w starcie aplikacji (IndexedDB zablokowana, błąd w ekranie) kończył się
+     białym ekranem bez słowa, a „NIE ZAPISANO” z hala.zapisz ginęło jako nieobsłużone odrzucenie obietnicy. Czerwony pasek
+     u góry strony mówi po polsku, co się stało (dotknięcie go zamyka); sieciowe błędy fetch i przerwane strumienie pomija —
+     to codzienność hali, mówi o nich pasek połączenia. Instalowany raz na stronę, z `utworz`. Czysta część: opisBledu. */
+  const BLAD_POMIJANY = /failed to fetch|networkerror|load failed|network request failed|resizeobserver|script error|abort|nie odpowiedział/i;
+  function opisBledu(e) {
+    if (e && e.nieZapisano) return { tekst: e.message, alarm: true };
+    const nazwa = e && e.name ? String(e.name) : '', tekst = e && e.message ? String(e.message) : String(e || '');
+    if (!tekst || nazwa === 'AbortError' || (e && e.limitCzasu) || BLAD_POMIJANY.test(tekst)) return null;
+    if (nazwa === 'QuotaExceededError') return { tekst: NIE_ZAPISANO, alarm: true };
+    return { tekst: `Coś poszło nie tak w aplikacji: ${tekst.slice(0, 160)}. Jeśli ekran nie reaguje, zamknij aplikację i otwórz ją ponownie.`, alarm: false };
+  }
+  function pilnujBledow(opcje) {
+    if (typeof window === 'undefined' || typeof document === 'undefined' || !window.addEventListener || !document.createElement) return null;
+    if (window.__halaPilnujBledow) return window.__halaPilnujBledow;
+    const o = Object.assign({ czasMs: 12000 }, opcje || {});
+    let el = null, zegar = null, ostatni = '', ostatniCzas = 0;
+    function pokaz(opis) {
+      const teraz = Date.now();
+      if (opis.tekst === ostatni && teraz - ostatniCzas < 10000) return;      // ten sam komunikat nie migocze
+      ostatni = opis.tekst; ostatniCzas = teraz;
+      if (!el) {
+        el = document.createElement('div');
+        el.setAttribute('role', 'alert');
+        el.addEventListener('click', () => { el.hidden = true; });
+        (document.body || document.documentElement).appendChild(el);
+      }
+      el.className = 'hala-blad-globalny' + (opis.alarm ? ' alarm' : '');
+      el.textContent = opis.tekst;
+      el.hidden = false;
+      clearTimeout(zegar);
+      zegar = setTimeout(() => { el.hidden = true; }, opis.alarm ? 2 * o.czasMs : o.czasMs);
+    }
+    const obsluz = e => { const opis = opisBledu(e); if (opis) pokaz(opis); return opis; };
+    window.addEventListener('error', ev => { if (ev && (ev.error || ev.message)) obsluz(ev.error || { message: ev.message }); });
+    window.addEventListener('unhandledrejection', ev => { if (ev) obsluz(ev.reason); });
+    window.__halaPilnujBledow = { obsluz, pokaz };
+    return window.__halaPilnujBledow;
+  }
+
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
-    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, naUrlopie, wskaznikiOkresu,
+    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
-    mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec,
+    mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec, limitZapytania, pilnujBledow, opisBledu, NIE_ZAPISANO,
   };
   global.Hala = Hala;
   if (typeof module !== 'undefined' && module.exports) module.exports = Hala;
