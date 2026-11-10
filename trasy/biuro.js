@@ -16,17 +16,22 @@ EKRANY.pulpit = {
       ile: s.ile + t.ile, ok: s.ok + t.ile_ok, nie: s.nie + t.ile_nie,
     }), { ile: 0, ok: 0, nie: 0 });
 
+    // Nowa wizyta na pulpicie zaczyna od pustej listy „Do zrobienia” — stare
+    // pozycje z poprzedniego wejścia nie mogą mignąć przed odpowiedziami serwera.
+    pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null };
+
     pole.innerHTML = `
-      <div id="p-alarmy"></div>
       <div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="p-data" value="${data}"></label>
         <button id="p-wczoraj">← Poprzedni</button>
         <button id="p-jutro">Następny →</button>
-        <button class="glowny" id="p-planuj">🗺️ Planuj trasy</button>
+        <button class="glowny" id="p-planuj">${ikonka('mapa')}Planuj trasy</button>
       </div>
 
+      <div id="p-do-zrobienia"></div>
+
       <div class="trzy kafle-pulpitu">
-        ${kafelek('Punkty na dziś', razem.ile, '')}
+        ${kafelek(data === dzisiaj() ? 'Punkty na dziś' : 'Punkty tego dnia', razem.ile, '')}
         ${kafelek('Dostarczone', razem.ok, 'var(--zielony)')}
         ${kafelek('Nieudane', razem.nie, razem.nie ? 'var(--czerwony)' : '')}
       </div>
@@ -36,7 +41,7 @@ EKRANY.pulpit = {
       <div id="p-zywo"></div>
 
       ${p.nieudane.length ? `
-        <h2 style="margin-top:20px">Wymaga decyzji</h2>
+        <h2 style="margin-top:20px">Nieudane dostawy — do decyzji</h2>
         <div class="karta">
           ${p.nieudane.map(n => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
               <b>${escHtml(n.klient_nazwa)}</b>
@@ -44,10 +49,6 @@ EKRANY.pulpit = {
               <div class="male slaby">${samaGodzina(n.zamkniete_o)} ${escHtml(n.notatka || '')}</div>
             </div>`).join('')}
         </div>` : ''}
-
-      <div id="p-odrzucone"></div>
-      <div id="p-zalegle"></div>
-      <div id="p-braki"></div>
 
       <h2 style="margin-top:20px">Gdzie są auta
         <span class="male slaby" style="font-weight:400">
@@ -66,56 +67,27 @@ EKRANY.pulpit = {
     // Alarmy (kopie, adres na Pages, tunel, dysk) — tylko administrator
     // może coś z nimi zrobić, więc tylko on je widzi.
     if (jestAdministratorem()) API.get('/api/alarmy').then(w => {
-      const pole_al = pole.querySelector('#p-alarmy');
-      if (!pole_al) return;
-      pole_al.innerHTML = wstegiAlarmow(w.alarmy, true);
-      // Prosto do sekcji, która alarm naprawia — leży pod zwiniętym „Zaawansowane”.
-      pole_al.querySelectorAll('[data-do-ustawien]').forEach(e =>
-        e.onclick = () => pokazEkran('ustawienia', { sekcja: SEKCJA_ALARMU[e.dataset.doUstawien] }));
+      pulpitSprawy.alarmy = w.alarmy || [];
+      rysujDoZrobienia();
     }).catch(() => {});
 
     // Zaległości są pierwszą rzeczą, o którą pyta klient przez telefon
     // („mieliście przywieźć wczoraj"), więc widać je od razu na pulpicie.
     API.get('/api/zalegle').then(w => {
-      const pole_zal = pole.querySelector('#p-zalegle');
-      if (!pole_zal || !w.zalegle.length) return;
-      const nazwy = w.zalegle.slice(0, 3).map(z => z.klient_nazwa).join(', ');
-      pole_zal.innerHTML = `<div class="wstega blad" style="margin-top:18px;cursor:pointer"
-          id="p-do-zaleglych">
-          <b>Zaległe dostawy: ${w.zalegle.length}</b> — ${escHtml(nazwy)}${
-            w.zalegle.length > 3 ? '…' : ''}
-          <span class="slaby">(dotknij, żeby wyznaczyć nadrobienie)</span>
-        </div>`;
-      pole_zal.querySelector('#p-do-zaleglych').onclick = () => pokazEkran('zalegle');
+      pulpitSprawy.zalegle = w.zalegle.length ? w.zalegle : null;
+      rysujDoZrobienia();
     }).catch(() => {});
 
     // Dowody, których serwer nie przyjął — podpis odbiorcy czeka na decyzję biura.
     API.get('/api/odrzucone').then(w => {
-      const pole_odrz = pole.querySelector('#p-odrzucone');
-      const ile = (w.odrzucone || []).length;
-      if (!pole_odrz || !ile) return;
-      pole_odrz.innerHTML = `<div class="wstega blad" style="margin-top:18px;cursor:pointer"
-          id="p-do-odrzuconych">
-          <b>Odrzucone zapisy z telefonów: ${ile}</b>
-          <span class="slaby">(dotknij, żeby przyjąć albo pobrać)</span>
-        </div>`;
-      pole_odrz.querySelector('#p-do-odrzuconych').onclick = () => pokazEkran('odrzucone');
+      pulpitSprawy.odrzucone = (w.odrzucone || []).length;
+      rysujDoZrobienia();
     }).catch(() => {});
 
     // krótka zajawka listy braków — pełna jest przy raportach
     API.get('/api/braki').then(w => {
-      const pole_brakow = pole.querySelector('#p-braki');
-      if (!pole_brakow || !w.braki.length) return;
-      const pilne = w.braki.filter(b => b.rodzaj === 'brak_raportu' || b.rodzaj === 'licznik');
-      pole_brakow.innerHTML = `<div class="wstega ${pilne.length ? 'uwaga' : 'info'}"
-          style="margin-top:18px;cursor:pointer" id="p-do-brakow">
-          <b>Do sprawdzenia: ${w.braki.length}</b> —
-          ${escHtml(w.braki.slice(0, 2).map(b => b.opis).join('; '))}${
-            w.braki.length > 2 ? '…' : ''} <span class="slaby">(dotknij, żeby zobaczyć wszystko)</span>
-        </div>`;
-      // ten sam zakres, żeby liczba z pulpitu zgadzała się z listą po kliknięciu
-      pole_brakow.querySelector('#p-do-brakow').onclick = () =>
-        pokazEkran('raporty', { od: w.od, do: w.do });
+      pulpitSprawy.braki = w.braki.length ? w : null;
+      rysujDoZrobienia();
     }).catch(() => {});
 
     const mapa = Mapa.zaloz(pole.querySelector('#p-mapa'));
@@ -143,6 +115,73 @@ EKRANY.pulpit = {
     Mapa.dopasujWidok(mapa, punkty);
   },
 };
+
+/* Pulpit: jedna sekcja „Do zrobienia" zamiast pięciu osobnych wstęg uwagi
+   (alarmy, sprawy do decyzji, zaległe dostawy, odrzucone zapisy, braki).
+   Te same sprawy, te same warunki pokazywania i te same przejścia — zmienił
+   się tylko układ: lista pozycji z licznikami. Każda odpowiedź serwera
+   uzupełnia swoją pozycję i przerysowuje całą listę, więc kolejność jest
+   stała bez względu na to, która odpowiedź przyjdzie pierwsza.          */
+let pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null };
+
+function rysujDoZrobienia() {
+  const el = document.getElementById('p-do-zrobienia');
+  if (!el) return;
+  const s = pulpitSprawy;
+  const poz = [];
+  (s.alarmy || []).forEach(a => poz.push({
+    ton: a.poziom === 'blad' ? 'blad' : 'uwaga', ikona: '⚠',
+    tytul: a.tytul, opis: a.tresc, doUstawien: a.kod || '',
+  }));
+  if (s.pilne) poz.push({
+    ton: 'uwaga', licznik: s.pilne, tytul: 'Sprawy do decyzji na trasach',
+    opis: 'Szczegóły w sekcji „Na żywo” niżej.', idzie: 'zywo',
+  });
+  if (s.zalegle) poz.push({
+    ton: 'blad', licznik: s.zalegle.length, tytul: 'Zaległe dostawy',
+    opis: s.zalegle.slice(0, 3).map(z => z.klient_nazwa).join(', ')
+      + (s.zalegle.length > 3 ? '…' : '') + ' — wyznacz nadrobienie',
+    idzie: 'zalegle',
+  });
+  if (s.odrzucone) poz.push({
+    ton: 'blad', licznik: s.odrzucone, tytul: 'Odrzucone zapisy z telefonów',
+    opis: 'Przyjmij albo pobierz', idzie: 'odrzucone',
+  });
+  if (s.braki) poz.push({
+    ton: s.braki.braki.some(b => b.rodzaj === 'brak_raportu' || b.rodzaj === 'licznik') ? 'uwaga' : 'info',
+    licznik: s.braki.braki.length, tytul: 'Do sprawdzenia',
+    opis: s.braki.braki.slice(0, 2).map(b => b.opis).join('; ')
+      + (s.braki.braki.length > 2 ? '…' : '') + ' — zobacz wszystko',
+    idzie: 'braki',
+  });
+  if (!poz.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `<h2 style="margin-top:20px">Do zrobienia</h2>
+    <div class="karta do-zrobienia">${poz.map((x, i) => `
+      <button class="poz ${x.ton}" data-poz="${i}"${
+        x.doUstawien !== undefined ? ` data-do-ustawien="${escHtml(x.doUstawien)}"` : ''}>
+        <span class="znak">${x.licznik != null ? x.licznik : x.ikona}</span>
+        <span class="tekst"><b>${escHtml(x.tytul)}</b>
+          <span class="male slaby">${escHtml(x.opis || '')}</span></span>
+        <span class="strzalka" aria-hidden="true">›</span>
+      </button>`).join('')}</div>`;
+
+  el.querySelectorAll('[data-poz]').forEach(b => {
+    const x = poz[Number(b.dataset.poz)];
+    b.onclick = () => {
+      if (x.doUstawien !== undefined) {
+        // Prosto do sekcji, która alarm naprawia — leży pod zwiniętym „Zaawansowane”.
+        pokazEkran('ustawienia', { sekcja: SEKCJA_ALARMU[b.dataset.doUstawien] });
+      } else if (x.idzie === 'zywo') {
+        const zywo = document.getElementById('p-zywo');
+        if (zywo) zywo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (x.idzie === 'zalegle') pokazEkran('zalegle');
+      else if (x.idzie === 'odrzucone') pokazEkran('odrzucone');
+      // ten sam zakres, żeby liczba z pulpitu zgadzała się z listą po kliknięciu
+      else if (x.idzie === 'braki') pokazEkran('raporty', { od: s.braki.od, do: s.braki.do });
+    };
+  });
+}
 
 function kafelek(napis, wartosc, kolor) {
   return `<div class="karta" style="text-align:center">
@@ -197,15 +236,17 @@ EKRANY.trasy = {
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="t-data" value="${data}"></label>
-        <button id="t-wczoraj">←</button><button id="t-jutro">→</button>
+        <button id="t-wczoraj">← Poprzedni</button><button id="t-jutro">Następny →</button>
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
-        <button id="t-import">📄 Wczytaj z Excela</button>
+        <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
       </div>
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
           Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Konta' : 'Ustawieniach → Konta kierowców'}.</div>`}
       ${trasy.length ? trasy.map(t => kartaTrasy(t)).join('')
-        : `<div class="karta"><div class="pusto"><span class="duza-ikona">🗺️</span>
-             Na ${polskaData(data)} nie ma jeszcze trasy.</div></div>`}`;
+        : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
+             Na ${polskaData(data)} nie ma jeszcze trasy.
+             <div class="male" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
+               Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (menu → Zapisane trasy).</div></div></div>`}`;
 
     pole.querySelector('#t-data').onchange = e => pokazEkran('trasy', { data: e.target.value });
     pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(data, -1) });
@@ -218,10 +259,10 @@ EKRANY.trasy = {
 };
 
 /* Przyjmowanie dostaw od kierowców (właściciel 2026-11-03: „niech działa jak w Panelu kierownika”): dostawa zamknięta na
-   telefonie czeka na „Przyjmij” albo „Zwróć” (powód — kierowca poprawia i zamyka jeszcze raz). Biuro może też zamknąć
+   telefonie czeka na „Zatwierdź” albo „Zwróć” (powód — kierowca poprawia i zamyka jeszcze raz). Biuro może też zamknąć
    punkt za kierowcę (np. gdy padł telefon) — takie zamknięcie jest przyjęte od razu. */
 async function przyjmijDostawe(id, poZmianie) {
-  const w = await sprobuj(() => API.post(`/api/przystanki/${id}/przyjmij-dostawe`), 'Przyjęto');
+  const w = await sprobuj(() => API.post(`/api/przystanki/${id}/przyjmij-dostawe`), 'Zatwierdzono');
   if (w && poZmianie) poZmianie();
 }
 
@@ -287,7 +328,7 @@ async function rysujDoPrzyjecia(el, poZmianie) {
   let lista = [];
   try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return; }
   if (!lista.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<h2 style="margin-top:20px">Do przyjęcia
+  el.innerHTML = `<h2 style="margin-top:20px">Do zatwierdzenia
       <span class="plakietka p-oczekuje" style="margin-left:6px">${lista.length}</span></h2>
     <div class="karta">${lista.map(x => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
         <b>${escHtml(x.klient_nazwa)}</b>
@@ -297,7 +338,7 @@ async function rysujDoPrzyjecia(el, poZmianie) {
           x.odebral ? ' · odebrał: ' + escHtml(x.odebral) : ''}${x.notatka ? ' · ' + escHtml(x.notatka) : ''}${
           x.ile_zalacznikow ? ' · 📎 ' + x.ile_zalacznikow : ''}</div>
         <div class="przyciski" style="margin-top:6px">
-          <button class="maly glowny" data-przyjmij="${x.id}">✓ Przyjmij</button>
+          <button class="maly glowny" data-przyjmij="${x.id}">✓ Zatwierdź</button>
           <button class="maly" data-zwroc="${x.id}">↩ Zwróć kierowcy</button>
           <button class="maly" data-do-trasy="${x.trasa}">Trasa</button></div>
       </div>`).join('')}</div>`;
@@ -312,17 +353,16 @@ async function rysujDoPrzyjecia(el, poZmianie) {
 function kartaTrasy(t) {
   return `<button class="przystanek s-oczekuje" data-trasa="${t.id}" style="border-left-color:${
     t.status === 'zakonczona' ? 'var(--zielony)' : t.status === 'w_toku' ? 'var(--zolty)' : 'var(--akcent)'}">
-      <span class="numer">${t.ile}</span>
+      <span class="numer" title="${t.ile} ${odmiana(t.ile, 'punkt', 'punkty', 'punktów')} na trasie">${t.ile}</span>
       <span class="srodek">
         <span class="nazwa">${escHtml(t.nazwa || 'Trasa ' + polskaData(t.data))}</span>
         <span class="adres">${polskaData(t.data)} · ${escHtml(t.kierowca_imie || 'bez kierowcy')}
           ${t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}</span>
         <span class="dopisek">${t.ile_ok} ${odmiana(t.ile_ok, 'dostarczona', 'dostarczone', 'dostarczonych')}${
           t.ile_nie ? ', ' + t.ile_nie + ' ' + odmiana(t.ile_nie, 'nieudana', 'nieudane', 'nieudanych') : ''}
-          z ${t.ile}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">⏳ ${t.ile_do_przyjecia} do przyjęcia</b>` : ''}</span>
+          z ${t.ile}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">⏳ ${t.ile_do_przyjecia + ' do zatwierdzenia'}</b>` : ''}</span>
       </span>
-      <span class="prawo"><span class="plakietka p-${t.status}">${escHtml(
-        t.status === 'odwolana' ? 'odwołane' : t.status.replace('_', ' '))}</span></span>
+      <span class="prawo"><span class="plakietka p-${t.status}">${escHtml(etykietaStatusuTrasy(t.status))}</span></span>
     </button>`;
 }
 
@@ -397,7 +437,7 @@ function oknoNowejTrasy(data, kierowcy) {
           ${busy.map(b => opcjaBusa(b, false)).join('')}
         </select>
       </label>
-      <label>Nazwa <span class="slaby">(np. „Wschód", „Poranna")</span>
+      <label>Nazwa <span class="slaby">(np. „Wschód”, „Poranna”)</span>
         <input id="nt-nazwa" placeholder="nieobowiązkowa">
       </label>
       <label>Układ trasy
@@ -470,11 +510,11 @@ EKRANY.trasa = {
         </div>
         <div class="przyciski">
           <button class="glowny" id="tr-zapisz">Zapisz zmiany</button>
-          <button class="maly" id="tr-mapa-link">🧭 Wyślij do Google Maps</button>
+          <button class="maly" id="tr-mapa-link">${ikonka('mapa')}Wyślij do Google Maps</button>
         </div>
         <details class="zaawansowane wiecej-trasy" id="tr-wiecej">
           <summary><span class="znak-zwiniecia">▸</span> Więcej
-            <span class="slaby">nazwa, godzina, baza, układ, uwagi${t.uwagi ? ' · 📌 są uwagi' : ''}</span></summary>
+            <span class="slaby">nazwa, godzina, baza, układ, uwagi, kopiowanie, odwołanie${t.uwagi ? ' · 📌 są uwagi' : ''}</span></summary>
           <div class="dwie">
             <label>Nazwa<input id="tr-nazwa" value="${escHtml(t.nazwa || '')}"></label>
             <label>Godzina wyjazdu
@@ -497,7 +537,7 @@ EKRANY.trasa = {
             <textarea id="tr-uwagi">${escHtml(t.uwagi || '')}</textarea>
           </label>
           <div class="przyciski">
-            <button class="maly" id="tr-szablon">Zapisz jako trasę stałą</button>
+            <button class="maly" id="tr-szablon">Dodaj do zapisanych tras</button>
             <button class="maly" id="tr-kopiuj">Kopiuj na inny dzień</button>
             ${t.status === 'odwolana' ? '' : '<button class="maly" id="tr-odwolaj">Odwołaj trasę</button>'}
             ${jestAdministratorem() ? '<button class="maly" id="tr-usun">Usuń trasę</button>' : ''}
@@ -532,7 +572,7 @@ EKRANY.trasa = {
             <b>${escHtml(t.szacunek.wyjazd)}</b></div>
           <div><span class="etykieta">${t.szacunek.powrot_do_bazy
             ? 'Powrót ok.' : 'Koniec ok.'}</span><b>${escHtml(t.szacunek.powrot || '—')}</b></div>
-          <div><span class="etykieta">Trasa</span><b>${t.szacunek.km} km</b></div>
+          <div><span class="etykieta">Trasa</span><b>${liczbaPl(t.szacunek.km)} km</b></div>
           <div><span class="etykieta">Punktów</span><b>${t.szacunek.punktow}</b></div>
         </div>
         <p class="male slaby" style="margin-top:10px">
@@ -639,16 +679,16 @@ EKRANY.trasa = {
       pole.querySelector('#tr-kopiuj').onclick = () => oknoKopiowania(t);
       pole.querySelector('#tr-mapa-link').onclick = () => oknoLinkuDoMap(t.id, false);
       pole.querySelector('#tr-szablon').onclick = () => okno({
-        tytul: 'Zapisz jako trasę stałą',
+        tytul: 'Dodaj do zapisanych tras',
         tresc: `<p class="male slaby">Zapamiętam klientów i ich kolejność. Bez dat,
             bez potwierdzeń — żeby dało się z tego robić kolejne dni.</p>
-          <label>Nazwa szablonu<input id="zs-nazwa"
+          <label>Nazwa zapisanej trasy<input id="zs-nazwa"
             value="${escHtml(t.nazwa || 'Trasa ' + polskaData(t.data))}"></label>`,
         przyciski: [
           { napis: 'Anuluj', klik: z => z() },
           { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
             const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/szablon`,
-              { nazwa: val('zs-nazwa') }), 'Szablon zapisany');
+              { nazwa: val('zs-nazwa') }), 'Trasa dodana do zapisanych');
             if (w) { z(); pokazEkran('szablony'); }
           } },
         ],
@@ -706,7 +746,7 @@ EKRANY.trasa = {
     if (ile < t.przystanki.length) {
       pole.querySelector('#tr-info-mapa').innerHTML =
         `<span style="color:var(--zolty)">Część klientów nie ma jeszcze odnalezionego adresu —
-         popraw adres w kartotece albo kliknij „Znajdź na mapie" przy kliencie.</span>`;
+         popraw adres w kartotece albo kliknij „Znajdź na mapie” przy kliencie.</span>`;
     }
     const przyciskPrzebieg = pole.querySelector('#tr-przebieg');
     przyciskPrzebieg.onclick = async () => {
@@ -725,7 +765,7 @@ EKRANY.trasa = {
         Mapa.rysujTrase(mapaBiura, t.przystanki,
           { bazaStart, bazaKoniec, bazaNazwa: t.baza_nazwa, linia: w.linia });
         info.innerHTML =
-          `Po drogach: <b>${w.km} km</b> · około <b>${w.minuty} min</b> jazdy (bez postojów u klientów).`;
+          `Po drogach: <b>${liczbaPl(w.km)} km</b> · około <b>${w.minuty} min</b> jazdy (bez postojów u klientów).`;
       } catch (e) {
         info.innerHTML = '<span style="color:var(--zolty)">Nie udało się pobrać przebiegu po drogach '
           + `(${escHtml(poLudzku(e))}). Mapa pokazuje odcinki w linii prostej.</span>`;
@@ -742,7 +782,7 @@ function wierszPrzystanku(p, indeks, ile, admin) {
     : p.status === 'nieudane' ? `<span class="plakietka p-nieudane">✕ ${escHtml(p.powod)}</span>`
     : p.status === 'odwolany' ? '<span class="plakietka p-odwolany">Zdjęte z trasy</span>' : '';
   const dopiski = [];
-  if (p.do_przyjecia) dopiski.push('<span style="color:var(--zolty)">⏳ do przyjęcia</span>');
+  if (p.do_przyjecia) dopiski.push('<span style="color:var(--zolty)">⏳ do zatwierdzenia</span>');
   if (p.zwrot_powod && p.status === 'oczekuje') dopiski.push('<span style="color:var(--czerwony)">↩ zwrócone kierowcy</span>');
   // Przy naszym miejscu nie ma zamowienia ani kontroli zaladunku — czerwone
   // ostrzezenie o niezgodnym numerze byloby tu falszywym alarmem.
@@ -753,7 +793,7 @@ function wierszPrzystanku(p, indeks, ile, admin) {
     // Niezgodny numer to najwazniejsza informacja na tym ekranie — znaczy,
     // ze kierowca wzial spod rampy cos innego, niz mowi zamowienie.
     dopiski.push(p.zaladunek_zgodny
-      ? '📄 załadunek OK · numer ' + escHtml(p.numer_kierowcy || '')
+      ? '✓ załadunek OK' + (p.dokument ? '' : ' · numer ' + escHtml(p.numer_kierowcy || ''))
       : p.zaladunek_zwolniony
         ? '<span style="color:var(--zolty)">⚠ numer niezgodny — zwolnione przez biuro</span>'
         : '<span style="color:var(--czerwony)">⛔ WYJAZD WSTRZYMANY: kierowca wpisał '
@@ -778,10 +818,10 @@ function wierszPrzystanku(p, indeks, ile, admin) {
           <button class="maly" data-szczegoly="${p.id}">Szczegóły</button>
           ${admin && p.status === 'oczekuje' ? `
             <span class="uchwyty">
-              <button data-gora="${p.id}" ${indeks === 0 ? 'disabled' : ''}>▲</button>
-              <button data-dol="${p.id}" ${indeks === ile - 1 ? 'disabled' : ''}>▼</button>
+              <button data-gora="${p.id}" ${indeks === 0 ? 'disabled' : ''} title="Wyżej" aria-label="Wyżej">▲</button>
+              <button data-dol="${p.id}" ${indeks === ile - 1 ? 'disabled' : ''} title="Niżej" aria-label="Niżej">▼</button>
             </span>
-            <button class="maly" data-usun-przystanek="${p.id}">✕</button>` : ''}
+            <button class="maly" data-usun-przystanek="${p.id}" title="Zdejmij z trasy" aria-label="Zdejmij z trasy">✕</button>` : ''}
         </span>
       </span>
     </div>`;
@@ -819,13 +859,15 @@ async function przestaw(t, przystanekId, kierunek) {
 
 /* --------------------------------------------- dodawanie klientow do trasy */
 
-/* Wspólna lista wyboru punktów: nasze miejsca na górze, klienci pod spodem.
+/* Wspólna lista wyboru punktów: klienci na górze (to nimi biuro układa dzień), nasze miejsca pod spodem.
 
    Jedno okno, nie dwa przyciski — biuro ma jedno miejsce, w które klika,
    a rozróżnienie widać w środku. Klucz NIESIE TYP („L3" / „K3"), bo klienci
    i lokalizacje mają niezależne numery: klient 3 i magazyn 3 istnieją naraz.
    Kolejność zaznaczania jest kolejnością dopisania punktów — doładunek ma
    trafić w środek dnia, a nie na koniec.                                    */
+/* Punkt już będący na trasie NIE jest zablokowany: ponowny załadunek w naszym miejscu (np. Rostarzewo po punkcie ABS)
+   albo druga dostawa do tego samego klienta to normalny dzień. Serwer nigdy nie odrzucał duplikatów — blokowało je tylko to okno. */
 function listaPunktowDoWyboru({ juz, wybrane, szukaj }) {
   const pasuje = (x) => !szukaj
     || ((x.nazwa || '') + ' ' + (x.miasto || '') + ' ' + (x.ulica || ''))
@@ -833,13 +875,12 @@ function listaPunktowDoWyboru({ juz, wybrane, szukaj }) {
 
   const wiersz = (x, klucz, nasze) => `
     <label class="plaska" style="padding:9px 4px;border-bottom:1px solid var(--ramka)">
-      <input type="checkbox" value="${klucz}" ${wybrane.includes(klucz) ? 'checked' : ''}
-             ${juz.has(klucz) ? 'disabled' : ''}>
+      <input type="checkbox" value="${klucz}" ${wybrane.includes(klucz) ? 'checked' : ''}>
       <span style="flex:1">
         <b>${nasze ? '🏭 ' : ''}${escHtml(x.nazwa)}</b>
         <span class="male slaby" style="display:block">${escHtml(adresJednymCiagiem(x)) || 'brak adresu'}
           ${nasze ? ' · nasze miejsce, nie dostawa' : ''}
-          ${juz.has(klucz) ? ' · już na trasie' : ''}
+          ${juz.has(klucz) ? ' · już na trasie · można dodać ponownie' : ''}
           ${x.lat == null ? ' · <span style="color:var(--zolty)">brak punktu na mapie</span>' : ''}</span>
       </span>
     </label>`;
@@ -847,13 +888,13 @@ function listaPunktowDoWyboru({ juz, wybrane, szukaj }) {
   const nasze = (stan.lokalizacje || []).filter(l => l.aktywna).filter(pasuje);
   const klienci = (stan.klienci || []).filter(k => k.aktywny).filter(pasuje);
   const czesci = [];
-  if (nasze.length) {
-    czesci.push('<div class="male slaby" style="margin:6px 0 2px"><b>NASZE MIEJSCA</b></div>'
-      + nasze.map(l => wiersz(l, 'L' + l.id, true)).join(''));
-  }
   if (klienci.length) {
-    czesci.push('<div class="male slaby" style="margin:12px 0 2px"><b>KLIENCI</b></div>'
+    czesci.push('<div class="male slaby" style="margin:6px 0 2px"><b>KLIENCI</b></div>'
       + klienci.map(k => wiersz(k, 'K' + k.id, false)).join(''));
+  }
+  if (nasze.length) {
+    czesci.push('<div class="male slaby" id="dk-nasze" style="margin:12px 0 2px"><b>NASZE MIEJSCA</b></div>'
+      + nasze.map(l => wiersz(l, 'L' + l.id, true)).join(''));
   }
   return czesci.join('') || '<div class="pusto">Nic nie pasuje.</div>';
 }
@@ -878,6 +919,7 @@ async function oknoDodawaniaKlientow(t) {
     tytul: 'Dodaj punkty do trasy',
     szerokie: true,
     tresc: `<input id="dk-szukaj" placeholder="Szukaj po nazwie, mieście, ulicy…" autocomplete="off">
+            <button type="button" class="tekstowy" id="dk-do-naszych" style="display:none">↓ Nasze miejsca</button>
             <div id="dk-lista" style="margin-top:12px">${
               listaPunktowDoWyboru({ juz, wybrane, szukaj: '' })}</div>
             <label style="margin-top:10px">Wstaw
@@ -911,11 +953,23 @@ async function oknoDodawaniaKlientow(t) {
           else wybrane.splice(wybrane.indexOf(klucz), 1);
         };
       });
+      // Nasze miejsca stoją pod długą listą klientów — odnośnik skacze do nich
+      // i pokazuje się tylko wtedy, gdy ta sekcja jest na liście (po szukaniu może jej nie być).
+      const doNaszych = pole.querySelector('#dk-do-naszych');
+      const pokazDoNaszych = () => {
+        doNaszych.style.display = pole.querySelector('#dk-nasze') ? '' : 'none';
+      };
+      doNaszych.onclick = () => {
+        const sekcja = pole.querySelector('#dk-nasze');
+        if (sekcja) sekcja.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
       przypnij();
+      pokazDoNaszych();
       pole.querySelector('#dk-szukaj').oninput = e => {
         pole.querySelector('#dk-lista').innerHTML = listaPunktowDoWyboru(
           { juz, wybrane, szukaj: e.target.value.trim().toLowerCase() });
         przypnij();
+        pokazDoNaszych();
       };
     },
   });
@@ -939,7 +993,7 @@ async function zaproponujKolejnosc(t) {
         : w.z_bazy ? ', ze startem w bazie, bez powrotu'
         : w.z_powrotem ? ', bez startu w bazie, z powrotem do bazy'
         : ', bez bazy — same punkty'}.</p>
-      ${w.km != null ? `<div class="wstega info">Szacunkowo <b>${w.km} km</b>${
+      ${w.km != null ? `<div class="wstega info">Szacunkowo <b>${liczbaPl(w.km)} km</b>${
         w.minuty != null ? `, około <b>${w.minuty} min</b> jazdy` : ''}${
         w.z_powrotem ? ' — razem z powrotem do bazy' : ''}.</div>` : ''}
       ${!zmiana ? '<div class="wstega info">Twoja obecna kolejność jest już taka sama.</div>' : ''}
@@ -1015,7 +1069,7 @@ function naglowekPunktu(t, p) {
     <div class="male slaby">Punkt ${nr} z ${t.przystanki.length}${
       t.kierowca_imie ? ' · ' + escHtml(t.kierowca_imie) : ''}${
       t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}${
-      t.data ? ' · ' + escHtml(t.data) : ''}</div>
+      t.data ? ' · ' + escHtml(polskaData(t.data)) : ''}</div>
     <div style="font-weight:700;margin:5px 0 2px">${escHtml(stanPunktu(t, p))}</div>
     ${wszystkie ? `<div class="postep"><i class="ok" style="width:${proc}%"></i></div>
       <div class="male slaby">Cała trasa: ${zrobione} z ${wszystkie} zamkniętych${
@@ -1084,7 +1138,7 @@ function panelPostepu(t, p, d) {
   const poz = d.ostatnia_pozycja;
   if (poz) {
     wiersze.push(`🛰 Ostatnia pozycja auta: ${escHtml(godz(poz.czas))}${
-      poz.km_do_punktu != null ? ` · ok. ${poz.km_do_punktu} km od tego punktu` : ''}${
+      poz.km_do_punktu != null ? ` · ok. ${liczbaPl(poz.km_do_punktu)} km od tego punktu` : ''}${
       poz.zrodlo === 'lokalizator' ? ' (lokalizator)' : ''}`);
   }
   if (d.ostatni_zapis) {
@@ -1124,18 +1178,18 @@ function oknoSzczegolowPunktu(t, id) {
           ${p.ile_zalacznikow ? `<br><span class="male">📎 ${p.ile_zalacznikow}
             ${odmiana(p.ile_zalacznikow, 'załącznik', 'załączniki', 'załączników')}</span>` : ''}
         </div>` : ''}
-      ${admin && zamkniety && p.do_przyjecia ? '<div class="wstega uwaga">⏳ Czeka na przyjęcie przez biuro.</div>' : ''}
+      ${admin && zamkniety && p.do_przyjecia ? '<div class="wstega uwaga">⏳ Czeka na zatwierdzenie przez biuro.</div>' : ''}
       ${p.zwrot_powod && !zamkniety ? `<div class="wstega uwaga">↩ Zwrócone kierowcy do poprawy: ${escHtml(p.zwrot_powod)}
           ${p.zwrocono_o ? ' · ' + escHtml(p.zwrocono_o) : ''}</div>` : ''}
       <div id="sp-os">${osCzasuPunktu(t, p, null)}</div>
       <div id="sp-postep"></div>
       <div class="przyciski" style="margin:0 0 14px">
-        ${admin && zamkniety && p.do_przyjecia ? `<button class="maly glowny" id="sp-przyjmij">✓ Przyjmij</button>
+        ${admin && zamkniety && p.do_przyjecia ? `<button class="maly glowny" id="sp-przyjmij">✓ Zatwierdź</button>
           <button class="maly" id="sp-zwroc">↩ Zwróć kierowcy</button>` : ''}
         ${admin && !zamkniety && p.status === 'oczekuje' ? '<button class="maly" id="sp-zamknij-biuro">✔ Zamknij za kierowcę</button>' : ''}
-        ${p.ile_zalacznikow ? `<button class="maly glowny" id="sp-dowod">📎 ${
-          p.nasze ? 'Zdjęcia z tego postoju' : 'Zobacz dowód dostawy'}</button>` : ''}
-        ${zamkniety && !p.nasze ? '<button class="maly" id="sp-druk">🖨 Wydrukuj potwierdzenie</button>' : ''}
+        ${p.ile_zalacznikow ? `<button class="maly${zamkniety && !p.do_przyjecia ? ' glowny' : ''}" id="sp-dowod">📎 ${
+          p.nasze ? 'Zdjęcia z tego postoju' : zamkniety ? 'Zobacz dowód dostawy' : 'Zdjęcia z załadunku'}</button>` : ''}
+        ${zamkniety && !p.nasze ? `<button class="maly" id="sp-druk">${ikonka('drukuj')}Wydrukuj potwierdzenie</button>` : ''}
         ${p.nasze ? '' : '<button class="maly" id="sp-historia">Historia tego klienta</button>'}
         ${admin && !zamkniety && !p.nasze ? '<button class="maly" id="sp-powiadom">✉️ Powiadom klienta</button>' : ''}
         ${admin && !zamkniety ? '<button class="maly" id="sp-przenies">➡ Przenieś na inną trasę</button>' : ''}
@@ -1282,7 +1336,7 @@ function kartaNaZywo(t) {
   }
   if (t.pozycja) {
     slady.push(`🛰 auto ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
-      t.pozycja.km_do_celu != null ? ` · ok. ${t.pozycja.km_do_celu} km od celu` : ''}`);
+      t.pozycja.km_do_celu != null ? ` · ok. ${liczbaPl(t.pozycja.km_do_celu)} km od celu` : ''}`);
   }
   // Kontakt sprzed dzisiaj z datą — sama godzina „14:05” z wczoraj wyglądała
   // jak telefon, który odezwał się przed chwilą.
@@ -1300,7 +1354,7 @@ function kartaNaZywo(t) {
           t.rejestracja ? ' · ' + escHtml(t.rejestracja) : ''}${
           t.start_o ? ' · start ' + escHtml(t.start_o) : ' · wyjazd ' + escHtml(t.wyjazd || '')}</div>
       </div>
-      <span class="plakietka p-${t.status}">${escHtml(t.status.replace('_', ' '))}</span>
+      <span class="plakietka p-${t.status}">${escHtml(etykietaStatusuTrasy(t.status))}</span>
     </div>
     <div class="male"><b>${zrobione}</b> z <b>${l.wszystkie || 0}</b>
       ${odmiana(l.wszystkie || 0, 'punktu', 'punktów', 'punktów')}${
@@ -1330,13 +1384,15 @@ async function rysujZywo(cel, data) {
     <h2 style="margin-top:20px">Na żywo
       <span class="male slaby" style="font-weight:400">— stan na ${escHtml(dane.teraz)},
         odświeża się co 30 s</span></h2>
-    ${pilne ? `<div class="wstega uwaga"><b>${pilne}
-      ${odmiana(pilne, 'sprawa wymaga', 'sprawy wymagają', 'spraw wymaga')} decyzji.</b></div>` : ''}
     ${dane.trasy.length ? dane.trasy.map(kartaNaZywo).join('')
-      : `<div class="karta"><div class="pusto"><span class="duza-ikona">🗓️</span>
+      : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('kalendarz', 38)}</span>
            Na ten dzień nie ma jeszcze żadnej trasy.
            <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">Zaplanuj trasę</button></div>
          </div></div>`}`;
+
+  // Liczba spraw do decyzji jest pozycją listy „Do zrobienia", nie wstęgą w tej sekcji.
+  pulpitSprawy.pilne = pilne;
+  rysujDoZrobienia();
 
   cel.querySelectorAll('[data-trasa-zywo]').forEach(b =>
     b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasaZywo) }));
@@ -1410,7 +1466,7 @@ EKRANY.klienci = {
         <label style="flex:1">Szukaj<input id="k-szukaj" value="${escHtml(param.szukaj || '')}"
           placeholder="nazwa, miasto, ulica, telefon" autocomplete="off"></label>
         ${admin ? `<button class="glowny" id="k-nowy">+ Nowy klient</button>
-                   <button id="k-plik">📄 Wczytaj z pliku</button>` : ''}
+                   <button id="k-plik">${ikonka('raporty')}Wczytaj z pliku</button>` : ''}
       </div>
       <div class="male slaby" style="margin-bottom:10px">
         ${stan.klienci.filter(k => k.aktywny).length} klientów w kartotece
@@ -1456,13 +1512,9 @@ function oknoImportuPliku() {
     if (!podglad) {
       return `<label>Plik z klientami
           <input type="file" id="ip-plik" accept=".csv,.txt,.xlsx,.xlsm"></label>
-        <p class="male slaby">Przyjmuję CSV (średnik, przecinek albo tabulator)
-          oraz Excel .xlsx. Polskie znaki z Excela też — nie musisz nic przestawiać.</p>
-        <p class="male slaby">Program radzi sobie sam z plikiem <b>bez nagłówka</b>,
-          z nagłówkiem <b>w dalszym wierszu</b> (pod tytułem arkusza), z <b>adresem
-          sklejonym</b> w jednej kolumnie oraz z kartoteką na <b>innej zakładce</b>
-          Excela. Telefon, e-mail, kod pocztowy i NIP rozpoznaje po samej zawartości.
-          Zanim cokolwiek zapisze, pokaże, co zrozumiał.</p>`;
+        <p class="male slaby">Przyjmuję CSV (średnik, przecinek albo tabulator) i Excel .xlsx, także z polskimi znakami.
+          Kolumny rozpoznaję po zawartości — także w pliku <b>bez nagłówka</b>, z <b>adresem w jednej kolumnie</b>
+          albo z kartoteką na <b>innej zakładce</b>. Zanim cokolwiek zapiszę, pokażę, co zrozumiałem.</p>`;
     }
     const opcje = (wybrane) => podglad.naglowek.map((h, i) =>
       `<option value="${i}" ${wybrane === i ? 'selected' : ''}>${escHtml(
@@ -1608,10 +1660,10 @@ function oknoKlienta(k) {
       ${nowy ? '' : `<label class="plaska"><input type="checkbox" id="kl-aktywny" ${k.aktywny ? 'checked' : ''}>
         Klient aktywny (odznacz, żeby schować z listy)</label>
         <div class="male slaby">Punkt na mapie: ${k.lat == null ? '<b>nie znaleziony</b>' : `${k.lat.toFixed(5)}, ${k.lon.toFixed(5)}`}</div>
-        <button class="maly" id="kl-geo" style="margin-top:6px">🔍 Znajdź adres na mapie</button>`}`,
+        <button class="maly" id="kl-geo" style="margin-top:6px">${ikonka('jakosc')}Znajdź adres na mapie</button>`}`,
     przyciski: [
       ...(nowy ? [] : [{ napis: 'Historia', klik: () => oknoHistoriiKlienta(k.id, k.nazwa) }]),
-      ...(nowy ? [] : [{ napis: '🏭 To nasze miejsce', klik: async z => {
+      ...(nowy ? [] : [{ napis: '🏭 Przenieś do lokalizacji', klik: async z => {
         if (!await potwierdz('Przenieść do naszych lokalizacji?',
           'Ten wpis przestanie być odbiorcą, a stanie się naszym miejscem, z którego '
           + 'wyjeżdżamy. Adres, telefon i uwagi idą razem z nim. Jeśli był już na jakiejś '
@@ -1638,7 +1690,7 @@ function oknoKlienta(k) {
         if (w.schowany) {
           komunikat(`Wpis został schowany, nie skasowany — trzyma go `
             + `${w.dostaw} ${odmiana(w.dostaw, 'dostawa', 'dostawy', 'dostaw')} w historii.`
-            + (w.przeniesiony ? ' Sama lokalizacja jest w „Nasze lokalizacje".' : ''), 'ok');
+            + (w.przeniesiony ? ' Sama lokalizacja jest w „Nasze lokalizacje”.' : ''), 'ok');
         } else {
           komunikat('Klient usunięty', 'ok');
         }
@@ -1702,9 +1754,9 @@ async function rysujRaportyBiura(pole, param) {
     </div>
 
     <div class="trzy">
-      ${kafelek('Godziny pracy', suma.godziny.toFixed(1), '')}
-      ${kafelek('Przejechane km', suma.km, '')}
-      ${kafelek('Paliwo (zł)', suma.paliwo.toFixed(2), '')}
+      ${kafelek('Godziny pracy', liczbaPl(suma.godziny.toFixed(1)), '')}
+      ${kafelek('Przejechane km', liczbaPl(suma.km), '')}
+      ${kafelek('Paliwo (zł)', liczbaPl(suma.paliwo.toFixed(2)), '')}
     </div>
 
     <div id="rb-braki"></div>
@@ -1724,9 +1776,9 @@ async function rysujRaportyBiura(pole, param) {
               <td>${escHtml(w.koniec_o || '')}</td>
               <td>${w.przerwa_min || 0} min</td>
               <td><b>${w.godziny != null ? w.godziny : '—'}</b></td>
-              <td>${w.km != null ? w.km : '—'}</td>
+              <td>${w.km != null ? liczbaPl(w.km) : '—'}</td>
               <td>${w.paliwo_l != null ? w.paliwo_l + ' l' : ''}
-                  ${w.paliwo_pln != null ? '<br>' + w.paliwo_pln.toFixed(2) + ' zł' : ''}</td>
+                  ${w.paliwo_pln != null ? '<br>' + liczbaPl(w.paliwo_pln.toFixed(2)) + ' zł' : ''}</td>
               <td class="male">${w.usterki ? '<b style="color:var(--czerwony)">⚠ ' + escHtml(w.usterki) + '</b><br>' : ''}
                   ${escHtml(w.uwagi || '')}</td>
             </tr>`).join('')
@@ -1781,7 +1833,7 @@ function godzinyMinuty(minuty) {
 
 /* ============================================================ USTAWIENIA */
 
-const OPIS_ROLI = { admin: 'administrator', biuro: 'biuro', kierowca: 'kierowca' };
+const OPIS_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca' };
 
 function kartaFirmyUst(ustawienia) {
   return `
@@ -2127,11 +2179,11 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     ${kartaFlotexu(ustawienia)}
 
     ${zwin('Trasy po drogach', ustawienia.ors_klucz_ustawiony ? 'klucz zapisany' : 'działa bez klucza', `
-      <p class="male slaby">Przycisk „Pokaż przebieg po drogach" na mapie trasy działa
+      <p class="male slaby">Przycisk „Pokaż przebieg po drogach” na mapie trasy działa
         <b>bez żadnego klucza</b> — rysuje przejazd po prawdziwych drogach wraz z kilometrami
         i czasem, korzystając z darmowego routera OpenStreetMap. Wymaga tylko internetu.</p>
       <p class="male slaby">Klucz poniżej jest nieobowiązkowy i zmienia co innego: <b>kolejność</b>
-        punktów układana przy „Ułóż trasę". Bez klucza kolejność liczy się w linii prostej —
+        punktów układana przy „Ułóż trasę”. Bez klucza kolejność liczy się w linii prostej —
         dla dostaw do 100 km to zwykle wystarcza. Darmowy klucz z openrouteservice.org
         układa ją po realnych drogach.</p>
       <label>Klucz OpenRouteService
@@ -2147,7 +2199,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
         (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
         a gdy Panel Kierownika jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
       <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i PIN-em,
-        a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego"</b>. Od tej pory
+        a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego”</b>. Od tej pory
         aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}
     </details>`;
 
@@ -2255,7 +2307,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
         odmiana(w.znaleziono, 'lokalizator', 'lokalizatory', 'lokalizatorów')}`, 'ok');
       if (!document.getElementById('u-ikol-wlaczony').checked) {
         komunikat('Połączenie działa, ale pobieranie pozycji jest wyłączone — '
-          + 'zaznacz „Pobieraj pozycje z IKOL-a"', 'blad');
+          + 'zaznacz „Pobieraj pozycje z IKOL-a”', 'blad');
       }
       wrocDoUstawien();
     };
@@ -2703,7 +2755,7 @@ function oknoBusa(b) {
   okno({
     tytul: nowy ? 'Nowe auto' : b.nazwa,
     tresc: `
-      <label>Nazwa <span class="slaby">(np. „Ducato", „Auto 1")</span>
+      <label>Nazwa <span class="slaby">(np. „Ducato”, „Auto 1”)</span>
         <input id="bu-nazwa" value="${escHtml(b.nazwa)}"></label>
       <label>Rejestracja<input id="bu-rej" value="${escHtml(b.rejestracja || '')}"></label>
       <label>Uwagi<textarea id="bu-uwagi">${escHtml(b.uwagi || '')}</textarea></label>
@@ -2822,11 +2874,13 @@ function kartaCzyszczeniaTras() {
   // Zakładka Administracja → Dane i czyszczenie: przycisk na wierzchu (nie w zwijanej sekcji pod „Zaawansowane”).
   return `<div class="karta" id="u-czyszczenie-tras">
     <h2>Czyszczenie tras</h2>
-    <p class="male slaby">Usuwa wybrane trasy <b>na stałe</b> — razem z punktami, zdjęciami i podpisami. Przed usunięciem
-      program robi pełną kopię bazy w folderze <code>kopie/</code> — <b>ale ta kopia nie zawiera zdjęć ani podpisów</b>, a usunięte pliki
-      znikają też z archiwów zdjęć (<code>kopie/pliki-*.zip</code>) i z kopii poza komputerem, więc nie da się ich odzyskać. Kopie bazy sprzed
-      czyszczenia (<code>dane-przed-czyszczeniem-*</code>) program trzyma 30 dni. Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy,
-      które już ruszyły.</p>
+    <p class="male slaby">Usuwa wybrane trasy <b>na stałe</b> — razem z punktami, zdjęciami i podpisami.</p>
+    <ul class="male slaby" style="margin:6px 0 12px;padding-left:20px">
+      <li>Przed usunięciem program robi pełną kopię bazy w folderze <code>kopie/</code> i trzyma ją 30 dni.</li>
+      <li><b>Kopia bazy nie zawiera zdjęć ani podpisów.</b> Usunięte pliki znikają też z archiwów zdjęć (<code>kopie/pliki-*.zip</code>)
+        i z kopii poza komputerem — nie da się ich odzyskać.</li>
+      <li>Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy, które już ruszyły.</li>
+    </ul>
     <div class="przyciski"><button class="glowny" id="u-czysc-wybierz">Wybierz trasy do usunięcia…</button></div>
   </div>`;
 }
@@ -2843,7 +2897,7 @@ function podepnijCzyszczenieTras(pole) {
 function oknoCzyszczeniaTras(trasy, ucieto) {
   const wiersz = t => `<label class="plaska" style="display:flex;gap:8px;align-items:flex-start;padding:4px 0">
       <input type="checkbox" data-trasa="${t.id}"> <span>${escHtml(t.data)} · ${escHtml(t.nazwa || 'bez nazwy')}
-      <span class="slaby">· ${escHtml(t.kierowca_imie || 'bez kierowcy')} · ${t.ile_punktow} pkt · ${escHtml(t.status)}</span></span></label>`;
+      <span class="slaby">· ${escHtml(t.kierowca_imie || 'bez kierowcy')} · ${t.ile_punktow} pkt · ${escHtml(etykietaStatusuTrasy(t.status))}</span></span></label>`;
   okno({
     tytul: 'Czyszczenie tras',
     szerokie: true,
@@ -2969,7 +3023,7 @@ function kartaTunelu(u) {
       <ol class="male slaby" style="padding-left:20px;line-height:1.8">
         <li>Załóż darmowe konto na <b>cloudflare.com</b> i dodaj do niego domenę firmy.</li>
         <li>Wejdź w <b>Zero Trust → Networks → Tunnels → Create a tunnel</b>,
-            wybierz <b>Cloudflared</b> i nazwij tunel (np. „trasy").</li>
+            wybierz <b>Cloudflared</b> i nazwij tunel (np. „trasy”).</li>
         <li>Cloudflare pokaże polecenie instalacyjne z długim tokenem —
             <b>skopiuj sam token</b> (ten długi ciąg znaków) i wklej go tutaj.</li>
         <li>W zakładce <b>Public Hostname</b> ustaw subdomenę (np. <code>trasy</code>),
@@ -3022,7 +3076,7 @@ function kartaPages(u) {
     ${p.lokalne && !p.hub_odpisal ? `<div class="wstega uwaga">Panel Kierownika jeszcze się nie odezwał.
         Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>` : ''}
     ${p.blad ? `<div class="wstega uwaga">Panel Kierownika nie wysłał adresu na GitHub:
-        ${escHtml(p.blad)} Panel ponawia sam; szczegóły w Panelu → Administracja → Serwis → Dostęp z telefonów.</div>` : ''}
+        ${escHtml(p.blad)} Panel ponawia sam; szczegóły w Panelu → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
     <table class="male" style="margin-bottom:10px">
       <tr><td class="slaby">Aplikacja wysłana</td>
@@ -3057,16 +3111,16 @@ function kartaIkol(u) {
       bez przełączania się między dwiema stronami. Pyta o pozycję co półtorej minuty,
       z zapasem względem limitów IKOL-a.</p>
 
-    <div class="wstega uwaga">W IKOL-u są <b>dwie różne rzeczy o nazwie „Interfejs API"</b>
+    <div class="wstega uwaga">W IKOL-u są <b>dwie różne rzeczy o nazwie „Interfejs API”</b>
       i potrzebne są obie. To była przyczyna odmów przy pierwszym podejściu.</div>
     <ol class="male slaby" style="margin:0 0 12px 18px; padding:0">
       <li><b>Uprawnienie użytkownika — bezpłatne.</b><br>
         MENU → Konfiguracja → Konfiguracja lokalizatorów → przy pojeździe
-        „Uprawnienia użytkowników" → kolumna <b>Interfejs API</b> → zaznaczyć → Zapisz.<br>
+        „Uprawnienia użytkowników” → kolumna <b>Interfejs API</b> → zaznaczyć → Zapisz.<br>
         <i>U Was włączone przy czterech lokalizatorach 1.09.2026.</i></li>
       <li><b>Usługa dodatkowa — płatna, 10 zł netto miesięcznie ZA KAŻDY lokalizator.</b><br>
         IKOL → Wybór usług → Zarządzaj usługami → sekcja <b>Dodatki</b> → pozycja
-        nr 58 „Interfejs API".<br>
+        nr 58 „Interfejs API”.<br>
         <i>U Was wyłączona przy wszystkich czterech (stan z 1.09.2026).</i></li>
     </ol>
     <p class="male slaby">Bez wykupionej usługi API odpowiada kodem 3 — tym samym,
@@ -3116,11 +3170,11 @@ function kartaIkol(u) {
     <details style="margin-top:12px">
       <summary class="male" style="cursor:pointer">Czego potrzeba po stronie IKOL-a</summary>
       <ul class="male slaby" style="padding-left:20px;line-height:1.8">
-        <li><b>Płatna usługa „Interfejs API"</b> włączona przy każdym lokalizatorze,
+        <li><b>Płatna usługa „Interfejs API”</b> włączona przy każdym lokalizatorze,
             z którego chcecie brać pozycje: IKOL → <b>Wybór usług</b> → <b>Zarządzaj
             usługami</b> → sekcja <b>Dodatki</b>. Kosztuje 10 zł netto miesięcznie
             za auto. <b>Bez tego API odmawia dostępu</b>, nawet przy poprawnym haśle.</li>
-        <li><b>Uprawnienie „Interfejs API"</b> dla użytkownika przy każdym lokalizatorze:
+        <li><b>Uprawnienie „Interfejs API”</b> dla użytkownika przy każdym lokalizatorze:
             Konfiguracja → Konfiguracja lokalizatorów → Uprawnienia użytkowników →
             ostatnia kolumna. To jest bezpłatne, ale samo w sobie nie wystarcza.</li>
         <li><b>Klucz aplikacji (appkey)</b> nie jest potrzebny — według specyfikacji IKOL-a
@@ -3632,7 +3686,7 @@ async function rysujBraki(pole, od, doDnia) {
 
       ${w.spalanie.length ? `<h3 style="margin:18px 0 4px">Spalanie</h3>
         <div class="male">${w.spalanie.map(s =>
-          `<b>${escHtml(s.bus)}</b>: ${s.srednia} l/100 km
+          `<b>${escHtml(s.bus)}</b>: ${liczbaPl(s.srednia)} l/100 km
            <span class="slaby">(z ${s.ile_tankowan} ${odmiana(s.ile_tankowan,
              'tankowania', 'tankowań', 'tankowań')})</span>`).join(' &nbsp;·&nbsp; ')}</div>` : ''}
     </div>`;

@@ -1,6 +1,6 @@
-/* Szablony tras (biuro) i lista załadunku (kierowca).
+/* Zapisane trasy (biuro; w kodzie nadal „szablony”) i lista załadunku (kierowca).
 
-   Szablon to stały zestaw klientów w stałej kolejności — „poniedziałek,
+   Zapisana trasa to zestaw klientów w stałej kolejności — „poniedziałek,
    Kalisz północ". Poranne układanie przestaje zaczynać się od zera.
 
    Lista załadunku to płaska lista towaru ze wszystkich punktów dnia do
@@ -8,7 +8,7 @@
    wejść w każdy punkt po kolei — więc nikt tego nie robi.                   */
 
 EKRANY.szablony = {
-  tytul: 'Trasy stałe',
+  tytul: 'Zapisane trasy',
   tylkoBiuro: true,
   async rysuj(pole) {
     const [szablony, kierowcy] = await Promise.all([
@@ -18,11 +18,11 @@ EKRANY.szablony = {
 
     pole.innerHTML = `
       <div class="pasek-narzedzi">
-        <button class="glowny" id="sz-nowy">+ Nowy szablon</button>
+        <button class="glowny" id="sz-nowy">+ Nowa zapisana trasa</button>
         <button id="sz-wroc">← Trasy</button>
       </div>
-      <p class="male slaby">Szablon zapamiętuje zestaw klientów i ich kolejność.
-        Z jednego szablonu robisz dzień jednym kliknięciem — bez przeklikiwania
+      <p class="male slaby">Zapisana trasa zapamiętuje zestaw klientów i ich kolejność.
+        Z jednej zapisanej trasy robisz dzień jednym kliknięciem — bez przeklikiwania
         tych samych kilkunastu punktów co rano.</p>
 
       ${szablony.length ? szablony.map(s => `
@@ -43,10 +43,10 @@ EKRANY.szablony = {
           <div class="male">${s.punkty.map((p, i) =>
             `${i + 1}. ${p.nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}`).join(' &nbsp;·&nbsp; ') || '<i>pusty</i>'}</div>
         </div>`).join('')
-        : `<div class="karta"><div class="pusto"><span class="duza-ikona">📋</span>
-             Nie ma jeszcze żadnego szablonu.
+        : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('zapisane', 38)}</span>
+             Nie ma jeszcze żadnej zapisanej trasy.
              <div class="male" style="margin-top:8px">Najprościej: otwórz gotową trasę
-               i użyj „Zapisz jako szablon".</div></div></div>`}`;
+               i użyj „Dodaj do zapisanych tras” (pod „Więcej”).</div></div></div>`}`;
 
     pole.querySelector('#sz-wroc').onclick = () => pokazEkran('trasy');
     pole.querySelector('#sz-nowy').onclick = () => oknoSzablonu(null, kierowcy, busy);
@@ -55,7 +55,7 @@ EKRANY.szablony = {
     pole.querySelectorAll('[data-uzyj]').forEach(b => b.onclick = () =>
       oknoTrasyZSzablonu(szablony.find(s => s.id === Number(b.dataset.uzyj)), kierowcy, busy));
     pole.querySelectorAll('[data-usun]').forEach(b => b.onclick = async () => {
-      if (!await potwierdz('Usunąć trasę stałą?', 'Trasy zrobione z niej zostają nietknięte.')) return;
+      if (!await potwierdz('Usunąć zapisaną trasę?', 'Trasy zrobione z niej zostają nietknięte.')) return;
       const w = await sprobuj(() => API.del('/api/szablony/' + b.dataset.usun), 'Usunięto');
       if (w) pokazEkran('szablony');
     });
@@ -76,10 +76,10 @@ async function oknoSzablonu(s, kierowcy, busy) {
   const lista = (szukaj) => listaPunktowDoWyboru({ juz: new Set(), wybrane, szukaj });
 
   okno({
-    tytul: nowy ? 'Nowa trasa stała' : 'Trasa stała: ' + s.nazwa,
+    tytul: nowy ? 'Nowa zapisana trasa' : 'Zapisana trasa: ' + s.nazwa,
     szerokie: true,
     tresc: `
-      <label>Nazwa <span class="slaby">(np. „Poniedziałek — Kalisz północ")</span>
+      <label>Nazwa <span class="slaby">(np. „Poniedziałek — Kalisz północ”)</span>
         <input id="sb-nazwa" value="${escHtml(s.nazwa)}"></label>
       <div class="dwie">
         <label>Domyślny kierowca
@@ -101,20 +101,20 @@ async function oknoSzablonu(s, kierowcy, busy) {
           <select id="sb-uklad">${opcjeUkladu(s.uklad)}</select></label>
       </div>
       <p class="male slaby" style="margin:-6px 0 10px">Układ jedzie razem z trasą
-        zrobioną z tego wzorca — stały kurs między naszymi magazynami nie będzie
+        zrobioną z tej zapisanej trasy — powtarzalny kurs między naszymi magazynami nie będzie
         co tydzień doliczał powrotu, którego nikt nie robi.</p>
       <label>Uwagi dla kierowcy<textarea id="sb-uwagi">${escHtml(s.uwagi || '')}</textarea></label>
-      <h3 style="margin-top:14px">Punkty w szablonie</h3>
+      <h3 style="margin-top:14px">Punkty zapisanej trasy</h3>
       <p class="male slaby">Możesz wstawić także nasze miejsce — np. doładunek w magazynie
         w środku dnia. Kolejność bierze się z kolejności zaznaczania; poprawisz ją
-        strzałkami po zrobieniu trasy z szablonu.</p>
+        strzałkami po utworzeniu trasy.</p>
       <input id="sb-szukaj" placeholder="Szukaj po nazwie, mieście, ulicy…" autocomplete="off">
       <div id="sb-lista" style="margin-top:10px;max-height:38vh;overflow-y:auto">${lista('')}</div>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: 'Zapisz trasę stałą', klasa: 'glowny', klik: async z => {
+      { napis: 'Zapisz trasę', klasa: 'glowny', klik: async z => {
         const nazwa = val('sb-nazwa');
-        if (!nazwa) { komunikat('Podaj nazwę trasy stałej', 'blad'); return; }
+        if (!nazwa) { komunikat('Podaj nazwę zapisanej trasy', 'blad'); return; }
         if (!wybrane.length) { komunikat('Zaznacz przynajmniej jeden punkt', 'blad'); return; }
         const w = await sprobuj(() => API.post('/api/szablony', {
           id: s.id, nazwa,
@@ -147,18 +147,18 @@ async function oknoSzablonu(s, kierowcy, busy) {
 
 function oknoTrasyZSzablonu(s, kierowcy, busy) {
   okno({
-    tytul: 'Nowa trasa z trasy stałej „' + s.nazwa + '"',
+    tytul: 'Nowa trasa z zapisanej trasy „' + s.nazwa + '”',
     tresc: `
       <p class="male slaby">Powstanie nowa trasa z ${s.ile}
-        ${odmiana(s.ile, 'punktem', 'punktami', 'punktami')} w kolejności z szablonu.</p>
+        ${odmiana(s.ile, 'punktem', 'punktami', 'punktami')} w kolejności zapisanej trasy.</p>
       <label>Dzień<input type="date" id="ts-data" value="${dzisiaj()}"></label>
       <div class="dwie">
         <label>Kierowca
-          <select id="ts-kierowca"><option value="">— jak w szablonie —</option>
+          <select id="ts-kierowca"><option value="">— jak w zapisanej trasie —</option>
             ${kierowcy.map(k => `<option value="${k.id}" ${s.kierowca === k.id ? 'selected' : ''}>
               ${escHtml(k.imie)}</option>`).join('')}</select></label>
         <label>Auto
-          <select id="ts-pojazd"><option value="">— jak w szablonie —</option>
+          <select id="ts-pojazd"><option value="">— jak w zapisanej trasie —</option>
             ${busy.map(b => opcjaBusa(b, s.pojazd === b.id)).join('')}</select></label>
       </div>`,
     przyciski: [

@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-dfaab12d8601';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-1a6376c54314';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -673,6 +673,22 @@ body.okno-otwarte .mapa{visibility:hidden}
 .wstega.info{background:var(--info-tlo); color:var(--granat-jasny)}
 .wstega.blad{background:var(--czerwony-tlo); color:var(--czerwony)}
 .wstega.ok{background:var(--zielony-tlo); color:var(--zielony)}
+
+/* Pulpit biura: sekcja „Do zrobienia" — jedna lista zamiast kilku wstęg uwagi.
+   Licznik po lewej ma barwę wagi sprawy, tak jak dawniej wstęga. */
+.do-zrobienia{padding:2px 14px}
+.do-zrobienia .poz{display:flex; align-items:center; gap:12px; width:100%; margin:0; padding:10px 0;
+  text-align:left; font-weight:400; background:none; border:0; border-radius:0;
+  border-bottom:1px solid var(--ramka); min-height:auto}
+.do-zrobienia .poz:last-child{border-bottom:0}
+.do-zrobienia .znak{flex:none; min-width:34px; padding:4px 8px; border-radius:999px; text-align:center;
+  font-weight:800; font-size:14px}
+.do-zrobienia .poz.blad .znak{background:var(--czerwony-tlo); color:var(--czerwony)}
+.do-zrobienia .poz.uwaga .znak{background:var(--zolty-tlo); color:var(--zolty)}
+.do-zrobienia .poz.info .znak{background:var(--info-tlo); color:var(--granat-jasny)}
+.do-zrobienia .tekst{flex:1; min-width:0}
+.do-zrobienia .tekst .male{display:block; margin-top:2px}
+.do-zrobienia .strzalka{flex:none; font-size:22px; line-height:1; color:var(--tekst-slaby)}
 /* Dwie kolumny, ktore na telefonie skladaja sie w jedna. .dwie robi to samo,
    ale bez zwijania — przy formularzach w oknie modalnym jest za ciasno. */
 .dwie-kolumny{display:grid; gap:12px; grid-template-columns:1fr 1fr}
@@ -819,3 +835,8 @@ body.okno-otwarte .mapa{visibility:hidden}
   .zaproszenie-kod svg{width:320px; height:320px}
   .zaproszenie{gap:24px}
 }
+
+/* Ikona liniowa przed napisem przycisku (ikonka() w app.js). */
+.ik{display:inline-flex; vertical-align:-3px; margin-right:6px}
+.ik svg{display:block; width:16px; height:16px}
+.pusto .duza-ikona svg{display:inline-block}

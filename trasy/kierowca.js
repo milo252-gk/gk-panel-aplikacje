@@ -159,6 +159,12 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
   if (p.eta && p.status === 'oczekuje') dopiski.push(ETA.opis(p));
   if (p.ile_zalacznikow) dopiski.push('📎 ' + p.ile_zalacznikow);
   if (p.czeka_na_wyslanie) dopiski.push('<span style="color:var(--zolty)">⏳ czeka na wysłanie</span>');
+  // Zamknięty punkt przechodzi trzy stany: czeka w telefonie → wysłane do biura → zatwierdzone przez biuro.
+  // Pierwszy był widoczny od zawsze, dwa kolejne tylko w oknie punktu.
+  if (p.status !== 'oczekuje' && p.status !== 'odwolany' && !p.czeka_na_wyslanie) {
+    if (p.do_przyjecia) dopiski.push('wysłane — biuro jeszcze nie zatwierdziło');
+    else if (p.przyjeto_o) dopiski.push('✓ zatwierdzone przez biuro');
+  }
   if (p.status === 'odwolany') dopiski.push('biuro zdjęło ten punkt — nie jedź');
 
   return `<button class="przystanek s-${p.status}${nasze ? ' nasze' : ''}${
@@ -183,7 +189,7 @@ EKRANY.moja = {
 
     const wybor = `<div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="data-trasy" value="${data}"></label>
-        <button id="btn-mapa">🗺️ Mapa</button>
+        <button id="btn-mapa">${ikonka('mapa')}Mapa</button>
       </div>`;
 
     if (!mojaTrasa) {
@@ -219,7 +225,7 @@ EKRANY.moja = {
               ${mojaTrasa.start_o ? '· start ' + samaGodzina(mojaTrasa.start_o) : ''}
             </div>
           </div>
-          <span class="plakietka p-${mojaTrasa.status}">${escHtml(mojaTrasa.status.replace('_', ' '))}</span>
+          <span class="plakietka p-${mojaTrasa.status}">${escHtml(etykietaStatusuTrasy(mojaTrasa.status))}</span>
         </div>
         ${mojaTrasa.flotex && !mojaTrasa.flotex.sprawny ? `<div class="wstega blad"
             style="margin:4px 0 10px">⚠ Auto według GK Flota: ${escHtml(
@@ -244,7 +250,7 @@ EKRANY.moja = {
           ${mojaTrasa.status === 'planowana' ? '<button class="glowny" id="btn-start">▶ Rozpocznij trasę</button>' : ''}
           ${zrobione === l.wszystkie && l.wszystkie && mojaTrasa.status !== 'zakonczona'
         ? '<button class="zielony" id="btn-koniec">✓ Zakończ trasę</button>' : ''}
-          <button id="btn-mapa-link">🧭 Cała trasa w Google Maps</button>
+          <button id="btn-mapa-link">${ikonka('mapa')}Cała trasa w Google Maps</button>
           <button id="btn-polozenie">${sledzenieWlaczone() ? '📍 Wyłącz położenie' : '📍 Udostępniaj położenie'}</button>
         </div>
       </div>
@@ -377,7 +383,7 @@ function oknoPrzystanku(id) {
   if (!p) return;
   const zamkniety = p.status !== 'oczekuje';
   const odwolany = p.status === 'odwolany';
-  /* R12 (2026-11-09): dostawę, którą biuro już przyjęło („Przyjmij”), kierowca z telefonu nie cofa — serwer
+  /* R12 (2026-11-09): dostawę, którą biuro już zatwierdziło („Zatwierdź”), kierowca z telefonu nie cofa — serwer
      odłożyłby taki zapis do „Odrzuconych”. Zamiast przycisku, który i tak nie zadziała, jest wyjaśnienie. */
   const przyjetaPrzezBiuro = zamkniety && !odwolany && !!p.przyjeto_o && !p.do_przyjecia && !p.czeka_na_wyslanie;
 
@@ -407,13 +413,13 @@ function oknoPrzystanku(id) {
           ${p.notatka ? '<br>' + escHtml(p.notatka) : ''}
         </div>
         ${przyjetaPrzezBiuro
-          ? `<div class="male slaby" id="info-przyjete">✓ Biuro przyjęło tę dostawę. Jeśli to pomyłka, zadzwoń do biura —
+          ? `<div class="male slaby" id="info-przyjete">✓ Biuro zatwierdziło tę dostawę. Jeśli to pomyłka, zadzwoń do biura —
               biuro może ją zwrócić do poprawy.</div>`
           : '<button class="tekstowy" id="btn-cofnij">Pomyłka — otwórz ten punkt ponownie</button>'}` : ''}
       <a class="glowny" href="${linkNawigacji(p)}" target="_blank" rel="noopener"
          style="display:block;text-align:center;padding:15px;border-radius:10px;
                 background:var(--granat);color:var(--na-marce);text-decoration:none;font-weight:600;margin-top:8px">
-        🧭 ${p.nasze ? 'Nawiguj do magazynu' : 'Nawiguj do klienta'}</a>
+        ${ikonka('mapa')}${p.nasze ? 'Nawiguj do magazynu' : 'Nawiguj do klienta'}</a>
       ${p.nasze ? '' : '<button class="maly" id="btn-uwaga" style="margin-top:10px">'
         + '📌 Dopisz uwagę o dojeździe</button>'}`,
     przyciski: zamkniety ? [{ napis: 'Zamknij', klik: z => z() }] : [
@@ -427,7 +433,7 @@ function oknoPrzystanku(id) {
       const cofnij = pole.querySelector('#btn-cofnij');
       if (cofnij) cofnij.onclick = async () => {
         if (!await potwierdz('Otworzyć punkt ponownie?',
-          'Status wróci do „do zrobienia". Zdjęcia i podpis zostaną w archiwum.')) return;
+          'Status wróci do „do zrobienia”. Zdjęcia i podpis zostaną w archiwum.')) return;
         await zapiszDostawe(p, { status: 'oczekuje' });
         zamknijOkno();
       };
@@ -499,7 +505,7 @@ function oknoDostarczone(p) {
   okno({
     tytul: (nasze ? 'Postój: ' : 'Dostawa: ') + p.klient_nazwa,
     tresc: `
-      ${nasze ? '' : `<label>Kto odebrał <span class="slaby">(imię i nazwisko lub „magazyn")</span>
+      ${nasze ? '' : `<label>Kto odebrał <span class="slaby">(imię i nazwisko lub „magazyn”)</span>
         <input id="d-odebral" autocapitalize="words" placeholder="np. Jan Kowalski">
       </label>
       <label>Podpis odbierającego
@@ -910,7 +916,7 @@ EKRANY.raporty = {
         minuty -= przerwa;
         czesci.push(minuty < 0
           ? '<b style="color:var(--czerwony)">Przerwa jest dłuższa niż czas pracy</b>'
-          : `Czas pracy: <b>${(minuty / 60).toFixed(2)} h</b>`);
+          : `Czas pracy: <b>${liczbaPl((minuty / 60).toFixed(2))} h</b>`);
       }
       if (kms && kmk && kmk >= kms) czesci.push(`Przejechane: <b>${kmk - kms} km</b>`);
       pole.querySelector('#r-podsumowanie').innerHTML = czesci.join(' &nbsp;·&nbsp; ') ||

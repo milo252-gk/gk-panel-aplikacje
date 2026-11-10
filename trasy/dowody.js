@@ -195,9 +195,9 @@ function oknoSzukania() {
     tytul: 'Szukaj dostawy',
     szerokie: true,
     tresc: `
-      <p class="male slaby">Reklamacja zaczyna się zwykle od numeru WZ albo nazwy klienta,
-        nie od daty. Szukam w numerach dokumentów, nazwach klientów, towarze,
-        nazwisku odbierającego i notatkach kierowcy.</p>
+      <p class="male slaby">Szukam w numerach dokumentów, nazwach klientów, towarze,
+        nazwisku odbierającego i notatkach kierowcy. Reklamacja zwykle zaczyna się
+        od numeru WZ, nie od daty.</p>
       <input id="sz-fraza" placeholder="np. 819587, Bud-Mat, Kowalski" autocomplete="off">
       <div id="sz-wyniki" style="margin-top:14px"></div>`,
     przyciski: [{ napis: 'Zamknij', klik: z => z() }],
@@ -235,8 +235,8 @@ function oknoSzukania() {
               <td class="przyciski">
                 ${h.ile_zalacznikow ? `<button class="maly" data-dowod="${h.id}"
                   data-nazwa="${escHtml(h.klient_nazwa)}">📎 ${h.ile_zalacznikow}</button>` : ''}
-                <button class="maly" data-trasa="${h.trasa}">🗺</button>
-                <button class="maly" data-druk="${h.id}">🖨</button></td>
+                <button class="maly" data-trasa="${h.trasa}" title="Pokaż trasę" aria-label="Pokaż trasę">${ikonka('mapa')}</button>
+                <button class="maly" data-druk="${h.id}" title="Wydrukuj potwierdzenie" aria-label="Wydrukuj potwierdzenie">${ikonka('drukuj')}</button></td>
             </tr>`).join('')}</tbody></table></div>`
             : '<div class="pusto">Nic nie znalazłem.</div>';
           wyniki.querySelectorAll('[data-dowod]').forEach(b =>

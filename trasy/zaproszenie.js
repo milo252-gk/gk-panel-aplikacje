@@ -44,7 +44,7 @@ EKRANY.zaproszenie = {
       ${naGithubie && daneWSwiat && z.pages && !z.pages.adres_aktualny ? `<div class="wstega uwaga">
         Panel Kierownika jeszcze nie wpisał nowego adresu tunelu na GitHub Pages — zwykle
         trwa to chwilę po starcie. Jeśli to nie minie, administrator sprawdza
-        <b>Ustawienia → Zaawansowane → Adres dla telefonów</b> i Panel → Administracja → Serwis → Dostęp z telefonów.</div>` : ''}
+        <b>Ustawienia → Zaawansowane → Adres dla telefonów</b> i Panel → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
       ${naGithubie && z.pages && z.pages.starsza && admin ? `<div class="wstega uwaga">
         Na GitHub Pages jest jeszcze starsza wersja aplikacji niż program w biurze — Panel

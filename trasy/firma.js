@@ -260,9 +260,9 @@ EKRANY.odrzucone = {
             : (o.typ === 'raport' ? 'raport pracy' : 'zapis')))}</b>
             <span class="plakietka p-nieudane">${escHtml(o.typ === 'dostawa'
               ? (o.status === 'nieudane' ? 'nieudana dostawa' : 'dostawa') : (o.typ || '?'))}</span></div>
-          <div class="male">${escHtml(o.kierowca || '?')} · zapisane ${escHtml(o.czas || '')}
-            · odrzucone ${escHtml(o.odrzucono || '')}</div>
-          <div class="male slaby">${escHtml(o.powod || (o.uszkodzony ? 'plik uszkodzony' : ''))}</div>
+          <div class="male">${escHtml(o.kierowca || '?')}${o.czas ? ' · zapisane w telefonie ' + escHtml(czasNaEkran(o.czas)) : ''}
+            · odrzucone ${escHtml(czasNaEkran(o.odrzucono || ''))}</div>
+          <div class="male"><b>Powód:</b> ${escHtml(o.powod || (o.uszkodzony ? 'plik uszkodzony' : 'brak podanego powodu'))}</div>
           ${o.data_trasy ? `<div class="male slaby">punkt jest teraz na trasie
             ${escHtml(polskaData(o.data_trasy))} (${escHtml(o.status_punktu)})</div>` : ''}
           <div class="male slaby">${o.podpis ? 'podpis' : 'bez podpisu'}${o.zdjec

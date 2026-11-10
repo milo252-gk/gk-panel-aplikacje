@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-dfaab12d8601';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-1a6376c54314';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -100,6 +100,11 @@ function odstepBleduSerwera(ile) {
 
 /* ------------------------------------------------------------- drobiazgi */
 
+/* Ikona liniowa (gk-ikony.js, STYL-GK §8) przed napisem przycisku — zamiast emoji. */
+function ikonka(nazwa, rozmiar) {
+  return '<span class="ik">' + GKIkony.html(nazwa, rozmiar || 16) + '</span>';
+}
+
 function escHtml(t) {
   return String(t == null ? '' : t)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -133,7 +138,7 @@ function poLudzku(e) {
   }
   if (/failed to fetch|load failed|networkerror|network connection was lost|could not be found/i
       .test(tekst)) {
-    return 'Brak połączenia z programem. Sprawdź zasięg — zapisy poczekają w telefonie '
+    return 'Brak połączenia z programem. Sprawdź zasięg — zapisy poczekają na tym urządzeniu '
       + 'i wyślą się same.';
   }
   if (/unexpected token|json parse|json\.parse|not valid json/i.test(tekst)) {
@@ -351,6 +356,14 @@ function polskaData(iso) {
   return `${d}.${m}.${r}`;
 }
 function samaGodzina(czas) { return czas ? String(czas).slice(11, 16) : ''; }
+/* Liczba na ekranie z przecinkiem dziesiętnym („316,5 km”, nie „316.5 km”). */
+function liczbaPl(x) { return String(x).replace('.', ','); }
+/* Status trasy na ekranie. W bazie klucze są bez polskich liter (zakonczona), więc samo
+   zamienianie „_” na spację pokazywało biuru i kierowcy „zakonczona”. */
+function etykietaStatusuTrasy(s) {
+  return ({ planowana: 'planowana', w_toku: 'w toku', zakonczona: 'zakończona', odwolana: 'odwołana' })[s]
+    || String(s || '').replace('_', ' ');
+}
 /* Chwila z programu („2026-10-06 14:20:33”, czas biura) albo z telefonu (ISO z „Z”)
    → „06.10.2026 14:20” (STYL-GK §6). B4 2026-10-16: biuro widziało surowe
    „2026-10-06 14:20” na osi punktu, w Kontach, Kopiach i Pages — GK Flota od dawna
@@ -1616,7 +1629,7 @@ async function zakonczBezSieci(zostaw) {
     pokazLogowanie();
     const pole = document.getElementById('pole-loginu');
     if (pole && !pole.value) { pole.value = zostaw; if (stan.poleLogowania) stan.poleLogowania.odswiez(); }
-    komunikat('Połączenie wróciło — wpisz PIN, żeby wysłać zapisy z telefonu.', 'ok');
+    komunikat('Połączenie wróciło — wpisz PIN, żeby wysłać zapisy z tego urządzenia.', 'ok');
   }
   odswiezPasekPolaczenia();
 }
@@ -2061,7 +2074,7 @@ async function wczytajSlowniki() {
       komunikat('Brak połączenia — pracuję na danych z ostatniej synchronizacji');
     } else {
       stan.klienci = []; stan.pojazdy = []; stan.ustawienia = {}; stan.lokalizacje = [];
-      komunikat('Brak połączenia i brak kopii danych w telefonie', 'blad');
+      komunikat('Brak połączenia i brak kopii danych na tym urządzeniu', 'blad');
     }
   }
 }
@@ -2345,7 +2358,7 @@ function oknoKodowAplikacji() {
             ${a.adres || a.siec ? `<a href="${escHtml(a.adres || a.siec)}" target="_blank" rel="noopener">${escHtml(a.adres || a.siec)}</a>` : ''}
             ${!a.adres && a.siec ? '<span class="konto-drobne">Tylko w firmowym wifi.</span>' : ''}
             ${a.opis ? `<span class="konto-drobne">${escHtml(a.opis)}</span>` : ''}
-            ${a.qr ? `<button type="button" data-drukuj="${i}">🖨 Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
+            ${a.qr ? `<button type="button" data-drukuj="${i}">${ikonka('drukuj')}Drukuj kod</button>` : ''}</figcaption></figure>`).join('')
         || '<p class="konto-drobne">To konto nie ma aplikacji na telefon.</p>';
       el.querySelectorAll('[data-drukuj]').forEach(b =>
         b.onclick = () => drukujArkuszQR(arkuszKodowQR([lista[+b.dataset.drukuj]])));
@@ -2688,7 +2701,7 @@ async function rysujOdrzucone(pole) {
     <div class="wstega uwaga" style="margin-top:12px">
       <b>${lista.length} ${odmiana(lista.length, 'zapis nie przeszedł', 'zapisy nie przeszły',
         'zapisów nie przeszło')}.</b> Nic nie zostało skasowane — leżą w tym urządzeniu.
-      Pokaż to biuru; gdy usuną przyczynę, dotknij „Spróbuj ponownie".
+      Pokaż to biuru; gdy usuną przyczynę, dotknij „Spróbuj ponownie”.
     </div>
     ${lista.map(o => `<div class="karta scisla" style="margin-bottom:8px">
         <div class="male"><b>${escHtml(opis(o))}</b></div>
