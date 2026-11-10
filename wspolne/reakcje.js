@@ -18,7 +18,7 @@
   'use strict';
 
   const TEKSTY = { dobra: 'Dobra robota!', dopracuj: 'Dopracuj to!', zla: '', wkoncu: 'No, w końcu!' };
-  const ARIA = { dobra: 'Dobra robota!', dopracuj: 'Dopracuj to!', zla: 'Zadanie niewykonane', wkoncu: 'No, w końcu!' };
+  const ARIA = { dobra: 'Dobra robota!', dopracuj: 'Dopracuj to!', zla: 'Zlecenie niewykonane', wkoncu: 'No, w końcu!' };
   const POKAZ_MS = 1900;              // ok. 1,5 s ruchu + chwila na przeczytanie; potem znika (hala.css: zanikanie od 1,45 s)
   const MAKS_PAMIECI = 300;
   const DO_ZROBIENIA = ['nowe', 'przyjete'];

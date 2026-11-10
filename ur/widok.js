@@ -377,7 +377,7 @@
     const nr = awaria && awaria.numer ? `${awaria.numer} ` : '';
     const kto = d.mechanik && d.mechanik !== ja ? nazwaPracownika(pracownicy, d.mechanik) : null;
     if ((typ === 'awaria.przyjeta' || typ === 'awaria.naprawa_rozpoczeta') && kto) return `Awarię ${nr}przyjął już ${kto}.`;
-    if (awaria && awaria.status === 'anulowana') return `Awaria ${nr}została anulowana — nic nie zmieniono.`;
+    if (awaria && awaria.status === 'anulowana') return `Awaria ${nr}została odwołana — nic nie zmieniono.`;
     if (awaria && awaria.status === 'zamknieta') return `Awaria ${nr}jest już zamknięta — nic nie zmieniono.`;
     return `Awaria ${nr}ma już status „${(awaria && awaria.etykieta) || '?'}” — nic nie zmieniono. Sprawdź kartę.`;
   }
@@ -453,7 +453,7 @@
         case 'awaria.zakonczona_ur': return `Zakończona przez UR: ${d.opis_naprawy || ''}`;
         case 'awaria.potwierdzona': return 'Lider potwierdził — linia ruszyła';
         case 'awaria.potwierdzenie_odrzucone': return `Lider: nie działa — ${d.powod || ''}`;
-        case 'awaria.anulowana': return `Anulowana: ${d.powod || ''}`;
+        case 'awaria.anulowana': return `Odwołana: ${d.powod || ''}`;
         case 'awaria.komentarz': return `Notatka: ${d.tekst || ''}`;
         default: return ((kontrakt && kontrakt.zdarzenia[z.typ]) || {}).opis || z.typ;
       }

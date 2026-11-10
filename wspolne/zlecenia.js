@@ -124,7 +124,7 @@
           uwagiZwrotu: d.uwagi_zwrotu || null, czas: d.czas_zlecenia || '',
           zdjecia: [].concat(d.zdjecia || []), zdjeciaWykonania: [].concat(d.zdjecia_wykonania || []),
           // D76: „do kierownika działu”, rozdział (postęp z osobami), część całości, „Przekaż” / „Rozdziel” dla kierownika działu.
-          doKierownika: d.do_kierownika === true && !d.wykonawca && DO_ZROBIENIA.has(z.status), rozdzielone: z.status === 'rozdzielone',
+          doKierownika: d.do_kierownika === true && !d.wykonawca && z.status === 'nowe', rozdzielone: z.status === 'rozdzielone',
           rozdzial: rozdzialWiersza(z, lista, nazwa, H, H && H.widziRozdzial ? H.widziRozdzial(z, pracownik, dzialyKontraktu) : false, godz),
           czesc: !!d.nadrzedne, uwagiPrzekazania: d.uwagi_przekazania || null,
           dzialania: H && H.mozeRozdzielic ? H.mozeRozdzielic(z, pracownik, dzialyKontraktu) : { przekaz: false, rozdziel: false },
@@ -293,9 +293,9 @@
     if (!lista.length) { el.innerHTML = ''; return 0; }
     const z = lista[0];
     el.innerHTML = `<button type="button" class="hala-zalegle" aria-label="Zaległe zlecenia: ${lista.length}. Otwórz zlecenia">
-      <span class="hala-zalegle-naglowek">⚠ ${lista.length > 1 ? 'Zaległe zlecenia' : 'Zaległe zlecenie'} — zrób najpierw</span>
+      <span class="hala-zalegle-naglowek">${ikona('awaria', 16)}${lista.length > 1 ? 'Zaległe zlecenia' : 'Zaległe zlecenie'} — zrób najpierw</span>
       <span class="hala-zalegle-pozycja"><span class="hala-zlecenie-nr" aria-hidden="true">1</span><b>${esc(z.tytul)}</b></span>
-      <span class="hala-zalegle-opis">${esc(z.zalegleOpis)}${z.wymagajZdjecia ? ' · 📷' : ''}${z.wymagajNotatki ? ' · 📝' : ''}${z.wymagajSkanu ? ' · QR' : ''}</span>
+      <span class="hala-zalegle-opis">${esc(z.zalegleOpis)}${z.wymagajZdjecia ? ' · zdjęcie' : ''}${z.wymagajNotatki ? ' · notatka' : ''}${z.wymagajSkanu ? ' · QR' : ''}</span>
       ${lista.length > 1 ? `<span class="hala-zalegle-wiecej">+${lista.length - 1} więcej ›</span>` : '<span class="hala-zalegle-wiecej">Otwórz ›</span>'}
     </button>`;
     el.firstElementChild.onclick = () => { if (otworz) otworz(z); };
@@ -307,7 +307,7 @@
   // podłączenia: lider zmienia linię, a na wspólnym tablecie po liderze loguje się mistrz (inny dział) — ze starymi
   // opcjami „Zrobione” zamykało formularz od razu i przerysowywało listę poprzedniej linii albo działu.
   const stany = new WeakMap();
-  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined, info: null, notatka: null, poz: null }); return stany.get(el); };
+  const stan = el => { if (!stany.has(el)) stany.set(el, { moje: false, formularz: null, opcje: null, ja: undefined, info: null, notatka: null, poz: null, wiecej: null, rozw: new Set() }); return stany.get(el); };
 
   /* Zdarzenie z treści TEGO ekranu zleceń. UR i KJ rysują wszystkie ekrany w jednym elemencie (#ekran), więc nasi
      słuchacze zostają na nim także pod Awariami czy Przeglądami — tam chip „Moje” (data-filtr) przestawiał filtr zleceń
@@ -318,7 +318,7 @@
   };
 
   /* D55: „Zaznacz wyraźniej statusy wykonywania zadań” — pasek kroków Zlecone → Przyjęte → Zrobione → Odebrane
-     (odebrane = kierownik przyjął wykonanie). „Nie mogę” i „po czasie” na czerwono. */
+     (odebrane = kierownik odebrał wykonanie). „Nie mogę” i „po czasie” na czerwono. */
   const KROKI = ['Zlecone', 'Przyjęte', 'Zrobione', 'Odebrane'];
   function krokiStatusu(status) {
     const nr = { nowe: 0, przepadlo: 0, przyjete: 1, wykonane: 2, odrzucone: 2, zamkniete: 3 }[status];
@@ -329,6 +329,10 @@
     }).join('')}</ol>`;
   }
   const KLASA_STATUSU = { nowe: 'info', przyjete: 'uwaga', wykonane: 'ok', odrzucone: 'alarm', przepadlo: 'alarm', zamkniete: 'ok' };
+
+  /* Ikona liniowa z gk-ikony.js (STYL-GK §8) zamiast emoji; bez załadowanego pliku — nic (napis obok mówi to samo). */
+  const ikona = (nazwa, rozmiar) => (global.GKIkony && global.GKIkony.html(nazwa, rozmiar || 18)
+    ? `<span class="hala-ikona">${global.GKIkony.html(nazwa, rozmiar || 18)}</span>` : '');
 
   const miniatury = ids => ids.map(id => `<img class="hala-zlecenie-foto" data-plik="${esc(id)}" alt="Zdjęcie" loading="lazy">`).join('');
 
@@ -350,7 +354,7 @@
       ${zrobione ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !juz.zdjecia, 'Zdjęcie')}${juz.zdjecia ? ` <span class="slaby">— już ${juz.zdjecia} w postępie</span>` : ''}</span>
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}">
             <button type="button" data-akcja="usun-zdjecie" data-nr="${i}" aria-label="Usuń zdjęcie ${i + 1}">✕</button></span>`).join('')}
-          ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length && !juz.zdjecia ? 'brak' : ''}">📷 ${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
+          ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length && !juz.zdjecia ? 'brak' : ''}">${ikona('aparat')}${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
             <input type="file" accept="image/*" capture="environment" multiple data-zdjecie hidden></label>` : ''}</div></div>` : ''}
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${zrobione ? pole(w.wymagajNotatki && !juz.notatka, 'Notatka') : 'Dlaczego nie da się tego zrobić?'}</span>
         <textarea data-pole rows="3" maxlength="2000" placeholder="${zrobione ? 'Co zrobione, co zauważone' : 'Kierownik to zobaczy'}">${esc(f.tekst)}</textarea></label>
@@ -381,6 +385,36 @@
     return role.some(r => dozwolone.includes(r));
   }
 
+  /* Akcje karty zlecenia „do zrobienia” (bez checklisty). Audyt 2026-11-09: kierownik działu dostawał naraz 7 przycisków
+     (zdjęcie, notatka, Przekaż, Rozdziel, Biorę, Zrobione, Nie mogę), a pasek stanu wyglądał jak kolejne cztery. Teraz:
+       - jedna GŁÓWNA czynność wynikająca ze stanu i roli (nowe zlecenie dla zwykłej osoby — „Biorę”, przyjęte — „Zrobione”,
+         „do rozdzielenia” dla kierownika działu — „Przekaż”), obok niej tylko to, co wybiera się równie często;
+       - reszta pod „Więcej”: kroki postępu (skan, zdjęcie, notatka) i rzadkie czynności. Żadna funkcja nie znika,
+         uprawnienia (z.dzialania) bez zmian — przycisk dalej pojawia się tylko tam, gdzie serwer go przyjmie. */
+  function akcjeKarty(z, s) {
+    const przyc = (akcja, napis, klasa) => `<button type="button"${klasa ? ` class="${klasa}"` : ''} data-akcja="${akcja}">${napis}</button>`;
+    const nowe = z.status === 'nowe' && !z.poCzasie;
+    const doRozdzielenia = z.doKierownika && z.dzialania.przekaz && nowe;     // „Przekaż”/„Rozdziel” to dla niego następny krok
+    const biore = przyc('przyjmij', 'Biorę', doRozdzielenia ? '' : 'glowny'), zrobione = przyc('wykonane', 'Zrobione', nowe ? '' : 'zielony');
+    const nieMoge = przyc('nie-moge', 'Nie mogę');
+    const przekaz = z.dzialania.przekaz ? przyc('przekaz', 'Przekaż', doRozdzielenia ? 'glowny' : '') : '';
+    const rozdziel = z.dzialania.rozdziel ? przyc('rozdziel', 'Rozdziel') : '';
+    const widoczne = doRozdzielenia ? [przekaz, rozdziel] : nowe ? [biore, zrobione, nieMoge] : [zrobione, nieMoge];
+    const ukryte = [].concat(doRozdzielenia ? [biore, zrobione, nieMoge] : [przekaz, rozdziel],
+      global.HalaSkaner && z.maszyny.length ? [przyc('postep-skan', `Skanuj ${z.maszyny.length > 1 ? 'maszyny' : 'maszynę'}`)] : [],
+      [`<label class="hala-przycisk-pliku">Dodaj zdjęcie<input type="file" accept="image/*" capture="environment" multiple data-postep-zdjecie hidden></label>`,
+       przyc('postep-notatka', 'Notatka')]).filter(Boolean);
+    const otwarte = s.wiecej === z.id || (s.notatka && s.notatka.id === z.id);
+    return `${s.notatka && s.notatka.id === z.id ? `<div class="hala-zlecenie-formularz">
+          <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">Notatka do postępu (kierownik zobaczy od razu)</span>
+            <textarea data-postep-pole rows="2" maxlength="2000" placeholder="Co już zrobione">${esc(s.notatka.tekst)}</textarea></label>
+          <div class="hala-zlecenie-akcje"><button type="button" data-akcja="postep-notatka-anuluj">Anuluj</button>
+            <button type="button" class="glowny" data-akcja="postep-notatka-zapisz">Zapisz notatkę</button></div></div>` : ''}
+        <div class="hala-zlecenie-akcje">${widoczne.join('')}
+          <button type="button" class="hala-wiecej" data-akcja="wiecej" aria-expanded="${otwarte}">Więcej ${otwarte ? '▴' : '▾'}</button></div>
+        ${otwarte ? `<div class="hala-zlecenie-wiecej-menu">${ukryte.join('')}</div>` : ''}`;
+  }
+
   function rysuj(el, hala, opcje) {
     const s = stan(el);
     s.opcje = opcje;
@@ -394,7 +428,7 @@
     const maszyny = (hala.slowniki && hala.slowniki.maszyny) || {};
     const wiersz = (z, nr) => `
       <article class="hala-zlecenie status-${esc(z.status)} ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''} ${z.zalegle ? 'zalegle' : ''} ${z.wyslane ? 'wyslane' : ''}" data-id="${esc(z.id)}">
-        <div class="hala-zlecenie-gora">${nr ? `<span class="hala-zlecenie-nr" aria-label="Kolejność ${nr}">${nr}</span>` : ''}<button type="button" class="hala-zlecenie-tytul" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button><span class="slaby">${z.stale ? '🔁 ' : ''}${esc(z.numer)}</span></div>
+        <div class="hala-zlecenie-gora">${nr ? `<span class="hala-zlecenie-nr" aria-label="Kolejność ${nr}">${nr}</span>` : ''}<button type="button" class="hala-zlecenie-tytul" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button><span class="slaby">${z.stale ? `<span title="Zlecenie stałe">${ikona('powtarzaj', 14)}</span>` : ''}${esc(z.numer)}</span></div>
         ${krokiStatusu(z.status)}
         <div class="hala-zlecenie-szczegoly">
           <span class="znacznik ${KLASA_STATUSU[z.status] || 'uwaga'}">${esc(z.poCzasie ? 'Po czasie' : z.etykieta)}</span>
@@ -413,39 +447,22 @@
         ${z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="hala-zlecenie-czesci"><summary>Części — szczegóły</summary><ul>${z.rozdzial.czesci.map(c =>
           `<li><b>${esc(c.znak)} ${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? `<p class="hala-zlecenie-zwrot">Nie może: ${esc(c.powod)}</p>` : ''}${c.notatka ? `<p class="hala-zlecenie-opis">📝 ${esc(c.notatka)}</p>` : ''}${c.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(c.zdjecia)}</div>` : ''}</li>`).join('')}</ul></details>` : ''}
         ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
-        ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">⏰ ${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
+        ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">${ikona('zegar', 16)}${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
         ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">⏳ Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
         : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
           <button type="button" data-akcja="nie-moge">Nie mogę</button></div>`)
-        : z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-postep-akcje">
-          ${global.HalaSkaner && z.maszyny.length ? `<button type="button" data-akcja="postep-skan">▣ Skanuj${z.maszyny.length > 1 ? ' maszyny' : ' maszynę'}</button>` : ''}
-          <label class="hala-przycisk-pliku">📷 Dodaj zdjęcie<input type="file" accept="image/*" capture="environment" multiple data-postep-zdjecie hidden></label>
-          <button type="button" data-akcja="postep-notatka">📝 Notatka</button>
-        </div>
-        ${s.notatka && s.notatka.id === z.id ? `<div class="hala-zlecenie-formularz">
-          <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">Notatka do postępu (kierownik zobaczy od razu)</span>
-            <textarea data-postep-pole rows="2" maxlength="2000" placeholder="Co już zrobione">${esc(s.notatka.tekst)}</textarea></label>
-          <div class="hala-zlecenie-akcje"><button type="button" data-akcja="postep-notatka-anuluj">Anuluj</button>
-            <button type="button" class="glowny" data-akcja="postep-notatka-zapisz">Zapisz notatkę</button></div></div>` : ''}
-        <div class="hala-zlecenie-akcje">
-          ${/* D76: kierownik działu — „Przekaż” (jedna osoba) i „Rozdziel” (kilka); przy zleceniu „do rozdzielenia” to jego
-               następny krok, więc wyróżniony zamiast „Biorę”. */
-            z.dzialania.przekaz ? `<button type="button" ${z.doKierownika ? 'class="glowny" ' : ''}data-akcja="przekaz">Przekaż</button>` : ''}
-          ${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}
-          ${/* UI etap 4: wyróżniony jest NASTĘPNY krok — przy nowym zleceniu „Biorę”, potem „Zrobione”. */
-            z.status === 'nowe' && !z.poCzasie ? `<button type="button" ${z.doKierownika && z.dzialania.przekaz ? '' : 'class="glowny" '}data-akcja="przyjmij">Biorę</button>` : ''}
-          <button type="button" ${z.status === 'nowe' && !z.poCzasie ? '' : 'class="zielony" '}data-akcja="wykonane">Zrobione</button>
-          <button type="button" data-akcja="nie-moge">Nie mogę</button>
-        </div>`) : z.rozdzielone ? `<div class="hala-zlecenie-akcje">${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}</div>`
+        : z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : akcjeKarty(z, s)) : z.rozdzielone ? `<div class="hala-zlecenie-akcje">${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}</div>`
         : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
       </article>`;
     // Zaległe osobno i z numerami 1, 2, 3… — kolejność roboty, a nie tylko kolor (jak „Zaległe dostawy” w GK Trasy).
     const zal = lista.filter(z => z.zalegle), doZ = lista.filter(z => z.doZrobienia && !z.zalegle).sort((a, b) => (a.przed ? 1 : 0) - (b.przed ? 1 : 0)), wys = lista.filter(z => z.wyslane);
     const roz = lista.filter(z => z.rozdzielone);              // D76: całość rozdzielona — postęp części, „Rozdziel” dokłada osoby
-    const pusto = s.moje ? 'Nie masz przypisanych zleceń' : 'Nie ma zleceń do zrobienia';
+    // Pusty ekran mówi, co dalej (audyt 2026-11-09): nowe zlecenia pojawiają się same, a „Moje” da się przełączyć na całość.
+    const pusto = s.moje ? 'Nie masz przypisanych zleceń. Dotknij „Wszystkie”, żeby zobaczyć zlecenia działu.'
+      : 'Brak zleceń do zrobienia. Nowe pojawią się tu same.';
     // Kursor w polu tekstowym — przerysowanie nie może go zabrać (tekst i tak jest w stanie).
     const wPolu = document.activeElement && el.contains(document.activeElement) && document.activeElement.matches('[data-pole], [data-postep-pole], [data-pozycja-pole]');
     const poleZFocusem = wPolu ? ['[data-pole]', '[data-postep-pole]', '[data-pozycja-pole]'].find(x => document.activeElement.matches(x)) : null;
@@ -453,8 +470,8 @@
     const DZ = global.HalaDzialania;
     // D55: skan QR maszyny (menu: wykonaj zadanie / zgłoś awarię / nieprawidłowość), zgłoszenie do kierownika, narzędzia (mistrz).
     const narzedziaGory = DZ && !opcje.bezDzialan ? `<div class="hala-zlecenia-dzialania">
-        <button type="button" data-gora="zglos">📝 Zgłoś nieprawidłowość</button>
-        ${mozeOdlozycNarzedzia(hala) ? '<button type="button" data-gora="narzedzia">🧰 Odłóż narzędzia</button>' : ''}
+        <button type="button" data-gora="zglos">${ikona('notatka', 16)}Zgłoś nieprawidłowość</button>
+        ${mozeOdlozycNarzedzia(hala) ? `<button type="button" data-gora="narzedzia">${ikona('narzedzia', 16)}Odłóż narzędzia</button>` : ''}
       </div>${s.info ? `<p class="hala-zlecenia-info" role="status">${esc(s.info)}</p>` : ''}` : '';
     const moje = mojeZgloszenia(hala, ja, opcje.opcjeZgloszen);
     // D60: opcje.tylko — jedno zlecenie (okno „▶ Wykonaj” w Panelu): bez nagłówka, filtra i zgłoszeń osoby.
@@ -496,7 +513,7 @@
             for (const p of pliki) ids.push(await hala.dodajPlik(p));
             await dopiszPostep(hala, art.dataset.id, { zdjecia: ids });
             st.info = `Dodano ${ids.length === 1 ? 'zdjęcie' : `${ids.length} zdjęcia`} — kierownik już je widzi`;
-          } catch (e) { st.info = (e && e.message) || 'Nie udało się dodać zdjęcia.'; }
+          } catch (e) { st.info = (e && e.message) || 'Nie udało się dodać zdjęcia. Spróbuj jeszcze raz.'; }
           rysuj(el, hala, o);
           return;
         }
@@ -542,18 +559,22 @@
     const art = b.closest('[data-id]');
     if (!art || !b.dataset.akcja) return;
     const id = art.dataset.id;
+    // „Więcej” przełącza dodatkowe czynności karty; każda inna czynność zamyka to menu.
+    if (b.dataset.akcja === 'wiecej') { s.wiecej = s.wiecej === id ? null : id; return rysuj(el, hala, o); }
+    if (b.dataset.akcja === 'checklista-przelacz') { if (s.rozw.has(id)) s.rozw.delete(id); else s.rozw.add(id); return rysuj(el, hala, o); }
+    s.wiecej = null;
     try {
       if (b.dataset.akcja === 'historia' && DZ) return DZ.historia(hala, 'zlecenie', id);
       if (b.dataset.akcja.startsWith('pozycja')) return akcjaPozycji(b, el, hala, o, id);
       // D76: okna „Przekaż” i „Rozdziel” są wspólne z Panelem (dzialania.js).
       if (b.dataset.akcja === 'przekaz' && DZ) return DZ.przekaz(hala, id, { gotowe: info });
       if (b.dataset.akcja === 'rozdziel' && DZ) return DZ.rozdziel(hala, id, { gotowe: info });
-      if (b.dataset.akcja === 'przyjmij') await hala.zapisz('zlecenie.przyjete', id, {});
+      if (b.dataset.akcja === 'przyjmij') await zCofnieciem(hala, 'zlecenie.przyjete', id, {}, o);
       if (b.dataset.akcja === 'wykonane') {
         // D56: wszystko już zrobione krok po kroku — „Zrobione” wysyła od razu, bez formularza robionego „na raz”.
         const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, o, { moje: null, zostaw: id })))[0];
         if (z && (z.wymagajZdjecia || z.wymagajNotatki || z.wymagajSkanu) && !brakuje(wymaganiaZ(z, hala), { rodzaj: 'wykonane' }).length) {
-          await hala.zapisz('zlecenie.wykonane', id, {});
+          await zCofnieciem(hala, 'zlecenie.wykonane', id, {}, o);
           reakcja(hala, id);
           s.info = 'Wysłane do kierownika — wymagania były już spełnione';
           return rysuj(el, hala, o);
@@ -621,7 +642,7 @@
           const skany = (f.skany || []).filter(m => !((f.wymagania.juz || {}).skany || []).includes(m));
           for (const m of skany.slice(0, -1)) await dopiszPostep(hala, id, { skan: m });
           if (skany.length) dane.skan = skany[skany.length - 1];
-          await hala.zapisz('zlecenie.wykonane', id, dane);
+          await zCofnieciem(hala, 'zlecenie.wykonane', id, dane, o);
           reakcja(hala, id);
         }
         zwolnij(f);
@@ -670,8 +691,8 @@
     const krok = (ok, tekst) => `<span class="hala-krok-wymogu ${ok ? 'ok' : ''}">${ok ? '✓' : '○'} ${tekst}</span>`;
     const wymogi = [];
     if (z.wymagajSkanu) for (const m of z.maszyny) wymogi.push(krok(skany.has(m), `▣ ${esc(nazwa(m))}`));
-    if (z.wymagajZdjecia) wymogi.push(krok(z.juz.zdjecia > 0, `📷 zdjęcie${z.juz.zdjecia > 1 ? ` (${z.juz.zdjecia})` : ''}`));
-    if (z.wymagajNotatki) wymogi.push(krok(z.juz.notatka, '📝 notatka'));
+    if (z.wymagajZdjecia) wymogi.push(krok(z.juz.zdjecia > 0, `zdjęcie${z.juz.zdjecia > 1 ? ` (${z.juz.zdjecia})` : ''}`));
+    if (z.wymagajNotatki) wymogi.push(krok(z.juz.notatka, 'notatka'));
     const CZYNNOSCI = { proba: '🔬 Zaliczy się samo, gdy zapiszesz próbę jakościową', przeglad: '🔧 Zaliczy się samo po przeglądzie UR' };
     const ostatnie = z.postep.slice(-3).map(e => `${esc(godzinaLok(e.czas))} ${e.skan ? `▣ ${esc(nazwa(e.skan))}` : ''}${[].concat(e.zdjecia || []).length ? ' 📷' : ''}${e.uwagi ? ` 📝 ${esc(String(e.uwagi).slice(0, 60))}` : ''}`);
     return `${wymogi.length ? `<div class="hala-zlecenie-wymogi" aria-label="Wymagania">${wymogi.join('')}</div>` : ''}
@@ -694,9 +715,15 @@
     const nazwaM = m => (maszyny[m] || {}).nazwa || m;
     const p = z.postepPozycji || { gotowe: 0, wszystkie: z.pozycje.length };
     const otwarta = s.poz && s.poz.id === z.id ? s.poz : null;
+    // Właściciel 2026-11-10: długa checklista (np. „Standardowa zmiana 8 h”) zwinięta do jednej linii „Checklista: 3 z 8” — dotknięcie
+    // rozwija, nic nie znika. Rozwinięta, gdy ktoś ją rozwinął albo ma otwartą pozycję; krótka (do 3 pozycji) zawsze widoczna.
+    // W oknie jednego zlecenia („▶ Wykonaj”, opcje.tylko) checklista jest jedyną treścią — tam zawsze rozwinięta.
+    const dluga = z.pozycje.length > 3 && !(opcje && opcje.tylko);
+    const rozwinieta = !dluga || s.rozw.has(z.id) || !!otwarta;
     return `<div class="hala-checklista" aria-label="Checklista">
-      <div class="hala-checklista-naglowek">☑ Checklista <b>${p.gotowe}/${p.wszystkie}</b></div>
-      ${z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia && !z.przed && q.stan !== 'przed' ? '' : 'disabled'}>
+      ${dluga ? `<button type="button" class="hala-checklista-naglowek hala-checklista-przelacz" data-akcja="checklista-przelacz" aria-expanded="${rozwinieta}">☑ Checklista: <b>${p.gotowe} z ${p.wszystkie}</b> ${rozwinieta ? '▴' : '▾'}</button>`
+        : `<div class="hala-checklista-naglowek">☑ Checklista: <b>${p.gotowe} z ${p.wszystkie}</b></div>`}
+      ${!rozwinieta ? '' : z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia && !z.przed && q.stan !== 'przed' ? '' : 'disabled'}>
           <span class="hala-pozycja-znak" aria-hidden="true">${ZNAK_POZYCJI[q.stan]}</span>
           ${q.odGodz || q.godz ? `<span class="hala-pozycja-godz">${esc(q.odGodz ? (q.godz ? `${q.odGodz}–${q.godz}` : `od ${q.odGodz}`) : q.godz)}</span>` : ''}
           <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
@@ -747,7 +774,7 @@
                  : `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">▣ Zeskanuj QR${q.maszyna ? `: ${esc(nazwaM(q.maszyna))}` : ''}</button>`}</div>` : ''}
       <div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !f.pliki.length, 'Zdjęcie')}</span>
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}"></span>`).join('')}
-          ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length ? 'brak' : ''}">📷 ${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
+          ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length ? 'brak' : ''}">${ikona('aparat')}${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
             <input type="file" accept="image/*" capture="environment" multiple data-pozycja-zdjecie hidden></label>` : ''}</div></div>
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajNotatki, 'Notatka')} <span class="slaby">— przy „Pomiń” to powód</span></span>
         <textarea data-pozycja-pole rows="2" maxlength="1000" placeholder="Co zrobione, co zauważone">${esc(f.tekst)}</textarea></label>
@@ -778,6 +805,13 @@
     await hala.zapisz('zlecenie.wykonane', id, {});
     reakcja(hala, id);
     return true;
+  }
+
+  /* Etap 6c: czynność odwracalna (Biorę, Zrobione) z paskiem „Cofnij” (dzialania.js); bez dzialania.js — zwykły zapis. */
+  function zCofnieciem(hala, typ, id, dane, o) {
+    const DZ = global.HalaDzialania;
+    if (!DZ || !DZ.zapiszZCofnieciem) return hala.zapisz(typ, id, dane);
+    return DZ.zapiszZCofnieciem(hala, typ, id, dane, { komunikat: o && o.komunikat, cofnieto: o && o.komunikat });
   }
 
   /* D77: reakcja kierownika po „Zrobione” tej osoby — 👍 „Dobra robota!” albo 🙄 „No, w końcu!” (reakcje.js). */
@@ -975,7 +1009,7 @@
 
   const HalaZlecenia = { maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
                          brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
-                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia };
+                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia, akcjeKarty };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

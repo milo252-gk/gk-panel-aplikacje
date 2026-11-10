@@ -26,12 +26,12 @@
       const zKodem = k.elementy.filter(e => e.aplikacja || (e.etykiety || []).length).length;
       return `<details class="kody-kategoria" data-kategoria="${esc(k.kod)}" ${otwarte.has(k.kod) ? 'open' : ''}>
         <summary><span class="kody-nazwa">${esc(k.nazwa)} <span class="znacznik neutral">${k.wczytuje ? '…' : zKodem}</span></span>
-          <button type="button" class="maly glowny" data-wszystkie="${esc(k.kod)}" ${zKodem ? '' : 'disabled'}>🖨 Drukuj wszystkie</button></summary>
+          <button type="button" class="maly glowny" data-wszystkie="${esc(k.kod)}" ${zKodem ? '' : 'disabled'}>${P.ik('drukuj')}Drukuj wszystkie</button></summary>
         ${k.gdzie ? `<p class="slaby">${esc(k.gdzie)}</p>` : ''}
         ${k.blad ? `<p class="tekst-alarm">${esc(k.blad)}</p>` : k.wczytuje ? '<p class="slaby">Wczytuję…</p>' : ''}
         <ul class="kody-lista">${k.elementy.map(e => `<li>
           <span><b>${esc(e.nazwa)}</b> <span class="slaby">${esc(e.podpis)}</span></span>
-          ${e.aplikacja || (e.etykiety || []).length ? `<button type="button" class="maly" data-jeden="${esc(e.klucz)}" aria-label="Drukuj: ${esc(e.nazwa)}" title="Drukuj">🖨</button>` : ''}
+          ${e.aplikacja || (e.etykiety || []).length ? `<button type="button" class="maly" data-jeden="${esc(e.klucz)}" aria-label="Drukuj: ${esc(e.nazwa)}" title="Drukuj">${P.ik('drukuj')}</button>` : ''}
         </li>`).join('')}</ul>
       </details>`;
     }).join('');

@@ -170,7 +170,7 @@
       apl,
       { kod: 'maszyny', nazwa: 'Maszyny', gdzie: 'Też: Administracja → Maszyny',
         elementy: proste('maszyny', p => [p.kod, wiele ? p.liniaNazwa : ''].filter(Boolean).join(' · ')) },
-      { kod: 'punkty', nazwa: 'Punkty skanu w zadaniach i obchodach', gdzie: 'Naklejki maszyn, które trzeba zeskanować. Też: Zlecenia → 💾 Zapisane',
+      { kod: 'punkty', nazwa: 'Punkty skanu w zleceniach i obchodach', gdzie: 'Naklejki maszyn, które trzeba zeskanować. Też: Zlecenia → Zapisane',
         elementy: punktySkanu(sl).map(p => ({ klucz: p.klucz, nazwa: p.zrodlo === 'ur' ? `UR: ${p.nazwa}` : p.nazwa,
           podpis: `${p.etykiety.map(e => e.kod).join(', ')}${p.aktywny ? '' : ' · wstrzymane'}`, etykiety: p.etykiety })) },
       { kod: 'linie', nazwa: 'Linie', gdzie: '', elementy: wiele ? proste('linie', p => p.kod) : [] },

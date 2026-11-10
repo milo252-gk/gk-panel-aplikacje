@@ -188,7 +188,7 @@
         <label>Nieobecni (każdy w osobnej linii)<textarea name="nieobecni" rows="3"></textarea></label>
         <label>Uwagi<textarea name="uwagi" rows="2" maxlength="1000"></textarea></label>
         <ul class="bledy" hidden></ul>
-        <button type="submit" class="glowny szeroki duzy">Wyślij obsadę</button>
+        <button type="submit" class="glowny szeroki duzy">Zapisz obsadę</button>
       </form>`,
       poOtwarciu: el => {
         const form = el.querySelector('form');
@@ -242,7 +242,7 @@
         <label class="na-linie">Na linię<select name="na_linie"><option value="">—</option>${linie.map(l => `<option value="${esc(l.kod)}">${esc(l.kod)} ${esc(l.nazwa)}</option>`).join('')}</select></label>
         <label>Opis<textarea name="opis" rows="2" maxlength="1000"></textarea></label>
         <ul class="bledy" hidden></ul>
-        <button type="submit" class="glowny szeroki duzy">Zapisz</button>
+        <button type="submit" class="glowny szeroki duzy">Zapisz zdarzenie</button>
       </form>`,
       poOtwarciu: el => {
         const form = el.querySelector('form');
@@ -373,7 +373,7 @@
         <label>Opis<textarea name="opis" rows="3" maxlength="4000" placeholder="Co się stało albo co grozi?"></textarea></label>
         <div class="pole-zdjec"></div>
         <ul class="bledy" hidden></ul>
-        <button type="submit" class="alarm szeroki duzy">Zgłoś</button>
+        <button type="submit" class="alarm szeroki duzy">Zgłoś BHP</button>
       </form>`,
       poOtwarciu: el => {
         const form = el.querySelector('form');

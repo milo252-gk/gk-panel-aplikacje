@@ -540,6 +540,9 @@
 
   // ------------------------------------------------------------ „Więcej”
 
+  // Etap 6a: awarie i nieprawidłowości zgłoszone przez tę osobę, ze statusem (wspolne/dzialania.js); w menu podświetla „Więcej”.
+  UR.ekran('zgloszenia', { zakladka: 'wiecej', rysuj: el => global.HalaDzialania.mojeZgloszenia(el, hala) });
+
   // STYL-GK §8: Plan (menu `.w-wiecej`) jest na telefonie tylko tutaj (dolny pasek: najwyżej 4 ekrany + Więcej); #plan działa jak dawniej.
   UR.ekran('wiecej', {
     rysuj(el) {
@@ -547,9 +550,10 @@
         <nav class="menu">
           <a class="przycisk" href="#liczniki">Liczniki maszyn (motogodziny, cykle)</a>
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
+          <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
-        <p class="slaby">Powiadomienia, dźwięk, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
+        <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
     },
   });
 

@@ -404,6 +404,9 @@
 
   // ------------------------------------------------------------ „Więcej”
 
+  // Etap 6a: awarie i nieprawidłowości zgłoszone przez tę osobę, ze statusem (wspolne/dzialania.js); w menu podświetla „Więcej”.
+  KJ.ekran('zgloszenia', { zakladka: 'wiecej', rysuj: el => global.HalaDzialania.mojeZgloszenia(el, hala) });
+
   // STYL-GK §8: dolny pasek telefonu ma najwyżej 4 ekrany + Więcej, więc Reklamacje (menu `.w-wiecej`) są na telefonie tutaj;
   // adres #reklamacje i powiadomienia nic nie zmieniają — ekran ten sam, tylko podświetla „Więcej” (hala.css → :has).
   KJ.ekran('wiecej', {
@@ -414,6 +417,7 @@
           <a class="przycisk" href="#pareto">Pareto wad</a>
           <a class="przycisk" href="#partie">Partie brakowe</a>
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
+          <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
         <p class="slaby">Powiadomienia, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;

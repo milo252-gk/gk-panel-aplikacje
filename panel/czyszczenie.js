@@ -1,7 +1,7 @@
 /* Panel Kierownika — okno „🧹 Czyszczenie zleceń” (Zlecenia → 🧹 Czyszczenie, Administracja → Dane; tylko administrator).
 
    Właściciel 2026-10-27: „usuń historię zadań z wczoraj i dziś z 1 zmiany”; 2026-11-09: „brakuje usunięcia zamkniętych, a wybór
-   zleceń jest niejasny”. Dlatego jedna lista w trzech krokach: (1) które pokazać — Zakończone (zamknięte, anulowane, przepadłe;
+   zleceń jest niejasny”. Dlatego jedna lista w trzech krokach: (1) które pokazać — Zakończone (zamknięte, odwołane, przepadłe;
    domyślnie), W toku albo Wszystkie, z liczbą na każdym przycisku, i od kiedy (kiedykolwiek / sprzed dzisiaj / starsze niż 7 / 30 dni);
    (2) zaznacz zlecenia — pole przy każdym, „Zaznacz wszystkie widoczne”, licznik „Zaznaczono N z M”; (3) „Usuń zaznaczone (N)”.
    Zapisanych (stałych) zleceń i zaplanowanych na później to okno nie pokazuje i nie rusza. Serwer przed usunięciem robi pełną kopię
@@ -16,8 +16,8 @@
 
   const GRUPY = [['zakonczone', 'Zakończone'], ['w_toku', 'W toku'], ['wszystkie', 'Wszystkie']];
   const WIEK = [['', 'kiedykolwiek'], ['dzis', 'sprzed dzisiaj'], ['7', 'starsze niż 7 dni'], ['30', 'starsze niż 30 dni']];
-  const STATUSY = { zamkniete: 'Zamknięte', anulowane: 'Anulowane', przepadlo: 'Przepadło', nowe: 'Nowe', przyjete: 'Przyjęte',
-                    wykonane: 'Wykonane — czeka na przyjęcie', odrzucone: 'Dział nie może', rozdzielone: 'Rozdzielone' };
+  const STATUSY = { zamkniete: 'Zamknięte', anulowane: 'Odwołane', przepadlo: 'Przepadło', nowe: 'Nowe', przyjete: 'Przyjęte',
+                    wykonane: 'Zrobione — czeka na odbiór', odrzucone: 'Dział nie może', rozdzielone: 'Rozdzielone' };
   const KONCOWE = new Set(['zamkniete', 'anulowane', 'przepadlo']);
 
   const pusty = () => ({ grupa: 'zakonczone', wiek: '', pozycje: [], liczby: { zakonczone: 0, w_toku: 0, wszystkie: 0 }, ucieto: false });

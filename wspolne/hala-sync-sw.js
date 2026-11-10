@@ -140,7 +140,7 @@
   async function powiadom(ile, powod) {
     if (!ile || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     const ikona = new URL('./ikona-192.png', self.registration.scope).href;
-    await self.registration.showNotification('GK — zapisy w telefonie', {
+    await self.registration.showNotification('GK — zapisy na tym urządzeniu', {
       body: `${ile} ${odmiana(ile)} — otwórz aplikację${powod === 'brak_sesji' || powod === 'sesja' ? ' i zaloguj się' : ''}, żeby je wysłać.`,
       tag: TAG, renotify: false, icon: ikona, badge: new URL('./ikona.svg', self.registration.scope).href, data: { adres: '' } });
   }

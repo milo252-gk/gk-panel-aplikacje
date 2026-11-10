@@ -399,6 +399,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-zlecenie-kiedy .po-terminie-tekst { color: var(--czerwony); font-weight: 700; }
 .hala-zlecenie-akcje { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .hala-zlecenie-akcje button { flex: 1 1 auto; }
+/* „Więcej” na karcie zlecenia: jedna wtórna czynność zamiast siedmiu równorzędnych przycisków (audyt 2026-11-09). */
+.hala-zlecenie-akcje .hala-wiecej { flex: 1 1 100%; min-height: var(--dotyk); border-color: transparent; background: transparent; color: var(--tekst-slaby); font-size: 14px; }
+.hala-zlecenie-wiecej-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--ramka-mocna); }
+.hala-ikona { display: inline-flex; vertical-align: -3px; margin-right: 6px; }
+.hala-zlecenie-wiecej-menu > * { min-height: var(--dotyk); width: 100%; box-sizing: border-box; }
 .hala-zlecenia-pusto { text-align: center; color: var(--tekst-slaby); margin: 24px 0; }
 .hala-zlecenia-naglowek { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .hala-zlecenia-naglowek h2 { margin: 4px 0; }
@@ -506,6 +511,31 @@ body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: calc(var(--dol-wys) + 9
   body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: 96px; }
 }
 @media (prefers-reduced-motion: reduce) { .komunikat { animation: none; } }
+
+/* Etap 6c (2026-11-10): pasek „Zrobione. Cofnij” (dzialania.js → zaproponujCofniecie) — jak dymek .komunikat, ale z przyciskiem;
+   popover="manual" (nad oknami <dialog>), reset ramki popovera jak w .komunikaty. */
+.hala-cofnij {
+  position: fixed; z-index: 1125; top: auto; left: 12px; right: 12px; bottom: calc(var(--dol-wys) + 14px + env(safe-area-inset-bottom, 0px));
+  width: auto; height: auto; margin: 0; padding: 0; border: 0; background: none; color: inherit; overflow: visible;
+  display: flex; justify-content: center; pointer-events: none;
+}
+.hala-cofnij-karta { pointer-events: auto; display: flex; align-items: center; gap: 14px; background: var(--toast-tlo); color: var(--toast-tekst);
+                     padding: 6px 8px 6px 17px; border-radius: 11px; font-size: 14px; box-shadow: var(--cien-mocny); max-width: 480px; box-sizing: border-box; animation: hala-wjazd .18s; }
+.hala-cofnij-karta button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 9px; background: var(--pomarancz); color: var(--na-pomarancz); font: inherit; font-weight: 700; cursor: pointer; }
+@media (min-width: 821px) { .hala-cofnij { bottom: 18px; } }
+body.hala-ma-skan .hala-cofnij { bottom: calc(var(--dol-wys) + 84px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 821px) { body.hala-ma-skan .hala-cofnij { bottom: 90px; } }
+@media (prefers-reduced-motion: reduce) { .hala-cofnij-karta { animation: none; } }
+
+/* Etap 6b (2026-11-10): podpowiedź „Maszyna X ma już otwartą awarię… Dodać do niej?” w oknie zgłoszenia awarii (dzialania.js). */
+.hala-duplikat { background: var(--zolty-tlo); border: 1px solid var(--zolty); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.hala-duplikat p { margin: 0; font-size: 14px; }
+
+/* Etap 6a (2026-11-10): „Moje zgłoszenia” (dzialania.js → mojeZgloszenia) — lista kart w Liderze, UR i KJ. */
+.hala-moje { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.hala-moje-wiersz { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien, 12px); padding: 12px 14px; display: grid; gap: 4px; }
+.hala-moje-wiersz .gora { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.hala-moje-wiersz .opis { overflow-wrap: anywhere; }
 
 /* ------------------------------------------------ wspólne okno (konto.js: „Zmień PIN”) i pasek „Pobierz CSV” (eksport.js) — D32 */
 /* Jedno okno we wszystkich czterech aplikacjach — ich własne okna mają różne klasy (.okno w Liderze to nie <dialog>),
@@ -615,12 +645,14 @@ button.hala-info[aria-expanded="true"] { background: var(--granat); border-color
 .hala-zlecenie.status-przyjete { border-left-color: var(--zolty); }
 .hala-zlecenie.status-wykonane, .hala-zlecenie.status-zamkniete { border-left-color: var(--zielony); }
 .hala-zlecenie.status-odrzucone, .hala-zlecenie.status-przepadlo { border-left-color: var(--czerwony); }
-.hala-kroki { display: flex; gap: 4px; list-style: none; margin: 8px 0 6px; padding: 0; counter-reset: krok; }
-.hala-kroki li { flex: 1 1 0; min-width: 0; padding: 5px 4px; border-radius: 6px; background: var(--tlo-neutralne); color: var(--tekst-slaby);
-  font-size: 12px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hala-kroki li.zrobiony { background: var(--zielony-tlo); color: var(--zielony); }
-.hala-kroki li.teraz { background: var(--granat); color: var(--na-marce); }
-.hala-kroki li.odmowa { background: var(--czerwony); color: var(--na-barwie); }
+/* Pasek stanu to wskaźnik postępu, a nie cztery przyciski (audyt 2026-11-09: szare prostokąty wyglądały jak klikalne) —
+   cienka linia nad napisem, bez tła i obramowania; aktualny krok ciemniejszy i grubszy, zrobione zielone, „Nie mogę” czerwone. */
+.hala-kroki { display: flex; gap: 6px; list-style: none; margin: 8px 0 6px; padding: 0; counter-reset: krok; }
+.hala-kroki li { flex: 1 1 0; min-width: 0; padding: 5px 0 0; border-top: 4px solid var(--ramka-mocna); border-radius: 2px; background: none; color: var(--tekst-slaby);
+  font-size: 12px; font-weight: 600; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hala-kroki li.zrobiony { border-top-color: var(--zielony); color: var(--zielony); }
+.hala-kroki li.teraz { border-top-color: var(--akcent); color: var(--tekst); font-weight: 800; }
+.hala-kroki li.odmowa { border-top-color: var(--czerwony); color: var(--czerwony); font-weight: 800; }
 /* Tytuł zlecenia = przycisk „Historia” (kto, kiedy, notatki, zdjęcia) — wygląda jak tytuł, podkreślenie mówi, że się klika. */
 button.hala-zlecenie-tytul { all: unset; cursor: pointer; font-weight: 700; color: var(--tekst); text-decoration: underline dotted;
   text-underline-offset: 3px; overflow-wrap: anywhere; }
@@ -643,6 +675,8 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-historia-spoznione { color: var(--czerwony); font-weight: 700; }
 .hala-menu-maszyny { display: grid; gap: 8px; }
 .hala-menu-maszyny button { min-height: 52px; font-size: 16px; text-align: left; padding: 8px 14px; }
+/* Gdy pierwsza jest inna czynność, „Zgłoś awarię” zostaje czerwone, ale bez pełnego tła — jeden przycisk główny na menu. */
+.hala-menu-maszyny button.czerwony-kontur { background: transparent; color: var(--czerwony); border-color: var(--czerwony); }
 .hala-menu-maszyny [data-zadania] { display: grid; gap: 6px; padding-left: 10px; }
 /* D57: „📱 Aplikacje na telefon” w Moje konto — kod QR każdej aplikacji osoby. */
 .hala-konto-aplikacje { width: 100%; min-height: var(--dotyk); font-weight: 700; }
@@ -669,6 +703,12 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
   display: inline-flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 22px; border: 0; border-radius: 999px;
   background: var(--pomarancz); color: var(--na-pomarancz); font-size: 17px; font-weight: 800; box-shadow: var(--cien-mocny); cursor: pointer; }
 .hala-skan-fab span { font-size: 22px; line-height: 1; }
+/* Ikona liniowa (gk-ikony.js) przed napisem na przycisku, chipie albo w nagłówku: <span class="ik" data-ikona="drukuj" data-rozmiar="16">. */
+.ik { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
+.ik svg { display: block; width: 16px; height: 16px; }
+/* Właściciel 2026-11-10: na ekranie, który ma własny przycisk skanu (klasa .wlasny-skan: skan maszyny w zgłoszeniu awarii, „Na miejscu”,
+   przegląd, miejsce kontroli KJ), pływający „Skanuj” nie dubluje go. Wszędzie indziej zostaje. */
+body:has(.ekran:not([hidden]) .wlasny-skan) .hala-skan-fab { display: none; }
 .hala-skan-fab:focus-visible { outline: 3px solid var(--tekst); outline-offset: 2px; }
 @media (min-width: 821px) { .hala-skan-fab { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); } }
 /* D56: wymagania zlecenia odhaczane na żywo i kroki postępu. */
@@ -681,6 +721,7 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-checklista { display: grid; gap: 4px; margin: 8px 0; }
 .hala-checklista-naglowek { font-size: 14px; color: var(--tekst-slaby); }
 .hala-checklista-naglowek b { color: var(--tekst); }
+.hala-checklista-przelacz { justify-self: start; min-height: 0; padding: 6px 10px; background: transparent; border: 1px solid var(--ramka); font-weight: 600; }
 .hala-pozycja { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--dotyk); padding: 6px 10px;
   border: 1px solid var(--ramka); border-radius: 10px; background: var(--karta); color: var(--tekst); font: inherit; text-align: left; cursor: pointer; }
 .hala-pozycja[aria-expanded="true"] { border-color: var(--ramka-mocna); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }

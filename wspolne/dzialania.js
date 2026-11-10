@@ -5,7 +5,7 @@
      HalaDzialania.historia(hala, 'zlecenie', id)      // okno: kto, kiedy, notatki i zdjęcia — cała droga zlecenia
      HalaDzialania.zglos(hala, { maszyna?, dzial })     // zgłoszenie nieprawidłowości do kierownika zakładu
      HalaDzialania.odlozNarzedzia(hala)                 // mistrz: zużyte narzędzia w miejscu odbioru, ze zdjęciem
-     HalaDzialania.skanujMaszyne(hala, opcje)           // skan QR → „Wykonaj zadanie / Zgłoś awarię / Zgłoś nieprawidłowość”
+     HalaDzialania.skanujMaszyne(hala, opcje)           // skan QR → „Wykonaj zlecenie / Zgłoś awarię / Zgłoś nieprawidłowość”
 
    Okna to <dialog class="hala-okno"> (hala.css) — jedno wyglądające tak samo w każdej aplikacji. Zapis wyłącznie przez
    hala.js (hala.zapisz, hala.dodajPlik), więc działa też bez sieci (kolejka telefonu). Czyste funkcje (testy:
@@ -177,8 +177,8 @@
     'zlecenie.edytowane': 'Poprawione przez kierownika', 'zlecenie.postep': 'Krok wykonania',
     'zlecenie.utworzone': 'Zlecone', 'zlecenie.zaplanowane': 'Zaplanowane', 'zlecenie.plan_zmieniony': 'Plan zmieniony',
     'zlecenie.aktywowane': 'Zlecone (z planu)', 'zlecenie.przyjete': 'Przyjęte — „Biorę”', 'zlecenie.wykonane': 'Zrobione',
-    'zlecenie.odrzucone': '„Nie mogę”', 'zlecenie.zwrocone': 'Zwrócone przez kierownika', 'zlecenie.zamkniete': 'Przyjęte przez kierownika',
-    'zlecenie.anulowane': 'Anulowane', 'zlecenie.przepadlo': 'Minął koniec zmiany',
+    'zlecenie.odrzucone': '„Nie mogę”', 'zlecenie.zwrocone': 'Zwrócone przez kierownika', 'zlecenie.zamkniete': 'Odebrane przez kierownika',
+    'zlecenie.anulowane': 'Odwołane', 'zlecenie.przepadlo': 'Minął koniec zmiany', 'zlecenie.cofniete': 'Cofnięte przez autora',
     'zgloszenie.utworzone': 'Zgłoszone', 'zgloszenie.przyjete': 'Przyjęte przez kierownika', 'zgloszenie.odrzucone': 'Odrzucone',
     'narzedzia.odlozone': 'Odłożone do odbioru', 'narzedzia.odebrane': 'Odebrane',
     // Test właściciela 2026-10-13: krok wykonania (D56) pokazywał się w historii jako surowe „postep”.
@@ -332,7 +332,7 @@
           await hala.zapisz('zlecenie.przekazane', id, dane);
           zamknij();
           if (o.gotowe) o.gotowe(`Przekazane: ${nazwaOsoby(hala, osoba)} dostał(a) powiadomienie`);
-        } catch (e) { bladOkna(dlg, (e && e.message) || 'Nie udało się zapisać.'); b.disabled = false; }
+        } catch (e) { bladOkna(dlg, (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'); b.disabled = false; }
       });
     });
   }
@@ -377,7 +377,7 @@
           await hala.zapisz('zlecenie.rozdzielone', id, r.rozdzielone);
           zamknij();
           if (o.gotowe) o.gotowe(`Rozdzielone na ${r.czesci.length} ${r.czesci.length < 5 ? 'osoby' : 'osób'} — każda dostała powiadomienie`);
-        } catch (e) { bladOkna(dlg, (e && e.message) || 'Nie udało się zapisać.'); b.disabled = false; }
+        } catch (e) { bladOkna(dlg, (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'); b.disabled = false; }
       });
     });
   }
@@ -389,7 +389,7 @@
 
   function odlozNarzedzia(hala, opcje) {
     const o = opcje || {};
-    okno(`<form method="dialog"><h2>🧰 Odłóż zużyte narzędzia</h2>
+    okno(`<form method="dialog"><h2>${global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('narzedzia', 20)}</span>` : ''}Odłóż zużyte narzędzia</h2>
       <p class="hala-okno-opis">Zrób zdjęcie narzędzi w miejscu odbioru. Kierownik zakładu dostanie powiadomienie i potwierdzi odbiór zdjęciem.</p>
       <label>Co odkładasz?<input name="co" required maxlength="200" placeholder="np. 3 frezy Ø12, piła tarczowa"></label>
       <label>Gdzie (miejsce odbioru)<input name="miejsce" maxlength="200" value="${esc(czytajMiejsce())}" placeholder="np. regał przy biurze mistrza"></label>
@@ -414,7 +414,7 @@
           await hala.zapisz('narzedzia.odlozone', hala.nowyId(), dane);
           zamknij();
           if (o.gotowe) o.gotowe('Zapisane — kierownik odbierze narzędzia');
-        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zapisać.'); b.disabled = false; }
+        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'); b.disabled = false; }
       });
     });
   }
@@ -444,7 +444,7 @@
           await hala.zapisz('narzedzia.odebrane', id, dane);
           zamknij();
           if (o.gotowe) o.gotowe('Odbiór potwierdzony');
-        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zapisać.'); b.disabled = false; }
+        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'); b.disabled = false; }
       });
     });
   }
@@ -455,16 +455,37 @@
     const o = opcje || {};
     const sl = hala.slowniki || {};
     const prio = ((hala.kontrakt && hala.kontrakt.stale && hala.kontrakt.stale.priorytety) || []).slice().sort((a, b) => (a.kolejnosc || 9) - (b.kolejnosc || 9));
-    okno(`<form method="dialog"><h2>⚠️ Zgłoś awarię</h2>
+    // Etap 6b: maszyna ma już otwartą awarię → podpowiedź „Dodać do niej?”. Tylko podpowiedź: bez danych o awariach (offline,
+    // świeży telefon) jej nie ma, a „Zgłoś osobną” / „Zgłoś mimo to” zawsze przechodzi. Kontroler i kierownik KJ nie mogą
+    // dopisywać notatek do awarii (kontrakt) — dostają samą informację.
+    const otwarta = H().otwartaAwariaMaszyny(hala.obiekty('awaria') || [], maszyna);
+    const mozeDopisac = H().mozeDopisacDoAwarii(hala.pracownik, hala.kontrakt);
+    const etykietaWyslij = otwarta ? (mozeDopisac ? 'Zgłoś osobną' : 'Zgłoś mimo to') : 'Zgłoś do UR';
+    okno(`<form method="dialog"><h2>Zgłoś awarię</h2>
       <p class="hala-okno-opis">${esc(nazwaMaszyny(sl, maszyna))} (${esc(maszyna)}) — trafi do UR.</p>
+      ${otwarta ? `<div class="hala-duplikat" role="note"><p>${esc(H().podpowiedzODuplikacie(otwarta, { slowniki: sl, pracownicy: hala.pracownicy, mozeDopisac }))}</p>
+        ${mozeDopisac ? '<button type="button" class="glowny" data-dopisz>Dodaj do tej awarii</button>' : ''}</div>` : ''}
       <fieldset><legend>Jak bardzo?</legend>${prio.map((p, i) => `<label class="hala-zespol-zaznacz"><input type="radio" name="priorytet" value="${esc(p.kod)}" ${i === 0 ? 'checked' : ''}> ${esc(p.zatrzymuje && Object.keys(sl.linie || {}).length <= 1 ? 'Maszyna stoi' : p.nazwa)}</label>`).join('')}</fieldset>
       <label>Co się dzieje? (opcjonalnie)<textarea name="opis" rows="2" maxlength="2000"></textarea></label>
       ${poleZdjecia('zdjecie', false)}
       <p class="hala-okno-blad" hidden></p>
-      <div class="hala-okno-przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="glowny">Zgłoś do UR</button></div></form>`,
+      <div class="hala-okno-przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="glowny">${esc(etykietaWyslij)}</button></div></form>`,
     (d, zamknij) => {
       const f = d.querySelector('form');
       podlaczZdjecie(f, 'zdjecie');
+      const dopisz = f.querySelector('[data-dopisz]');
+      if (dopisz) dopisz.addEventListener('click', async () => {
+        if (dopisz.disabled) return;
+        dopisz.disabled = true;
+        try {
+          // Notatka i zdjęcie trafiają do otwartej awarii (awaria.komentarz) — bez drugiego licznika przestoju.
+          const dane = { tekst: f.opis.value.trim() || 'Ponowne zgłoszenie — maszyna dalej nie działa.' };
+          if (f.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(f.zdjecie.files[0])];
+          await hala.zapisz('awaria.komentarz', otwarta.id, dane);
+          zamknij();
+          if (o.gotowe) o.gotowe(`Dodane do otwartej awarii${otwarta.numer ? ' ' + otwarta.numer : ''}`);
+        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'); dopisz.disabled = false; }
+      });
       f.addEventListener('submit', async ev => {
         ev.preventDefault();
         const b = f.querySelector('[type="submit"]');
@@ -481,9 +502,105 @@
           await hala.zapisz('awaria.zgloszona', hala.nowyId(), dane);
           zamknij();
           if (o.gotowe) o.gotowe('Awaria zgłoszona — UR dostało powiadomienie');
-        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zgłosić.'); b.disabled = false; }
+        } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zgłosić. Spróbuj jeszcze raz.'); b.disabled = false; }
       });
     });
+  }
+
+  // ================================================================ Etap 6c: „Cofnij” zamiast „Czy na pewno?”
+
+  /* Czynności odwracalne na zleceniu (Biorę, Zrobione, Odbierz, Odwołaj) wykonują się od razu, a pod ręką jest pasek
+     „Zrobione. Cofnij” na ok. 8 s. Cofnięcie najpierw próbuje wycofać zapis z kolejki telefonu (jeszcze nie wyszedł — bez
+     śladu na serwerze, hala.wycofajZKolejki); gdy już poszedł, wysyła zlecenie.cofniete (hub sprawdza: ta sama osoba, nic się
+     nie zmieniło, okno czasu — stale.cofniecia). Czynności nieodwracalne (usuń, wyczyść, reset PIN, odrzucenie) zostają z pytaniem.
+     Starszy serwer bez zlecenie.cofniete: paska po prostu nie ma (Hala.mozeCofnac). */
+  const CZAS_COFNIECIA_MS = 8000;
+  const TEKSTY_CZYNNOSCI = { 'zlecenie.przyjete': 'Przyjęte.', 'zlecenie.wykonane': 'Zrobione.', 'zlecenie.zamkniete': 'Odebrane.', 'zlecenie.anulowane': 'Odwołane.' };
+  let pasekCofnij = null;
+  function zdejmijCofnij() {
+    if (!pasekCofnij) return;
+    clearTimeout(pasekCofnij.zegar);
+    pasekCofnij.zdejmij();
+    pasekCofnij.el.remove();
+    pasekCofnij = null;
+  }
+  /* przed — zlecenie sprzed czynności (hala.obiekt), zd — zdarzenie zwrócone przez hala.zapisz. opcje.komunikat(tekst, rodzaj) — błąd
+     cofnięcia. Zwraca true, gdy pasek pokazano. */
+  function zaproponujCofniecie(hala, zd, przed, opcje) {
+    const o = opcje || {};
+    const doc = global.document;
+    zdejmijCofnij();                        // nowa czynność zastępuje pasek poprzedniej — cofnąć można tylko ostatnią
+    if (!doc || !zd || !H().mozeCofnac(hala.kontrakt, hala.pracownik, zd.typ, przed)) return false;
+    const obiekt = zd.obiekt, statusPo = (hala.obiekt('zlecenie', obiekt) || {}).status;
+    const el = doc.createElement('div');
+    el.className = 'hala-cofnij';
+    el.setAttribute('role', 'status');
+    el.setAttribute('popover', 'manual');   // jak .komunikaty: nad otwartymi oknami <dialog>
+    el.innerHTML = `<div class="hala-cofnij-karta"><span class="tekst">${esc(o.tekst || TEKSTY_CZYNNOSCI[zd.typ] || 'Zrobione.')}</span><button type="button">Cofnij</button></div>`;
+    doc.body.appendChild(el);
+    try { el.showPopover(); } catch (e) { /* bez popovera zostaje zwykły fixed */ }
+    // Ktoś zmienił zlecenie po tej czynności — cofnąć jej już nie wolno, pasek znika. Status sprzed czynności jest dozwolony: gdy zapis
+    // wychodzi z kolejki, widok telefonu na chwilę wraca do stanu serwera (jeszcze bez tej czynności), zanim dojdzie nowy stan.
+    const zdejmij = hala.na('zmiana', ({ typ, id, obiekt: ob }) => {
+      if (typ === 'zlecenie' && id === obiekt && ob && ob.status !== statusPo && ob.status !== przed.status) zdejmijCofnij();
+    });
+    const zegar = setTimeout(zdejmijCofnij, CZAS_COFNIECIA_MS);
+    const moj = pasekCofnij = { el, zegar, zdejmij };
+    el.querySelector('button').addEventListener('click', async () => {
+      if (pasekCofnij !== moj) return;
+      zdejmijCofnij();
+      try {
+        // Wycofanie z kolejki = „jakby nie było”; inaczej cofa hub (zdarzenie w historii zlecenia).
+        if (!(await hala.wycofajZKolejki(zd.id)))
+          await hala.zapisz('zlecenie.cofniete', obiekt, { cofa: zd.typ, zdarzenie: zd.id, do: przed.status });
+        if (o.cofnieto) o.cofnieto('Cofnięte.');
+      } catch (e) { if (o.komunikat) o.komunikat((e && e.message) || 'Nie udało się cofnąć. Zrób to jeszcze raz ręcznie.', 'blad'); }
+    });
+    return true;
+  }
+  /* Zapis czynności na zleceniu z paskiem „Cofnij”. Zwraca { zd, pasek } (pasek: false = starszy serwer albo czynność
+     nie do cofnięcia — aplikacja może pokazać zwykły komunikat); błędy zapisu rzuca dalej. */
+  async function zapiszZCofnieciem(hala, typ, id, dane, opcje) {
+    const przed = hala.obiekt('zlecenie', id);
+    const zd = await hala.zapisz(typ, id, dane);
+    let pasek = false;
+    try { pasek = zaproponujCofniecie(hala, zd, przed, opcje); } catch (e) { console.error(e); }     // pasek nie może zepsuć zapisu
+    return { zd, pasek };
+  }
+
+  // ================================================================ Etap 6a: „Moje zgłoszenia”
+
+  /* Ekran dla Lidera, UR i KJ (w „Więcej”, bez nowego miejsca na dolnym pasku): awarie i zgłoszenia nieprawidłowości
+     zgłoszone przez zalogowaną osobę, ze statusem w słowach GK. Źródła: widok telefonu (od razu, także zapisy czekające
+     w kolejce) i serwer (GET /api/v1/ja/zgloszenia — starsze niż pamięć aplikacji; serwer oddaje tylko własne). Serwer
+     pytamy co najwyżej raz na minutę i bez sieci po cichu zostajemy przy widoku telefonu. */
+  const mojeCache = { ja: null, kiedy: 0, lista: [], trwa: false };
+  const MOJE_TTL_MS = 60000;
+  function kiedyMoje(ms, teraz) {
+    if (!ms) return '';
+    const l = H().lokalny(ms), t = H().lokalny(teraz), g = `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`;
+    return l.rok === t.rok && l.miesiac === t.miesiac && l.dzien === t.dzien ? `dziś ${g}` : `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${g}`;
+  }
+  function mojeZgloszenia(el, hala) {
+    const ja = hala.pracownik && hala.pracownik.id;
+    if (mojeCache.ja !== ja) { mojeCache.ja = ja; mojeCache.kiedy = 0; mojeCache.lista = []; }
+    const wiersze = H().wierszeMoichZgloszen(['awaria', 'zgloszenie'].flatMap(t => hala.obiekty(t) || []).concat(mojeCache.lista),
+      { ja, pracownicy: hala.pracownicy, slowniki: hala.slowniki });
+    const teraz = hala.teraz();
+    el.innerHTML = `<h1 data-moje-ekran>Moje zgłoszenia</h1>${wiersze.length ? `<ul class="hala-moje">${wiersze.map(w => `
+      <li class="hala-moje-wiersz">
+        <div class="gora"><b>${esc(w.tytul)}</b><span class="znacznik ${esc(w.klasa)}">${esc(w.status)}</span></div>
+        <div class="slaby">${esc([w.numer, kiedyMoje(w.czasMs, teraz)].filter(Boolean).join(' · '))}${w.oczekuje ? ' · czeka na wysłanie' : ''}</div>
+        ${w.opis ? `<div class="opis">${esc(w.opis)}</div>` : ''}
+        ${w.szczegol ? `<div class="slaby">${esc(w.szczegol)}</div>` : ''}
+      </li>`).join('')}</ul>` : '<p class="pusto">Nie zgłaszałeś jeszcze niczego.</p>'}`;
+    if (!mojeCache.trwa && ja && teraz - mojeCache.kiedy > MOJE_TTL_MS && hala.mojeZgloszenia) {
+      mojeCache.trwa = true;
+      hala.mojeZgloszenia().then(lista => { mojeCache.lista = lista; mojeCache.kiedy = hala.teraz(); },
+        () => { mojeCache.kiedy = hala.teraz() - MOJE_TTL_MS + 10000; })     // bez sieci: następna próba za ~10 s
+        // Ekran mógł się w międzyczasie zmienić (UR i KJ rysują wszystko w jednym <main>) — przerysowujemy tylko własny.
+        .then(() => { mojeCache.trwa = false; if (el.querySelector('[data-moje-ekran]')) mojeZgloszenia(el, hala); });
+    }
   }
 
   // ================================================================ menu po skanie QR maszyny
@@ -504,13 +621,26 @@
     const zadania = HZ && o.zlecenia ? zadaniaMaszyny(HZ.wierszeDla(hala, o.zlecenia()), maszyna) : [];
     const mozeAwarie = ((hala.kontrakt.zdarzenia['awaria.zgloszona'] || {}).role || []).some(r => ((hala.pracownik || {}).role || []).includes(r))
       || ((hala.pracownik || {}).role || []).includes('admin');
+    // Pierwszy przycisk = to, co po skanie najpewniej chcesz zrobić (audyt 2026-11-09). Moja awaria „w drodze” na tej maszynie —
+    // „Jestem na miejscu” (skan, który właśnie zrobiłeś, jest dowodem obecności, tak jak w ekranie awarii UR); są zadania do
+    // wykonania — „Wykonaj zadanie”; inaczej pierwsza jest „Zgłoś awarię”, a zamiast wyszarzonego przycisku jest zdanie.
+    const ja = (hala.pracownik || {}).id;
+    let awariaMoja = null;
+    try {
+      const role = (hala.pracownik || {}).role || [];
+      const dozwolone = ((hala.kontrakt.zdarzenia['awaria.naprawa_rozpoczeta'] || {}).role || []).some(r => role.includes(r));
+      if (o.qr && dozwolone) awariaMoja = (hala.obiekty('awaria') || []).find(a => a.aktywny !== false && a.status === 'przyjeta'
+        && (a.dane || {}).maszyna === maszyna && (a.dane || {}).mechanik === ja) || null;
+    } catch (e) { awariaMoja = null; }
+    const ikAwaria = global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('awaria', 18)}</span>` : '';
     okno(`<form method="dialog"><h2>${esc(nazwaMaszyny(sl, maszyna))}</h2>
-      <p class="hala-okno-opis">Kod ${esc(maszyna)} — co chcesz zrobić?</p>
+      <p class="hala-okno-opis">Kod ${esc(maszyna)} — co chcesz zrobić?${zadania.length || awariaMoja ? '' : ' Brak zleceń do wykonania przy tej maszynie.'}</p>
       <div class="hala-menu-maszyny">
-        <button type="button" class="glowny" data-co="zadanie" ${zadania.length ? '' : 'disabled'}>✅ Wykonaj zadanie${zadania.length ? ` (${zadania.length})` : ' — brak zadań'}</button>
+        ${awariaMoja ? '<button type="button" class="glowny" data-co="na-miejscu">Jestem na miejscu — zacznij naprawę</button>' : ''}
+        ${zadania.length ? `<button type="button" ${awariaMoja ? '' : 'class="glowny" '}data-co="zadanie">Wykonaj zlecenie (${zadania.length})</button>` : ''}
         <div data-zadania hidden>${zadania.map(z => `<button type="button" data-zlecenie="${esc(z.id)}">${esc(z.tytul)}<span class="hala-okno-opis"> ${esc(z.numer)}${z.terminOpis ? ` · ${esc(z.terminOpis)}` : ''}</span></button>`).join('')}</div>
-        ${mozeAwarie ? '<button type="button" class="czerwony" data-co="awaria">⚠️ Zgłoś awarię</button>' : ''}
-        <button type="button" data-co="zgloszenie">📝 Zgłoś nieprawidłowość</button>
+        ${mozeAwarie ? `<button type="button" class="${awariaMoja || zadania.length ? 'czerwony-kontur' : 'czerwony'}" data-co="awaria">${ikAwaria}Zgłoś awarię</button>` : ''}
+        <button type="button" data-co="zgloszenie">Zgłoś nieprawidłowość</button>
       </div>
       <div class="hala-okno-przyciski"><button type="button" data-zamknij>Zamknij</button></div></form>`,
     (d, zamknij) => {
@@ -521,6 +651,13 @@
         if (b.dataset.co === 'zadanie') {
           if (zadania.length === 1) { zamknij(); if (o.wykonaj) o.wykonaj(zadania[0].id, maszyna); return; }
           d.querySelector('[data-zadania]').hidden = false;
+        }
+        if (b.dataset.co === 'na-miejscu' && awariaMoja) {
+          b.disabled = true;
+          hala.zapisz('awaria.naprawa_rozpoczeta', awariaMoja.id, { qr: o.qr })
+            .then(() => { zamknij(); if (o.gotowe) o.gotowe('Naprawa w toku — jesteś na miejscu'); })
+            .catch(e => { b.disabled = false; if (o.komunikat) o.komunikat((e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'); });
+          return;
         }
         if (b.dataset.co === 'awaria') { zamknij(); if (o.awaria) o.awaria(maszyna); else zglosAwarie(hala, maszyna, { gotowe: o.gotowe }); }
         if (b.dataset.co === 'zgloszenie') { zamknij(); zglos(hala, { maszyna, gotowe: o.gotowe }); }
@@ -537,7 +674,7 @@
     // Kod wpisany z naklejki („WT-01”) = skan HALA:M:WT-01 (Hala.kodZeSkanu).
     const k = H().odczytajKod(H().kodZeSkanu ? H().kodZeSkanu(tekst, hala.slowniki) : tekst, hala.slowniki);
     if (k.rodzaj !== 'maszyny' || !k.wpis) { if (o.komunikat) o.komunikat('To nie jest kod maszyny z tego zakładu.'); return; }
-    menuMaszyny(hala, k.kod, o);
+    menuMaszyny(hala, k.kod, Object.assign({}, o, { qr: H().kodZeSkanu ? H().kodZeSkanu(tekst, hala.slowniki) : tekst }));
   }
 
   /* D56 (właściciel 2026-10-13: „niech skanowanie QR będzie bardziej na wierzchu — teraz trzeba go szukać”): pływający
@@ -573,6 +710,6 @@
   }
 
   global.HalaDzialania = { przyciskSkanu, historia, wierszeHistorii, zglos, odlozNarzedzia, odbierzNarzedzia, zglosAwarie, menuMaszyny,
-                           zadaniaMaszyny, skanujMaszyne, dzialOsoby, OPISY_ZDARZEN, przekaz, rozdziel, osobyDzialu };
+                           zadaniaMaszyny, skanujMaszyne, mojeZgloszenia, zapiszZCofnieciem, zaproponujCofniecie, dzialOsoby, OPISY_ZDARZEN, przekaz, rozdziel, osobyDzialu };
   if (typeof module !== 'undefined' && module.exports) module.exports = { HalaDzwieki: global.HalaDzwieki, HalaDzialania: global.HalaDzialania };
 })(typeof window !== 'undefined' ? window : globalThis);

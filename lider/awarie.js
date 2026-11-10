@@ -44,12 +44,12 @@
         <div class="siatka-wyboru" data-grupa="maszyna">
           ${maszyny.map(m => { const k = W.kafelekMaszyny(m);   // nazwa duża, kod mały (UI etap 3)
             return `<button type="button" data-wartosc="${esc(m.kod)}"><b>${esc(k.duzy)}</b>${k.maly ? `<span>${esc(k.maly)}</span>` : ''}</button>`; }).join('')}
-          <button type="button" class="skan" data-skanuj>▣ Skanuj QR maszyny</button>
+          <button type="button" class="skan wlasny-skan" data-skanuj>▣ Skanuj QR maszyny</button>
         </div>
         <div class="wybrana-inna slaby" hidden></div>
         <div class="ostrzezenie duplikat" hidden><p></p>
-          <div class="przyciski-rzad"><button type="button" class="glowny" data-dopisz>Dopisz się</button>
-            <button type="button" data-nowa>Zgłoś nową</button></div></div>
+          <div class="przyciski-rzad"><button type="button" class="glowny" data-dopisz>Dodaj do tej awarii</button>
+            <button type="button" data-nowa>Zgłoś osobną</button></div></div>
         <h3>2. Priorytet</h3>
         <div class="siatka-wyboru priorytety" data-grupa="priorytet">
           ${prio.map(p => `<button type="button" class="prio-${esc(KLASA_PRIORYTETU[p.kod] || 'neutral')}" data-wartosc="${esc(p.kod)}">${esc(W.nazwaPriorytetu(p, hala.slowniki))}</button>`).join('')}
@@ -63,16 +63,15 @@
       </form>`;
     const form = kontener.querySelector('form');
     f.powiaz(form);
-    // Etap 3: maszyna z aktywną awarią — pytanie „dopisać się czy zgłosić nową?” (nowaDla = maszyna, dla której
-    // lider świadomie wybrał „Zgłoś nową”; zmiana maszyny pyta od nowa).
+    // Etap 3 / 6b: maszyna z otwartą awarią — podpowiedź „Dodać do niej?” (nowaDla = maszyna, dla której
+    // lider świadomie wybrał „Zgłoś osobną”; zmiana maszyny pyta od nowa). Offline lista awarii jest pusta albo stara — wtedy zwykłe zgłoszenie.
     let nowaDla = null;
     const duplikat = () => W.aktywnaAwariaMaszyny(hala.obiekty('awaria'), d.maszyna);
     function pokazDuplikat() {
       const a = duplikat(), box = form.querySelector('.duplikat');
       box.hidden = !a || nowaDla === d.maszyna;
       if (a) {
-        box.querySelector('p').textContent = W.pytanieODuplikat(a);
-        box.querySelector('[data-dopisz]').textContent = `Dopisz się${a.numer ? ' do ' + a.numer : ''}`;
+        box.querySelector('p').textContent = W.pytanieODuplikat(a, { slowniki: hala.slowniki, pracownicy: hala.pracownicy, mozeDopisac: true });
       }
     }
     // „Wyczyść” tylko na ekranie: okna nie ma czym zamknąć, a przypadkiem dotknięta maszyna zostawałaby wybrana do końca zmiany.
@@ -89,7 +88,7 @@
         tekst: (d.opis || '').trim() || 'Ponowne zgłoszenie z linii — maszyna dalej nie działa.', zdjecia: d.zdjecia }));
       if (!zd) return;
       await f.usun();
-      poWyslaniu(`Dopisane do zgłoszonej awarii${a.numer ? ' ' + a.numer : ''}`);
+      poWyslaniu(`Dodane do otwartej awarii${a.numer ? ' ' + a.numer : ''}`);
     });
     function zaznacz() {
       for (const g of form.querySelectorAll('[data-grupa]')) {
@@ -140,7 +139,7 @@
       if (duplikat() && nowaDla !== d.maszyna) {
         pokazDuplikat();
         ul.hidden = false;
-        ul.innerHTML = `<li>${esc('Wybierz: „Dopisz się” do zgłoszonej awarii albo „Zgłoś nową”.')}</li>`;
+        ul.innerHTML = `<li>${esc('Wybierz: „Dodaj do tej awarii” albo „Zgłoś osobną”.')}</li>`;
         return;
       }
       const m = (hala.slowniki.maszyny || {})[d.maszyna] || {};
@@ -247,10 +246,10 @@
   }
 
   async function anuluj(id) {
-    const powod = await L.zapytaj({ tytul: 'Anuluj zgłoszenie', pytanie: 'Dlaczego anulujesz? (np. fałszywy alarm)',
-                                    przycisk: 'Anuluj zgłoszenie', wymagane: true, klasa: 'alarm', pole: ['awaria.anulowana', 'powod'] });
+    const powod = await L.zapytaj({ tytul: 'Odwołaj awarię', pytanie: 'Dlaczego odwołujesz? (np. fałszywy alarm)',
+                                    przycisk: 'Odwołaj awarię', wymagane: true, klasa: 'alarm', pole: ['awaria.anulowana', 'powod'] });
     if (!powod) return;
-    if (await L.zapisz('awaria.anulowana', id, { powod })) L.poZapisie('Zgłoszenie anulowane');
+    if (await L.zapisz('awaria.anulowana', id, { powod })) L.poZapisie('Awaria odwołana');
   }
 
   async function komentarz(id) {
@@ -284,7 +283,7 @@
         ${w.doPotwierdzenia ? `<button type="button" class="zielony" data-a="potwierdz">${rusza() === 'linia' ? 'Linia' : 'Maszyna'} ruszyła</button>
                                <button type="button" data-a="odrzuc">Nadal nie działa</button>` : ''}
         <button type="button" class="maly" data-a="komentarz">Notatka</button>
-        ${w.mozeAnulowac ? '<button type="button" class="maly" data-a="anuluj">Anuluj</button>' : ''}
+        ${w.mozeAnulowac ? '<button type="button" class="maly" data-a="anuluj">Odwołaj</button>' : ''}
       </div>` : ''}
     </article>`;
   }

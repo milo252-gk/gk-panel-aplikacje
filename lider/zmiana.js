@@ -11,7 +11,8 @@
   const L = window.Lider, hala = L.hala, W = L.W, esc = L.esc;
   const prog = () => hala.ustawienie('prog_zolty_min', 30);
 
-  const IKONY = { obchod: '⌖', proba: '◎', bhp: '⛑', obsada: '👥', przekazanie: '📋', zadanie: '✓' };
+  // ▣ = skan QR, 🔬 = próba — te same znaki co w Zleceniach (STYL-GK §2 D64), żeby ta sama pozycja nie miała dwóch ikon.
+  const IKONY = { obchod: '▣', proba: '🔬', bhp: '⛑', obsada: '👥', przekazanie: '📋', zadanie: '✓' };
   const OPIS_STANU = { wykonana: 'Zrobione', pominieta: 'Pominięte', opozniona: 'Po terminie', bliska: 'Wkrótce', czeka: '', przed: 'Później' };
 
   // ------------------------------------------------------------ zapisy checklisty
@@ -77,8 +78,8 @@
     const wpis = p.wpis || {};
     const kto = W.nazwaPracownika(hala.pracownicy, wpis.autor);
     const glowna = {
-      obchod: 'Skanuj QR — jestem na miejscu', proba: 'Wypełnij próbę', bhp: 'Audyt BHP', obsada: 'Raport obsady',
-      przekazanie: 'Przekazanie zmiany', zadanie: 'Zrobione',
+      obchod: 'Skanuj QR — jestem na miejscu', proba: 'Wypełnij próbę', bhp: 'Zrób audyt BHP', obsada: 'Wpisz obsadę',
+      przekazanie: 'Przekaż zmianę', zadanie: 'Zrobione',
     }[p.typ] || 'Zrobione';
     const m = k.lista.mapa[p.id] || {};
     if (!m.zlecenie) { L.komunikat('Kierownik zmienił tę listę — pozycji już nie ma. Odśwież ekran.', 'blad', 'pozycja-zniknela'); return; }
@@ -193,6 +194,10 @@
         ${W.przyciskiZmiany(pozycje).map(p => `<button type="button" data-a="${esc(p.a)}">${esc(p.nazwa)}</button>`).join('')}
       </div>`;
 
+  /* Skrót do ekranu „Koniec” (właściciel 2026-11-10): raport końcowy to czynność obowiązkowa raz na zmianę, a była tylko w „Więcej”.
+     Główny przycisk dopiero, gdy checklista jest zrobiona — wcześniej nie konkuruje z pozycjami. W „Więcej” zostaje też. */
+  const koniecZmiany = glowny => `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Koniec zmiany — raport</button></div>`;
+
   function rysujZmiane(el) {
     const k = L.kontekst();
     if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian. Sprawdź słownik zmian.</p>'; return; }
@@ -205,7 +210,8 @@
           <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))} · <span class="znacznik neutral">Raport wysłany</span></p>
           <p class="slaby">Zmiana zamknięta raportem. Poprawiony raport wyślesz na ekranie „Koniec”.</p>
-        </article>`;
+        </article>
+        ${koniecZmiany(false)}`;
       return;
     }
     if (!pozycje.length) {
@@ -216,7 +222,8 @@
           <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik układa ją w Panelu → Zlecenia → 💾 Zapisane → „+ Checklista”
             (dział Lider) — pojawi się tu sama na początku zmiany.</p>
         </article>
-        ${przyciskiZmiany([])}`;
+        ${przyciskiZmiany([])}
+        ${koniecZmiany(false)}`;
       return;
     }
     const c = W.checklista(k.lista, hala.teraz(), prog());
@@ -236,7 +243,8 @@
             w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
           <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
         </li>`).join('')}</ul>
-      ${przyciskiZmiany(pozycje)}`;
+      ${przyciskiZmiany(pozycje)}
+      ${koniecZmiany(!zamknieta && c.wszystkie > 0 && c.zrobione === c.wszystkie)}`;
   }
 
   L.$('ekran-zmiana').addEventListener('click', async ev => {
@@ -251,6 +259,7 @@
     if (a === 'obsada') L.formularzObsady({});
     else if (a === 'audyt-bhp') L.formularzAudytuBhp({});
     else if (a === 'zdarzenie-obsady') L.formularzZdarzeniaObsady();
+    else if (a === 'koniec') L.pokazEkran('koniec');
   });
   L.$('ekran-zmiana').addEventListener('keydown', ev => {
     const t = ev.target.closest('[data-pozycja]');

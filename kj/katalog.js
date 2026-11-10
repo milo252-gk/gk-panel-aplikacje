@@ -70,10 +70,10 @@
   function rysujWady(box) {
     const lista = W.katalogWad(hala.slowniki);
     const edycja = moznaPisac('katalog_wad');
-    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowa-wada">Dodaj wadę</button>' : '<p class="slaby">Katalog zmienia kierownik KJ.</p>'}
+    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowa-wada">+ Dodaj wadę</button>' : '<p class="slaby">Katalog zmienia kierownik KJ.</p>'}
       <div class="lista">${lista.map(w => `
         <div class="karta wiersz-katalogu">
-          <div><b>${esc(w.nazwa)}</b> <span class="slaby">${esc(w.kod)}${w.kategoria ? ' · ' + esc(w.kategoria) : ''}</span></div>
+          <div><b>${esc(w.nazwa)}</b>${w.kategoria ? ` <span class="slaby">${esc(w.kategoria)}</span>` : ''}</div>
           ${edycja ? `<div class="akcje"><button type="button" data-zmien-wade="${esc(w.kod)}">Zmień</button>
             <button type="button" data-wycofaj-wade="${esc(w.kod)}">Wycofaj</button></div>` : ''}
         </div>`).join('') || '<p class="pusto">Katalog jest pusty.</p>'}</div>`;
@@ -128,7 +128,7 @@
   function rysujWyroby(box) {
     const lista = Object.entries(hala.slowniki.wyroby || {}).sort(([a], [b]) => a.localeCompare(b, 'pl'));
     const edycja = moznaPisac('wyroby');
-    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowy-wyrob">Dodaj wyrób</button>' : ''}
+    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowy-wyrob">+ Dodaj wyrób</button>' : ''}
       <p class="slaby">Linia wyrobu podpowiada, do których liderów trafi reklamacja.</p>
       <div class="lista">${lista.map(([k, w]) => `
         <div class="karta wiersz-katalogu">

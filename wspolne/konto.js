@@ -468,7 +468,7 @@
     return { komputer: lista.filter(a => a.komputer).map(a => a.nazwa), niedziala: lista.filter(a => !a.komputer).map(a => a.nazwa) };
   }
 
-  /* Druk kodów aplikacji konta (okno „Kody QR aplikacji”, Panel → Administracja → Serwis i Panel → Więcej → 🖨 Kody QR):
+  /* Druk kodów aplikacji konta (okno „Kody QR aplikacji”, Panel → Administracja → Ustawienia i Panel → Więcej → Kody QR):
      lista z huba według ról — kierownik zakładu i administrator dostają każdą aplikację GK, nie tylko cztery aplikacje
      hali. kod — tylko ta jedna aplikacja (właściciel 2026-10-20: „każdy kod QR osobno, jak i wszystkie zbiorczo”); bez
      kodu — wszystkie, z listą tych bez kodu na dole. Zwraca bezKodu. */

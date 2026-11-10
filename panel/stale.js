@@ -11,7 +11,24 @@
   const P = window.Panel;
   const { hala, W, $, esc } = P;
 
+  /* Akcje wiersza zapisanego zlecenia (audyt 2026-11-09): do pięciu równorzędnych przycisków. Teraz „Zleć teraz” (główne),
+     „Zmień” i „Więcej” — Kopiuj, Wstrzymaj/Wznów, Usuń i 🖨 QR pod nim. Uprawnienia i warunki bez zmian. */
+  const wiecejStale = new Set();
+  let ostatnieD = null;
+  function akcjeStalego(s, { zlecaj, pisze, qr }) {
+    const p = (akcja, napis, klasa, title) => `<button type="button" class="maly${klasa ? ` ${klasa}` : ''}" data-akcja="${akcja}"${title ? ` title="${esc(title)}"` : ''}>${napis}</button>`;
+    const widoczne = [zlecaj ? p('zlec', 'Zleć teraz', 'glowny') : '', pisze ? p('zmien', 'Zmień') : ''].filter(Boolean);
+    const ukryte = [qr ? p('kody-qr', `${P.ik('drukuj')}QR`, '', `Drukuj kody QR punktów: ${qr.etykiety.map(e => e.kod).join(', ')}`) : '',
+      pisze ? p('kopiuj', 'Kopiuj') : '', pisze ? p('wstrzymaj', s.aktywny ? 'Wstrzymaj' : 'Wznów') : '', pisze ? p('usun', 'Usuń') : ''].filter(Boolean);
+    if (!ukryte.length) return widoczne.join('');
+    if (ukryte.length === 1 && widoczne.length < 2) return widoczne.concat(ukryte).join('');
+    const otwarte = wiecejStale.has(s.kod);
+    return widoczne.join('') + p('wiecej', `Więcej ${otwarte ? '▴' : '▾'}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
+      + (otwarte ? ukryte.join('') : '');
+  }
+
   function rysuj(d) {
+    ostatnieD = d;
     const lista = W.zleceniaStale({ slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz,
                                     roleZlecajacych: ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || [] });
     const pisze = P.mozeZapisacStale();
@@ -21,7 +38,7 @@
     // „🖨 Kody QR punktów” = naklejki wszystkich (bez powtórzeń). Te same etykiety co Maszyny i Więcej → 🖨 Kody QR.
     const punkty = new Map(window.PanelEtykiety.punktySkanu(d.slowniki).filter(p => p.zrodlo === 'zapisane').map(p => [p.kod, p]));
     $('kody-punktow').hidden = !punkty.size;
-    $('kody-punktow').textContent = `🖨 Kody QR punktów (${window.PanelEtykiety.etykietyElementow([...punkty.values()]).length})`;
+    $('kody-punktow').innerHTML = `${P.ik('drukuj')}Kody QR punktów (${window.PanelEtykiety.etykietyElementow([...punkty.values()]).length})`;
     $('lista-stalych').innerHTML = lista.map(s => `
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
@@ -39,18 +56,11 @@
           ${s.nieAutomat ? `<div class="ostrzezenie-stalego">⚠ Nie zleca się sama — zlecasz ją przyciskiem „Zleć teraz”.${pisze ? ' <button type="button" class="maly glowny" data-akcja="automat">Włącz automat</button>' : ''}</div>` : ''}
           ${s.aktywny && !s.reczny ? `<div class="nastepne">${s.nastepne ? `Następne: ${esc(s.nastepne)}` : 'Brak wystąpień w najbliższych dwóch miesiącach'}</div>` : ''}
         </div>
-        <div class="akcje">
-          ${zlecaj ? '<button type="button" class="maly glowny" data-akcja="zlec">Zleć teraz</button>' : ''}
-          ${punkty.has(s.kod) ? `<button type="button" class="maly" data-akcja="kody-qr" title="Drukuj kody QR punktów: ${esc(punkty.get(s.kod).etykiety.map(e => e.kod).join(', '))}">🖨 QR</button>` : ''}
-          ${pisze ? `<button type="button" class="maly" data-akcja="zmien">Zmień</button>
-            <button type="button" class="maly" data-akcja="kopiuj">Kopiuj</button>
-            <button type="button" class="maly" data-akcja="wstrzymaj">${s.aktywny ? 'Wstrzymaj' : 'Wznów'}</button>
-            <button type="button" class="maly" data-akcja="usun">Usuń</button>` : ''}
-        </div>
-      </article>`).join('') || `<p class="pusto">Nie ma jeszcze zapisanych zleceń.${pisze ? ' Dodaj pierwsze: „+ Nowe zapisane” albo „💾 Zapisz” przy zleceniu.' : ''}</p>`;
+        <div class="akcje">${akcjeStalego(s, { zlecaj, pisze, qr: punkty.get(s.kod) })}</div>
+      </article>`).join('') || `<p class="pusto">Nie ma jeszcze zapisanych zleceń.${pisze ? ' Dodaj pierwsze: „+ Nowe zapisane” albo „Do zapisanych” przy zleceniu.' : ''}</p>`;
     const brak = pisze ? W.brakujaceZestawu(d.slowniki, hala.pracownik.id) : [];
     $('zestaw-stalych').hidden = !brak.length;
-    $('zestaw-stalych').textContent = `+ Zadania mistrza i lidera (${brak.length})`;
+    $('zestaw-stalych').textContent = `+ Zlecenia mistrza i lidera (${brak.length})`;
   }
 
   $('kody-punktow').addEventListener('click', async () => {
@@ -63,8 +73,8 @@
   $('zestaw-stalych').addEventListener('click', async () => {
     const brak = W.brakujaceZestawu(hala.slowniki, hala.pracownik.id);
     if (!brak.length) return;
-    if (!(await P.potwierdz('Dodać zadania mistrza i lidera?', `${brak.map(z => z.wartosc.tytul).join(', ')}. `
-      + 'Każde potem zmienisz albo wstrzymasz. Zadania mistrza zobaczą osoby z rolą „mistrz”. Zadania lidera przepadają '
+    if (!(await P.potwierdz('Dodać zlecenia mistrza i lidera?', `${brak.map(z => z.wartosc.tytul).join(', ')}. `
+      + 'Każde potem zmienisz albo wstrzymasz. Zlecenia mistrza zobaczą osoby z rolą „mistrz”. Zlecenia lidera przepadają '
       + 'z końcem swojej zmiany; obsadę („Ustaw ludzi na maszyny”) lider ma w checkliście.', 'Dodaj'))) return;
     try {
       for (const z of brak) await hala.zapisz('slownik.zapisany', `zlecenia_stale/${z.kod}`, { slownik: 'zlecenia_stale', klucz: z.kod, wartosc: z.wartosc });
@@ -223,7 +233,7 @@
       : edytowanyKod ? `Zapisane zlecenie: ${wartosci.tytul}` : 'Nowe zapisane zlecenie');
     const zapisane = W.zadaniaDoChecklisty(hala.slowniki, edytowanyKod ? [edytowanyKod] : []);
     const z = f.querySelector('[data-z-zapisanych]');
-    z.innerHTML = `<option value="">${zapisane.length ? '➕ Z zapisanych…' : '➕ Z zapisanych — brak'}</option>`
+    z.innerHTML = `<option value="">${zapisane.length ? '+ Z zapisanych…' : '+ Z zapisanych — brak'}</option>`
       + zapisane.map(x => `<option value="${esc(x.kod)}">${esc(x.opisWyboru)}</option>`).join('');
     z.disabled = !zapisane.length;
     const dz = (wartosci.dzialy && wartosci.dzialy.length ? wartosci.dzialy : [wartosci.dzial || (dzialyKontraktu()[0] || {}).kod || 'produkcja']);
@@ -437,13 +447,13 @@
         reszta = await przepiszDoTrwajacych(instancja.kod, nowy, wzorzec, instancja.id);
       } catch (e) {
         $('okno-stalego').close(); instancja = null;
-        P.komunikat(`Zlecenie poprawione, ale wzorca nie udało się zapisać: ${P.komunikatBledu(e)}`, 'uwaga');
+        P.komunikat(`Zlecenie poprawione, ale zapisanego zlecenia nie udało się poprawić: ${P.komunikatBledu(e)}`, 'uwaga');
         return;
       }
     }
     $('okno-stalego').close();
     instancja = null;
-    P.komunikat(`Zlecenie poprawione${dowzorca ? ' — także w zapisanym wzorcu' : ''}${reszta.ile ? ` i w ${ile(reszta.ile, 'innym trwającym', 'innych trwających', 'innych trwających')}` : ''}${
+    P.komunikat(`Zlecenie poprawione${dowzorca ? ' — także w zapisanym zleceniu' : ''}${reszta.ile ? ` i w ${ile(reszta.ile, 'innym trwającym', 'innych trwających', 'innych trwających')}` : ''}${
       reszta.bledy.length ? `. Nie udało się: ${reszta.bledy.join('; ')}` : ''}`, reszta.bledy.length ? 'uwaga' : 'ok');
   }
 
@@ -468,7 +478,7 @@
       const wspolne = edytowanyKod ? await synchronizujPowiazane(w.kod, w.wartosc, dawny, null) : { ile: 0, bledy: [] };
       $('okno-stalego').close();
       P.komunikat((w.wartosc.harmonogram.rodzaj === 'reczny' ? 'Zapisano — zlecasz je przyciskiem „Zleć teraz”'
-        : 'Zapisano — serwer sam zleci je według harmonogramu') + (trwajace.ile ? ` · poprawione też trwające: ${trwajace.ile}` : '') + (wspolne.ile ? ` · to samo zadanie poprawione też w ${wspolne.ile} zapisanych` : '')
+        : 'Zapisano — serwer sam zleci je według harmonogramu') + (trwajace.ile ? ` · poprawione też trwające: ${trwajace.ile}` : '') + (wspolne.ile ? ` · ta sama pozycja poprawiona też w ${wspolne.ile} zapisanych` : '')
         + (wspolne.bledy.length ? `. Nie udało się poprawić powiązanych: ${wspolne.bledy.join('; ')}` : '')
         + (trwajace.bledy.length ? `. Nie udało się poprawić trwających: ${trwajace.bledy.join('; ')}` : ''), trwajace.bledy.length ? 'uwaga' : 'ok');
       P.pokazZlecenia(null, 'stale');
@@ -485,6 +495,8 @@
     const kod = b.closest('[data-kod]').dataset.kod;
     const s = ((hala.slowniki || {}).zlecenia_stale || {})[kod];
     if (!s) return;
+    if (b.dataset.akcja === 'wiecej') { if (wiecejStale.has(kod)) wiecejStale.delete(kod); else wiecejStale.add(kod); if (ostatnieD) rysuj(ostatnieD); return; }
+    wiecejStale.delete(kod);
     try {
       if (b.dataset.akcja === 'kody-qr') {
         const p = window.PanelEtykiety.punktySkanu(hala.slowniki).find(x => x.zrodlo === 'zapisane' && x.kod === kod);

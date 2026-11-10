@@ -2,7 +2,7 @@
    jako wiersze JEDNEJ listy Zleceń (D60, właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie —
    wszystko z tego jest zadaniem”). Wcześniej każde miało osobną zakładkę (D55, D59).
 
-   Te same zasady co zlecenia: czeka na kierownika → „Do przyjęcia” (zgłoszenie nowe, narzędzia do odbioru, BHP otwarte),
+   Te same zasady co zlecenia: czeka na kierownika → „Do odbioru” (zgłoszenie nowe, narzędzia do odbioru, BHP otwarte),
    załatwione → „Zamknięte”; filtry Dział, Osoba, Rodzaj; znacznik rodzaju na wierszu.
    Zgłoszenia: „Zrób zlecenie”, „Zrób stałe”, „Przyjmij” (z uwagą), „Odrzuć” (powód wraca do zgłaszającego).
    Narzędzia: mistrz odkłada ze zdjęciem, kierownik odbiera — też ze zdjęciem (HalaDzialania).
@@ -53,7 +53,7 @@
     const czeka = n.status === 'do_odbioru';
     return `<article class="zlecenie ${czeka ? 'pilne' : ''}" data-rodzaj="narzedzia" data-id="${esc(n.id)}">
         <div class="opis">
-          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia">🧰 ${esc(x.co || '')}</button> <span class="slaby">${esc(n.numer || '')}</span></div>
+          <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia">${P.ik('narzedzia')}${esc(x.co || '')}</button> <span class="slaby">${esc(n.numer || '')}</span></div>
           <div class="szczegoly">${znacznikRodzaju('narzedzia')}<span class="znacznik ${czeka ? 'alarm' : 'ok'}">${esc(n.etykieta || n.status)}</span>
             ${x.miejsce ? `<span>${esc(x.miejsce)}</span>` : ''}<span>· ${esc(W.nazwaPracownika(d.pracownicy, x.odlozyl) || '')}</span></div>
           ${x.uwagi ? `<div class="slaby tekst-opisu">${esc(x.uwagi)}</div>` : ''}
@@ -89,7 +89,7 @@
   /* Wiersze innych rodzajów dla filtra stanu ('otwarte' | 'do-zamkniecia' | 'zamkniete') — pola jak w wierszu zlecenia,
      żeby działały te same filtry: dzial, osoby, spoznione, rodzaj; czeka (na kierownika), alarm, czas, html. */
   function wiersze(d, filtr) {
-    if (filtr === 'otwarte') return [];               // W toku — robota działów; to, co czeka na kierownika, jest w „Do przyjęcia”
+    if (filtr === 'otwarte') return [];               // W toku — robota działów; to, co czeka na kierownika, jest w „Do odbioru”
     const chce = r => (filtr === 'do-zamkniecia' ? r.czeka : !r.czeka);
     const kier = jestKierownikiem();
     const moze = P.mozeWyslac ? P.mozeWyslac('bhp.zamkniete') : kier;

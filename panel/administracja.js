@@ -2,15 +2,19 @@
    ze swoim zespołem, zakres z huba, wspolne/klient/zespol.js). 2026-09-28: login to imię i nazwisko (D26),
    więc pracowników, PIN-y i karty prowadzi się tutaj, a nie tylko plikiem wspolne/narzedzia/zaladuj.py.
 
-   Cztery części (UI etap 2, właściciel 2026-10-12 — wcześniej sześć chipów):
+   Logowania (logowanie R1, 2026-11-10): tylko do odczytu — dziennik logowań (bez haseł), lista kont z hasłem startowym, niespójności.
+
+  Cztery części (UI etap 2, właściciel 2026-10-12 — wcześniej sześć chipów):
    - Pracownicy: dodaj, zmień dane, role, linie, nowy PIN, karta (zgubiona → usuń), wyłącz konto, odblokuj po złych PIN-ach.
      Hub: GET/POST /api/v1/admin/… przez hala.admin (rolę sprawdza hub). PIN-ów i kart nie widać — w bazie są tylko skróty.
      🖨 przy osobie i „🖨 Identyfikatory” — kody HALA:P do logowania skanem w Liderze, UR i KJ (właściciel 2026-10-20).
    - Maszyny (bez linii i stanowisk — 2026-10-12): słownik przez zdarzenia slownik.zapisany / slownik.usuniety.
      „🖨 Drukuj etykiety” drukuje naklejki QR (dawny chip „Etykiety QR” — te same opcje i ten sam druk).
-   - Ustawienia: sieć zakładu i progi (hub sprawdza zakresy przy zapisie), kopie poza komputerem (etap 2: folder,
-     przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST /api/v1/admin/kopie), tunel i tokeny GitHub.
-   - Serwis — dwie zwijane części, nad nimi niezwinięty alarm „Sieć zakładu”:
+   Nazwy chipów od 2026-11-10 (właściciel: jedna nazwa „Ustawienia” w całej rodzinie); kody części w kodzie bez zmian:
+   - „Progi i godziny” (kod 'ustawienia'): progi alarmów i sieć zakładu (hub sprawdza zakresy przy zapisie), godziny zmian.
+   - „Ustawienia” (kod 'serwis', dawny Serwis) — dwie zwijane części, nad nimi niezwinięty alarm „Sieć zakładu”, pod nimi formularze
+     „Tunel i GitHub” oraz „Kopie poza komputerem” (etap 2: folder, przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST
+     /api/v1/admin/kopie), przeniesione z dawnych Ustawień, bo to ustawienia techniczne:
      · Dostęp z telefonów (D33): stan tunelu, adresy aplikacji na GitHub Pages z kodami QR (🖨 przy każdej i „Drukuj
        wszystkie”), „Wyślij aplikacje na
        GitHub”, wersja na Pages, logowanie z internetu (D35). Ustawienia tunelu i tokenów — Ustawienia → „Tunel i GitHub”
@@ -95,13 +99,13 @@
   function pokaz(nowa, sekcja) {
     if (nowa === 'serwis' && sekcja) serwisOtwarte[sekcja] = true;
     przejdz(nowa);
-    const cel = nowa === 'serwis' ? $(`serwis-${sekcja}`) : sekcja && $(sekcja);
+    const cel = nowa === 'serwis' ? ($(`serwis-${sekcja}`) || $(sekcja)) : sekcja && $(sekcja);
     if (cel) cel.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function rysuj() {
     // D49: kierownik zakładu / UR / KJ — tylko Pracownicy (jego zespół); bez alarmów huba i ustawień.
-    // Chipy, gdy części jest więcej niż jedna (D60: checklisty lidera są w Zlecenia → 💾 Zapisane, nie tutaj).
+    // Chipy, gdy części jest więcej niż jedna (D60: checklisty lidera są w Zlecenia → Zapisane, nie tutaj).
     const admin = jestAdmin();
     const dostepne = W.czesciAdministracji(P.dostepAdministracji());
     czesc = W.czescAdministracji(czesc, dostepne);
@@ -114,11 +118,12 @@
     if (!admin) { alarmy = []; rysujAlarmy(); }
     else if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();
     const el = $('admin-tresc');
-    // D60: checklisty lidera przeniesione do Zlecenia → 💾 Zapisane (checklisty.js rysuje je tam).
+    // D60: checklisty lidera przeniesione do Zlecenia → Zapisane (checklisty.js rysuje je tam).
     if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'urlopy') { if (P.widoki.urlopy) P.widoki.urlopy.rysuj(el); }
     else if (czesc === 'maszyny') rysujMaszyny(el);
     else if (czesc === 'dane') rysujDane(el);
+    else if (czesc === 'logowania') rysujLogowania(el);
     else if (czesc === 'kody') rysujKody(el);
     else if (czesc === 'serwis') rysujSerwis(el);
     else rysujUstawienia(el);
@@ -135,17 +140,135 @@
     el.innerHTML = `<section class="admin-linia" data-karta="dane">
         <h3>Czyszczenie zleceń</h3>
         <p class="slaby">Usuwa wybrane zlecenia (albo całą historię sprzed wybranej chwili) z Panelu i telefonów. Zapisanych zleceń stałych nie rusza.
-          Serwer najpierw robi pełną kopię bazy (folder Odlozone na serwerze: 5 ostatnich, najwyżej 90 dni; zawiera też klucze i skróty haseł) i po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → 🧹 Czyszczenie.</p>
-        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-czyszczenie">🧹 Czyszczenie zleceń</button></div>
+          Serwer najpierw robi pełną kopię bazy (folder Odlozone na serwerze: 5 ostatnich, najwyżej 90 dni; zawiera też klucze i skróty haseł) i po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → Czyszczenie.</p>
+        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-czyszczenie">${P.ik('czyszczenie')}Czyszczenie zleceń</button></div>
+      </section>
+      <section class="admin-linia" data-karta="odrzucone">
+        <h3>Odrzucone zdarzenia <button type="button" class="maly" data-akcja="odswiez-odrzucone">Odśwież</button></h3>
+        <p class="slaby">Zapisy z hali, których serwer nie przyjął (telefon pokazał osobie powód i wyrzucił je z kolejki). Leżą tu 90 dni.
+          „Ponów” wysyła zapis jeszcze raz w imieniu autora — z jego dzisiejszymi uprawnieniami i pełnym sprawdzeniem.</p>
+        <div id="odrzucone-lista" class="lista"><p class="pusto">Wczytuję…</p></div>
       </section>`;
+    wczytajOdrzucone();
   }
+
+  /* Etap 1: odrzucone zdarzenia (GET /api/v1/admin/zdarzenia-odrzucone; tylko administrator). Lista rysowana osobno od szkieletu,
+     żeby odświeżenie nie zabierało fokusu; co pokazać — W.odrzuconeZdarzenia (testowane). */
+  let odrzucone = null, bladOdrzuconych = '', wczytujeOdrzucone = false;
+  async function wczytajOdrzucone() {
+    if (wczytujeOdrzucone) return;
+    wczytujeOdrzucone = true;
+    try { odrzucone = await hala.admin('GET', '/api/v1/admin/zdarzenia-odrzucone'); bladOdrzuconych = ''; }
+    catch (e) { bladOdrzuconych = P.komunikatBledu(e); }
+    finally { wczytujeOdrzucone = false; rysujOdrzucone(); }
+  }
+  function rysujOdrzucone() {
+    const el = $('odrzucone-lista');
+    if (!el) return;
+    if (bladOdrzuconych && !odrzucone) { el.innerHTML = `<p class="pusto">${esc(bladOdrzuconych)}</p>`; return; }
+    const w = W.odrzuconeZdarzenia(odrzucone, P.nazwaTypu);
+    if (w.niedostepne) { el.innerHTML = `<p class="pusto">${esc(w.podsumowanie)}</p>`; return; }
+    if (w.pusto) { el.innerHTML = '<p class="pusto">Nic nie zostało odrzucone.</p>'; return; }
+    el.innerHTML = `<p class="slaby">${esc(w.podsumowanie)}</p>` + w.wiersze.map(z => `
+      <article class="admin-osoba ${z.ponowione ? 'wylaczona' : ''}" data-wpis="${z.id}">
+        <div class="opis">
+          <div><b>${esc(z.typ)}</b> <span class="slaby">${esc(z.kiedy)} · ${esc(z.kto)}</span></div>
+          <div class="szczegoly"><span>${esc(z.powod)}</span>
+            ${z.ponowione ? `<span class="znacznik neutral">Ponowione</span>` : ''}${z.wynik ? `<span class="slaby">${esc(z.wynik)}</span>` : ''}</div>
+          <details class="odrzucone-surowe"><summary class="slaby">Zapis</summary><pre>${esc(z.surowe)}</pre></details>
+        </div>
+        <div class="akcje">${z.mozePonowic ? '<button type="button" class="maly" data-akcja="ponow-odrzucone">Ponów</button>' : ''}</div>
+      </article>`).join('');
+  }
+  async function ponowOdrzucone(id) {
+    const z = ((odrzucone || {}).zdarzenia || []).find(x => x.id === id);
+    if (!z) return;
+    const ma = W.odrzuconeZdarzenia({ zdarzenia: [z] }, P.nazwaTypu).wiersze[0];
+    if (!await P.potwierdz('Ponowić zapis?', `${ma.typ} — ${ma.kto}, ${ma.kiedy}. Serwer sprawdzi go jeszcze raz tak, jakby wysłała go ta osoba teraz.`, 'Ponów')) return;
+    const r = await hala.admin('POST', `/api/v1/admin/zdarzenia-odrzucone/${id}/ponow`, {});
+    if (r.status === 'odrzucone') P.komunikat(`Serwer dalej nie przyjmuje: ${r.powod}`, 'uwaga');
+    else P.komunikat('Ponowione — zapis przyjęty.', 'ok');
+    await wczytajOdrzucone();
+  }
+  /* Logowanie R1 (2026-11-10): „Logowania” — tylko do odczytu, tylko administrator (GET /api/v1/admin/logowania). Dziennik: kto, kiedy,
+     skąd — bez haseł i PIN-ów; lista kont z hasłem startowym (bez haseł); niespójności wykryte w dzienniku. Szkielet budowany raz na
+     wejście w część; lista rysowana osobno, żeby odświeżenie nie zabierało fokusu. Co pokazać — W.logowania (testowane). */
+  let dziennikLogowan = null, bladLogowan = '', wczytujeLogowania = false, filtrLogowan = { wynik: '', zrodlo: '' };
+  function rysujLogowania(el) {
+    if (el.querySelector('[data-karta="logowania"]')) return;
+    const opcje = (lista) => lista.map(([v, n]) => `<option value="${v}">${n}</option>`).join('');
+    el.innerHTML = `<section class="admin-linia" data-karta="logowania-startowe">
+        <h3>Hasła startowe</h3>
+        <p class="slaby" id="logowania-startowe-opis">Wczytuję…</p>
+        <div id="logowania-startowe" class="lista"></div>
+      </section>
+      <section class="admin-linia" data-karta="logowania-niespojnosci" id="logowania-niespojnosci" hidden></section>
+      <section class="admin-linia" data-karta="logowania">
+        <h3>Dziennik logowań <button type="button" class="maly" data-akcja="odswiez-logowania">Odśwież</button></h3>
+        <p class="slaby">Kto, kiedy i skąd się logował — bez haseł i PIN-ów. Wpisy leżą 90 dni, adres widzi tylko administrator. Ekran tylko do odczytu.</p>
+        <div class="admin-pasek">
+          <label>Wynik <select id="logowania-wynik">${opcje([['', 'wszystkie'], ['ok', 'udane'], ['zle_haslo', 'złe hasło'], ['zly_pin', 'zły PIN'],
+            ['wymagane_haslo', 'wymagane hasło'], ['pauza', 'pauza'], ['seria', 'serie złych prób'], ['nieznany', 'nieznany identyfikator']])}</select></label>
+          <label>Skąd <select id="logowania-zrodlo">${opcje([['', 'wszędzie'], ['zaklad', 'sieć zakładu'], ['internet', 'internet'], ['lokalny', 'ten komputer']])}</select></label>
+        </div>
+        <div id="logowania-lista" class="lista"><p class="pusto">Wczytuję…</p></div>
+      </section>`;
+    for (const id of ['logowania-wynik', 'logowania-zrodlo']) {
+      const w = $(id);
+      w.value = filtrLogowan[id === 'logowania-wynik' ? 'wynik' : 'zrodlo'];
+      w.addEventListener('change', () => { filtrLogowan = { wynik: $('logowania-wynik').value, zrodlo: $('logowania-zrodlo').value }; wczytajLogowania(); });
+    }
+    wczytajLogowania();
+  }
+  async function wczytajLogowania() {
+    if (wczytujeLogowania) return;
+    wczytujeLogowania = true;
+    try {
+      const q = new URLSearchParams({ limit: '200', dni: '7' });
+      if (filtrLogowan.wynik) q.set('wynik', filtrLogowan.wynik);
+      if (filtrLogowan.zrodlo) q.set('zrodlo', filtrLogowan.zrodlo);
+      dziennikLogowan = await hala.admin('GET', `/api/v1/admin/logowania?${q}`); bladLogowan = '';
+    } catch (e) { bladLogowan = P.komunikatBledu(e); }
+    finally { wczytujeLogowania = false; rysujListeLogowan(); }
+  }
+  function rysujListeLogowan() {
+    const lista = $('logowania-lista');
+    if (!lista || czesc !== 'logowania') return;
+    if (bladLogowan && !dziennikLogowan) {
+      lista.innerHTML = `<p class="pusto">${esc(bladLogowan)}</p>`;
+      $('logowania-startowe-opis').textContent = bladLogowan;
+      return;
+    }
+    const w = W.logowania(dziennikLogowan);
+    $('logowania-startowe-opis').textContent = w.niedostepne ? w.podsumowanie : w.startowePodsumowanie;
+    $('logowania-startowe').innerHTML = w.startowe.map(x => `
+      <article class="admin-osoba" data-konto="${esc(x.id)}">
+        <div class="opis"><div><b>${esc(x.nazwa)}</b> <span class="slaby">${esc(x.role)}</span></div>
+          <div class="szczegoly"><span>Hasło startowe ${esc(x.opis)}</span>${x.poTerminie ? '<span class="znacznik uwaga">Dłużej niż 7 dni</span>' : ''}</div></div>
+      </article>`).join('');
+    const nie = $('logowania-niespojnosci');
+    nie.hidden = !w.niespojnosci.length;
+    nie.innerHTML = w.niespojnosci.length ? `<h3>Do sprawdzenia</h3>` + w.niespojnosci.map(n => `<p class="slaby"><span class="znacznik uwaga">Uwaga</span> ${esc(n.opis)}</p>`).join('') : '';
+    if (w.niedostepne) { lista.innerHTML = ''; return; }
+    if (w.pusto) { lista.innerHTML = '<p class="pusto">Brak wpisów w tym okresie.</p>'; return; }
+    lista.innerHTML = `<p class="slaby">${esc(w.podsumowanie)}</p>` + w.wiersze.map(z => `
+      <article class="admin-osoba" data-wpis="${z.id}">
+        <div class="opis">
+          <div><b>${esc(z.kto)}</b> <span class="slaby">${esc(z.kiedy)} · ${esc(z.program)}</span></div>
+          <div class="szczegoly"><span class="znacznik ${z.klasa}">${esc(z.wynik)}</span>
+            ${z.metoda ? `<span>${esc(z.metoda)}</span>` : ''}${z.zrodlo ? `<span class="slaby">${esc(z.zrodlo)}${z.adres ? ' · ' + esc(z.adres) : ''}</span>` : ''}
+            ${z.uwaga ? `<span class="slaby">${esc(z.uwaga)}</span>` : ''}</div>
+        </div>
+      </article>`).join('');
+  }
+
   function rysujKody(el) {
     if (el.querySelector('[data-karta="kody"]')) return;
     el.innerHTML = `<section class="admin-linia" data-karta="kody">
         <h3>Kody QR</h3>
         <p class="slaby">Kody aplikacji, maszyn, punktów skanu, linii i identyfikatorów osób — każdy osobno albo wszystkie z kategorii.
           Wejście jest też w ☰ Więcej → Kody QR.</p>
-        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-kody">🖨 Kody QR</button></div>
+        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-kody">${P.ik('drukuj')}Kody QR</button></div>
       </section>`;
   }
 
@@ -167,7 +290,7 @@
         <div class="admin-pasek">
           <input id="admin-szukaj" type="search" placeholder="Szukaj osoby" aria-label="Szukaj osoby" value="${esc(szukaj)}">
           <label class="zaznacz"><input type="checkbox" id="admin-nieaktywni" ${nieaktywni ? 'checked' : ''}> Pokaż wyłączone</label>
-          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Lider, UR, KJ)">🖨 Identyfikatory</button>
+          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Lider, UR, KJ)">${P.ik('drukuj')}Identyfikatory</button>
           <button type="button" class="glowny" id="admin-dodaj">+ Dodaj osobę</button>
         </div>
         <div id="admin-lista" class="lista"></div>`;
@@ -193,7 +316,8 @@
         </div>
         <div class="akcje">
           ${p.zablokowany ? '<button type="button" class="maly glowny" data-akcja="odblokuj">Odblokuj</button>' : ''}
-          ${zeSkanem.has(p.id) ? '<button type="button" class="maly" data-akcja="identyfikator" title="Drukuj identyfikator QR" aria-label="Drukuj identyfikator QR">🖨</button>' : ''}
+          ${zeSkanem.has(p.id) ? `<button type="button" class="maly" data-akcja="identyfikator" title="Drukuj identyfikator QR" aria-label="Drukuj identyfikator QR">${P.ik('drukuj')}</button>` : ''}
+          ${uprawnienia(lista.find(x => x.id === p.id)).resetPinu ? '<button type="button" class="maly" data-akcja="resetuj-pin" title="PIN startowy 1234 — osoba ustawi nowy przy logowaniu">Resetuj PIN</button>' : ''}
           <button type="button" class="maly" data-akcja="edytuj">Zmień</button>
         </div>
       </article>`).join('') || '<p class="pusto">Nikogo nie znaleziono</p>';
@@ -288,18 +412,23 @@
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  /* „Resetuj PIN” (D46): PIN startowy 1234 — osoba ustawia nowy przy pierwszym logowaniu. Nikt nie zna niczyjego PIN-u. */
-  $('osoba-resetuj-pin').addEventListener('click', async () => {
-    const o = edytowany;
+  /* „Resetuj PIN” (D46): PIN startowy 1234 — osoba ustawia nowy przy pierwszym logowaniu. Nikt nie zna niczyjego PIN-u.
+     Dwa wejścia, to samo pytanie i ten sam zapis: przycisk w oknie osoby i skrót w wierszu listy (właściciel 2026-11-10 —
+     trzy kliknięcia zamiast pięciu). Skrót widzi ten, komu `uprawnienia(osoba).resetPinu` pozwala, jak przycisk w oknie. */
+  async function resetujPin(o, zOkna) {
     if (!o || !(await P.potwierdz('Zresetować PIN?', `${o.nazwa} dostanie PIN startowy 1234 — przy pierwszym logowaniu `
           + 'ustawi nowy.', 'Resetuj PIN'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: o.id });
-      $('okno-osoby').close();
+      if (zOkna) $('okno-osoby').close();
       P.komunikat(`${o.nazwa}: PIN startowy 1234 — przy logowaniu ustawi nowy.`, 'ok');
       await wczytajPracownikow();         // znacznik „PIN startowy” na liście
-    } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
-  });
+    } catch (e) {
+      if (zOkna) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+      else P.komunikat(P.komunikatBledu(e), 'blad');
+    }
+  }
+  $('osoba-resetuj-pin').addEventListener('click', () => resetujPin(edytowany, true));
 
   /* „Wyloguj wszędzie” (D43 §2): wszystkie sesje i zaufanie urządzeń tej osoby — następne logowanie wszędzie hasłem. */
   $('osoba-wyloguj').addEventListener('click', async () => {
@@ -397,16 +526,16 @@
     if (!el.querySelector('#lista-maszyn')) {
       el.innerHTML = `
         <div class="admin-pasek">
-          <button type="button" class="glowny" data-akcja="nowa-maszyna">+ Maszyna</button>
-          <button type="button" id="drukuj-etykiety" data-akcja="etykiety" aria-expanded="false">🖨 Drukuj etykiety</button>
+          <button type="button" class="glowny" data-akcja="nowa-maszyna">+ Nowa maszyna</button>
+          <button type="button" id="drukuj-etykiety" data-akcja="etykiety" aria-expanded="false">${P.ik('drukuj')}Drukuj etykiety</button>
         </div>
         <div id="etykiety-opcje" hidden></div>
         <section class="admin-linia" id="lista-maszyn"></section>
-        <p class="slaby">Kod maszyny to napis na etykiecie QR (HALA:M:…) — po wydrukowaniu etykiet go nie zmieniaj.</p>`;
+        <p class="slaby">Kod maszyny jest zapisany w kodzie QR na etykiecie — po wydrukowaniu etykiet go nie zmieniaj, bo skan przestanie działać.</p>`;
     }
     const lista = maszyny.map(([mk, m]) => `
           <div class="admin-maszyna"><span><b>${esc(m.nazwa)}</b> <span class="slaby">${esc(mk)}${m.typ ? ` · ${esc(m.typ)}` : ''}${wiele ? ` · ${esc((linie[m.linia] || {}).nazwa || m.linia)}` : ''}</span></span>
-            <span><button type="button" class="maly" data-akcja="etykieta" data-kod="${esc(mk)}" title="Drukuj etykietę QR tej maszyny">🖨 Etykieta</button>
+            <span><button type="button" class="maly" data-akcja="etykieta" data-kod="${esc(mk)}" title="Drukuj etykietę QR tej maszyny">${P.ik('drukuj')}Etykieta</button>
             <button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
             <button type="button" class="maly" data-akcja="wycofaj" data-kod="${esc(mk)}">Wycofaj</button></span></div>`).join('')
           || '<p class="pusto">Nie ma jeszcze maszyn</p>';
@@ -484,47 +613,28 @@
     if (el.querySelector('#formularz-ustawien')) return;           // nie kasujemy tego, co administrator właśnie wpisuje
     const u = (hala.slowniki && hala.slowniki.ustawienia) || {};
     const wart = (k, d) => ((u[k] || {}).wartosc !== undefined ? u[k].wartosc : d);
+    // „Sieć zakładu” (adresy IP) jest rzadko ruszana i techniczna, więc stoi po progach — na wierzchu są liczby, które kierownik rozumie.
     el.innerHTML = `
       <form id="formularz-ustawien" class="admin-ustawienia" novalidate>
+        <h3>Alarmy i sieć zakładu</h3>
+        ${USTAWIENIA.map(([k, opis, d]) => `<label>${esc(opis)}<input name="${k}" type="number" min="${W.ZAKRESY_USTAWIEN[k][0]}" max="${W.ZAKRESY_USTAWIEN[k][1]}" value="${esc(wart(k, d))}">
+          <span class="blad-pola" data-blad="${k}" hidden></span></label>`).join('')}
         <label>Sieć zakładu (adresy internetu wifi zakładu, po przecinku)
           <input name="siec_zakladu" value="${esc(wart('siec_zakladu', ''))}" placeholder="np. 203.0.113.7">
           <span class="slaby">${twojAdres ? `Ten komputer łączy się z adresu <b>${esc(twojAdres)}</b> — jeśli jesteś w zakładzie, to jest adres zakładu.` : ''}
             Złe PIN-y z tej sieci nie blokują kont z internetu; sieci lokalne (192.168…, 10…) liczą się zawsze.
-            Najprościej: Serwis → „Wpisz mój adres”.</span></label>
-        ${USTAWIENIA.map(([k, opis, d]) => `<label>${esc(opis)}<input name="${k}" type="number" min="${W.ZAKRESY_USTAWIEN[k][0]}" max="${W.ZAKRESY_USTAWIEN[k][1]}" value="${esc(wart(k, d))}">
-          <span class="blad-pola" data-blad="${k}" hidden></span></label>`).join('')}
+            Najprościej: Ustawienia → „Wpisz mój adres”.</span></label>
         <p class="blad" role="alert" hidden></p>
-        <div class="przyciski"><button class="glowny" type="submit">Zapisz ustawienia</button></div>
+        <div class="przyciski"><button class="glowny" type="submit">Zapisz progi</button></div>
       </form>
       <form id="formularz-zmian" class="admin-ustawienia">
         <h3>Godziny zmian</h3>
         <p class="slaby">Zmiana nocna kończy się następnego dnia (np. 22:00–06:00). Obchody, raporty i „ta zmiana” w Panelu liczą się od tych godzin.</p>
         <div class="naglowek-zmian" aria-hidden="true"><span>Nr</span><span>Nazwa</span><span>Od</span><span>Do</span><span></span></div>
         <div id="wiersze-zmian"></div>
-        <button type="button" id="dodaj-zmiane">+ Zmiana</button>
+        <button type="button" id="dodaj-zmiane">+ Dodaj zmianę</button>
         <p class="blad" role="alert" hidden></p>
         <div class="przyciski"><button class="glowny" type="submit">Zapisz godziny zmian</button></div>
-      </form>
-      <form id="formularz-kopii" class="admin-ustawienia" autocomplete="off">
-        <h3>Kopie poza komputerem <span id="kopie-znacznik"></span></h3>
-        <p class="slaby" id="kopie-opis">Wczytuję…</p>
-        <label>Folder kopii
-          <input name="kopia_folder" placeholder="np. E:\\GK-kopie" autocapitalize="none" spellcheck="false">
-          <span class="slaby">np. E:\\GK-kopie (dysk zewnętrzny) albo folder OneDrive/Dysk Google — tylko na kopie, nigdy na żywą bazę.
-            Raz na dobę serwer kładzie tu kopię bazy (bez tokenów i kluczy) i nowe zdjęcia; trzyma 7 dziennych, 4 tygodniowe i 12 miesięcznych.</span></label>
-        <label>Przechowuj zdjęcia (miesięcy)
-          <input name="retencja_zdjec_mies" type="number" min="1" max="120" placeholder="puste = bez kasowania">
-          <span class="slaby">Starsze zdjęcia znikają z serwera i z kopii (RODO). Puste pole — nic nie kasujemy.</span></label>
-        <ul id="kopie-lista" class="slaby"></ul>
-        <p class="blad" role="alert" hidden></p>
-        <div class="przyciski"><button type="button" data-akcja="kopia-teraz">Zrób kopię teraz</button>
-          <button class="glowny" type="submit">Zapisz kopie</button></div>
-      </form>
-      <form id="formularz-dostepu" class="admin-ustawienia" autocomplete="off">
-        <h3>Tunel i GitHub</h3>
-        <p class="slaby">Telefony otwierają aplikacje z GitHub Pages, a dane idą do serwera przez tunel Cloudflare. Stan, adresy
-          i kody QR: Administracja → Serwis → Dostęp z telefonów. Token GitHub robi się raz — INSTRUKCJA-BIURO.md.</p>
-        <div id="pola-dostepu"><p class="slaby">Wczytuję…</p></div>
       </form>`;
     const wierszZmiany = (nr, z) => `<div class="wiersz-zmiany"><input name="nr" value="${esc(nr)}" aria-label="Numer zmiany" maxlength="4">
       <input name="nazwa" value="${esc((z && z.nazwa) || '')}" placeholder="Nazwa" aria-label="Nazwa zmiany">
@@ -545,7 +655,7 @@
       // Etap 3: numer zmiany, który znika, a jest w szablonach checklist albo zleceniach stałych — tam przestanie pasować.
       const uzycia = W.uzyciaZmian(hala.slowniki, wynik.zmiany.map(z => z.nr));
       if (uzycia.length && !(await P.potwierdz('Zmienić numery zmian?', `${uzycia.join(' ')} Po zapisie popraw je w Checklistach `
-        + 'i w Zleceniach → 💾 Zapisane — inaczej przestaną działać.', 'Zapisz mimo to'))) return;
+        + 'i w Zleceniach → Zapisane — inaczej przestaną działać.', 'Zapisz mimo to'))) return;
       try {
         const obecne = (hala.slowniki && hala.slowniki.zmiany) || {};
         const zapisy = wynik.zmiany.filter(z => JSON.stringify(obecne[z.nr]) !== JSON.stringify(z.wartosc))
@@ -558,6 +668,54 @@
       } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
     });
     if (lista === null) wczytajPracownikow();      // twoj_adres przychodzi z listą pracowników
+    $('formularz-ustawien').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const f = ev.target, blad = f.querySelector('p[role=alert]');
+      const u2 = (hala.slowniki && hala.slowniki.ustawienia) || {};
+      // Etap 3: puste pole albo liczba spoza zakresu huba — błąd przy polu (wcześniej Number('') = 0 szło do huba).
+      const w = W.ustawieniaZFormularza(Object.assign({ siec_zakladu: f.siec_zakladu.value },
+        Object.fromEntries(USTAWIENIA.map(([k]) => [k, f[k].value]))), u2);
+      for (const el of f.querySelectorAll('[data-blad]')) { el.hidden = !w.bledy[el.dataset.blad]; el.textContent = w.bledy[el.dataset.blad] || ''; }
+      if (Object.keys(w.bledy).length) { blad.hidden = false; blad.className = 'blad'; blad.textContent = 'Popraw pola zaznaczone na czerwono.'; return; }
+      try {
+        blad.hidden = false; blad.className = 'slaby'; blad.textContent = 'Zapisuję…';
+        // „Zapisane.” dopiero, gdy hub przyjął (Panel.zapiszWHubie) — hub sprawdza zakresy i format sieci zakładu.
+        const wynik = W.wynikZapisu(await P.zapiszWHubie(w.zmiany.map(([k, v]) =>
+          ['slownik.zapisany', `ustawienia/${k}`, { slownik: 'ustawienia', klucz: k, wartosc: { wartosc: v } }])));
+        blad.className = wynik.klasa; blad.textContent = wynik.tekst;
+      } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
+    });
+  }
+
+  // ------------------------------------------------------------ ustawienia techniczne: kopie i tunel (2026-11-10)
+
+  /* Dwa formularze, które były w „Ustawieniach” (progi i godziny) obok rzeczy dla kierownika, a są techniczne: kopie poza
+     komputerem i „Tunel i GitHub”. Stoją teraz w części „Ustawienia” (kod 'serwis', dawny Serwis) pod stanem dostępu z
+     telefonów, do którego należą — i tak prowadzą tam ścieżki z serwera („Administracja → Ustawienia → Tunel i GitHub”). */
+  const FORMULARZE_KOPII_I_TUNELU = `
+      <form id="formularz-kopii" class="admin-ustawienia" autocomplete="off">
+        <h3>Kopie poza komputerem <span id="kopie-znacznik"></span></h3>
+        <p class="slaby" id="kopie-opis">Wczytuję…</p>
+        <label>Folder kopii
+          <input name="kopia_folder" placeholder="np. E:\\GK-kopie" autocapitalize="none" spellcheck="false">
+          <span class="slaby">np. E:\\GK-kopie (dysk zewnętrzny) albo folder OneDrive/Dysk Google — tylko na kopie, nigdy na żywą bazę.
+            Raz na dobę serwer kładzie tu kopię bazy (bez tokenów i kluczy) i nowe zdjęcia; trzyma 7 dziennych, 4 tygodniowe i 12 miesięcznych.</span></label>
+        <label>Przechowuj zdjęcia (miesięcy)
+          <input name="retencja_zdjec_mies" type="number" min="1" max="120" placeholder="puste = bez kasowania">
+          <span class="slaby">Starsze zdjęcia znikają z serwera i z kopii (RODO). Puste pole — nic nie kasujemy.</span></label>
+        <ul id="kopie-lista" class="slaby"></ul>
+        <p class="blad" role="alert" hidden></p>
+        <div class="przyciski"><button type="button" data-akcja="kopia-teraz">Zrób kopię teraz</button>
+          <button class="glowny" type="submit">Zapisz kopie</button></div>
+      </form>
+      <form id="formularz-dostepu" class="admin-ustawienia" autocomplete="off">
+        <h3>Tunel i GitHub</h3>
+        <p class="slaby">Telefony otwierają aplikacje z GitHub Pages, a dane idą do serwera przez tunel Cloudflare. Stan, adresy
+          i kody QR: Administracja → Ustawienia → Dostęp z telefonów. Token GitHub robi się raz — INSTRUKCJA-BIURO.md.</p>
+        <div id="pola-dostepu"><p class="slaby">Wczytuję…</p></div>
+      </form>`;
+
+  function podlaczKopieITunel() {
     wczytajDostep().then(() => wypelnijDostep());
     wczytajKopie().then(() => wypelnijKopie());
     $('formularz-kopii').addEventListener('submit', async ev => {
@@ -593,24 +751,7 @@
         wypelnijDostep(true);
         const b2 = $('formularz-dostepu').querySelector('.blad');
         b2.hidden = false; b2.className = 'ok';
-        b2.textContent = 'Zapisane. Stan tunelu: Administracja → Serwis → Dostęp z telefonów.';
-      } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
-    });
-    $('formularz-ustawien').addEventListener('submit', async ev => {
-      ev.preventDefault();
-      const f = ev.target, blad = f.querySelector('p[role=alert]');
-      const u2 = (hala.slowniki && hala.slowniki.ustawienia) || {};
-      // Etap 3: puste pole albo liczba spoza zakresu huba — błąd przy polu (wcześniej Number('') = 0 szło do huba).
-      const w = W.ustawieniaZFormularza(Object.assign({ siec_zakladu: f.siec_zakladu.value },
-        Object.fromEntries(USTAWIENIA.map(([k]) => [k, f[k].value]))), u2);
-      for (const el of f.querySelectorAll('[data-blad]')) { el.hidden = !w.bledy[el.dataset.blad]; el.textContent = w.bledy[el.dataset.blad] || ''; }
-      if (Object.keys(w.bledy).length) { blad.hidden = false; blad.className = 'blad'; blad.textContent = 'Popraw pola zaznaczone na czerwono.'; return; }
-      try {
-        blad.hidden = false; blad.className = 'slaby'; blad.textContent = 'Zapisuję…';
-        // „Zapisane.” dopiero, gdy hub przyjął (Panel.zapiszWHubie) — hub sprawdza zakresy i format sieci zakładu.
-        const wynik = W.wynikZapisu(await P.zapiszWHubie(w.zmiany.map(([k, v]) =>
-          ['slownik.zapisany', `ustawienia/${k}`, { slownik: 'ustawienia', klucz: k, wartosc: { wartosc: v } }])));
-        blad.className = wynik.klasa; blad.textContent = wynik.tekst;
+        b2.textContent = 'Zapisane. Stan tunelu: Administracja → Ustawienia → Dostęp z telefonów.';
       } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
     });
   }
@@ -651,7 +792,7 @@
     const koniec = Date.now() + 15 * 60000;
     while (Date.now() < koniec) {
       await new Promise(ok => setTimeout(ok, 3000));
-      if (czesc !== 'ustawienia') return;
+      if (czesc !== 'serwis') return;
       await wczytajKopie();
       if (!kopieStan || !kopieStan.stan.trwa) break;
     }
@@ -689,14 +830,16 @@
       el.innerHTML = `
         <div id="serwis-siec"></div>
         <details class="serwis-czesc" id="serwis-dostep" data-sekcja="dostep" ${serwisOtwarte.dostep ? 'open' : ''}>
-          <summary><h3>📱 Dostęp z telefonów</h3><span id="serwis-dostep-stan"></span></summary>
+          <summary><h3>Dostęp z telefonów</h3><span id="serwis-dostep-stan"></span></summary>
           <div class="serwis-czesc-tresc" id="serwis-dostep-tresc"></div>
         </details>
         <details class="serwis-czesc" id="serwis-polaczenia" data-sekcja="polaczenia" ${serwisOtwarte.polaczenia ? 'open' : ''}>
           <summary><h3>Połączenia GK</h3><span id="serwis-polaczenia-stan"></span></summary>
           <div class="serwis-czesc-tresc" id="serwis-polaczenia-tresc"></div>
         </details>
-        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Administracja → Dane</b> i w <b>Zlecenia → 🧹 Czyszczenie</b> — tylko dla administratora.</p>`;
+        <div id="serwis-formularze">${FORMULARZE_KOPII_I_TUNELU}</div>
+        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Administracja → Dane</b> i w <b>Zlecenia → Czyszczenie</b> — tylko dla administratora.</p>`;
+      podlaczKopieITunel();
     }
     rysujDostep($('serwis-dostep-tresc'));
     rysujPolaczenia($('serwis-polaczenia-tresc'));
@@ -799,9 +942,9 @@
           <figure class="dostep-qr">
             <div class="dostep-kod" data-qr="${esc(a.adres)}" role="img" aria-label="Kod QR: ${esc(a.nazwa)}"></div>
             <figcaption><b>${esc(a.nazwa)}</b>${link(a.adres)}${a.opis ? `<span class="slaby">${esc(a.opis)}</span>` : ''}
-              <button type="button" class="maly" data-akcja="drukuj-qr-aplikacji" data-app="${esc(a.app)}" aria-label="Drukuj kod ${esc(a.nazwa)}">🖨 Drukuj kod</button></figcaption>
+              <button type="button" class="maly" data-akcja="drukuj-qr-aplikacji" data-app="${esc(a.app)}" aria-label="Drukuj kod ${esc(a.nazwa)}">${P.ik('drukuj')}Drukuj kod</button></figcaption>
           </figure>`).join('')}</div>
-        <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">🖨 Drukuj wszystkie</button></div>
+        <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">${P.ik('drukuj')}Drukuj wszystkie</button></div>
       </section>
       <section class="admin-linia">
         <h3><span>GK Trasy i GK Flota</span></h3>
@@ -963,7 +1106,7 @@
               ${rodzajeEtykiet(sl).includes(r) ? 'checked' : ''}> ${{ linie: 'Linie', stanowiska: 'Stanowiska', maszyny: 'Maszyny' }[r]}</label>`).join('')}
           </div></fieldset>
           <div class="przyciski"><span id="etykiet-ile" class="slaby"></span>
-            <button type="button" class="glowny" data-akcja="drukuj-etykiety">🖨 Drukuj</button></div>
+            <button type="button" class="glowny" data-akcja="drukuj-etykiety">${P.ik('drukuj')}Drukuj</button></div>
         </form>`;
       $('formularz-etykiet').addEventListener('change', () => {
         const f = $('formularz-etykiet');
@@ -1016,6 +1159,7 @@
     const akcja = b.dataset.akcja, id = (b.closest('[data-id]') || {}).dataset?.id;
     try {
       if (akcja === 'edytuj') otworzOsobe(lista.find(p => p.id === id));
+      if (akcja === 'resetuj-pin') await resetujPin(lista.find(p => p.id === id), false);
       if (akcja === 'odblokuj') {
         await hala.admin('POST', '/api/v1/admin/odblokuj', { pracownik: id });
         await wczytajPracownikow();
@@ -1023,6 +1167,9 @@
       }
       if (akcja === 'otworz-czyszczenie' && P.widoki.czyszczenie) P.widoki.czyszczenie.otworz();
       if (akcja === 'otworz-kody' && P.widoki.kody) P.widoki.kody.otworz();
+      if (akcja === 'odswiez-odrzucone') await wczytajOdrzucone();
+      if (akcja === 'odswiez-logowania') await wczytajLogowania();
+      if (akcja === 'ponow-odrzucone') await ponowOdrzucone(Number((b.closest('[data-wpis]') || {}).dataset?.wpis));
       if (akcja === 'wpisz-moj-adres') await wpiszMojAdres();
       if (akcja === 'kopia-teraz') await kopiaTeraz();
       if (akcja === 'nowa-maszyna') otworzMaszyne();
@@ -1070,6 +1217,7 @@
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
     lista = null; zakres = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
+    odrzucone = null; bladOdrzuconych = '';
     kopieStan = null; alarmy = []; alarmyCzas = 0; serwisOtwarte = { dostep: null, polaczenia: false }; etykietyOtwarte = false;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;
     rysujAlarmy();

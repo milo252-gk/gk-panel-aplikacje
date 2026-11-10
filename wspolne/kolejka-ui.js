@@ -50,7 +50,7 @@
           o.komunikat(ok ? 'Zapis wrócił do kolejki — wyślę go jeszcze raz' : 'Tego zapisu nie ma już na liście', ok ? 'ok' : 'uwaga');
         } else if (cel.dataset.ponowPlik) {
           const ok = await hala.ponowPlik(cel.dataset.ponowPlik);
-          o.komunikat(ok ? 'Zdjęcie wróciło do kolejki — wyślę je jeszcze raz' : 'Tego zdjęcia nie ma już w telefonie', ok ? 'ok' : 'uwaga');
+          o.komunikat(ok ? 'Zdjęcie wróciło do kolejki — wyślę je jeszcze raz' : 'Tego zdjęcia nie ma już na tym urządzeniu', ok ? 'ok' : 'uwaga');
         } else if (cel.dataset.usunPlik) {
           await hala.usunOdrzuconyPlik(cel.dataset.usunPlik);
         }

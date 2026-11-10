@@ -11,7 +11,6 @@
 .slaby { color: var(--tekst-slaby); }
 .tekst-alarm { color: var(--czerwony); font-weight: 700; }
 .tekst-uwaga { color: var(--zolty); font-weight: 600; }
-.tekst-ok { color: var(--zielony); font-weight: 600; }
 .blad { color: var(--czerwony); font-weight: 600; }
 .przycisk { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box; }
 .szeroki { width: 100%; }
@@ -59,7 +58,6 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
 .pusto.ok { color: var(--zielony); font-weight: 600; }
 .wiersz { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .tekst { white-space: pre-wrap; }
-.tekst-opisu { font-size: .9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tekst-slaby); }
 .stopka { margin-top: 24px; font-size: .85em; }
 
 .karta {
@@ -69,9 +67,7 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
 a.karta:active { background: var(--tlo); }
 .karta .tytul { display: block; margin: 4px 0; font-size: 1.05em; }
 .karta.alert { border-left: 8px solid var(--czerwony); }
-.karta.partia { border-left: 8px solid var(--czerwony); }
-.karta.reklamacja { border-left: 8px solid var(--zolty); }
-.karta.wycofany, .karta.zwolniona, .karta.zamknieta { border-left-color: var(--neutral); opacity: .8; }
+.karta.wycofany, .karta.zamknieta { border-left-color: var(--neutral); opacity: .8; }
 .archiwum { margin-top: 16px; }
 .archiwum summary { min-height: var(--dotyk); display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--tekst-slaby); }
 
@@ -107,26 +103,8 @@ fieldset { border: 0; padding: 0; margin: 0; }
 legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .przyciski-formularza { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 8px; }
 .przyciski-formularza:has(> :only-child) { grid-template-columns: 1fr; }
-.z-przyciskiem { display: flex; gap: 8px; }
-.z-przyciskiem input { flex: 1; min-width: 0; }
-.bez-skanu { margin-top: 10px; }
-.bez-skanu summary { min-height: 44px; display: flex; align-items: center; color: var(--tekst-slaby); cursor: pointer; }
-.wybrane-stanowisko { flex: 1; }
-#p-stanowisko:has(.wybrane-stanowisko) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-#p-stanowisko:has(.wybrane-stanowisko) h2 { width: 100%; }
 
 /* Licznik ±: duże przyciski po bokach, liczba na środku (rękawice). */
-.liczniki { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
-.licznik { display: grid; grid-template-columns: var(--dotyk) 1fr var(--dotyk); gap: 6px; align-items: center; }
-.licznik .licznik-opis { grid-column: 1 / -1; font-weight: 600; font-size: .9em; }
-.licznik button { padding: 0; font-size: 1.6em; line-height: 1; }
-.licznik input { text-align: center; font-size: 1.5em; font-weight: 700; padding: 6px 0; -moz-appearance: textfield; }
-.licznik input::-webkit-inner-spin-button, .licznik input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.licznik.male { grid-template-columns: 1fr 44px 70px 44px; margin: 6px 0; }
-.licznik.male .licznik-opis { grid-column: 1; font-weight: 400; }
-.licznik.male button { min-height: 44px; }
-.licznik.male input { min-height: 44px; font-size: 1.15em; }
-@media (max-width: 380px) { .liczniki { grid-template-columns: 1fr; } }
 
 /* ---------------------------------------------------------------- zdjęcia */
 
@@ -145,16 +123,10 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .szczegoly dt { color: var(--tekst-slaby); }
 .szczegoly dd { margin: 0; overflow-wrap: anywhere; }
 .instrukcja { font-weight: 600; }
-.potwierdzenia-linii { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.potwierdzenia-linii li { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 10px 12px; border-radius: var(--promien); border: 1px solid var(--ramka); border-left: 8px solid var(--czerwony); }
-.potwierdzenia-linii li.ok { border-left-color: var(--zielony); }
-.potwierdzenia-linii li span { color: var(--tekst-slaby); }
-.potwierdzenia-linii li q { width: 100%; font-style: italic; }
-.liczby-proby, .kafle-liczb { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 10px 0; }
-.liczby-proby > div, .kafle-liczb > div { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 10px; display: flex; flex-direction: column; }
-.liczby-proby span, .kafle-liczb span { font-size: .85em; color: var(--tekst-slaby); }
-.liczby-proby b, .kafle-liczb b { font-size: 1.6em; font-variant-numeric: tabular-nums; }
-.liczby-proby .alarm b { color: var(--czerwony); }
+.kafle-liczb { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 10px 0; }
+.kafle-liczb > div { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 10px; display: flex; flex-direction: column; }
+.kafle-liczb span { font-size: .85em; color: var(--tekst-slaby); }
+.kafle-liczb b { font-size: 1.6em; font-variant-numeric: tabular-nums; }
 pre { white-space: pre-wrap; font-size: .8em; background: var(--tlo); padding: 8px; border-radius: 6px; }
 
 /* ---------------------------------------------------------------- okno i komunikat */
@@ -245,8 +217,6 @@ body.kpi-ur .tylko-kpi { display: flex !important; }
 .chipy { display: flex; flex-wrap: wrap; gap: 8px; }
 .chipy button { min-height: 48px; border-radius: 999px; padding: 0 16px; font-weight: 600; }
 .chipy button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
-.lista-wyboru { display: flex; flex-direction: column; gap: 8px; }
-.lista-wyboru button { justify-content: flex-start; text-align: left; min-height: 56px; }
 
 /* ---------------------------------------------------------------- przeglądy */
 

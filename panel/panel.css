@@ -52,14 +52,18 @@
 }
 /* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. Pokazujemy tylko kafelki z liczbą
    (W.kafelkiDoPokazania), więc kolumny stałej szerokości (auto-fill): dwa kafelki nie rozjeżdżają się na cały ekran. */
-.kafelki-liczb { grid-area: liczby; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+/* Kafelki i przycisk „+ Nowe zlecenie” (tylko ten, kto zleca) w jednym rzędzie Pulpitu; na wąskim ekranie przycisk schodzi pod kafelki. */
+.pulpit-gora { grid-area: liczby; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.pulpit-gora > .kafelki-liczb { flex: 1 1 320px; min-width: 0; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.pulpit-gora > #pulpit-nowe-zlecenie { flex: 0 0 auto; }
+@media (max-width: 600px) { .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; } }
 /* Same zera — jedno spokojne zdanie zamiast kafelków. */
 .kafelki-liczb > .spokoj { grid-column: 1 / -1; margin: 0; background: none; padding: 4px 8px; text-align: left;
   color: var(--zielony); font-weight: 600; }
 .kafelki-liczb > button { cursor: default; }
 .kafelki-liczb > button:is([data-kafel="zlecenia"], [data-kafel="po-terminie"]) { cursor: pointer; }
 .kafelki-liczb > button:hover { filter: none; }
-/* UI etap 3: „1 do przyjęcia” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
+/* UI etap 3: „1 do odbioru” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
 .kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
 .awarie { grid-area: awarie; }
@@ -105,6 +109,8 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
   .kafelki-liczb { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .kafelki-liczb b { font-size: 22px; }
   .kafelki-liczb .etykieta { font-size: 10px; }
+  /* Cztery kafelki (typowy pulpit: stoi, awarie, jakość, zlecenia) w układzie 3+1 zostawiały czwarty samotnie — 2 × 2 jest równe. */
+  .kafelki-liczb:has(> :nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---------------------------------------------------------------- kafelki obchodów */
@@ -190,11 +196,12 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .zlecenie .odpowiedz { margin-top: 4px; font-size: .9em; font-weight: 600; }
 .zlecenie .numer { text-align: right; font-size: .8em; }
 .zlecenie .akcje { display: flex; flex-direction: column; gap: 6px; }
+.zlecenie .akcje button.wiecej { background: transparent; color: var(--tekst-slaby); }   /* „Więcej” — wtórne, nie konkuruje z przyciskiem głównym */
 button.maly { min-height: max(36px, var(--dotyk-maly)); padding: 0 12px; }   /* telefon: 52 px (D29, --dotyk-maly z hala.css) */
 @media (max-width: 600px) {
   .zlecenie { grid-template-columns: minmax(0, 1fr); }
   .zlecenie .numer { text-align: left; }
-  .zlecenie .akcje { flex-direction: row; }
+  .zlecenie .akcje { flex-direction: row; flex-wrap: wrap; }
 }
 
 /* ---------------------------------------------------------------- okna (jak okna GK Flota) */
@@ -210,10 +217,16 @@ dialog.okno label.zaznacz { display: flex; align-items: center; gap: 10px; font-
 dialog.okno label.zaznacz input { width: 24px; min-height: 24px; }
 dialog.okno .dwie { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 dialog.okno .przyciski { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+/* Przyciski okna zostają na dole widoku, gdy okno się przewija (Nowe zlecenie z „Więcej opcji”, osoba, zapisane): na laptopie 768 px
+   i na telefonie „Zleć” / „Zapisz” były kilkaset pikseli niżej, poza ekranem. Ujemne marginesy równają się paddingowi formularza. */
+dialog.okno form > .przyciski { position: sticky; bottom: 0; z-index: 2; margin: 0 -20px -20px; padding: 12px 20px 16px;
+                                background: var(--karta); border-top: 1px solid var(--ramka); }
+@media (max-width: 820px) { dialog.okno form > .przyciski { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); } }   /* iPhone: przyciski nad paskiem domu */
 dialog.okno .blad { color: var(--czerwony); font-weight: 600; margin: 0; }
 @media (max-width: 600px) { dialog.okno .dwie { grid-template-columns: 1fr; } }
 /* Jedna linia (D51): pole linii schowane — maszyna zajmuje cały rząd, a nie połowę z pustym miejscem obok. */
 dialog.okno .dwie:has(> .pole-linii[hidden]) { grid-template-columns: 1fr; }
+dialog.okno .dwie:has(> :only-child) { grid-template-columns: 1fr; }   /* sam termin (Od kiedy jest w „Więcej opcji”) — pełna szerokość */
 /* Zwijane części (UI etap 2): „Więcej opcji” w „Nowe zlecenie” i części Administracji → Serwis. Nagłówek wysoki
    jak pole dotyku (D29), strzałka ▸ / ▾ jednakowa w każdej przeglądarce (bez znacznika systemowego). */
 .wiecej-opcji > summary, .serwis-czesc > summary {
@@ -299,9 +312,6 @@ dialog.okno .zaznaczenia .zaznacz { font-size: 15px; color: var(--tekst); }
 /* ---------------------------------------------------------------- szablony checklist */
 
 .opis-widoku { margin: 0 0 10px; font-size: .9em; }
-/* UI etap 3: szablony jako część Administracji — nagłówek części z przyciskiem po prawej (jak licznik w h2). */
-.naglowek-czesci { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 6px; }
-.naglowek-czesci > button { margin-left: auto; }
 .szablon { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
            border: 1px solid var(--ramka); border-radius: var(--promien); padding: 8px 12px; }
 .szablon .akcje { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -453,6 +463,14 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .filtry-zlecen label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .filtry-zlecen label.zaznacz { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 400; color: var(--tekst); min-height: 52px; }
 .filtry-zlecen select { min-width: 150px; }
+/* Telefon: trzy listy i pole wyboru zajmowały pół ekranu, a pierwsze zlecenie było pod kreską. Dwie kolumny — lista startuje wyżej. */
+@media (max-width: 600px) {
+  .filtry-zlecen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .filtry-zlecen select { min-width: 0; width: 100%; }
+  .filtry-zlecen label.zaznacz { grid-column: 1 / -1; min-height: var(--dotyk); }
+  .chipy { gap: 6px; }
+  .chip { padding: 0 12px; font-size: 14px; }
+}
 .wskazniki-osoby { margin-top: 18px; }
 .tabela-przewijana { overflow-x: auto; }
 .tabela-osob { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
@@ -566,7 +584,11 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
   .hala-uklad > .hala-menu.zakladki:has(> button.w-wiecej[aria-selected="true"]) > button[data-widok="wiecej"] { color: var(--granat-tekst); }
 }
 .menu-wiecej { display: grid; gap: 10px; margin: 12px 0; max-width: 520px; }
-.menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }
+.menu-wiecej button { min-height: var(--dotyk); display: flex; align-items: center; justify-content: flex-start; gap: 12px; }
+.menu-wiecej .ikona { display: inline-flex; flex: 0 0 22px; justify-content: center; }
+/* Na komputerze Wskaźniki, Raporty i Administracja są w menu po lewej — „Więcej” zostawia tylko to, czego tam nie ma
+   (na telefonie pasek ma 4 pozycje, więc te trzy są tylko tutaj). */
+@media (min-width: 821px) { .menu-wiecej :is([data-idz="wskazniki"], [data-idz="raporty"], [data-idz="administracja"]) { display: none; } }
 
 /* Kilka zdjęć w formularzu (zlecenie, awaria): miniatury z ✕ w jednym rzędzie, zawijane. */
 .hala-zdjecie-lista { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
@@ -600,6 +622,8 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 
 /* Role i uprawnienia (2026-10-27): tabela funkcji × role, swoja rola podświetlona. */
 .okno-role { max-width: min(1100px, 96vw); }
+/* Siatka formularza dawała kolumnie szerokość tabeli — okno rosło poziomo, a opisy ról były ucięte; tabela przewija się we własnej ramce. */
+.okno-role form { grid-template-columns: minmax(0, 1fr); }
 .role-zasady ol { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 4px; }
 .role-opisy dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
 .role-opisy dt { font-weight: 700; } .role-opisy dd { margin: 0; color: var(--tekst-slaby); }

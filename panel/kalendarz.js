@@ -108,7 +108,7 @@
     const zlecone = (c.zlecone || []).map(z => `<li><span class="slaby">${esc(z.godz)}</span> <b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)} · ${esc(z.status)}${
       z.postep ? ` · ☑ ${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · 🔁' : ''}</span></li>`).join('');
     el.innerHTML = `<h3>${c.przeszly ? 'Było zaplanowane' : 'Zaplanowane'}</h3>`
-      + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Nowe stałe zlecenie: 💾 Zapisane → „+ Nowe zapisane”.' : ''}</p>`)
+      + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Nowe stałe zlecenie: Zapisane → „+ Nowe zapisane”.' : ''}</p>`)
       + (zlecone ? `<h3>Zlecone tego dnia (${c.zlecone.length})</h3><ul class="kal-zlecone">${zlecone}</ul>` : '');
   }
 

@@ -319,18 +319,12 @@
         (y.zatrzymuje - x.zatrzymuje) || String(x.czasZgloszenia).localeCompare(String(y.czasZgloszenia)));
   }
 
-  /* Aktywna awaria tej maszyny (najstarsza) — przy zgłoszeniu pytamy, czy dopisać się do niej, czy zgłosić nową (etap 3).
-     Dwa zgłoszenia tej samej przerwy dublowały przestój i liczbę awarii, a mechanik jechał dwa razy. */
-  function aktywnaAwariaMaszyny(lista, maszyna) {
-    if (!maszyna) return null;
-    return (lista || []).filter(a => a && a.aktywny && (a.dane || {}).maszyna === maszyna)
-      .sort((a, b) => String((a.dane || {}).czas_zgloszenia).localeCompare(String((b.dane || {}).czas_zgloszenia)))[0] || null;
-  }
+  /* Otwarta awaria tej maszyny (najstarsza) — przy zgłoszeniu podpowiadamy „Dodać do niej?” (etap 3, tekst i przyciski: etap 6b).
+     Dwa zgłoszenia tej samej przerwy dublowały przestój i liczbę awarii, a mechanik jechał dwa razy. Reguła i tekst są wspólne
+     z UR, KJ i Panelem (Hala.otwartaAwariaMaszyny, Hala.podpowiedzODuplikacie). */
+  function aktywnaAwariaMaszyny(lista, maszyna) { return H().otwartaAwariaMaszyny(lista, maszyna); }
 
-  function pytanieODuplikat(a) {
-    const kto = a.numer ? `#${a.numer}` : `zgłoszona ${godzina((a.dane || {}).czas_zgloszenia)}`;
-    return `Ta maszyna ma już zgłoszoną awarię (${kto}${a.etykieta ? ', ' + a.etykieta.toLowerCase() : ''}) — dopisać się do niej czy zgłosić nową?`;
-  }
+  function pytanieODuplikat(a, o) { return H().podpowiedzODuplikacie(a, o); }
 
   /* Błędy formularza awarii — pokazywane przed zapisem, żeby hub nie odrzucił zgłoszenia. */
   function sprawdzAwarie(f, stale) {

@@ -19,8 +19,8 @@
       const aktywne = lista.filter(a => a.aktywny), wycofane = lista.filter(a => !a.aktywny);
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Alerty jakości</h1>
-          ${KJ.mozna('alert.opublikowany') ? '<a class="przycisk glowny" href="#alert-nowy">Nowy alert</a>' : ''}</div>
-        <div class="lista">${aktywne.map(karta).join('') || '<p class="pusto">Brak aktywnych alertów</p>'}</div>
+          ${KJ.mozna('alert.opublikowany') ? '<a class="przycisk glowny" href="#alert-nowy">+ Nowy alert</a>' : ''}</div>
+        <div class="lista">${aktywne.map(karta).join('') || '<p class="pusto ok">Brak aktywnych alertów</p>'}</div>
         ${wycofane.length ? `<details class="archiwum"><summary>Wycofane i wygasłe (${wycofane.length})</summary>
           <div class="lista">${wycofane.map(karta).join('')}</div></details>` : ''}`;
     },

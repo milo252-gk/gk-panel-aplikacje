@@ -87,15 +87,15 @@
     try {
       return await hala.zapisz(typ, obiekt, dane);
     } catch (e) {
-      Lider.komunikat('Nie udało się zapisać w telefonie: ' + (e.message || e) + '. Zamknij inne karty i spróbuj ponownie.', 'blad');
+      Lider.komunikat('Nie udało się zapisać na tym urządzeniu: ' + (e.message || e) + '. Zamknij inne karty i spróbuj ponownie.', 'blad');
       return null;
     }
   };
 
-  /* Komunikat po zapisie: z siecią „wysłane”, bez niej — uczciwie, że czeka w telefonie. */
+  /* Komunikat po zapisie: z siecią „wysłane”, bez niej — uczciwie, że czeka na tym urządzeniu. */
   Lider.poZapisie = tekst => {
     const online = hala.polaczenie.online && hala.polaczenie.strumien;
-    Lider.komunikat(online ? tekst : tekst + ' — zapisane w telefonie, wyślę po powrocie sieci', 'ok');
+    Lider.komunikat(online ? tekst : tekst + ' — zapisane na tym urządzeniu, wyślę po powrocie sieci', 'ok');
   };
 
   /* Usuwa puste pola — hub i tak traktuje "" jak brak, a raport i Panel są czytelniejsze. */
@@ -492,8 +492,9 @@
 
   const NAZWY_TYPOW = {
     'zlecenie.postep': 'Skan maszyny', 'zlecenie.wykonane': 'Zrobione (zlecenie)', 'zlecenie.przyjete': 'Biorę', 'zlecenie.odrzucone': 'Nie mogę',
+    'zlecenie.cofniete': 'Cofnięcie czynności',
     'awaria.zgloszona': 'Zgłoszenie awarii', 'awaria.potwierdzona': 'Potwierdzenie naprawy',
-    'awaria.potwierdzenie_odrzucone': 'Odrzucenie naprawy', 'awaria.anulowana': 'Anulowanie awarii',
+    'awaria.potwierdzenie_odrzucone': 'Odrzucenie naprawy', 'awaria.anulowana': 'Odwołanie awarii',
     'zmiana.rozpoczeta': 'Otwarcie zmiany', 'checklista.pozycja_wykonana': 'Odhaczenie pozycji',
     'zlecenie.pozycja_wykonana': 'Odhaczenie pozycji', 'zlecenie.pozycja_pominieta': 'Pominięcie pozycji', 'zlecenie.pozycja_cofnieta': 'Cofnięcie pozycji',
     'checklista.pozycja_cofnieta': 'Cofnięcie pozycji', 'checklista.pozycja_pominieta': 'Pominięcie pozycji',
@@ -608,7 +609,7 @@
     if (nazwa !== Lider.stan.ekran && !(opcje && opcje.bezHistorii)) wHistorii(nazwa);
     Lider.stan.ekran = nazwa;
     // Ekrany schowane w „☰ Więcej” (D74) podświetlają w menu „Więcej”.
-    const wMenu = nazwa === 'koniec' ? 'wiecej' : nazwa;
+    const wMenu = nazwa === 'koniec' || nazwa === 'moje' ? 'wiecej' : nazwa;
     for (const b of document.querySelectorAll('.dolny [data-ekran]')) {
       if (b.dataset.ekran === wMenu) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
@@ -631,7 +632,7 @@
   /* D67: pozycja checklisty z czynnością (obsada, próba, audyt BHP, przekazanie) otwiera w karcie zlecenia ten sam formularz
      co na ekranie Zmiana — po wysłaniu formularz odhacza pozycję (L.odhacz). */
   Lider.czynnoscPozycji = {
-    nazwy: { obsada: 'Raport obsady', proba: 'Wypełnij próbę', bhp: 'Audyt BHP', przekazanie: 'Przekazanie zmiany' },
+    nazwy: { obsada: 'Wpisz obsadę', proba: 'Wypełnij próbę', bhp: 'Zrób audyt BHP', przekazanie: 'Przekaż zmianę' },   // te same czasowniki co w oknie pozycji na ekranie Zmiana (zmiana.js)
     wykonaj: (z, q) => Lider.wykonajPozycje(`${z.id}|${q.id}`),
   };
   Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji }, Lider.dzialZlecen());
@@ -640,16 +641,24 @@
   Lider.ekrany.wiecej = {
     rysuj(el) {
       const k = Lider.stan.kolejka || {};
+      // Lista tego, co jest w Moim koncie, tylko z rzeczy, które ta osoba naprawdę tam ma (linia — przy kilku liniach, Mój zespół — kierownik zakładu).
+      const wMoimKoncie = [W.wieleLinii(hala.slowniki) ? 'linia' : '', HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale) ? 'Mój zespół' : '',
+        'powiadomienia', 'dźwięki', 'wersja', 'wylogowanie'].filter(Boolean);
+      const opisKonta = wMoimKoncie.slice(0, -1).join(', ') + ' i ' + wMoimKoncie[wMoimKoncie.length - 1];
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu-wiecej">
-          <button type="button" class="glowny" data-a="koniec">🏁 Koniec zmiany — raport</button>
+          <button type="button" class="glowny" data-a="koniec">Koniec zmiany — raport</button>
+          <button type="button" data-a="moje">Moje zgłoszenia</button>
           <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>
         </nav>
-        <p class="slaby">Linia, Mój zespół, powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
+        <p class="slaby">${esc(opisKonta.charAt(0).toUpperCase() + opisKonta.slice(1))} — w Moim koncie (ikona osoby u góry).</p>`;
       el.querySelector('[data-a=koniec]').addEventListener('click', () => Lider.pokazEkran('koniec'));
+      el.querySelector('[data-a=moje]').addEventListener('click', () => Lider.pokazEkran('moje'));
       el.querySelector('[data-a=niewyslane]').addEventListener('click', () => pokazOdrzucone());
     },
   };
+  // Etap 6a: awarie i nieprawidłowości zgłoszone przez tę osobę, ze statusem (wspolne/dzialania.js).
+  Lider.ekrany.moje = { rysuj: el => HalaDzialania.mojeZgloszenia(el, hala) };
   Lider.poRysowaniu.push(() => Lider.plakietka('wiecej', ((Lider.stan.kolejka || {}).odrzucone || 0) + ((Lider.stan.kolejka || {}).plikiOdrzucone || 0)));
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.

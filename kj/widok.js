@@ -651,7 +651,7 @@
     // hala.zapisz rzuca zwykłe Error z polskim zdaniem; DOMException (QuotaExceededError…) i TypeError mają inne name.
     const polski = !!e && e.name === 'Error' && !!e.message;
     return polski ? `Nie zapisano: ${e.message}`
-                  : 'Nie zapisano — telefon nie przyjął zapisu (np. brak miejsca). Spróbuj jeszcze raz; formularz został w telefonie.';
+                  : 'Nie zapisano — urządzenie nie przyjęło zapisu (np. brak miejsca). Spróbuj jeszcze raz; formularz został na tym urządzeniu.';
   }
 
   const katalogWad = slowniki => posortowane((slowniki || {}).katalog_wad).map(w => ({ kod: w.kod, nazwa: w.nazwa || w.kod,

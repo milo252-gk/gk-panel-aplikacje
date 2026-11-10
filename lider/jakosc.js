@@ -56,7 +56,7 @@
       </form></div>`;
     el.hidden = false;
     document.body.classList.add('z-blokada');
-    L.galeria(el.querySelector('[data-z=wzor]'), d.zdjecie_wzorcowe, 'Wzorzec — tak ma być');
+    L.galeria(el.querySelector('[data-z=wzor]'), d.zdjecie_wzorcowe, 'Wzór — tak ma być');
     L.galeria(el.querySelector('[data-z=wada]'), d.zdjecie_wady, 'Wada — tak nie może być');
     el.querySelector('[data-awaria]').addEventListener('click', () => L.zglosAwarie());
     const form = el.querySelector('form');
@@ -92,7 +92,7 @@
         <div data-z="wzor"></div><div data-z="wada"></div>
         ${p ? `<p class="ok-tekst">Potwierdzone: ${esc(W.nazwaPracownika(hala.pracownicy, p.autor))}, ${esc(W.godzina(p.czas))}${p.uwagi ? ` — ${esc(p.uwagi)}` : ''}</p>` : ''}`,
       poOtwarciu: el => {
-        L.galeria(el.querySelector('[data-z=wzor]'), d.zdjecie_wzorcowe, 'Wzorzec');
+        L.galeria(el.querySelector('[data-z=wzor]'), d.zdjecie_wzorcowe, 'Wzór');
         L.galeria(el.querySelector('[data-z=wada]'), d.zdjecie_wady, 'Wada');
       },
     });
@@ -192,7 +192,7 @@
             <span class="znacznik ${r.przeczytana ? 'neutral' : 'uwaga'}">${r.przeczytana ? (r.otwarta ? 'Otwarta' : 'Zamknięta') : 'Nowa'}</span></li>`).join('')
           || '<li class="pusto ok">Brak reklamacji dla linii</li>'}</ul>
         <h2>Moje próby</h2>
-        <ul class="lista">${moje.map(wierszProby).join('') || '<li class="pusto">Brak</li>'}</ul>
+        <ul class="lista">${moje.map(wierszProby).join('') || '<li class="pusto">Brak prób</li>'}</ul>
         <h2>Zgłoszenia BHP — otwarte</h2>
         <ul class="lista">${bhp.map(b => `<li class="wiersz" data-bhp="${esc(b.id)}">
             <span class="czas">${esc(W.godzina((b.dane || {}).czas_zgloszenia || b.utworzono))}</span>

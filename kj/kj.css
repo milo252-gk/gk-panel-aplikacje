@@ -52,7 +52,7 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
 
 .tytul-ekranu { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .tytul-ekranu h1 { margin: 4px 0; }
-.wstecz { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--tekst-slaby); font-weight: 600; }
+.wstecz { display: inline-flex; align-items: center; min-height: var(--dotyk); text-decoration: none; color: var(--tekst-slaby); font-weight: 600; }
 .lista { display: flex; flex-direction: column; gap: 8px; }
 .pusto { margin: 16px 0; text-align: center; color: var(--tekst-slaby); }
 .pusto.ok { color: var(--zielony); font-weight: 600; }
@@ -94,7 +94,7 @@ details.grupa[open] > summary::before { transform: rotate(90deg); }
 
 /* Wybór z kilku (linie, okres, źródło): przyciski-przełączniki. */
 .wybor { display: flex; flex-wrap: wrap; gap: 8px; }
-.wybor button { min-height: 44px; padding: 0 14px; font-weight: 600; font-size: 14px; }   /* jak .chip w GK Trasy */
+.wybor button { min-height: var(--dotyk); padding: 0 14px; font-weight: 600; font-size: 14px; }   /* jak .chip w GK Trasy */
 /* Wybrany = grafit, jak .chip.wybrany w GK Flota. */
 .wybor button { border-radius: 999px; }
 .wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
@@ -115,7 +115,7 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .z-przyciskiem { display: flex; gap: 8px; }
 .z-przyciskiem input { flex: 1; min-width: 0; }
 .bez-skanu { margin-top: 10px; }
-.bez-skanu summary { min-height: 44px; display: flex; align-items: center; color: var(--tekst-slaby); cursor: pointer; }
+.bez-skanu summary { min-height: var(--dotyk); display: flex; align-items: center; color: var(--tekst-slaby); cursor: pointer; }
 .wybrane-stanowisko { flex: 1; }
 #p-stanowisko:has(.wybrane-stanowisko) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 #p-stanowisko:has(.wybrane-stanowisko) h2 { width: 100%; }

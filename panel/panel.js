@@ -17,7 +17,9 @@
   // D59: bhp_zgloszenie — zgłoszenia BHP liderów (lista ⛑ BHP, „Na żywo”, gong przy incydencie).
   const hala = Hala.utworz({ aplikacja: 'panel', typy: ['awaria', 'zmiana_linii', 'partia', 'alert', 'zlecenie', 'proba', 'zgloszenie', 'narzedzia', 'bhp_zgloszenie'], dni: 2 });
   // Wspólne narzędzia dla ekranów w osobnych plikach (administracja.js) — rejestrują się w Panel.widoki.
-  const Panel = window.Panel = { hala, W, $, esc, widoki: {}, narysuj: () => narysuj(), komunikatBledu: e => komunikatBledu(e) };
+  // ik('drukuj') — ikona liniowa z gk-ikony.js przed napisem (zamiast emoji); bez załadowanego pliku nic, napis obok mówi to samo.
+  const ik = (nazwa, rozmiar) => (window.GKIkony ? `<span class="ik" aria-hidden="true">${window.GKIkony.html(nazwa, rozmiar || 16)}</span>` : '');
+  const Panel = window.Panel = { hala, W, $, esc, ik, widoki: {}, narysuj: () => narysuj(), komunikatBledu: e => komunikatBledu(e) };
 
   // localStorage bywa niedostępny (tryb prywatny) — Panel ma działać i bez niego.
   const pamiec = {
@@ -90,9 +92,25 @@
     // Zapis tylko tam, gdzie kontrakt pozwala roli (konto ekranu i kierownik KJ nie zgłaszają awarii).
     $('menu-awaria').hidden = !(z && mozeWyslac('awaria.zgloszona'));
     $('nowe-zlecenie').hidden = !(z && mozeWyslac('zlecenie.utworzone'));
+    // Ten sam warunek co „+ Nowe zlecenie” w Zleceniach (kierownik zakładu i admin; kierownik UR/KJ nie), ale liczony wprost: przycisk
+    // w Zleceniach bywa ukryty zależnie od zakładki (Zapisane, Kalendarz) i nie może zabierać skrótu z Pulpitu.
+    $('pulpit-nowe-zlecenie').hidden = !(z && mozeWyslac('zlecenie.utworzone'));
     // D49: kierownik zakładu, kierownik UR i KJ też — ale tylko „Pracownicy” ze swoim zespołem (administracja.js).
     // UI etap 3: Checklisty są częścią Administracji — menu widać też samemu edytującemu szablony.
-    $('menu-administracja').hidden = !(z && W.czesciAdministracji(Panel.dostepAdministracji()).length);
+    const czesciAdm = z ? W.czesciAdministracji(Panel.dostepAdministracji()) : [];
+    $('menu-administracja').hidden = !czesciAdm.length;
+    // Kierownik UR / KJ ma tu tylko urlopy swoich ludzi — pozycja nazywa się wtedy „Urlopy” (W.nazwaAdministracji).
+    const nazwaAdm = W.nazwaAdministracji(czesciAdm);
+    const wstawNazwe = (el, nazwa) => { if (el && el.textContent !== nazwa) el.textContent = nazwa; };
+    wstawNazwe(document.querySelector('#menu-administracja span:not(.ikona)'), nazwaAdm);
+    wstawNazwe($('wiecej-administracja').lastChild, nazwaAdm);      // tekst po ikonie
+    wstawNazwe($('t-administracja'), nazwaAdm);
+    // Czytnik ekranu i podpis ikony czytają title/aria-label ustawione raz przy starcie — odświeżamy je razem z widocznym tekstem.
+    for (const id of ['menu-administracja', 'wiecej-administracja', 't-administracja']) {
+      const el = $(id) && ($(id).closest('button, a') || $(id));
+      if (el && el.hasAttribute('title')) el.title = nazwaAdm;
+      if (el && el.hasAttribute('aria-label')) el.setAttribute('aria-label', nazwaAdm);
+    }
     if (z) requestAnimationFrame(dopasujMenu);        // liczba pozycji zależy od roli — mierzymy po ich pokazaniu
     rysujPasek(hala.polaczenie);
     // Raporty → „Do Excela” (D32): rysowany raz na sesję, nie co 20 s — inaczej zamykałby kalendarz w trakcie wyboru daty.
@@ -166,7 +184,8 @@
 
   const NAZWY_TYPOW = {
     'awaria.zgloszona': 'Zgłoszenie awarii', 'zlecenie.utworzone': 'Nowe zlecenie', 'zlecenie.zamkniete': 'Zamknięcie zlecenia',
-    'zlecenie.zwrocone': 'Zwrot zlecenia', 'zlecenie.anulowane': 'Anulowanie zlecenia', 'zlecenie.wykonane': 'Wykonanie zlecenia',
+    'zlecenie.zwrocone': 'Zwrot zlecenia', 'zlecenie.anulowane': 'Odwołanie zlecenia', 'zlecenie.wykonane': 'Wykonanie zlecenia',
+    'zlecenie.cofniete': 'Cofnięcie czynności na zleceniu',
     'slownik.zapisany': 'Zmiana w administracji', 'slownik.usuniety': 'Usunięcie w administracji',
   };
   function nazwaTypu(typ) {
@@ -174,6 +193,7 @@
     const spec = hala.kontrakt && hala.kontrakt.zdarzenia[typ];
     return (spec && spec.opis) ? spec.opis.split(/[.—(]/)[0].trim() : typ;
   }
+  Panel.nazwaTypu = nazwaTypu;
 
   /* „Moje konto” — JEDNO okno z Liderem, UR i KJ (../wspolne/konto.js → HalaKonto.mojeKonto, STYL-GK §3 runda 2):
      ten sam wygląd, szerokość 440 px, Wygląd, Zmień PIN/hasło, Dane w tym urządzeniu, „wersja X”, Zamknij + Wyloguj.
@@ -287,7 +307,7 @@
     // Właściciel 2026-10-20: wszystkie kody QR do druku w jednym miejscu — dla kierownika zakładu i administratora.
     $('wiecej-kody').hidden = !(Panel.widoki.kody && Panel.widoki.kody.dostepne());
     const n = ((kolejka && kolejka.odrzucone) || 0) + ((kolejka && kolejka.plikiOdrzucone) || 0);
-    $('wiecej-niewyslane').textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
+    $('wiecej-niewyslane-tekst').textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
     $('plakietka-wiecej').hidden = !n;
     $('plakietka-wiecej').textContent = n ? String(n) : '';
   }
@@ -358,7 +378,7 @@
           </div>
           ${w.opis ? `<div class="slaby tekst-opisu">${esc(w.opis)}</div>` : ''}
           ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc([w.maszynaNazwa, w.opis].filter(Boolean).join(' · '))}" aria-label="Powiększ zdjęcie awarii"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
-          ${w.mozeAnulowac ? `<div class="akcje-awarii"><button type="button" class="maly" data-akcja="anuluj-awarie" data-id="${esc(w.id)}" title="Fałszywy alarm albo zgłoszenie podwójne — awaria znika z listy">Anuluj zgłoszenie</button></div>` : ''}
+          ${w.mozeAnulowac ? `<div class="akcje-awarii"><button type="button" class="maly" data-akcja="anuluj-awarie" data-id="${esc(w.id)}" title="Fałszywy alarm albo zgłoszenie podwójne — awaria znika z listy">Odwołaj awarię</button></div>` : ''}
         </div>
         <div class="numer slaby">${esc(w.numer)}<br> od ${esc(w.godzZgloszenia)}</div>
       </article>`).join('') || '<p class="pusto ok">Brak aktywnych awarii</p>';
@@ -591,7 +611,7 @@
     if (adres === '#administracja') { if (!$('menu-administracja').hidden) $('menu-administracja').click(); return; }
     // #checklisty — dawna pozycja menu (UI etap 3: część Administracji); stare zakładki i linki dalej trafiają w szablony.
     if (adres === '#checklisty') {
-      // D60: szablony checklisty lidera są w Zlecenia → 💾 Zapisane (stare zakładki i linki trafiają tam).
+      // D60: szablony checklisty lidera są w Zlecenia → Zapisane (stare zakładki i linki trafiają tam).
       Panel.pokazZlecenia(null, 'stale');
       return;
     }
@@ -617,8 +637,6 @@
              przepadlo: 'alarm', zaplanowane: 'neutral' }[status] || 'neutral';
   }
 
-  const PUSTE_ZLECENIA = { otwarte: 'Żadne zadanie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na przyjęcie',
-                           zamkniete: 'Brak zamkniętych zadań w wybranym okresie' };
 
   const mozeZapisacStale = () => {
     const role = (hala.pracownik && hala.pracownik.role) || [];
@@ -641,6 +659,8 @@
     try {
       const w = await hala.pobierzStan('zlecenie', { aktywne: 0, od, limit: 5000 });
       starsze = { od, lista: w.obiekty || [], wczytuje: false };
+      const uciete = W.komunikatUciecia(w);
+      if (uciete) komunikat('Zamknięte zlecenia: ' + uciete, 'uwaga');
     } catch (e) { starsze.wczytuje = false; komunikat('Starszych zleceń nie wczytano — ' + komunikatBledu(e), 'uwaga'); }
     narysuj();
   }
@@ -685,6 +705,13 @@
 
   $('zlecenia-czysc').addEventListener('click', () => { if (Panel.widoki.czyszczenie) Panel.widoki.czyszczenie.otworz(); });
 
+  /* Pusta lista „W toku” mówi też, co dalej (audyt 2026-11-09): kto może zlecać, dostaje wskazówkę o przycisku u góry. */
+  function pustaListaZlecenTekst(chipy) {
+    const filtryAktywne = !!(filtry.dzial || filtry.osoba || filtry.rodzaj || filtry.spoznione);
+    const tekst = W.pustaListaZlecen(filtrZlecen, chipy, filtryAktywne);
+    return filtrZlecen === 'otwarte' && !filtryAktywne && !/Czeka na odbiór/.test(tekst) && mozeWyslac('zlecenie.utworzone')
+      ? `${tekst}. Dodasz je przyciskiem „Nowe zlecenie”.` : tekst;
+  }
   function rysujZlecenia(d, lista) {
     for (const b of document.querySelectorAll('#tryb-zlecen [data-tryb]')) b.setAttribute('aria-pressed', String(b.dataset.tryb === trybZlecen));
     for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) b.setAttribute('aria-pressed', String(b.dataset.filtr === filtrZlecen));
@@ -715,13 +742,15 @@
     const wiersze = W.polaczZadania(W.filtrujZlecenia(zlecenia, fm), W.filtrujZlecenia(inne, fm));
     // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego (także
     // zgłoszenia, narzędzia i BHP). Po terminie, przepadłe (D35) i pilne BHP — chip na czerwono.
-    for (const c of W.chipyZlecen(lista, d.teraz, ZG ? ZG.liczby() : null)) {
+    const chipy = W.chipyZlecen(lista, d.teraz, ZG ? ZG.liczby() : null);
+    for (const c of chipy) {
       const b = document.querySelector(`#filtr-zlecen [data-filtr="${c.filtr}"]`);
       if (!b) continue;
       if (b.textContent !== c.napis) b.textContent = c.napis;
       b.classList.toggle('spoznione', c.alarm);
     }
-    $('lista-zlecen').innerHTML = wiersze.map(w => w.html).join('') || `<p class="pusto">${PUSTE_ZLECENIA[filtrZlecen] || 'Brak zadań'}</p>`;
+    $('lista-zlecen').innerHTML = wiersze.map(w => w.html).join('')
+      || `<p class="pusto">${esc(pustaListaZlecenTekst(chipy))}</p>`;
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
     for (const e of $('lista-zlecen').querySelectorAll('img[data-plik]'))
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
@@ -730,6 +759,37 @@
   /* Wiersz zlecenia na jednej liście (D60: znacznik rodzaju; zadanie dla kierownika — „▶ Wykonaj”). */
   const zdjeciaWiersza = (ids, etykieta, podpis) => ids.length ? `<div class="zdjecia"><span class="slaby">${esc(etykieta)}</span>${ids.map(id =>
     `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : '';
+  /* Akcje wiersza zlecenia (Panel). Audyt 2026-11-09: do ośmiu równorzędnych przycisków w kolumnie (Wykonaj, Przekaż, Rozdziel,
+     Zmień, Zleć teraz, Odbierz, Zwróć, Odwołaj, Do zapisanych). Teraz: jedna GŁÓWNA czynność wynikająca ze stanu (Odbierz / Zleć teraz /
+     Wykonaj / Przekaż), obok niej najwyżej jedna najczęstsza, reszta pod „Więcej”. Uprawnienia bez zmian — każdy przycisk
+     pojawia się pod tym samym warunkiem co dotąd (serwer i tak je egzekwuje). */
+  const wiecejOtwarte = new Set();
+  function akcjeZlecenia(z, { zrob, kier, stale }) {
+    const p = (akcja, napis, klasa, title) => `<button type="button" class="maly${klasa ? ` ${klasa}` : ''}" data-akcja="${akcja}"${title ? ` title="${esc(title)}"` : ''}>${napis}</button>`;
+    const glowne = [], obok = [], reszta = [];
+    if (zrob) glowne.push(p('wykonaj', '▶ Wykonaj', 'glowny'));
+    const przekaz = z.dzialania.przekaz ? p('przekaz', 'Przekaż', z.doKierownika ? 'glowny' : '') : '';
+    const rozdziel = z.dzialania.rozdziel ? p('rozdziel', 'Rozdziel') : '';
+    if (z.doKierownika && przekaz) { glowne.push(przekaz); if (rozdziel) obok.push(rozdziel); } else reszta.push(przekaz, rozdziel);
+    const edytuj = kier && z.moznaEdytowac && mozeWyslac('zlecenie.edytowane')
+      ? p('edytuj', '✎ Zmień', '', 'Popraw treść, opis, pozycje, godziny — także w zapisanym zleceniu') : '';
+    if (z.moznaZmienic) { glowne.push(p('zlec-teraz', 'Zleć teraz', 'glowny', 'Zleć od razu — dział dostanie powiadomienie')); reszta.push(p('zmien-plan', 'Zmień')); }
+    if (kier && z.doZamkniecia && z.moznaOdebrac) { glowne.push(p('zamknij', z.status === 'wykonane' ? 'Odbierz' : 'Zamknij', 'glowny')); obok.push(p('zwroc', 'Zwróć')); }
+    // Audyt ról 2026-11-09 (D80): „Odwołaj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
+    // i admin). Kierownik UR/KJ widział przycisk, a hub odpowiadał 403.
+    const anuluj = z.moznaAnulowac && mozeWyslac('zlecenie.anulowane') ? p('anuluj', 'Odwołaj') : '';
+    const zapisz = stale && !z.stale && !z.zaplanowane
+      ? p('jako-stale', `${ik('zapisane')}Do zapisanych`, '', 'Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)') : '';
+    // Bez czynności głównej (zlecenie czeka na dział) najczęstsze jest poprawienie treści — „Zmień” zostaje na wierzchu.
+    const widoczne = glowne.concat(obok);
+    if (!widoczne.length && edytuj) widoczne.push(edytuj); else reszta.push(edytuj);
+    const ukryte = reszta.concat(anuluj, zapisz).filter(Boolean);
+    if (ukryte.length === 1 && widoczne.length < 2) return widoczne.concat(ukryte).join('');   // dwa widoczne to komplet — reszta pod „Więcej”
+    if (!ukryte.length) return widoczne.join('');
+    const otwarte = wiecejOtwarte.has(z.id);
+    return widoczne.join('') + p('wiecej', `Więcej ${otwarte ? '▴' : '▾'}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
+      + (otwarte ? ukryte.join('') : '');
+  }
   function wierszZlecenia(z) {
     const kier = mozeWyslac('zlecenie.zamkniete');
     const stale = mozeZapisacStale();
@@ -770,7 +830,7 @@
             z.rozdzial ? `<div class="postep-zlecenia">Rozdzielone: <b>${esc(z.rozdzial.tekst)}</b> — ${z.rozdzial.osoby.map(o =>
               `<span class="${o.znak === '✓' ? 'tekst-ok' : o.znak === '✗' ? 'tekst-alarm' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(', ')}</div>` : ''}
           ${/* D76 (właściciel 2026-10-19): wgląd w postęp dla upoważnionych (W.rozdzialZlecenia → czesci) — każda część: stan,
-               kiedy zrobiona, notatka, zdjęcia, powód „Nie mogę”. Zwinięte, rozwinięte przy „Do przyjęcia”. */
+               kiedy zrobiona, notatka, zdjęcia, powód „Nie mogę”. Zwinięte, rozwinięte przy „Do odbioru”. */
             z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="pozycje-zlecenia czesci-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Części — szczegóły</summary>
             <ul>${z.rozdzial.czesci.map(c => `<li class="stan-${c.znak === '✓' ? 'wykonana' : 'czeka'}"><span aria-hidden="true">${esc(c.znak)}</span> <b>${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? ` <span class="tekst-alarm">— ${esc(c.powod)}</span>` : ''}${c.notatka ? `<div class="slaby">📝 ${esc(c.notatka)}</div>` : ''}${zdjecia(c.zdjecia, '', [z.tytul, c.kto, c.notatka].filter(Boolean).join(' · '))}</li>`).join('')}</ul></details>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
@@ -780,21 +840,7 @@
         </div>
         ${z.zaplanowane ? `<div class="numer slaby">zleci się<br><b class="tekst-planu">${esc(z.zaplanowaneNa || '—')}</b><br>${esc(z.terminPlanu)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}</div>`
           : `<div class="numer slaby">${esc(z.zleconoDzien)} ${esc(z.zlecono)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}${z.termin ? `<br><span class="${z.poTerminie ? 'tekst-alarm' : ''}">termin ${esc(z.termin)}</span>` : ''}</div>`}
-        <div class="akcje">
-          ${zrob ? '<button type="button" class="maly glowny" data-akcja="wykonaj">▶ Wykonaj</button>' : ''}
-          ${/* D76: kierownik działu (UR, KJ) w Panelu — te same okna co w aplikacji działu (dzialania.js). */
-            z.dzialania.przekaz ? `<button type="button" class="maly${z.doKierownika ? ' glowny' : ''}" data-akcja="przekaz">Przekaż</button>` : ''}
-          ${z.dzialania.rozdziel ? '<button type="button" class="maly" data-akcja="rozdziel">Rozdziel</button>' : ''}
-          ${kier && z.moznaEdytowac && mozeWyslac('zlecenie.edytowane') ? '<button type="button" class="maly" data-akcja="edytuj" title="Popraw treść, opis, pozycje, godziny — także w zapisanym wzorcu">✎ Zmień</button>' : ''}
-          ${z.moznaZmienic ? `<button type="button" class="maly" data-akcja="zmien-plan">Zmień</button>
-            <button type="button" class="maly glowny" data-akcja="zlec-teraz" title="Zleć od razu — dział dostanie powiadomienie">Zleć teraz</button>` : ''}
-          ${kier && z.doZamkniecia && z.moznaOdebrac ? `<button type="button" class="maly glowny" data-akcja="zamknij">${z.status === 'wykonane' ? 'Przyjmij' : 'Zamknij'}</button>
-            <button type="button" class="maly" data-akcja="zwroc">Zwróć</button>` : ''}
-          ${/* Audyt ról 2026-11-09 (D80): „Anuluj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
-               i admin). Kierownik UR/KJ widział przycisk, a hub odpowiadał 403. */
-            z.moznaAnulowac && mozeWyslac('zlecenie.anulowane') ? '<button type="button" class="maly" data-akcja="anuluj">Anuluj</button>' : ''}
-          ${stale && !z.stale && !z.zaplanowane ? '<button type="button" class="maly" data-akcja="jako-stale" title="Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)">💾 Zapisz</button>' : ''}
-        </div>
+        <div class="akcje">${akcjeZlecenia(z, { zrob, kier, stale })}</div>
       </article>`;
   }
 
@@ -806,13 +852,16 @@
     $('okno-zdjecia').showModal();
   }
 
-  /* Pytanie o tekst (powód zwrotu, anulowania) w oknie aplikacji. null = Anuluj. */
-  Panel.zapytajTekst = ({ tytul, etykieta, wymagany, przycisk }) => new Promise(ok => {
+  /* Pytanie o tekst (powód zwrotu, odwołania) w oknie aplikacji. null = Anuluj. */
+  /* wstecz — napis przycisku „zostaw jak jest” (domyślnie „Anuluj”). Przy pytaniu „Odwołać zlecenie?” samo „Anuluj” stało obok
+     „Odwołaj zlecenie” i nie było wiadomo, który kończy, a który wycofuje — tam „Nie”. */
+  Panel.zapytajTekst = ({ tytul, etykieta, wymagany, przycisk, wstecz }) => new Promise(ok => {
     const o = $('okno-tekstu'), f = $('formularz-tekstu');
     let wynik = null;
     $('t-okno-tekstu').textContent = tytul;
     $('tekst-etykieta').textContent = etykieta;
     $('tekst-tak').textContent = przycisk || 'OK';
+    o.querySelector('[data-zamknij]').textContent = wstecz || 'Anuluj';
     f.tekst.value = '';
     f.querySelector('.blad').hidden = true;
     f.onsubmit = ev => {
@@ -830,16 +879,16 @@
   $('lista-awarii').addEventListener('click', async ev => {
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
-    // R7 (2026-11-09): kierownik zakładu anuluje awarię (fałszywy alarm). Powód jest obowiązkowy (kontrakt: ≤ 1000 znaków).
+    // R7 (2026-11-09): kierownik zakładu odwołuje awarię (fałszywy alarm). Powód jest obowiązkowy (kontrakt: ≤ 1000 znaków).
     const b = ev.target.closest('[data-akcja="anuluj-awarie"]');
     if (!b) return;
     try {
-      const powod = await Panel.zapytajTekst({ tytul: 'Anulować zgłoszenie awarii?', etykieta: 'Dlaczego? (np. fałszywy alarm, zgłoszenie podwójne)',
-                                               wymagany: true, przycisk: 'Anuluj zgłoszenie' });
+      const powod = await Panel.zapytajTekst({ tytul: 'Odwołać awarię?', etykieta: 'Dlaczego? (np. fałszywy alarm, zgłoszenie podwójne)',
+                                               wymagany: true, przycisk: 'Odwołaj awarię', wstecz: 'Nie' });
       if (powod === null) return;
       if (powod.length > 1000) { komunikat(`Powód za długi: ${powod.length} znaków, najwyżej 1000. Skróć opis.`, 'blad'); return; }
       await hala.zapisz('awaria.anulowana', b.dataset.id, { powod });
-      komunikat('Zgłoszenie awarii anulowane', 'ok');
+      komunikat('Awaria odwołana', 'ok');
     } catch (e) { komunikat(komunikatBledu(e), 'blad'); }
   });
   $('lista-zlecen').addEventListener('click', async ev => {
@@ -852,6 +901,8 @@
     // D60: zgłoszenie, narzędzia, BHP — ta sama lista, ich przyciski obsługuje zgloszenia.js.
     if (wiersz.dataset.rodzaj && wiersz.dataset.rodzaj !== 'zlecenie') { await Panel.widoki.zgloszenia.akcja(wiersz.dataset.rodzaj, b.dataset.akcja, id, b); return; }
     try {
+      if (b.dataset.akcja === 'wiecej') { if (wiecejOtwarte.has(id)) wiecejOtwarte.delete(id); else wiecejOtwarte.add(id); narysuj(); return; }
+      wiecejOtwarte.delete(id);
       if (b.dataset.akcja === 'wykonaj') { Panel.widoki.zgloszenia.wykonaj(id); return; }
       if (b.dataset.akcja === 'historia') { if (window.HalaDzialania) window.HalaDzialania.historia(hala, 'zlecenie', id); return; }
       if ((b.dataset.akcja === 'przekaz' || b.dataset.akcja === 'rozdziel') && window.HalaDzialania) {
@@ -859,13 +910,16 @@
         return;
       }
       if (b.dataset.akcja === 'zamknij') {
-        await hala.zapisz('zlecenie.zamkniete', id, {});
-        komunikat(b.textContent.trim() === 'Przyjmij' ? 'Przyjęte — zlecenie zamknięte' : 'Zamknięte', 'ok');
+        // Etap 6c: bez pytania — pasek „Odebrane. Cofnij” (kilka sekund); starszy serwer bez cofania dostaje zwykły komunikat.
+        const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.zamkniete', id, {}, { komunikat, cofnieto: t => komunikat(t, 'ok') });
+        if (!pasek) komunikat(b.textContent.trim() === 'Odbierz' ? 'Odebrane — zlecenie zamknięte' : 'Zamknięte', 'ok');
       }
       if (b.dataset.akcja === 'anuluj') {
-        const powod = await Panel.zapytajTekst({ tytul: 'Anulować zlecenie?', etykieta: 'Dlaczego? (można zostawić puste)', przycisk: 'Anuluj zlecenie' });
+        const powod = await Panel.zapytajTekst({ tytul: 'Odwołać zlecenie?', etykieta: 'Dlaczego? (można zostawić puste)', przycisk: 'Odwołaj zlecenie', wstecz: 'Nie' });
         if (powod === null) return;
-        await hala.zapisz('zlecenie.anulowane', id, powod ? { powod } : {});
+        const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.anulowane', id, powod ? { powod } : {},
+          { tekst: 'Zlecenie odwołane.', komunikat, cofnieto: t => komunikat(t, 'ok') });
+        if (!pasek) komunikat('Zlecenie odwołane', 'ok');
       }
       if (b.dataset.akcja === 'zmien-plan') Panel.noweZlecenie(null, hala.obiekt('zlecenie', id));
       if (b.dataset.akcja === 'edytuj') Panel.widoki.stale.otworzInstancje(hala.obiekt('zlecenie', id));
@@ -920,6 +974,9 @@
   }
   for (const okno of document.querySelectorAll('dialog.okno')) {
     okno.querySelector('[data-zamknij]').addEventListener('click', () => okno.close());
+    // showModal() daje fokus pierwszemu elementowi, który go przyjmie. W długim oknie, gdzie jedyny taki element to „Zamknij”
+    // na samym dole (Role i uprawnienia, Kody QR, dzień w kalendarzu), okno otwierało się przewinięte do końca.
+    okno.showModal = function () { HTMLDialogElement.prototype.showModal.call(this); this.scrollTop = 0; };
   }
 
   /* Pole datetime-local podaje czas ZAKŁADU (Europe/Warsaw), a nie strefę monitora — hub trzyma UTC. */
@@ -1078,6 +1135,7 @@
       .map(c => `<option value="${esc(c.nazwa)}">${esc([c.zdjecie ? '📷' : '', c.notatka ? '📝' : ''].join(''))}</option>`).join('');
   };
   $('nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
+  $('pulpit-nowe-zlecenie').addEventListener('click', () => Panel.noweZlecenie(null));
   // D72: podpowiedź z zapisanych uzupełnia pusty opis — kierownik opisuje po swojemu, jeśli chce inaczej.
   // Właściciel 2026-10-15: „opisuję (jeśli chcę inaczej niż jak są zapisane) i wybieram, co wymagam” — podpowiedź ustawia
   // swoje domyślne wymagania (📷 📝), kierownik je potem zmienia; tak samo w checkliście i w „Nowe zapisane”.
@@ -1134,7 +1192,7 @@
       if (fz.termin.value) dane.termin = lokalnyNaIso(fz.termin.value);
       if (fz.od.value) {
         dane.od = lokalnyNaIso(fz.od.value);
-        if (dane.termin && Date.parse(dane.od) >= Date.parse(dane.termin)) { blad('„Od kiedy” musi być wcześniej niż termin.'); return; }
+        if (dane.termin && Date.parse(dane.od) >= Date.parse(dane.termin)) { blad('„Od kiedy można zrobić” musi być wcześniej niż termin.'); return; }
       }
       delete dane.wykonawca;
       const osoby = [...fz.querySelectorAll('input[name="osoby"]:checked')].map(x => x.value);
@@ -1191,7 +1249,7 @@
       const doKier = doZapisu.some(d => d.do_kierownika);
       komunikat(`${ids.length > 1 ? (tez.length ? `Zlecone ${ids.length} — każdy dział ma swoje` : `Zlecone ${ids.length} osobom`)
         : planNa ? `Zaplanowane — dział zobaczy je ${W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: 0 }).opis || ''}`
-        : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : doKier ? 'Zlecone — kierownik działu je rozdzieli' : 'Zlecone'}${zapisane ? ' i zapisane w „💾 Zapisane”' : ''}`, 'ok');
+        : zm && !zm.biezaca ? `Zaplanowane — dział zobaczy je o ${W.godzina(zm.start)}` : doKier ? 'Zlecone — kierownik działu je rozdzieli' : 'Zlecone'}${zapisane ? ' i zapisane w „Zapisane”' : ''}`, 'ok');
       Panel.pokazZlecenia('otwarte', 'biezace');
     } catch (e) { blad(komunikatBledu(e)); }
   }));
@@ -1261,11 +1319,37 @@
     // Szlif UI 2026-10-12: maszyna NIE jest wybrana z góry — pierwsza z listy po cichu szła do UR, gdy kierownik
     // zapomniał zmienić pole. „— wybierz —” ma pustą wartość, więc required każe wybrać.
     fa.maszyna.innerHTML = opcje(maszynyLinii(wiele ? fa.linia.value : ''), MASZYNA_WYBIERZ);
+    pokazDuplikatAwarii();
     // Jedna linia (D51): zatrzymujący priorytet nazywa się „Maszyna stoi” (W.priorytetyDoWyboru).
     fa.priorytet.innerHTML = opcje(W.priorytetyDoWyboru(hala.kontrakt.stale, hala.slowniki));
     otworzOkno($('okno-awarii'));
   });
-  fa.linia.addEventListener('change', () => { fa.maszyna.innerHTML = opcje(maszynyLinii(fa.linia.value), MASZYNA_WYBIERZ); });
+  fa.linia.addEventListener('change', () => { fa.maszyna.innerHTML = opcje(maszynyLinii(fa.linia.value), MASZYNA_WYBIERZ); pokazDuplikatAwarii(); });
+  /* Etap 6b: wybrana maszyna ma już otwartą awarię → „Maszyna X ma już otwartą awarię od 14:20 (Jan K.). Dodać do niej?”.
+     Tylko podpowiedź — przycisk wysyłki zostaje i zgłasza osobną awarię; bez danych o awariach (offline) podpowiedzi nie ma. */
+  function pokazDuplikatAwarii() {
+    const box = $('awaria-duplikat'), wyslij = fa.querySelector('[type="submit"]');
+    const a = Hala.otwartaAwariaMaszyny(hala.obiekty('awaria'), fa.maszyna.value);
+    const moze = Hala.mozeDopisacDoAwarii(hala.pracownik, hala.kontrakt);
+    box.hidden = !a;
+    wyslij.textContent = a ? (moze ? 'Zgłoś osobną' : 'Zgłoś mimo to') : 'Zgłoś do UR';
+    if (!a) return;
+    box.querySelector('p').textContent = Hala.podpowiedzODuplikacie(a, { slowniki: hala.slowniki, pracownicy: hala.pracownicy, mozeDopisac: moze });
+    box.querySelector('[data-dopisz]').hidden = !moze;
+  }
+  fa.maszyna.addEventListener('change', pokazDuplikatAwarii);
+  $('awaria-duplikat').querySelector('[data-dopisz]').addEventListener('click', W.przyWysylce(async () => {
+    const a = Hala.otwartaAwariaMaszyny(hala.obiekty('awaria'), fa.maszyna.value);
+    if (!a) { pokazDuplikatAwarii(); return; }
+    try {
+      // Notatka i zdjęcia trafiają do otwartej awarii jako notatka dla UR (awaria.komentarz) — bez drugiego licznika przestoju.
+      const dane = { tekst: fa.opis.value.trim() || 'Ponowne zgłoszenie — maszyna dalej nie działa.' };
+      { const ids = await zdjeciaPola(fa.zdjecie); if (ids.length) dane.zdjecia = ids; }
+      await hala.zapisz('awaria.komentarz', a.id, dane);
+      $('okno-awarii').close();
+      komunikat(`Dodane do otwartej awarii${a.numer ? ' ' + a.numer : ''}`, 'ok');
+    } catch (e) { const b = fa.querySelector('.blad'); b.textContent = komunikatBledu(e); b.hidden = false; }
+  }));
   fa.addEventListener('submit', W.przyWysylce(async ev => {
     ev.preventDefault();
     if (!fa.maszyna.value) { const b = fa.querySelector('.blad'); b.textContent = 'Wybierz maszynę.'; b.hidden = false; fa.maszyna.focus(); return; }
@@ -1320,7 +1404,7 @@
     const czeka = wl && !dzwiekGotowy();
     b.textContent = wl ? (czeka ? '🔔 Kliknij' : '🔔') : '🔕';
     const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
-    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zadaniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
+    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zleceniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
     b.setAttribute('aria-label', b.title);
     b.setAttribute('aria-pressed', String(wl));
     b.classList.toggle('czeka', czeka);
@@ -1450,6 +1534,7 @@
   /* Hub nie przyjął zapisu kierownika (np. brak uprawnień, zła maszyna) albo przyjął bez zmiany stanu (ktoś był
      szybszy) — wcześniej Panel milczał i kierownik myślał, że zlecenie poszło. */
   hala.na('odrzucone', ({ zdarzenie, powod }) => komunikat(`${zdarzenie ? nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — serwer nie przyjął: ${powod}`, 'blad'));
+  hala.na('ucieto', ({ typ, pokazano, razem }) => komunikat(`Pokazano ${pokazano} z ${razem} (${typ}) — zawęź filtry, bo liczby mogą być niepełne.`, 'uwaga'));
   hala.na('konflikt', ({ zdarzenie, uwaga }) => komunikat(`${zdarzenie ? nazwaTypu(zdarzenie.typ) : 'Zapis'}: ${uwaga} — sprawdź, co jest teraz.`, 'uwaga'));
 
   await hala.start();

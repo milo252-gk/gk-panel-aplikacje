@@ -312,7 +312,7 @@
 
   /* Wiersze zleceń. UI etap 2 (właściciel 2026-10-12) — trzy filtry zamiast sześciu:
      'otwarte' = „W toku” (dział jeszcze robi; także po terminie i zaplanowane na później — D47, dział ich jeszcze nie widzi)
-     | 'do-zamkniecia' = „Do przyjęcia” (dział skończył albo nie może — kierownik przyjmuje albo zwraca)
+     | 'do-zamkniecia' = „Do odbioru” (dział skończył albo nie może — kierownik odbiera albo zwraca)
      | 'zamkniete' (także przepadłe zadania zmianowe — D35); inny filtr = wszystkie.
      Po terminie, przepadłe i zaplanowane to znaczniki na wierszu, nie osobne listy: kierownik widzi je tam, gdzie i tak
      patrzy. Kolejność: po terminie (najdłużej spóźnione) na górze — tam prowadzi kafelek „Zlecenia po terminie” i push —
@@ -399,7 +399,8 @@
         czas: d.czas_zlecenia || d.czas_zaplanowania || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
         // D76: do kierownika działu, rozdział (komu i ile zrobione), „Przekaż” / „Rozdziel” dla kierownika działu,
         // kto zlecił (filtr „Mój dział i moje” kierownika UR/KJ).
-        doKierownika: d.do_kierownika === true && !d.wykonawca && (z.status === 'nowe' || z.status === 'przyjete'),
+        // „Do rozdzielenia” znika, gdy kierownik wziął zlecenie na siebie („Biorę” → przyjęte): już nie czeka na przekazanie.
+        doKierownika: d.do_kierownika === true && !d.wykonawca && z.status === 'nowe',
         rozdzielone: z.status === 'rozdzielone',
         rozdzial: rozdzialZlecenia(z, wszystkie, pracownicy, { ja, dzialy: (stale && stale.dzialy) || [] }), czesc: !!d.nadrzedne, zlecilId: d.zlecil || null,
         // Przyciski w Panelu tylko u kierownika działu (UR, KJ) — kierownik zakładu wybiera osobę już przy zleceniu,
@@ -413,22 +414,34 @@
       || (b.pilne - a.pilne) || String(a.czas).localeCompare(String(b.czas)));
   }
 
-  /* Napisy trzech chipów filtra zleceń (UI etap 2). Liczby jak dotąd przy „W toku” i „Do przyjęcia”; to, co miało
+  /* Napisy trzech chipów filtra zleceń (UI etap 2). Liczby jak dotąd przy „W toku” i „Do odbioru”; to, co miało
      własne czerwone chipy, zostaje sygnałem na chipie swojej listy — „W toku · 5 · ⏰ 2” (po terminie) i „Zamknięte ·
      przepadło 1” (D35, dwie ostatnie doby) na czerwono (alarm), żeby egzekwowanie nie zniknęło razem z filtrami. */
   function chipyZlecen(lista, teraz, inne) {
     const l = bezCzesci(lista);
     const wToku = l.filter(z => OTWARTE.has(z.status) || z.status === 'zaplanowane').length;
     const po = l.filter(z => poTerminie(z, teraz)).length;
-    // D60: „Do przyjęcia” = wszystko, co czeka na kierownika — także zgłoszenia, narzędzia i BHP (inne.czeka);
+    // D60: „Do odbioru” = wszystko, co czeka na kierownika — także zgłoszenia, narzędzia i BHP (inne.czeka);
     // otwarte pilne BHP (incydent) — chip na czerwono.
-    const doPrzyjecia = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length + ((inne && inne.czeka) || 0);
+    const doOdbioru = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length + ((inne && inne.czeka) || 0);
     const przepadlo = l.filter(z => z.status === 'przepadlo').length;
     return [
       { filtr: 'otwarte', napis: `W toku${wToku ? ` · ${wToku}` : ''}${po ? ` · ⏰ ${po}` : ''}`, alarm: po > 0 },
-      { filtr: 'do-zamkniecia', napis: `Do przyjęcia${doPrzyjecia ? ` · ${doPrzyjecia}` : ''}`, alarm: !!(inne && inne.alarm) },
+      { filtr: 'do-zamkniecia', napis: `Do odbioru${doOdbioru ? ` · ${doOdbioru}` : ''}`, alarm: !!(inne && inne.alarm) },
       { filtr: 'zamkniete', napis: `Zamknięte${przepadlo ? ` · przepadło ${przepadlo}` : ''}`, alarm: przepadlo > 0 },
     ];
+  }
+
+  /* Pusta lista zleceń: nie samo „nic nie ma”, tylko dokąd spojrzeć. Dwa częste powody pustki, których kierownik inaczej nie widzi:
+     (1) filtr (dział, osoba, rodzaj, „tylko spóźnione”, u kierownika UR/KJ domyślnie jego dział) chowa zadania, (2) „W toku” jest
+     puste, ale coś czeka na odbiór w drugim filtrze. chipy = wynik chipyZlecen (liczby z napisów „Do odbioru · 4”). */
+  function pustaListaZlecen(filtr, chipy, filtryAktywne) {
+    const PUSTE = { otwarte: 'Żadne zlecenie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na odbiór',
+                    zamkniete: 'Brak zamkniętych zleceń w wybranym okresie' };
+    const baza = PUSTE[filtr] || 'Brak zleceń';
+    if (filtryAktywne) return `${baza}. Filtry (Dział, Osoba, Rodzaj, Okres, spóźnione) mogą chować część zleceń — wyczyść je.`;
+    const doOdbioru = Number((/· (\d+)/.exec(((chipy || []).find(c => c.filtr === 'do-zamkniecia') || {}).napis || '') || [])[1] || 0);
+    return filtr === 'otwarte' && doOdbioru ? `${baza}. Czeka na odbiór: ${doOdbioru} — zobacz „Do odbioru”.` : baza;
   }
 
   /* Czy w oknie „Nowe zlecenie” rozwinąć „Więcej opcji” (UI etap 2). Na co dzień zwinięte — kierownik wpisuje co, dział,
@@ -439,7 +452,7 @@
     if (edycja) return true;
     const d = w || {};
     const inneNizDomyslne = k => d[k] !== undefined && d[k] !== true;
-    return !!(d.stale || String(d.opis || '').trim() || d.linia || d.maszyna || d.pilne
+    return !!(d.stale || d.od || String(d.opis || '').trim() || d.linia || d.maszyna || d.pilne
               || inneNizDomyslne('wymagaj_zdjecia') || inneNizDomyslne('wymagaj_notatki') || d.wymagaj_skanu === true);
   }
 
@@ -546,9 +559,9 @@
       { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'pilne') },
       // D59: otwarte zgłoszenia BHP (każdej zmiany, aż kierownik je zamknie z opisem działań) — klik prowadzi do listy.
       { kod: 'bhp', etykieta: 'BHP — otwarte', liczba: bhp || 0, klasa: klasa(bhp || 0, 'pilne') },
-      // „do przyjęcia” — tak samo jak chip w Zleceniach (kierownik przyjmuje albo zwraca); dwie nazwy jednej listy myliły.
-      // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO PRZYJĘCIA” łamało się w wąskim kafelku.
-      { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do przyjęcia` : null,
+      // „do odbioru” — tak samo jak chip w Zleceniach (kierownik odbiera albo zwraca); dwie nazwy jednej listy myliły.
+      // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO ODBIORU” łamało się w wąskim kafelku.
+      { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do odbioru` : null,
         liczba: otwarte + doZamkniecia, klasa: klasa(otwarte + doZamkniecia, 'neutralne') },
       { kod: 'po-terminie', etykieta: 'Zlecenia po terminie', liczba: spoznione, klasa: klasa(spoznione, 'pilne') },
     ].concat(bezRaportu === undefined ? [] : [
@@ -1018,7 +1031,7 @@
     if (zleca) return null;
     const tytuly = lista.slice(0, 3).map(s => `„${s.tytul}”`).join(', ') + (lista.length > 3 ? ` i ${lista.length - 3} więcej` : '');
     return `${osoba.nazwa} zleca zlecenia stałe (${lista.length}): ${tytuly}. Po zapisie przestaną się zlecać — kierownik musi `
-      + 'otworzyć każde w Zlecenia → 💾 Zapisane i kliknąć „Zmień” (zostanie autorem).';
+      + 'otworzyć każde w Zlecenia → Zapisane i kliknąć „Zmień” (zostanie autorem).';
   }
 
   /* Lista „Zlecenia stałe”: aktywne na górze, potem po tytule. */
@@ -1658,7 +1671,7 @@
      Panelem — tunel prowadzi do stanu tunelu, miejsce nigdzie. */
   const GDZIE_ALARMU = {
     pages: { czesc: 'serwis', sekcja: 'dostep' }, tunel: { czesc: 'serwis', sekcja: 'dostep' },
-    token: { czesc: 'ustawienia', sekcja: 'formularz-dostepu' }, kopia: { czesc: 'ustawienia', sekcja: 'formularz-kopii' },
+    token: { czesc: 'serwis', sekcja: 'formularz-dostepu' }, kopia: { czesc: 'serwis', sekcja: 'formularz-kopii' },
   };
   const gdzieAlarmu = kod => GDZIE_ALARMU[kod] || (/^pages_/.test(String(kod || '')) ? GDZIE_ALARMU.pages : null);
 
@@ -1668,8 +1681,87 @@
     const waga = { pages: 0, pages_trasy: 0, pages_flota: 0, token: 1, kopia: 2, miejsce: 3 };
     return (lista || []).slice().sort((a, b) => (waga[a.kod] ?? 9) - (waga[b.kod] ?? 9))
       .map(a => ({ kod: a.kod, tytul: a.tytul || 'Alarm',
-                   opis: String(a.opis || '').replace(/Administracja → (📱 )?Dostęp z telefonów/g, 'Administracja → Serwis → Dostęp z telefonów'),
+                   opis: String(a.opis || '').replace(/Administracja → (📱 )?Dostęp z telefonów/g, 'Administracja → Ustawienia → Dostęp z telefonów'),
                    gdzie: gdzieAlarmu(a.kod) }));
+  }
+
+  /* Etap 1 (2026-11-10): ekran „Odrzucone zdarzenia” (Administracja → Dane). Odpowiedź GET /api/v1/admin/zdarzenia-odrzucone
+     → to, co pokazać: zapisy z hali, których serwer nie przyjął (telefon pokazał powód i wyrzucił je z kolejki), 90 dni.
+     nazwaTypu — funkcja Panelu (typ zdarzenia → nazwa po ludzku). Niedostępne = migracja bazy nie przeszła (jest też alarm). */
+  function odrzuconeZdarzenia(odp, nazwaTypu) {
+    const o = odp || {};
+    const nazwa = typeof nazwaTypu === 'function' ? nazwaTypu : t => t;
+    const lista = Array.isArray(o.zdarzenia) ? o.zdarzenia : [];
+    if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.' };
+    const czeka = Number(o.oczekuje) || 0;
+    const wiersze = lista.map(z => ({
+      id: z.id,
+      kiedy: `${dataKrotka(z.czas)} ${godzina(z.czas)}`,
+      kto: z.kto_nazwa || z.kto || '—',
+      typ: nazwa(z.typ) || z.typ || '—',
+      powod: z.powod || '',
+      ponowione: !!z.ponowiono,
+      wynik: z.wynik || '',
+      mozePonowic: !!z.mozna_ponowic,
+      surowe: JSON.stringify(z.zdarzenie, null, 1),
+    }));
+    let podsumowanie = '';
+    if (wiersze.length) {
+      podsumowanie = czeka ? `Do sprawdzenia: ${czeka}.` : 'Wszystko ponowione.';
+      if (o.ucieto) podsumowanie += ` Pokazano ${wiersze.length} z ${o.razem} najnowszych.`;
+    }
+    return { niedostepne: false, wiersze, pusto: !wiersze.length, podsumowanie };
+  }
+
+  /* Komunikat o liście uciętej limitem (etap 1): GET /api/v1/stan/<typ> niesie ucieto/razem/pokazano, gdy pasuje więcej
+     obiektów, niż zmieścił limit (5000 w Panelu). Pusty tekst, gdy lista jest kompletna. */
+  function komunikatUciecia(odp) {
+    if (!odp || !odp.ucieto) return '';
+    return `Pokazano ${odp.pokazano} z ${odp.razem} — zawęź okres albo filtry, bo liczby mogą być niepełne.`;
+  }
+
+  /* Logowanie R1 (2026-11-10): ekran „Logowania” (Administracja → Logowania; tylko administrator, tylko odczyt). Odpowiedź
+     GET /api/v1/admin/logowania → to, co pokazać: dziennik logowań (kto, kiedy, skąd — bez haseł), lista kont, które nadal mają
+     hasło startowe, i niespójności wykryte w dzienniku. Adres IP trafia tu tylko dlatego, że cały ekran jest za rolą administratora. */
+  const WYNIKI_LOGOWAN = {
+    ok: ['Zalogowano', 'ok'], zle_haslo: ['Złe hasło', 'alarm'], zly_pin: ['Zły PIN', 'alarm'], wymagane_haslo: ['Wymagane hasło', 'uwaga'],
+    pauza: ['Pauza po złych próbach', 'alarm'], seria: ['Seria złych prób', 'alarm'], limit_adresu: ['Limit prób z adresu', 'alarm'],
+    konto_wylaczone: ['Konto wyłączone', 'alarm'], startowe_wygaslo: ['Hasło startowe wygasło', 'uwaga'], nieznany: ['Nieznany identyfikator', 'uwaga'],
+    ustawienie: ['Ustawiono hasło lub PIN', 'ok'], wylogowanie: ['Wylogowano', 'ok'], inny: ['Inna odmowa', 'uwaga'],
+  };
+  const ZRODLA_LOGOWAN = { zaklad: 'sieć zakładu', internet: 'internet', lokalny: 'ten komputer' };
+  const PROGRAMY_LOGOWAN = { panel: 'Panel', lider: 'Lider', ur: 'Utrzymanie Ruchu', kj: 'Kontrola Jakości', trasy: 'Trasy', flota: 'Flota',
+                             szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
+  const NAZWY_ROL_LOGOWAN = { admin: 'administrator', kierownik: 'kierownik zakładu', biuro: 'biuro', lider: 'lider', mistrz: 'mistrz', mechanik: 'mechanik',
+                              kontroler: 'kontroler', kierowca: 'kierowca', 'kierownik-ur': 'kierownik UR', 'kierownik-kj': 'kierownik KJ' };
+  function logowania(odp) {
+    const o = odp || {};
+    if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.', startowe: [], startowePodsumowanie: '', niespojnosci: [] };
+    const wiersze = (Array.isArray(o.wpisy) ? o.wpisy : []).map(x => {
+      const [nazwa, klasa] = WYNIKI_LOGOWAN[x.wynik] || [x.wynik || '—', 'uwaga'];
+      return { id: x.id, kiedy: `${dataKrotka(x.czas)} ${godzina(x.czas)}`, kto: x.konto_nazwa || x.konto || '—',
+               program: PROGRAMY_LOGOWAN[x.program] || x.program || '—', wynik: nazwa, klasa,
+               zrodlo: ZRODLA_LOGOWAN[x.zrodlo] || '', adres: x.adres || '',
+               metoda: { haslo: 'hasło', pin: 'PIN', pin_offline: 'PIN bez sieci', startowe: 'hasło startowe', ekran: 'ekran' }[x.metoda] || '',
+               uwaga: x.uwaga || '' };
+    });
+    const d = o.doba || {};
+    const udane = Number(d.ok) || 0;
+    const nieudane = ['zle_haslo', 'zly_pin', 'nieznany', 'konto_wylaczone', 'pauza', 'limit_adresu'].reduce((n, k) => n + (Number(d[k]) || 0), 0);
+    let podsumowanie = `Ostatnia doba — udane: ${udane}, nieudane: ${nieudane}.`;
+    if (o.ucieto) podsumowanie += ` Pokazano ${wiersze.length} z ${o.razem} najnowszych.`;
+    if (o.audyt === false) podsumowanie = 'Zapis dziennika jest wyłączony na serwerze (GK_LOGOWANIE_AUDYT=0).';
+    const startowe = (Array.isArray(o.startowe) ? o.startowe : []).map(x => ({
+      id: x.id, nazwa: x.nazwa || x.id, role: (x.role || []).map(r => NAZWY_ROL_LOGOWAN[r] || r).join(', '),
+      opis: x.dni === null || x.dni === undefined ? 'od niedawna' : (x.dni === 0 ? 'od dziś' : `od ${x.dni} ${odmiana(x.dni, 'dnia', 'dni', 'dni')}`),
+      poTerminie: !!x.po_terminie,
+    }));
+    const cel = Number(o.startowe_dni_cel) || 7;
+    const startowePodsumowanie = startowe.length
+      ? `${startowe.length} ${odmiana(startowe.length, 'konto czeka', 'konta czekają', 'kont czeka')} na własne hasło. Dziś hasło startowe działa bez terminu; w przyszłości z internetu będzie ważne ${cel} dni.`
+      : 'Wszystkie konta mają już własne hasło.';
+    const niespojnosci = (Array.isArray(o.niespojnosci) ? o.niespojnosci : []).map(n => ({ kod: n.kod, opis: n.opis || '' }));
+    return { niedostepne: false, wiersze, pusto: !wiersze.length, podsumowanie, startowe, startowePodsumowanie, niespojnosci };
   }
 
   /* Formularz „Tunel i GitHub” → { bledy, dane } dla POST /api/v1/admin/dostep. Puste pole tokenu = bez zmian
@@ -1803,8 +1895,8 @@
     return bledy;
   }
 
-  /* Numer zmiany, który znika ze słownika (zmiana nazwy „III” na „N”, usunięcie), a jest w szablonach checklist albo
-     w zleceniach stałych — tam przestanie pasować (szablon i zadania tej zmiany po cichu przestaną działać). */
+  /* Numer zmiany, który znika ze słownika (zmiana nazwy „III” na „N”, usunięcie), a jest w zapisanych checklistach albo
+     w zleceniach stałych — tam przestanie pasować (checklista i zlecenia tej zmiany po cichu przestaną działać). */
   function uzyciaZmian(slowniki, noweNumery) {
     const obecne = Object.keys((slowniki && slowniki.zmiany) || {});
     const znikaja = obecne.filter(nr => !(noweNumery || []).includes(nr));
@@ -1815,7 +1907,7 @@
       const stale = Object.entries((slowniki && slowniki.zlecenia_stale) || {})
         .filter(([, s]) => (((s && s.harmonogram) || {}).zmiany || []).includes(nr)).map(([k, s]) => s.tytul || k);
       if (szablony.length || stale.length)
-        wynik.push(`Zmiana ${nr} znika, a używają jej: ${[...szablony.map(n => `szablon „${n}”`), ...stale.map(n => `zlecenie stałe „${n}”`)].join(', ')}.`);
+        wynik.push(`Zmiana ${nr} znika, a używają jej: ${[...szablony.map(n => `checklista „${n}”`), ...stale.map(n => `zlecenie stałe „${n}”`)].join(', ')}.`);
     }
     return wynik;
   }
@@ -2084,9 +2176,15 @@
   /* Liczba z ułamkiem po polsku: 3.6 → „3,6” (Wskaźniki, raporty zmian). Kropka w „3.6 %” to zapis angielski. */
   const procent = n => (n === null || n === undefined ? '—' : String(n).replace('.', ','));
 
+  /* Nazwa pozycji menu i nagłówka: kierownik UR / KJ i mistrz mają w „Administracji” tylko urlopy swoich ludzi — „Administracja”
+     obiecywała więcej, niż jest w środku. Wszystkie inne zestawy części (kierownik zakładu, administrator) zostają „Administracją”. */
+  function nazwaAdministracji(czesci) {
+    return (czesci || []).length === 1 && czesci[0] === 'urlopy' ? 'Urlopy' : 'Administracja';
+  }
+
   /* Części Administracji dla tej osoby, w kolejności chipów. Checklisty (szablony obchodów lidera) zeszły z górnego menu
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
-     admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Kody QR, Ustawienia, Serwis); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; maszyny (R10, kontrakt: zapis
+     admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Logowania, Kody QR, Progi i godziny, Ustawienia); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; maszyny (R10, kontrakt: zapis
      słownika maszyn — kierownik zakładu) — Maszyny; szablony (kontrakt: zapis szablony_checklist) — Checklisty. */
   function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny } = {}) {
     const c = [];
@@ -2097,9 +2195,9 @@
     if (maszyny && !admin) c.push('maszyny');
     // STYL-GK §8 (2026-11-04): „Dane” (czyszczenie zleceń) i „Kody QR” mają wejście także tutaj — to te same okna co
     // Zlecenia → 🧹 i ☰ Więcej → Kody QR (chip tylko je otwiera). Zespół (kierownicy) ich nie dostaje: D49 — tylko Pracownicy.
-    if (admin) c.push('maszyny', 'dane', 'kody', 'ustawienia');
+    if (admin) c.push('maszyny', 'dane', 'logowania', 'kody', 'ustawienia');
     // D60 (właściciel 2026-10-14: „checklisty nie powinny być schowane w ustawieniach, tylko w zleceniach”):
-    // szablony checklisty lidera są w Zlecenia → 💾 Zapisane, nie w Administracji (parametr szablony zostaje dla zgodności).
+    // szablony checklisty lidera są w Zlecenia → Zapisane, nie w Administracji (parametr szablony zostaje dla zgodności).
     if (admin) c.push('serwis');
     return c;
   }
@@ -2171,7 +2269,7 @@
 
   /* D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):
      jedna lista Zleceń. Rodzaje (kod, napis na znaczniku) — także filtr „Rodzaj”. */
-  const RODZAJE_ZADAN = [['zlecenie', 'Zlecenie'], ['zapisane', 'Zapisane 🔁'], ['checklista', 'Checklista'],
+  const RODZAJE_ZADAN = [['zlecenie', 'Zlecenie'], ['zapisane', 'Zapisane'], ['checklista', 'Checklista'],
     ['kierownik', 'Dla kierownika'], ['podsumowanie', 'Podsumowanie zmiany'], ['zgloszenie', 'Zgłoszenie'],
     ['narzedzia', 'Narzędzia'], ['bhp', 'BHP']];
   const nazwaRodzaju = kod => (RODZAJE_ZADAN.find(([k]) => k === kod) || [kod, kod])[1];
@@ -2524,7 +2622,7 @@
   }
 
   /* Pozycje checklisty z zapisanych zleceń (właściciel 2026-10-13: „żebym nie musiał pisać tego samego wiele razy”):
-     zapisane pojedyncze i stałe z „💾 Zapisane i stałe” — bez pozycji innych checklist (to już są części checklist).
+     zapisane pojedyncze i stałe z „Zapisane i stałe” — bez pozycji innych checklist (to już są części checklist).
      pomin = kody, których nie pokazywać (np. pozycje edytowanej checklisty). Wiersze do listy wyboru, po tytule. */
   function zadaniaDoChecklisty(slowniki, pomin) {
     const bez = new Set(pomin || []);
@@ -2612,12 +2710,12 @@
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
-                       presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE,
+                       presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
                        zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
-                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow };
+                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

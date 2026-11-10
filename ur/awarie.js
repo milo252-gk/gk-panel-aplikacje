@@ -107,7 +107,7 @@
     if (d.opis_wstrzymania) wiersze.push(['Wstrzymana', d.opis_wstrzymania]);
     if (d.opis_naprawy) wiersze.push(['Co zrobiono', d.opis_naprawy]);
     if (d.czesci) wiersze.push(['Części', d.czesci]);
-    if (d.powod_anulowania) wiersze.push(['Powód anulowania', d.powod_anulowania]);
+    if (d.powod_anulowania) wiersze.push(['Powód odwołania', d.powod_anulowania]);
     if (d.uwagi_potwierdzenia) wiersze.push(['Uwagi lidera', d.uwagi_potwierdzenia]);
     for (const o of d.odrzucenia || []) wiersze.push(['Lider: nie działa', `${o.powod || ''} (${W.kiedy(o.czas, k.teraz)})`]);
     return `<dl class="szczegoly">${wiersze.filter(Boolean).map(([t, v]) => `<dt>${esc(t)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
@@ -116,14 +116,14 @@
   function rysujKarte(el, id) {
     const a = hala.obiekt('awaria', id);
     if (!a) {
-      el.innerHTML = `<a class="wstecz" href="#awarie">‹ Awarie</a><p class="pusto">Nie ma takiej awarii w telefonie. Wróć do listy.</p>`;
+      el.innerHTML = `<a class="wstecz" href="#awarie">‹ Awarie</a><p class="pusto">Nie ma takiej awarii na tym urządzeniu. Wróć do listy.</p>`;
       return;
     }
     const k = UR.kontekst();
     const w = W.wierszAwarii(a, k);
     // UI etap 2: jeden duży przycisk następnego kroku na wierzchu, rzadkie rzeczy pod „Więcej ▾” (W.ukladAkcji).
     const uklad = W.ukladAkcji(W.akcjeAwarii(a, k));
-    const przycisk = x => `<button type="button" data-krok="${esc(x.typ)}" class="${x.glowny ? 'glowny' : ''} ${x.alarm ? 'alarm' : ''}">${esc(x.tekst)}</button>`;
+    const przycisk = x => `<button type="button" data-krok="${esc(x.typ)}" class="${x.glowny ? 'glowny' : ''} ${x.alarm ? 'alarm' : ''}${x.typ === 'awaria.naprawa_rozpoczeta' ? ' wlasny-skan' : ''}">${esc(x.tekst)}</button>`;
     const d = a.dane || {};
     const komentarze = d.komentarze || [];
     el.innerHTML = `
@@ -233,7 +233,7 @@
 
       case 'awaria.naprawa_rozpoczeta': {
         // Skan QR zalecany (dowód obecności). Bez skanu — tylko po świadomym „Zacznij bez skanu”.
-        const qr = await UR.skanujMaszyne(maszyna, `Zeskanuj ${W.nazwaMaszyny(hala.slowniki, maszyna)}`);
+        const qr = await UR.skanujMaszyne(maszyna, `Zeskanuj kod maszyny: ${W.nazwaMaszyny(hala.slowniki, maszyna)}`);
         if (qr) { await zapisz(typ, id, { qr }, 'Naprawa w toku'); break; }
         if (await UR.potwierdz('Zacząć bez skanu?', 'Skan maszyny potwierdza, że jesteś na miejscu. Bez niego zapiszemy start naprawy bez dowodu obecności.', 'Zacznij bez skanu')) {
           await zapisz(typ, id, {}, 'Naprawa w toku');
@@ -318,13 +318,13 @@
           tresc: `<p class="slaby">Awaria zniknie z listy, a przestój stanie na tej chwili.</p>
             ${UR.chipy('gotowy', W.POWODY_ANULOWANIA.map(p => ({ kod: p, nazwa: p })), [])}
             <label>Albo opisz<input name="powod" maxlength="${W.MAKS_POWODU}" data-bez-fokusu></label>`,
-          przyciski: [{ tekst: 'Wróć', wartosc: false }, { tekst: 'Anuluj awarię', wartosc: true, alarm: true,
+          przyciski: [{ tekst: 'Wróć', wartosc: false }, { tekst: 'Odwołaj awarię', wartosc: true, alarm: true,
             // Limit huba liczy się dla całości (gotowy + opis), nie tylko dla wpisanego pola.
             sprawdz: f => W.powodAnulowania(f.get('gotowy'), f.get('powod')).blad }],
         });
         if (!w || !w.wartosc) break;
         const { powod } = W.powodAnulowania(w.dane.get('gotowy'), w.dane.get('powod'));
-        await zapisz(typ, id, { powod }, 'Awaria anulowana');
+        await zapisz(typ, id, { powod }, 'Awaria odwołana');
         break;
       }
       default:

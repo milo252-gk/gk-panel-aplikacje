@@ -17,14 +17,14 @@
   /* Definicje — po polsku, krótko, ale dokładnie tak, jak liczy kod. Zmieniasz regułę liczenia — zmień tekst tutaj. */
   const DEFINICJE = {
     awarie: { nazwa: 'Awarie',
-      tekst: 'Awarie zgłoszone w wybranym okresie (wszystkie priorytety). Anulowane — fałszywy alarm — się nie liczą.' },
+      tekst: 'Awarie zgłoszone w wybranym okresie (wszystkie priorytety). Odwołane — fałszywy alarm — się nie liczą.' },
     zatrzymania: { nazwa: 'Zatrzymania linii',
-      tekst: 'Awarie zgłoszone w okresie z priorytetem, który zatrzymuje linię („Zatrzymanie linii”, także po korekcie priorytetu przez UR). Anulowane się nie liczą.' },
+      tekst: 'Awarie zgłoszone w okresie z priorytetem, który zatrzymuje linię („Zatrzymanie linii”, także po korekcie priorytetu przez UR). Odwołane się nie liczą.' },
     // D51: zakład z jedną (schowaną) linią — Panel mówi o maszynach. Ta sama liczba co „zatrzymania”, inna nazwa.
     zatrzymania_maszyn: { nazwa: 'Zatrzymania maszyn',
-      tekst: 'Awarie zgłoszone w okresie z priorytetem, który zatrzymuje maszynę („Maszyna stoi”, także po korekcie priorytetu przez UR). Anulowane się nie liczą.' },
+      tekst: 'Awarie zgłoszone w okresie z priorytetem, który zatrzymuje maszynę („Maszyna stoi”, także po korekcie priorytetu przez UR). Odwołane się nie liczą.' },
     przestoj: { nazwa: 'Przestój łącznie',
-      tekst: 'Czas, przez który linie stały w okresie: od zgłoszenia awarii do potwierdzenia przez lidera, że linia ruszyła (trwająca — do teraz). Liczony 24/7, także gdy naprawa jest wstrzymana. Przycięty do okresu, więc liczy się też awaria zgłoszona wcześniej. Nakładające się awarie jednej linii liczą się raz; suma po liniach. Bez anulowanych.' },
+      tekst: 'Czas, przez który linie stały w okresie: od zgłoszenia awarii do potwierdzenia przez lidera, że linia ruszyła (trwająca — do teraz). Liczony 24/7, także gdy naprawa jest wstrzymana. Przycięty do okresu, więc liczy się też awaria zgłoszona wcześniej. Nakładające się awarie jednej linii liczą się raz; suma po liniach. Bez odwołanych.' },
     reakcja: { nazwa: 'Reakcja UR (średnio)',
       tekst: 'Średni czas od zgłoszenia awarii do chwili, gdy mechanik ją przyjął („Mechanik w drodze”) albo od razu zaczął naprawę. Z awarii zgłoszonych w okresie, które UR już przyjęło.' },
     mttr: { nazwa: 'MTTR (średnio)',
@@ -36,7 +36,7 @@
     zlecenia_wykonane: { nazwa: 'Zlecenia wykonane',
       tekst: 'Zlecenia od kierownika zlecone w okresie: ile dział wykonał (wykonane i już zamknięte) ze wszystkich zleconych. Zaplanowane liczą się od chwili, gdy serwer je zlecił.' },
     zlecenia_w_terminie: { nazwa: 'Zlecenia w terminie',
-      tekst: 'Ze zleceń zleconych w okresie, które mają termin: procent wykonanych do terminu. Po terminie = wykonane po terminie, niezrobione po minionym terminie i przepadłe z końcem zmiany. Otwarte przed terminem, anulowane i „Dział nie może wykonać” się nie liczą.' },
+      tekst: 'Ze zleceń zleconych w okresie, które mają termin: procent wykonanych do terminu. Po terminie = wykonane po terminie, niezrobione po minionym terminie i przepadłe z końcem zmiany. Otwarte przed terminem, odwołane i „Dział nie może wykonać” się nie liczą.' },
     przestoj_linie: { nazwa: 'Przestój na linię',
       tekst: 'Przestój każdej linii w okresie (tak jak „Przestój łącznie”), liczba awarii i zatrzymań zgłoszonych w okresie oraz MTTR linii. Pasek — względem linii z najdłuższym przestojem (w pełnych minutach).' },
     przestoj_maszyny: { nazwa: 'Przestój na maszynę',

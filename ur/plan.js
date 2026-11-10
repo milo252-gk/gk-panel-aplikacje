@@ -43,7 +43,7 @@
         .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
       const harm = W.listaHarmonogramu(sl, hala.pracownicy);
       // Maszyny bez żadnej pozycji harmonogramu nie dostaną przeglądu nigdy — karta po typie sama niczego nie planuje
-      // (audyt 2026-10-12). Lista z szybkim „＋ Dodaj” zaraz pod harmonogramem.
+      // (audyt 2026-10-12). Lista z szybkim „+ Dodaj” zaraz pod harmonogramem.
       const bezPlanu = karty.length ? W.maszynyBezHarmonogramu(sl) : [];
       const dlaKogo = k => (k.typ_maszyny ? `typ: ${k.typ_maszyny}` : (k.maszyny || []).map(m => W.nazwaMaszyny(sl, m)).join(', ')) || '—';
       el.innerHTML = `<h1>Plan przeglądów</h1>
@@ -54,7 +54,7 @@
         <h2>Karty przeglądów <span class="znacznik neutral">${karty.length}</span></h2>
         <div class="lista">${karty.map(k => `<a class="karta" href="#karta/${encodeURIComponent(k.kod)}"><b class="tytul">${esc(k.nazwa)}</b>
           <span class="slaby">${esc(dlaKogo(k))} · ${(k.punkty || []).length} ${W.odmiana((k.punkty || []).length, 'punkt', 'punkty', 'punktów')}</span></a>`).join('')}</div>
-        <a class="przycisk szeroki" href="#karta/nowa" style="margin-top:10px">＋ Nowa karta</a>
+        <a class="przycisk szeroki" href="#karta/nowa" style="margin-top:10px">+ Nowa karta</a>
         <h2>Harmonogram <span class="znacznik neutral">${harm.length}</span></h2>
         <div class="lista" id="harmonogram">${harm.map(h => `<button type="button" class="karta" data-harmonogram="${esc(h.klucz)}" style="text-align:left">
           <b>${esc(h.maszynaNazwa)}</b> <span class="slaby">${esc(h.maszyna)}</span><br>
@@ -63,10 +63,10 @@
         ${bezPlanu.length ? `<h2 class="tekst-uwaga">Maszyny bez harmonogramu <span class="znacznik uwaga">${bezPlanu.length}</span></h2>
           <p class="slaby">Te maszyny nie dostaną żadnego przeglądu, dopóki nie dodasz ich do harmonogramu.</p>
           <div class="lista" id="bez-harmonogramu">${bezPlanu.map(m => `<button type="button" class="karta" data-dodaj-maszyne="${esc(m.kod)}" style="text-align:left">
-            <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)}${m.typ ? ' · ' + esc(m.typ) : ''}</span> <span class="slaby">＋ Dodaj</span></button>`).join('')}</div>` : ''}
+            <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)}${m.typ ? ' · ' + esc(m.typ) : ''}</span> <span class="slaby">+ Dodaj</span></button>`).join('')}</div>` : ''}
         <div class="przyciski-formularza" style="margin-top:10px">
           <button type="button" id="zaplanuj-teraz" ${harm.length ? '' : 'disabled'}>Zaplanuj teraz</button>
-          <button type="button" class="glowny" id="dodaj-harmonogram" ${karty.length ? '' : 'disabled'}>＋ Dodaj do harmonogramu</button>
+          <button type="button" class="glowny" id="dodaj-harmonogram" ${karty.length ? '' : 'disabled'}>+ Dodaj do harmonogramu</button>
         </div>
         <p class="slaby stopka">Serwer zakłada przeglądy z harmonogramu co godzinę, na 14 dni do przodu. Przegląd „co N motogodzin/cykli” pojawia się, gdy licznik maszyny urośnie o N od ostatniego przeglądu (nie wcześniej niż w dniu pierwszego przeglądu) — na jego zrobienie jest 7 dni.</p>`;
       const p = el.querySelector('#przyklad');
@@ -200,7 +200,7 @@
         </fieldset>
         <h2>Punkty kontrolne</h2>
         <div id="punkty-karty"></div>
-        <button type="button" id="dodaj-punkt">＋ Punkt</button>
+        <button type="button" id="dodaj-punkt">+ Punkt</button>
         <p class="blad" id="blad-karty" hidden></p>
         <div class="przyciski-formularza">${nowa ? '<a class="przycisk" href="#plan">Anuluj</a>' : '<button type="button" class="alarm" id="wycofaj">Usuń kartę</button>'}<button type="submit" class="glowny">Zapisz kartę</button></div>
       </form>`;

@@ -17,7 +17,10 @@
 
   function zainstaluj(ponow, opcje) {
     const o = Object.assign({ dokument: typeof document !== 'undefined' ? document : null, limitMs: 5000, opoznienieMs: 60,
-                              zegar: typeof setTimeout === 'function' ? setTimeout : null, kasuj: typeof clearTimeout === 'function' ? clearTimeout : () => {} }, opcje || {});
+                              // Zegary opakowane w funkcje strzałkowe: wołane jako `o.zegar(…)` goły setTimeout dostaje `this` = o i przeglądarka
+                              // rzuca „Illegal invocation” przy każdym dotknięciu ekranu (błąd z wydania 2026.11.09-1845).
+                              zegar: typeof setTimeout === 'function' ? (f, ms) => setTimeout(f, ms) : null,
+                              kasuj: typeof clearTimeout === 'function' ? (id) => clearTimeout(id) : () => {} }, opcje || {});
     let palec = false, poPalcu = false, straznik = null;
     const puscil = () => {
       palec = false;

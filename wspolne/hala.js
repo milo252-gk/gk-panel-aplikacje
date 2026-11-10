@@ -252,6 +252,9 @@
       if (tworzy === true) return [stan, 'obiekt już istnieje — zdarzenie zapisane, stan bez zmian'];
       if (spec.z && !spec.z.includes(stan.status))
         return [stan, `niedozwolone przejście ze statusu '${stan.status}' — zdarzenie zapisane, stan bez zmian`];
+      // Etap 6c: status docelowy podaje zdarzenie (zlecenie.cofniete → `do`); spoza listy to konflikt. Bliźniak: hala.py → zastosuj.
+      if (spec.na_z_danych && !spec.na_z_danych.dozwolone.includes((zd.dane || {})[spec.na_z_danych.pole]))
+        return [stan, `niedozwolony status docelowy '${(zd.dane || {})[spec.na_z_danych.pole]}' — zdarzenie zapisane, stan bez zmian`];
       // D56: zaliczenie czynnością (hub, z dowodem) — czynność JEST wykonaniem, wymagania nie wracają. Bliźniak: hala.py.
       const automat = zd.aplikacja === 'hub' && !!((zd.dane || {}).dowod);
       const brak = automat ? null : brakWymagan(kontrakt, stan, zd);
@@ -293,7 +296,9 @@
       if (k !== null && m && typeof m === 'object' && !Array.isArray(m)) delete m[k];
     }
     for (const pole of spec.zeruj || []) delete d[pole];
-    if (spec.na) s.status = spec.na;
+    if (spec.zeruj_wg) for (const pole of spec.zeruj_wg.mapa[dane[spec.zeruj_wg.pole]] || []) delete d[pole];
+    if (spec.na_z_danych) s.status = dane[spec.na_z_danych.pole];
+    else if (spec.na) s.status = spec.na;
     if (s.status === null) s.status = Object.keys(ob.statusy)[0];
     if (nowy && typeof dane.linia === 'string') s.linia = dane.linia;     // linię ustala zdarzenie tworzące
     s.zmieniono = zd.czas;
@@ -765,13 +770,107 @@
     return ((awaria && awaria.dane) || {}).zglosil === pracownik.id;
   }
 
+  /* Etap 6a (2026-11-10): „Moje zgłoszenia” w Liderze, UR i KJ — awarie i zgłoszenia nieprawidłowości zgłoszone przez zalogowaną
+     osobę, w słowach ze słownika GK (Zgłoszone / Przyjęte / W naprawie / Zrobione / Odwołane). Czysta funkcja: dostaje obiekty
+     (z widoku aplikacji i/lub z GET /api/v1/ja/zgloszenia — ten sam kształt) i zwraca wiersze, najnowsze zgłoszenie pierwsze.
+     Obiekt innej osoby (dane.zglosil) odpada tu, a serwer i tak oddaje tylko własne. Zapis z kolejki telefonu (_oczekuje) ma
+     oczekuje: true — człowiek widzi, że jeszcze nie dotarł. */
+  const STATUSY_ZGLOSZEN = {
+    awaria: { zgloszona: ['Zgłoszone', 'alarm'], przyjeta: ['Przyjęte', 'uwaga'], w_trakcie: ['W naprawie', 'info'], wstrzymana: ['W naprawie', 'info'],
+              oczekuje_potwierdzenia: ['Zrobione', 'ok'], zamknieta: ['Zrobione', 'neutral'], anulowana: ['Odwołane', 'neutral'] },
+    zgloszenie: { nowe: ['Zgłoszone', 'uwaga'], przyjete: ['Przyjęte', 'ok'], odrzucone: ['Odrzucone', 'neutral'] },
+  };
+  /* „Jan Kowalski” → „Jan K.” (jak w pasku zespołu; na wąskim ekranie telefonu pełne nazwisko się nie mieści). */
+  function skrotOsoby(nazwa) {
+    const c = String(nazwa || '').trim().split(/\s+/).filter(Boolean);
+    if (c.length < 2) return c[0] || '';
+    return `${c[0]} ${c[c.length - 1].charAt(0).toUpperCase()}.`;
+  }
+  const godzinaZgloszenia = ms => { if (isNaN(ms)) return ''; const l = lokalny(ms); return `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
+  function wierszeMoichZgloszen(obiekty, o) {
+    const op = o || {};
+    const ludzie = op.pracownicy || [];
+    const osoba = id => { const p = ludzie.find(x => x && x.id === id); return p ? p.nazwa : (id || ''); };
+    const maszyny = (op.slowniki || {}).maszyny || {};
+    const wyniki = new Map();
+    for (const x of obiekty || []) {
+      if (!x) continue;
+      const rodzaj = x.rodzaj || x.typ;
+      const mapa = STATUSY_ZGLOSZEN[rodzaj];
+      const d = x.dane || {};
+      if (!mapa || !op.ja || d.zglosil !== op.ja) continue;
+      const [slowo, klasa] = mapa[x.status] || [x.etykieta || x.status, 'neutral'];
+      const m = d.maszyna ? ((maszyny[d.maszyna] || {}).nazwa || d.maszyna) : '';
+      const czasMs = Date.parse(d.czas_zgloszenia || x.utworzono);
+      const czesci = [];
+      if (rodzaj === 'awaria') {
+        // „Mechanik w drodze: Piotr Z.”, „Wstrzymana” — słowo statusu (Przyjęte, W naprawie) jest ogólne, etykieta mówi, co się dzieje.
+        if (['przyjeta', 'w_trakcie', 'wstrzymana', 'oczekuje_potwierdzenia'].includes(x.status) && x.etykieta) {
+          const mech = d.mechanik && x.status !== 'oczekuje_potwierdzenia' ? skrotOsoby(osoba(d.mechanik)) : '';
+          czesci.push(mech ? `${x.etykieta}: ${mech}` : x.etykieta);
+        }
+        if (x.status === 'anulowana' && d.powod_anulowania) czesci.push(d.powod_anulowania);
+      } else {
+        if (x.status === 'odrzucone' && d.powod_odrzucenia) czesci.push(d.powod_odrzucenia);
+        if (x.status === 'przyjete') czesci.push(d.zlecenie ? 'zrobiono z tego zlecenie' : (d.uwagi_przyjecia || ''));
+      }
+      const wiersz = { rodzaj, id: x.id, numer: x.numer || '', status: slowo, statusKod: x.status, klasa, aktywny: !!x.aktywny,
+                       tytul: rodzaj === 'awaria' ? `Awaria${m ? ' — ' + m : ''}` : (d.tytul || 'Nieprawidłowość'), maszyna: d.maszyna || '',
+                       opis: d.opis || '', czas: d.czas_zgloszenia || x.utworzono || '', czasMs: isNaN(czasMs) ? 0 : czasMs,
+                       godzina: godzinaZgloszenia(czasMs), szczegol: czesci.filter(Boolean).join(' · '), oczekuje: !!x._oczekuje, zmieniono: x.zmieniono || '' };
+      const klucz = rodzaj + '|' + x.id;
+      const byl = wyniki.get(klucz);
+      // Ten sam obiekt z widoku telefonu i z serwera: bierzemy świeższy (zapis z kolejki jest zawsze świeższy).
+      if (!byl || x._oczekuje || String(wiersz.zmieniono) >= String(byl.zmieniono)) wyniki.set(klucz, wiersz);
+    }
+    return Array.from(wyniki.values()).sort((a, b) => b.czasMs - a.czasMs);
+  }
+
+  /* Etap 6b (2026-11-10): zgłaszana maszyna ma już otwartą awarię → podpowiedź „Dodać do niej?”. To tylko podpowiedź —
+     offline albo bez danych o awariach lista jest pusta i zgłoszenie idzie normalnie. Najstarsza otwarta (od niej liczy się przestój). */
+  function otwartaAwariaMaszyny(lista, maszyna) {
+    if (!maszyna) return null;
+    return (lista || []).filter(a => a && a.aktywny && (a.dane || {}).maszyna === maszyna)
+      .sort((a, b) => String((a.dane || {}).czas_zgloszenia).localeCompare(String((b.dane || {}).czas_zgloszenia)))[0] || null;
+  }
+  /* Tekst podpowiedzi; o.mozeDopisac: czy ta osoba może dopisać notatkę do awarii (awaria.komentarz) — kontroler i kierownik KJ nie. */
+  function podpowiedzODuplikacie(a, o) {
+    const op = o || {};
+    const d = (a && a.dane) || {};
+    const m = d.maszyna ? ((((op.slowniki || {}).maszyny || {})[d.maszyna] || {}).nazwa || d.maszyna) : '';
+    const kto = d.zglosil ? skrotOsoby((((op.pracownicy || []).find(x => x && x.id === d.zglosil)) || {}).nazwa || '') : '';
+    const od = godzinaZgloszenia(Date.parse(d.czas_zgloszenia));
+    const poczatek = `Maszyna ${m} ma już otwartą awarię${od ? ' od ' + od : ''}${kto ? ` (${kto})` : ''}.`;
+    return op.mozeDopisac === false ? poczatek : `${poczatek} Dodać do niej?`;
+  }
+  /* Czy rola może dopisać notatkę do awarii — z kontraktu (awaria.komentarz.role), administrator zawsze. */
+  function mozeDopisacDoAwarii(pracownik, kontrakt) {
+    const role = (pracownik && pracownik.role) || [];
+    const spec = (kontrakt && kontrakt.zdarzenia && kontrakt.zdarzenia['awaria.komentarz']) || {};
+    return role.includes('admin') || (spec.role || []).some(r => role.includes(r));
+  }
+
+  /* Etap 6c: czy po tej czynności na zleceniu pokazać „Cofnij”. `przed` = zlecenie PRZED czynnością (jego status wraca). Zgodnie z kontraktem
+     1.25.0: czynność jest na liście stale.cofniecia, status sprzed niej jest dozwolony, zlecenie nie jest częścią rozdzielonego, hub zna
+     zlecenie.cofniete (nowy klient przy starym hubie nie obiecuje nic, czego serwer nie zrobi), a rola ma prawo do cofanej czynności
+     (hub sprawdza to samo). Bliźniak: _blad_cofniecia w hala.py. */
+  function mozeCofnac(kontrakt, pracownik, typ, przed) {
+    const k = kontrakt || {};
+    const cfg = ((k.stale || {}).cofniecia || {})[typ];
+    const spec = (k.zdarzenia || {})[typ], cof = (k.zdarzenia || {})['zlecenie.cofniete'];
+    if (!cfg || !spec || !cof || !przed || !(cfg.do || []).includes(przed.status) || (przed.dane || {}).nadrzedne) return false;
+    const role = (pracownik && pracownik.role) || [];
+    if (!pracownik || !role.length) return false;
+    return role.includes('admin') || ((spec.role || []).some(r => role.includes(r)) && (cof.role || []).some(r => role.includes(r)));
+  }
+
   /* Etap 2b (D82, 2026-11-09). Działy, w których pracuje osoba (ma rolę z listy `role` działu). Bliźniak: dzialy_osoby w hala.py. */
   function dzialyOsoby(role, dzialyKontraktu) {
     const r = [].concat(role || []);
     return (dzialyKontraktu || []).filter(d => d && ((d.role || []).some(x => r.includes(x)))).map(d => d.kod);
   }
 
-  /* R2: kierownik UR/KJ zamyka i zwraca (Przyjmij / Zamknij / Zwróć) tylko zlecenia swojego działu; kierownik zakładu i admin —
+  /* R2: kierownik UR/KJ zamyka i zwraca (Odbierz / Zamknij / Zwróć) tylko zlecenia swojego działu; kierownik zakładu i admin —
      wszystkie. Ekran pokazuje przyciski tylko wtedy; hub: blad_odbioru_zlecenia (najpierw „tylko loguj”, potem 403). */
   function mozeOdebracZlecenie(zlecenie, pracownik, dzialyKontraktu) {
     const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
@@ -1052,11 +1151,11 @@
     if (p.trybOffline) {
       // D78: zalogowano PIN-em bez sieci — wyraźna wstęga: nic nie idzie do serwera, zapisy czekają w urządzeniu.
       klasa = 'offline';
-      czesci.push(`Tryb bez połączenia — ${n ? czekaNaWyslanie(n) : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`
+      czesci.push(`Tryb bez połączenia — ${n ? czekaNaWyslanie(n) : `zapisy zostają na tym urządzeniu`}`
                   + ' · wyślą się po powrocie sieci');
     } else if (!p.online) {
       klasa = 'offline';
-      czesci.push(`Brak sieci — ${n ? czekaNaWyslanie(n) : `zapisy zostają w ${komputer ? 'urządzeniu' : 'telefonie'}`}`);
+      czesci.push(`Brak sieci — ${n ? czekaNaWyslanie(n) : `zapisy zostają na tym urządzeniu`}`);
     } else if (dociaga) {
       klasa = 'kolejka';
       czesci.push('Odświeżanie co kilka sekund' + (n ? ` · Wysyłanie: ${n}` : ''));
@@ -1156,7 +1255,7 @@
       const z = praca(t.objectStore(magazyn));
       t.oncomplete = () => ok(z ? z.result : undefined);
       t.onerror = () => zle(t.error);
-      t.onabort = () => zle(t.error || new Error('Zapis w telefonie przerwany'));
+      t.onabort = () => zle(t.error || new Error('Zapis na tym urządzeniu przerwany'));
     });
   }
 
@@ -1210,6 +1309,7 @@
     const stanSerwera = new Map();       // 'typ|id' -> obiekt (ostatni stan z huba)
     let db = null, hub = '', token = null, seq = 0, synchronizuje = false, strumienAktywny = false;
     let przesuniecieZegara = 0, kolejkaCache = [], widok = null;
+    const wDrodze = new Set();                        // id zdarzeń z paczki, która wyszła (Cofnij nie wycofa ich z kolejki — etap 6c)
     /* Epoka bazy (etap 2): hub nadaje ją bazie, a przywrócenie z kopii (hala.py --przywroc) — nową. Inna epoka = inna
        historia zdarzeń: kursor seq z telefonu nic już nie znaczy (kopia ma mniej zdarzeń, a nowe dostaną numery, które
        telefon „już widział” i pominąłby po cichu). Wtedy pełne wczytanie — także na monitorze z sesją na 90 dni, który
@@ -1405,6 +1505,9 @@
       for (const [k, v] of Object.entries(parametry || {})) if (['od', 'aktywne', 'linia', 'limit'].includes(k) && v !== undefined && v !== null) q.set(k, String(v));
       return api('GET', `/api/v1/stan/${typ}${q.toString() ? `?${q}` : ''}`);
     };
+    /* Etap 6a: zgłoszenia zalogowanej osoby z serwera (awarie i nieprawidłowości, otwarte + zamknięte z ostatnich dni).
+       Tylko z siecią; serwer oddaje wyłącznie własne. Ekran łączy to z widokiem telefonu (Hala.wierszeMoichZgloszen). */
+    h.mojeZgloszenia = async dni => (await api('GET', `/api/v1/ja/zgloszenia${dni ? `?dni=${encodeURIComponent(dni)}` : ''}`)).zgloszenia || [];
     /* D57: aplikacje osoby z adresami do kodów QR (Moje konto → 📱 Aplikacje na telefon). */
     h.aplikacje = () => api('GET', '/api/v1/aplikacje');
     /* Trasy administracji huba (/api/v1/admin/…: pracownicy, odblokowanie konta) — ekran administracji w Panelu.
@@ -1531,6 +1634,8 @@
       for (const typ of o.typy) {
         const r = await api('GET', `/api/v1/stan/${encodeURIComponent(typ)}?aktywne=1&od=${encodeURIComponent(od)}&limit=5000`);
         for (const s of r.obiekty) nowe.set(s.typ + '|' + s.id, s);
+        // Etap 1: serwer dopisuje ucieto/razem/pokazano, gdy pasuje więcej obiektów, niż zmieścił limit — aplikacja (Panel) mówi o tym.
+        if (r.ucieto) emituj('ucieto', { typ, pokazano: r.pokazano, razem: r.razem });
         nowySeq = Math.min(nowySeq, r.seq);
       }
       stanSerwera.clear();
@@ -1723,6 +1828,22 @@
       h.synchronizuj();
       return true;
     };
+    /* Etap 6c („Cofnij”): zapis, który jeszcze NIE wyszedł z telefonu, można wycofać z kolejki, jakby go nie było — bez wysyłania
+       i bez zmiany formatu kolejki (kasujemy tylko wpis). Zapis, który właśnie jedzie w paczce, wycofać się nie da (hub może go już
+       mieć) — wtedy aplikacja wysyła zdarzenie cofające (zlecenie.cofniete). Cache czyścimy od razu, przed kasowaniem w bazie:
+       inaczej synchronizacja mogłaby wziąć wpis ze starego cache. Zdjęcia dołączone do wycofanego zapisu usuwamy z telefonu.
+       → true, gdy wycofano. Tylko zapis zalogowanej osoby. */
+    h.wycofajZKolejki = async id => {
+      const w = kolejkaCache.find(x => x.zd && x.zd.id === id);
+      if (!w || wDrodze.has(id) || !h.pracownik || (w.autor && w.autor !== h.pracownik.id)) return false;
+      kolejkaCache = kolejkaCache.filter(x => x.nr !== w.nr);
+      await dzialanie(db, 'kolejka', 'readwrite', s => s.delete(w.nr));
+      await odswiezKolejke();
+      const spec = h.kontrakt && h.kontrakt.zdarzenia[w.zd.typ];
+      if (spec) emituj('zmiana', { typ: spec.obiekt, id: w.zd.obiekt, obiekt: h.obiekt(spec.obiekt, w.zd.obiekt) });
+      for (const plik of [].concat((w.zd.dane || {}).zdjecia || [])) { try { await h.usunPlik(plik); } catch (e) { /* zostaje — pójdzie jako zwykły plik */ } }
+      return true;
+    };
     const mojeWKolejce = () => (h.pracownik ? kolejkaCache.filter(w => w.autor === h.pracownik.id).length : 0);
     h.stanKolejki = () => ({ oczekuje: kolejkaCache.length, moje: mojeWKolejce(), pozycje: kolejkaCache.map(w => w.zd),
                              pliki: plikiLiczniki.czeka, plikiOdrzucone: plikiLiczniki.odrzucone });
@@ -1764,12 +1885,16 @@
       while (lista.length && !innaOsoba()) {
         const paczka = lista.slice(0, rozmiar);
         let r;
+        // Etap 6c: te zapisy jadą — „Cofnij” nie wycofa ich już z kolejki (h.wycofajZKolejki). Ustawiamy synchronicznie, przed await.
+        for (const w of paczka) wDrodze.add(w.zd.id);
         try {
           // „wyslano” w tej samej skali co czas zdarzeń (h.teraz) — hub dorzuca tylko różnicę, której telefon jeszcze nie znał.
           r = await api('POST', '/api/v1/zdarzenia', Object.assign({ wyslano: iso(h.teraz()), zdarzenia: paczka.map(w => w.zd) },
                                                                    przekaz ? { autor } : {}));
         } catch (e) {
-          if (e.kod === 413 && rozmiar > 1) { rozmiar = Math.ceil(rozmiar / 2); continue; }   // za duża paczka — dzielimy
+          if (e.kod === 413 && rozmiar > 1) { rozmiar = Math.ceil(rozmiar / 2); for (const w of paczka) wDrodze.delete(w.zd.id); continue; }   // za duża paczka — dzielimy
+          // Inny błąd (sieć, 5xx): paczka mogła dojść mimo to — zapisy zostają „w drodze”, więc nie da się ich już wycofać z kolejki
+          // (Cofnij wyśle wtedy zdarzenie cofające, po oryginale; hub odfiltruje duplikat oryginału).
           throw e;
         }
         const wyniki = new Map(r.wyniki.map(w => [w.id, w]));
@@ -1785,8 +1910,9 @@
             if (wynik.uwaga) emituj(jestKonflikt(wynik.uwaga) ? 'konflikt' : 'uwaga', { zdarzenie: w.zd, uwaga: wynik.uwaga });
           }
           t.oncomplete = ok; t.onerror = () => zle(t.error);
-          t.onabort = () => zle(t.error || new Error('Zapis w telefonie przerwany (brak miejsca?)'));
+          t.onabort = () => zle(t.error || new Error('Zapis na tym urządzeniu przerwany (brak miejsca?)'));
         });
+        for (const w of paczka) wDrodze.delete(w.zd.id);       // odpowiedź jest, wpisy poszły z kolejki
         for (const w of paczka) {
           const x = wyniki.get(w.zd.id);
           if (!x) continue;
@@ -2531,7 +2657,9 @@
     const nazwa = e && e.name ? String(e.name) : '', tekst = e && e.message ? String(e.message) : String(e || '');
     if (!tekst || nazwa === 'AbortError' || (e && e.limitCzasu) || BLAD_POMIJANY.test(tekst)) return null;
     if (nazwa === 'QuotaExceededError') return { tekst: NIE_ZAPISANO, alarm: true };
-    return { tekst: `Coś poszło nie tak w aplikacji: ${tekst.slice(0, 160)}. Jeśli ekran nie reaguje, zamknij aplikację i otwórz ją ponownie.`, alarm: false };
+    // Treść techniczna (po angielsku, z nazwami pól) nic nie mówi człowiekowi z hali — idzie do konsoli (`techniczny`), a na
+    // ekranie jest instrukcja: co zrobić, gdy ekran nie reaguje.
+    return { tekst: 'Ta czynność się nie udała. Spróbuj jeszcze raz. Jeśli ekran nie reaguje, zamknij aplikację i otwórz ją ponownie.', alarm: false, techniczny: tekst.slice(0, 160) };
   }
   function pilnujBledow(opcje) {
     if (typeof window === 'undefined' || typeof document === 'undefined' || !window.addEventListener || !document.createElement) return null;
@@ -2554,7 +2682,11 @@
       clearTimeout(zegar);
       zegar = setTimeout(() => { el.hidden = true; }, opis.alarm ? 2 * o.czasMs : o.czasMs);
     }
-    const obsluz = e => { const opis = opisBledu(e); if (opis) pokaz(opis); return opis; };
+    const obsluz = e => {
+      const opis = opisBledu(e);
+      if (opis) { if (opis.techniczny && typeof console !== 'undefined') console.error('[GK] błąd w aplikacji:', opis.techniczny, e); pokaz(opis); }
+      return opis;
+    };
     window.addEventListener('error', ev => { if (ev && (ev.error || ev.message)) obsluz(ev.error || { message: ev.message }); });
     window.addEventListener('unhandledrejection', ev => { if (ev) obsluz(ev.reason); });
     window.__halaPilnujBledow = { obsluz, pokaz };
@@ -2565,7 +2697,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
     mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec, limitZapytania, pilnujBledow, opisBledu, NIE_ZAPISANO,
   };

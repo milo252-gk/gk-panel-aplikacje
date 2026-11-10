@@ -30,11 +30,13 @@
 
   // ------------------------------------------------------------ lista
 
+  // „Zaplanowany” z terminem dziś stoi pod nagłówkiem „Dziś” — drugie „termin dziś” na każdej karcie tylko zasłaniało status.
   function kartaListy(w, teraz) {
     const p = w.postep;
     return `<a class="karta przeglad ${esc(w.stan.kod)} ${w.moj ? 'moj' : ''}" href="#przeglad/${encodeURIComponent(w.id)}">
       <div class="wiersz"><span class="znacznik ${esc(w.stan.klasa)}">${esc(w.stan.nazwa)}</span>
-        <span class="slaby">termin ${esc(!w.termin ? '—' : w.dzien === W.dzienZakladu(teraz) ? 'dziś' : W.data(w.termin))}</span>
+        ${w.stan.kod === 'zaplanowany' && w.termin && w.dzien === W.dzienZakladu(teraz) ? ''
+          : `<span class="slaby">termin ${esc(!w.termin ? '—' : w.dzien === W.dzienZakladu(teraz) ? 'dziś' : W.data(w.termin))}</span>`}
         ${w.oczekuje ? '<span class="slaby">czeka na wysłanie</span>' : ''}</div>
       <b class="tytul">${esc(w.maszynaNazwa)} <span class="slaby">${esc(w.maszyna)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(w.liniaNazwa)}` : ''}</span></b>
       <div class="slaby">${esc(w.kartaNazwa)}${w.mechanikNazwa ? ` · ${esc(w.mechanikNazwa)}` : ''}</div>
@@ -54,7 +56,7 @@
       const kart = Object.keys(hala.slowniki.karty_przegladow || {}).length;
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Przeglądy</h1>
-          ${UR.mozna('przeglad.zaplanowany') && kart ? '<button type="button" id="zaplanuj">＋ Zaplanuj</button>' : ''}</div>
+          ${UR.mozna('przeglad.zaplanowany') && kart ? '<button type="button" id="zaplanuj">+ Zaplanuj</button>' : ''}</div>
         <div class="wybor filtr" id="filtr-przegladow">${[['wszystkie', 'Wszystkie'], ['moje', 'Moje']].map(([kod, n]) =>
           `<button type="button" data-filtr="${kod}" aria-pressed="${f === kod}">${n}</button>`).join('')}</div>
         ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">Planie</a>.' : ' Poproś kierownika UR o plan przeglądów.'}</p>` : ''}
@@ -146,7 +148,7 @@
   function rysujKarte(el, id) {
     const p = hala.obiekt('przeglad', id);
     if (!p) {
-      el.innerHTML = `<a class="wstecz" href="#przeglady">‹ Przeglądy</a><p class="pusto">Nie ma takiego przeglądu w telefonie. Wróć do listy.</p>`;
+      el.innerHTML = `<a class="wstecz" href="#przeglady">‹ Przeglądy</a><p class="pusto">Nie ma takiego przeglądu na tym urządzeniu. Wróć do listy.</p>`;
       return;
     }
     const k = UR.kontekst();
@@ -157,7 +159,7 @@
     const wyniki = d.punkty || {};
     const licznik = hala.obiekt('licznik_maszyny', d.maszyna);
     let akcje = '';
-    if (p.status === 'zaplanowany' && UR.mozna('przeglad.rozpoczety')) akcje += '<button type="button" class="glowny szeroki duzy" id="zacznij">▣ Skanuj maszynę i zacznij</button>';
+    if (p.status === 'zaplanowany' && UR.mozna('przeglad.rozpoczety')) akcje += '<button type="button" class="glowny szeroki duzy wlasny-skan" id="zacznij">▣ Skanuj maszynę i zacznij</button>';
     // Etap 3: „W trakcie” też da się usunąć (kierownik UR) — przegląd porzucony w połowie nie wisi w planie na zawsze;
     // usunięty po terminie liczy się w % planu jako niewykonany (W.wykonaniePlanu).
     if ((p.status === 'zaplanowany' || p.status === 'w_trakcie') && UR.mozna('przeglad.anulowany') && W.dozwolonyZ(hala.kontrakt, 'przeglad.anulowany', p.status))
@@ -247,7 +249,7 @@
     const p = hala.obiekt('przeglad', p0.id);
     if (!p || p.status !== 'zaplanowany') return;      // drugie dotknięcie przed przerysowaniem
     const maszyna = (p.dane || {}).maszyna;
-    const qr = await UR.skanujMaszyne(maszyna, `Zeskanuj ${W.nazwaMaszyny(hala.slowniki, maszyna)}`);
+    const qr = await UR.skanujMaszyne(maszyna, `Zeskanuj kod maszyny: ${W.nazwaMaszyny(hala.slowniki, maszyna)}`);
     if (!qr) return;
     await zapisz('przeglad.rozpoczety', p.id, { qr }, 'Przegląd rozpoczęty');
   });
@@ -379,7 +381,7 @@
       const lista = W.listaLicznikow({ slowniki: hala.slowniki, liczniki: hala.obiekty('licznik_maszyny'), teraz: k.teraz });
       const moge = UR.mozna('maszyna.licznik');
       el.innerHTML = `<a class="wstecz" href="#wiecej">‹ Więcej</a><h1>Liczniki maszyn</h1>
-        <p class="slaby">Motogodziny i cykle z licznika na maszynie. Z nich plan liczy przeglądy „co N motogodzin”.</p>
+        <p class="slaby">${moge ? 'Dotknij maszyny i wpisz odczyt z jej licznika (motogodziny, cykle).' : 'Odczyty z liczników maszyn (motogodziny, cykle).'} Z odczytów plan liczy przeglądy „co N motogodzin”.</p>
         <div class="lista">${lista.map(m => `<button type="button" class="karta" data-licznik="${esc(m.kod)}" ${moge ? "" : "disabled"}>
           <b>${esc(m.nazwa)}</b> <span class="slaby">${esc(m.kod)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(m.liniaNazwa)}` : ''}</span><br>
           <span>${m.motogodziny !== null ? `${esc(m.motogodziny)} mth` : '— mth'} · ${m.cykle !== null ? `${esc(m.cykle)} ${W.odmiana(m.cykle, 'cykl', 'cykle', 'cykli')}` : '— cykli'}</span>

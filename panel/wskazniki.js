@@ -60,6 +60,8 @@
     try {
       const w = await hala.pobierzStan('zlecenie', { od: odIso, limit: 5000 });
       zlecOkresu.set(odIso, { lista: w.obiekty || [], kiedy: Date.now() });
+      const uciete = W.komunikatUciecia(w);
+      if (uciete) P.komunikat('Wskaźniki osób: ' + uciete, 'uwaga');
       setTimeout(() => zlecOkresu.delete(odIso), 5 * 60000);
     } catch (e) { zlecOkresu.set(odIso, { lista: null, blad: P.komunikatBledu(e), kiedy: Date.now() }); setTimeout(() => zlecOkresu.delete(odIso), 60000); }
     finally { wTokuOsob.delete(odIso); P.narysuj(); }
