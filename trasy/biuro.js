@@ -3340,14 +3340,14 @@ function kartaKontGK(u) {
       działa dalej, gdy Panel chwilowo nie odpowiada.</p>
     <p class="male slaby"><b>Panel na tym komputerze łączy się sam</b> — Panel robi klucz i podaje go
       programowi przez plik w profilu Windows, nic nie trzeba wklejać. Ręcznie (Panel na innym
-      komputerze): adres <b>https://…</b> i klucz z Panelu → Administracja → Połączenia GK.</p>
+      komputerze): adres <b>https://…</b> i klucz z Panelu → Administracja → Ustawienia → Połączenia GK.</p>
     <p class="male slaby"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
       co w Panelu (ustawia się je w aplikacji hali). Tutejszy awaryjny „admin” z tutejszym hasłem
       wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
       ponad ${Number(adm.po_godz) || 24} godzin. Inni administratorzy Panelu logują się imieniem i nazwiskiem.</p>
     ${lok.auto ? `<div class="wstega ok">✓ Połączono samo z Panelem na tym komputerze (${escHtml(u.hub_adres || '')}).</div>`
       : lok.plik === 'wylaczone' ? `<div class="wstega uwaga">Połączenie jest wyłączone w Panelu → Administracja →
-        Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
+        Ustawienia → Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
       : lok.plik === 'reczny' && !s.kiedy ? `<div class="wstega uwaga">W Panelu utworzono klucz ręcznie — wklej go niżej
         albo w Panelu kliknij „Połącz na tym komputerze”.</div>`
       : lok.odlaczony ? '<div class="male slaby">Odłączono ręcznie — program nie łączy się sam.</div>' : ''}
@@ -3359,7 +3359,7 @@ function kartaKontGK(u) {
         <input id="u-hub-klucz" type="password" autocomplete="new-password"
                placeholder="${u.hub_klucz_ustawiony
                  ? 'klucz jest zapisany — wklej nowy, żeby zmienić'
-                 : 'z Panelu: Administracja → Połączenia GK'}"></label>
+                 : 'z Panelu: Administracja → Ustawienia → Połączenia GK'}"></label>
     </div>
     <div class="male ${u.hub_klucz_ustawiony ? '' : 'slaby'}">
       ${u.hub_klucz_ustawiony ? '✓ Klucz ustawiony' : 'Klucz nie jest ustawiony'}</div>
@@ -3414,7 +3414,7 @@ function podepnijKontaGK(pole, ustawienia) {
   if (sprawdz) sprawdz.onclick = async () => {
     if (!val('u-hub-adres')) { komunikat('Wpisz adres Panelu', 'blad'); return; }
     if (!val('u-hub-klucz') && !ustawienia.hub_klucz_ustawiony) {
-      komunikat('Wklej klucz z Panelu (Administracja → Połączenia GK)', 'blad');
+      komunikat('Wklej klucz z Panelu (Administracja → Ustawienia → Połączenia GK)', 'blad');
       return;
     }
     const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
@@ -3430,7 +3430,7 @@ function podepnijKontaGK(pole, ustawienia) {
     const w = await sprobuj(() => API.post('/api/konta-gk/lokalnie'));
     if (!w) return;
     komunikat(['polaczono', 'polaczony'].includes(w.wynik) ? 'Połączono z Panelem na tym komputerze — konta przyjdą za chwilę'
-      : w.wynik === 'wylaczone_w_panelu' ? 'Połączenie jest wyłączone w Panelu → Administracja → Połączenia GK'
+      : w.wynik === 'wylaczone_w_panelu' ? 'Połączenie jest wyłączone w Panelu → Administracja → Ustawienia → Połączenia GK'
         : 'Poprosiłem Panel o klucz — połączy się sam w ciągu minuty', w.wynik === 'wylaczone_w_panelu' ? 'blad' : 'ok');
     setTimeout(() => { if (stan.ekran === 'ustawienia' || stan.ekran === 'administracja') wrocDoUstawien(); }, 1500);
   };
