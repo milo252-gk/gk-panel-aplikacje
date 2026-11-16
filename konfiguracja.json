@@ -1,6 +1,6 @@
 {
   "hub": "https://monitor-aim-tired-pie.trycloudflare.com",
-  "zmieniono": "2026-11-16T20:49:30.298Z",
+  "zmieniono": "2026-11-16T20:50:24.526Z",
   "wersje": {
     "wspolne": "wspolne-77b1ba1b3dd5",
     "panel": "panel-e5bc1017e6a8",
@@ -9,6 +9,7 @@
     "kj": "kj-d3f261086b5d"
   },
   "programy": {
-    "szkolenia": "https://juice-webmaster-risks-deemed.trycloudflare.com"
+    "szkolenia": "https://juice-webmaster-risks-deemed.trycloudflare.com",
+    "wycena": "https://substantially-contacts-partly-poison.trycloudflare.com"
   }
 }
