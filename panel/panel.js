@@ -344,9 +344,13 @@
       prog: hala.ustawienie('prog_zolty_min', 30), awarie,
       zmianaLinii: klucz => hala.obiekt('zmiana_linii', klucz), zlecenia: hala.obiekty('zlecenie'),
     });
-    $('kafelki').innerHTML = kafelki.map(k => {
+    // Mistrz „wyżej niż lider”: jego kafelek (jeśli jest checklista działu mistrz na tę zmianę) stoi przed kafelkami linii.
+    const mistrz = W.obchodyMistrza({
+      pracownicy: d.pracownicy, zmiana: d.zmiana, teraz: d.teraz, prog: hala.ustawienie('prog_zolty_min', 30), zlecenia: hala.obiekty('zlecenie'),
+    });
+    $('kafelki').innerHTML = mistrz.concat(kafelki).map(k => {
       const proc = k.wszystkie ? Math.round(k.zrobione * 100 / k.wszystkie) : 0;
-      const stan = k.zamknieta ? 'Raport wysłany' : k.wirtualna ? 'Nie otwarta' : (k.lider || 'Otwarta');
+      const stan = k.zamknieta ? 'Raport wysłany' : k.przyjecie && k.przyjecie.tekst ? k.przyjecie.tekst : k.wirtualna ? 'Nie otwarta' : (k.lider || 'Otwarta');
       const opoz = k.opoznione.slice(0, 3).map(p => `<li>${esc(p.godz)} ${esc(p.nazwa)}</li>`).join('')
         + (k.opoznione.length > 3 ? `<li>+${k.opoznione.length - 3} więcej</li>` : '');
       // UI etap 4: zatrzymana maszyna na „zielonym” (obchód na czas) kafelku myliła — kafelek dostaje czerwony obrys (.stoi).

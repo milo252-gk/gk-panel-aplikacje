@@ -133,11 +133,11 @@
 
   /* Pytanie tak/nie w oknie aplikacji (jak UR.potwierdz i KJ.potwierdz) — zamiast confirm() przeglądarki,
      który na telefonie wygląda obco i podpisuje się adresem strony. Zamknięcie okna (✕, Esc) = „nie”. */
-  Lider.potwierdz = (tytul, tresc, tak) => new Promise(ok => {
+  Lider.potwierdz = (tytul, tresc, tak, nie) => new Promise(ok => {
     let wynik = false;
     Lider.okno({
       tytul,
-      html: `<p>${esc(tresc)}</p><div class="przyciski-rzad"><button type="button" data-odp="nie">Anuluj</button>
+      html: `<p>${esc(tresc)}</p><div class="przyciski-rzad"><button type="button" data-odp="nie">${esc(nie || 'Anuluj')}</button>
         <button type="button" class="glowny" data-odp="tak">${esc(tak || 'Tak')}</button></div>`,
       poOtwarciu: el => el.querySelectorAll('[data-odp]').forEach(b => b.addEventListener('click', () => {
         wynik = b.dataset.odp === 'tak';
@@ -328,8 +328,10 @@
     const zmiana = zmianaInna || hala.zmianaTeraz();
     const linia = liniaInna || Lider.stan.linia;
     const klucz = zmiana && linia ? W.kluczZmiany(linia, zmiana) : null;
-    return { linia, zmiana, klucz, zl: klucz ? hala.obiekt('zmiana_linii', klucz) : null,
-             lista: Hala.checklistaZmiany(hala.obiekty('zlecenie'), linia, zmiana, 'produkcja') };
+    // Mistrz (rola mistrz, jak W.dzialZlecen) ma WŁASNĄ checklistę — zlecenia działu „mistrz”, całego zakładu albo jego
+    // linii (bez zawężenia do wybranej linii, bo pracuje na całej hali). Lider i reszta — dział „produkcja” na swojej linii.
+    const lista = W.listaChecklisty(hala.obiekty('zlecenie'), hala.pracownik, linia, hala.slowniki, zmiana);
+    return { linia, zmiana, klucz, zl: klucz ? hala.obiekt('zmiana_linii', klucz) : null, lista };
   };
 
   function wyborLinii() {
@@ -352,6 +354,7 @@
     $('logowanie').hidden = z;
     $('aplikacja').hidden = !z;
     if (!z) {
+      document.title = 'GK Lider';                      // przed logowaniem (i po wylogowaniu) — nazwa ze statycznego manifestu
       $('blokada').hidden = true;
       if (Lider.oknoOtwarte()) { $('okno').hidden = true; document.body.classList.remove('z-oknem'); }
       rysujCzekajace();
@@ -567,6 +570,10 @@
     const p = hala.pracownik;
     // Przycisk „Moje konto” to sama ikona osoby (index.html, STYL-GK §3 runda 2) — bez „Anna N.” obok, jak w UR, KJ i Panelu.
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
+    // Nazwa zależy od profilu, tylko po zalogowaniu: mistrz → „GK Mistrz”, reszta → „GK Lider” (manifest i logowanie bez zmian).
+    const nazwaApki = W.nazwaAplikacji(p);
+    $('menu-aplikacja').textContent = nazwaApki;
+    document.title = nazwaApki;
   }
 
   function rysujWezwania() {
@@ -635,7 +642,14 @@
     nazwy: { obsada: 'Wpisz obsadę', proba: 'Wypełnij próbę', bhp: 'Zrób audyt BHP', przekazanie: 'Przekaż zmianę' },   // te same czasowniki co w oknie pozycji na ekranie Zmiana (zmiana.js)
     wykonaj: (z, q) => Lider.wykonajPozycje(`${z.id}|${q.id}`),
   };
-  Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji }, Lider.dzialZlecen());
+  /* „Przyjmuję zadania” (ekran Zmiana) to jedyna droga przejęcia checklisty: pozycji checklisty bieżącej zmiany nie otwieramy w karcie
+     zlecenia, dopóki nie zostanie przyjęta (tylko interfejs). Karta checklisty nie ma „Biorę” — przyciski zależą od pozycji (zlecenia.js). */
+  Lider.najpierwPrzyjmij = z => {
+    const lista = Lider.kontekst().lista;
+    return z && lista.zlecenia.some(x => x.id === z.id) && W.przyjecieChecklisty(lista, hala.pracownik, hala.pracownicy).zablokowane
+      ? W.NAJPIERW_PRZYJMIJ : null;
+  };
+  Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji, najpierwPrzyjmij: Lider.najpierwPrzyjmij }, Lider.dzialZlecen());
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.opcjeZlecen()) };
   /* D74 „☰ Więcej” — jak w UR i KJ: rzadziej używane rzeczy Lidera; ustawienia, linia i zespół są w Moim koncie. */
   Lider.ekrany.wiecej = {

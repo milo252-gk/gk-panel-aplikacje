@@ -485,6 +485,11 @@
     const o = opcje || {};
     const k = ustalKontekst(o);
     if (brakZmiany(k)) return;
+    // Raport to OSTATNI krok zmiany: kończy zmianę (i checklistę). Z niezrobionymi pozycjami — najpierw pytanie, dopiero po
+    // potwierdzeniu otwiera się raport (poprawiony raport już wysłanej zmiany nie pyta drugi raz).
+    const koniec = W.stanKonca(k.lista && ((k.lista.dane || {}).pozycje || []).length ? k.lista : k.zl);
+    if (koniec.brakuje && !(k.zl && k.zl.status === 'zamknieta')
+        && !(await L.potwierdz(koniec.pytanie, koniec.opis, 'Zakończ zmianę', 'Wróć'))) return;
     const f = await L.formularz('raport:' + k.klucz, { uwagi: (k.zl && k.zl.dane && k.zl.dane.raport && k.zl.dane.raport.uwagi) || '' });
     const r = zbudujRaport(k, f.dane.uwagi);
     const bezPrzekazania = !(k.zl && k.zl.dane && k.zl.dane.przekazanie);

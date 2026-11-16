@@ -57,6 +57,60 @@
 
   // ------------------------------------------------------------ obchody liderów
 
+  /* „Przyjmuję zadania” w GK Lider (2026-11-16) = rozpoczęcie pracy na zmianie. Z zleceń checklisty (pola przyjal i czas_przyjecia
+     z zdarzenia zlecenie.przyjete — klient zna je bez zmian na hubie): { stan, tekst }; stan 'brak' (nikt jeszcze), 'czesc', 'przyjete'
+     albo null (brak checklisty / zrobiona bez przyjęcia). Bliźniak: LiderWidok.przyjecieChecklisty. */
+  function przyjecieListy(lista, pracownicy) {
+    const zl = (lista && lista.zlecenia) || [];
+    const doPrzyjecia = zl.filter(z => z.status === 'nowe').length;
+    const przyjete = zl.filter(z => (z.dane || {}).przyjal)
+      .sort((a, b) => (Date.parse((a.dane || {}).czas_przyjecia) || 0) - (Date.parse((b.dane || {}).czas_przyjecia) || 0));
+    const stan = doPrzyjecia && !przyjete.length ? 'brak' : doPrzyjecia ? 'czesc' : przyjete.length ? 'przyjete' : null;
+    if (!stan) return { stan: null, tekst: '' };
+    if (stan === 'brak') return { stan, tekst: 'Nikt jeszcze nie przyjął zadań' };
+    const d = przyjete[0].dane;
+    return { stan, tekst: `Przyjął: ${nazwaPracownika(pracownicy, d.przyjal)}${d.czas_przyjecia ? ' · ' + godzina(d.czas_przyjecia) : ''}${stan === 'czesc' ? ' (część zadań czeka)' : ''}` };
+  }
+
+  /* Działy zaznaczone domyślnie w oknie „Nowa checklista” (kody z kontraktu: „Lider” i „Mistrzowie”). */
+  const DZIALY_NOWEJ_CHECKLISTY = ['produkcja', 'mistrz'];
+
+  /* Checklista mistrza zapisana z linią „każda linia osobno” daje N zleceń — zostawiamy jedną kopię (najniższy kod linii) na
+     (zapisane, tytuł, wystąpienie). Zlecenia bez linii i innych działów bez zmian. Bliźniak: LiderWidok.bezKopiiLinii. */
+  function bezKopiiLiniiMistrza(zlecenia) {
+    const wybrane = new Map();
+    const klucz = z => { const d = z.dane || {}; return d.dzial === 'mistrz' && d.linia && Array.isArray(d.pozycje) && d.pozycje.length
+      ? `${d.stale || ''}|${d.tytul || ''}|${d.wystapienie || ''}` : null; };
+    for (const z of zlecenia || []) {
+      const k = klucz(z);
+      if (k === null) continue;
+      const poprzednie = wybrane.get(k);
+      if (!poprzednie || String(z.dane.linia).localeCompare(String(poprzednie.dane.linia), 'pl') < 0) wybrane.set(k, z);
+    }
+    return (zlecenia || []).filter(z => { const k = klucz(z); return k === null || wybrane.get(k) === z; });
+  }
+
+  /* Obchody MISTRZA (właściciel 2026-11-16): jeden kafelek „Checklista mistrza” dla bieżącej zmiany, nad kafelkami liderów.
+     Mistrz działa na cały zakład, więc lista to wszystkie zlecenia działu „mistrz” tej zmiany (checklistaZmiany bez linii).
+     Kafelek ma ten sam kształt, kolory (kolorChecklisty) i pola co kafelek lidera (rysujKafelki). Brak zlecenia mistrza na
+     tę zmianę → brak kafelka (zakład bez checklist mistrza nic nie widzi). Awarii i „Stoi” nie liczymy — to sprawa linii. */
+  function obchodyMistrza({ pracownicy, zmiana, teraz, prog, zlecenia }) {
+    if (!zmiana) return [];
+    const lista = H().checklistaZmiany(bezKopiiLiniiMistrza(zlecenia), null, zmiana, 'mistrz');
+    if (!lista.dane.pozycje.length) return [];
+    const k = H().kolorChecklisty(lista, teraz, prog);
+    return [{
+      linia: null, nazwa: 'Mistrz', klucz: `mistrz/${zmiana.id}`, naglowek: 'Checklista mistrza',
+      kolor: k.kolor, zrobione: k.zrobione, wszystkie: k.wszystkie,
+      przyjecie: przyjecieListy(lista, pracownicy),
+      lider: nazwaPracownika(pracownicy, lista.zlecenia.map(z => (z.dane || {}).przyjal).find(Boolean)),
+      najblizsza: k.najblizsza ? { nazwa: k.najblizsza.nazwa, godz: godzina(k.najblizsza.termin),
+                                   zaMin: Math.max(0, Math.round((Date.parse(k.najblizsza.termin) - teraz) / MIN)) } : null,
+      opoznione: k.opoznione.map(p => ({ nazwa: p.nazwa, godz: godzina(p.termin) })),
+      awarie: 0, zatrzymania: 0,
+    }];
+  }
+
   /* Kafelek na linię. Lider, który nie otworzył zmiany, nie wysłał jeszcze migawki
      pozycji — wtedy bierzemy pozycje z szablonu (KONTRAKT §6.2), żeby kafelek sam
      zrobił się czerwony po terminie pierwszej pozycji. To samo, gdy lider odhacza
@@ -84,7 +138,7 @@
         kolor: k.kolor, zrobione: k.zrobione, wszystkie: k.wszystkie,
         otwarta: !!(zl && zl.status === 'otwarta' && !wirtualna),
         zamknieta: !!(zl && zl.status === 'zamknieta'),
-        wirtualna,
+        wirtualna, przyjecie: przyjecieListy(lista, pracownicy),
         lider: nazwaPracownika(pracownicy, (zl && zl.dane && zl.dane.lider) || lista.zlecenia.map(z => (z.dane || {}).przyjal).find(Boolean)),
         najblizsza: k.najblizsza ? { nazwa: k.najblizsza.nazwa, godz: godzina(k.najblizsza.termin),
                                      zaMin: Math.max(0, Math.round((Date.parse(k.najblizsza.termin) - teraz) / MIN)) } : null,
@@ -2725,7 +2779,7 @@
   }
 
   const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
+                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,

@@ -565,6 +565,8 @@
     s.wiecej = null;
     try {
       if (b.dataset.akcja === 'historia' && DZ) return DZ.historia(hala, 'zlecenie', id);
+      // Aplikacja może wymagać przyjęcia checklisty przed odhaczaniem (GK Lider: „Przyjmuję zadania”) — opcja zwraca tekst albo null.
+      if (b.dataset.akcja === 'pozycja' && o.najpierwPrzyjmij) { const t = o.najpierwPrzyjmij(hala.obiekt('zlecenie', id)); if (t) return info(t); }
       if (b.dataset.akcja.startsWith('pozycja')) return akcjaPozycji(b, el, hala, o, id);
       // D76: okna „Przekaż” i „Rozdziel” są wspólne z Panelem (dzialania.js).
       if (b.dataset.akcja === 'przekaz' && DZ) return DZ.przekaz(hala, id, { gotowe: info });

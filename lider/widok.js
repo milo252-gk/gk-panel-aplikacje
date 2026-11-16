@@ -105,6 +105,73 @@
     return lm ? { dzial: 'mistrz', linie: lm } : { dzial: 'mistrz' };
   }
 
+  /* Checklista zmiany dla osoby (Lider.kontekst): mistrz — zlecenia działu „mistrz” całego zakładu (albo jego linii; zlecenie
+     bez linii dotyczy wszystkich), lider i reszta — dział „produkcja” na wybranej linii, jak dotąd. */
+  function listaChecklisty(zlecenia, pracownik, linia, slowniki, zmiana) {
+    const d = dzialZlecen(pracownik, linia, slowniki);
+    if (d.dzial !== 'mistrz') return H().checklistaZmiany(zlecenia, linia, zmiana, 'produkcja');
+    return H().checklistaZmiany(bezKopiiLinii((zlecenia || []).filter(z => !d.linie || !((z.dane || {}).linia) || d.linie.includes(z.dane.linia))),
+                                null, zmiana, 'mistrz');
+  }
+
+  /* Checklista działu „mistrz” zapisana z linią „każda linia osobno” daje hubowi N zleceń (po jednym na linię) — mistrz dostałby
+     N kopii tej samej listy. Zostawiamy jedną kopię na (zapisane, tytuł, wystąpienie): tę z najniższym kodem linii. Zlecenia
+     bez linii (właściwy układ: jedno na zmianę) i innych działów nie są ruszane. Bliźniak: PanelWidok.bezKopiiLiniiMistrza. */
+  function bezKopiiLinii(zlecenia) {
+    const wybrane = new Map();
+    const klucz = z => { const d = z.dane || {}; return d.dzial === 'mistrz' && d.linia && Array.isArray(d.pozycje) && d.pozycje.length
+      ? `${d.stale || ''}|${d.tytul || ''}|${d.wystapienie || ''}` : null; };
+    for (const z of zlecenia || []) {
+      const k = klucz(z);
+      if (k === null) continue;
+      const poprzednie = wybrane.get(k);
+      if (!poprzednie || String(z.dane.linia).localeCompare(String(poprzednie.dane.linia), 'pl') < 0) wybrane.set(k, z);
+    }
+    return (zlecenia || []).filter(z => { const k = klucz(z); return k === null || wybrane.get(k) === z; });
+  }
+
+  /* Przyjęcie checklisty zmiany (właściciel 2026-11-16: „Przyjmuję zadania” = początek pracy na zmianie). Lista = wynik
+     checklistaZmiany (zlecenia checklisty działu na tę zmianę; kilka, gdy zlecone osobno na linie). Czas i osoba z pól
+     zlecenia, które klient zna z zdarzenia zlecenie.przyjete: przyjal, czas_przyjecia.
+       stan: 'brak' (nikt nie przyjął), 'czesc' (część zleceń przyjęta), 'przyjete', null (brak checklisty albo zrobiona bez przyjęcia)
+       doPrzyjecia: id zleceń w statusie „nowe” (tyle ma przyjąć jedno kliknięcie)
+       moze: lider i mistrz przyjmują (kierownik i admin tylko oglądają); zablokowane: pozycji nie odhaczamy przed przyjęciem. */
+  function przyjecieChecklisty(lista, pracownik, pracownicy) {
+    const zl = (lista && lista.zlecenia) || [];
+    const doPrzyjecia = zl.filter(z => z.status === 'nowe').map(z => z.id);
+    const przyjete = zl.filter(z => (z.dane || {}).przyjal)
+      .sort((a, b) => (ms((a.dane || {}).czas_przyjecia) || 0) - (ms((b.dane || {}).czas_przyjecia) || 0));
+    const role = (pracownik && pracownik.role) || [];
+    const moze = role.includes('lider') || role.includes('mistrz');
+    const stan = doPrzyjecia.length && !przyjete.length ? 'brak' : doPrzyjecia.length ? 'czesc' : przyjete.length ? 'przyjete' : null;
+    const d = przyjete.length ? przyjete[0].dane : null;
+    const kto = d ? nazwaPracownika(pracownicy, d.przyjal) : null, godz = d && d.czas_przyjecia ? godzina(d.czas_przyjecia) : null;
+    const tekst = stan === 'brak' ? 'Nikt jeszcze nie przyjął zadań'
+      : stan ? `Przyjął: ${kto}${godz ? ' · ' + godz : ''}${stan === 'czesc' ? ' (część zadań czeka)' : ''}` : '';
+    return { stan, doPrzyjecia, kto, godz, tekst, moze, zablokowane: moze && doPrzyjecia.length > 0 };
+  }
+
+  /* Koniec zmiany (właściciel 2026-11-16): „Raport zmiany” jest ostatnim krokiem checklisty. Ile pozycji zostało (niezrobionych
+     i niepominiętych) — gdy coś zostało, koniec zmiany wymaga potwierdzenia „Zakończyć zmianę bez wykonania wszystkich zadań?”. */
+  function stanKonca(lista) {
+    const d = (lista && lista.dane) || {};
+    const poz = d.pozycje || [], wyk = d.wykonane || {}, pom = d.pominiete || {};
+    const brakuje = poz.filter(p => !wyk[p.id] && !pom[p.id]).length;
+    return { wszystkie: poz.length, brakuje, komplet: poz.length > 0 && brakuje === 0, pytanie: 'Zakończyć zmianę bez wykonania wszystkich zadań?',
+             opis: brakuje ? `Niezrobione: ${brakuje} z ${poz.length}.` : '' };
+  }
+
+  /* Nazwa aplikacji WEWNĄTRZ po zalogowaniu (właściciel 2026-11-16): „GK Mistrz” tylko dla roli mistrz bez roli kierownik i admin
+     (mistrz z rolą lider też); kierownik i admin zawsze „GK Lider” — nawet z dodatkową rolą mistrz. To tylko napis:
+     manifest, ekran logowania, <title> przed logowaniem, push i kontrakt zostają „GK Lider”. */
+  function nazwaAplikacji(pracownik) {
+    const role = (pracownik && pracownik.role) || [];
+    return role.includes('mistrz') && !role.includes('kierownik') && !role.includes('admin') ? 'GK Mistrz' : 'GK Lider';
+  }
+
+  /* Jedno zdanie, gdy ktoś chce odhaczyć pozycję przed „Przyjmuję zadania” (ekran Zmiana i karta zlecenia). */
+  const NAJPIERW_PRZYJMIJ = 'Najpierw dotknij „Przyjmuję zadania” na ekranie Zmiana';
+
   /* Linia na starcie: zapamiętana (przesunięcie), inaczej pierwsza z przypisanych, inaczej pierwsza w zakładzie.
      Mistrz z liniami: zapamiętana spoza nich się nie liczy (np. zostało z czasu, gdy jeszcze nie miał linii). */
   function liniaStartowa(slowniki, pracownik, zapamietana) {
@@ -644,7 +711,7 @@
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
-    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen,
+    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, nazwaAplikacji, NAJPIERW_PRZYJMIJ, bezKopiiLinii,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,

@@ -568,8 +568,11 @@
 
   // Nowa checklista: domyślnie sama zleca się na wszystkie zmiany, codziennie (właściciel 2026-10-27: „nie chcę codziennie
   // klikać ZLEĆ”) — kierownik zawęża dni i zmiany w tym samym oknie.
+  // Dla kogo (właściciel 2026-11-16): domyślnie dwa działy — Lider i Mistrzowie — i „Dział — zrobi jedna osoba”: jedno zlecenie
+  // na zmianę na dział, bierze je ten, kto jest na zmianie. Dział, którego kierownik nie może zlecać, odpada z domyślnych.
   $('nowa-checklista-zlecen').addEventListener('click', () => otworz({
-    checklista: true, dzial: (dzialyKontraktu()[0] || {}).kod || 'produkcja', linia: W.LINIA_KAZDA, rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5],
+    checklista: true, dzial: (dzialyKontraktu()[0] || {}).kod || 'produkcja',
+    dzialy: W.DZIALY_NOWEJ_CHECKLISTY.filter(k => dzialyKontraktu().some(d => d.kod === k)), kto: 'dzial', linia: W.LINIA_KAZDA, rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5],
     zmiany: Object.keys(zmianySlownik()), termin_rodzaj: 'koniec_zmiany', wymagaj_zdjecia: false, wymagaj_notatki: false, bez_swiat: false,
     aktywny: true, pozycje: [{ godzina: '0:30' }, {}] }, null, 'Nowa checklista'));
 

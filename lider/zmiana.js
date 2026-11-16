@@ -78,6 +78,8 @@
     if (!p) return;
     if (p.stan === 'przed') { L.komunikat(`„${p.nazwa}” zrobisz od ${p.odGodz}${p.godz ? ` (do ${p.godz})` : ''}`, 'info', 'pozycja-przed'); return; }
     const zrobiona = p.stan === 'wykonana';
+    // „Przyjmuję zadania” najpierw (tylko UI; hub nadal przyjmie odhaczenie bez przyjęcia). Zrobionej pozycji nie blokujemy — „Cofnij”.
+    if (!zrobiona && W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy).zablokowane) { L.komunikat(W.NAJPIERW_PRZYJMIJ, 'info', 'najpierw-przyjmij'); return; }
     const wpis = p.wpis || {};
     const kto = W.nazwaPracownika(hala.pracownicy, wpis.autor);
     const glowna = {
@@ -201,6 +203,22 @@
      Główny przycisk dopiero, gdy checklista jest zrobiona — wcześniej nie konkuruje z pozycjami. W „Więcej” zostaje też. */
   const koniecZmiany = glowny => `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Koniec zmiany — raport</button></div>`;
 
+  /* Ostatni krok checklisty: „Raport zmiany” (właściciel 2026-11-16). To nie pozycja zlecenia (raport to osobne zdarzenie
+     zmiana.raport, KONTRAKT §6.4) — wiersz-przypomnienie na końcu listy: „Na końcu”, gdy coś zostało, „Zrób raport” (zielony),
+     gdy reszta zrobiona, „✔ godz.” po wysłaniu. Główna akcja po zrobionej liście to osobny przycisk pod listą (koniecZmiany).
+     Dotknięty za wcześnie nie jest zablokowany, tylko pyta „Zakończyć zmianę bez wykonania wszystkich zadań?” (oknoRaportu). */
+  function ostatniKrok(k, zamknieta) {
+    const d = (k.zl && k.zl.dane) || {};
+    const stan = zamknieta ? 'wykonana' : W.stanKonca(k.lista).komplet ? 'gotowy' : 'czeka';
+    const opis = zamknieta ? `✔ ${esc(W.godzina(d.czas_zamkniecia))}` : stan === 'gotowy' ? 'Zrób raport' : 'Na końcu';
+    return `<li class="pozycja ostatni-krok stan-${stan}" data-a="raport" role="button" tabindex="0">
+          <span class="czas">—</span>
+          <span class="ikona-typu" aria-hidden="true">${ikonaTypu('przekazanie')}</span>
+          <span class="tresc">Raport zmiany</span>
+          <span class="stan">${opis}</span>
+        </li>`;
+  }
+
   function rysujZmiane(el) {
     const k = L.kontekst();
     if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian. Sprawdź słownik zmian.</p>'; return; }
@@ -231,7 +249,13 @@
     }
     const c = W.checklista(k.lista, hala.teraz(), prog());
     const zamknieta = !!(k.zl && k.zl.status === 'zamknieta');
-    el.innerHTML = `${przekazanie}
+    const pr = W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy);
+    // Jedna czynność przejęcia całej checklisty działu na tę zmianę; potem — kto i o której (kierownik i admin widzą to samo).
+    const przyjecie = !pr.stan ? '' : pr.moze && pr.doPrzyjecia.length
+      ? `<article class="karta przyjecie"><p><b>${esc(pr.tekst)}</b></p>
+          <button type="button" class="glowny duzy szeroki" data-a="przyjmuje">Przyjmuję zadania</button></article>`
+      : `<p class="slaby przyjecie" role="status">${esc(pr.tekst)}</p>`;
+    el.innerHTML = `${przekazanie}${przyjecie}
       <article class="karta postep-zmiany kolor-${esc(c.kolor)}">
         <div class="postep-gora"><b class="liczba">${c.zrobione}/${c.wszystkie}</b> <span>${c.proc} %</span>
           ${zamknieta ? '<span class="znacznik neutral">Raport wysłany</span>' : c.opoznione ? `<span class="znacznik alarm">Po terminie: ${c.opoznione}</span>` : ''}</div>
@@ -245,9 +269,9 @@
           <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
             w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
           <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
-        </li>`).join('')}</ul>
-      ${przyciskiZmiany(pozycje)}
-      ${koniecZmiany(!zamknieta && c.wszystkie > 0 && c.zrobione === c.wszystkie)}`;
+        </li>`).join('')}${ostatniKrok(k, zamknieta)}</ul>
+      ${!zamknieta && W.stanKonca(k.lista).komplet ? koniecZmiany(true) : ''}
+      ${przyciskiZmiany(pozycje)}`;
   }
 
   L.$('ekran-zmiana').addEventListener('click', async ev => {
@@ -263,9 +287,29 @@
     else if (a === 'audyt-bhp') L.formularzAudytuBhp({});
     else if (a === 'zdarzenie-obsady') L.formularzZdarzeniaObsady();
     else if (a === 'koniec') L.pokazEkran('koniec');
+    else if (a === 'raport') L.oknoRaportu({});
+    else if (a === 'przyjmuje') await przyjmijZadania(t);
   });
+
+  /* „Przyjmuję zadania”: zlecenie.przyjete dla każdego zlecenia checklisty tej zmiany w statusie „nowe”, po kolei.
+     Pierwszy błąd zatrzymuje (ponowne dotknięcie dokończy resztę). */
+  async function przyjmijZadania(przycisk) {
+    const pr = W.przyjecieChecklisty(L.kontekst().lista, hala.pracownik, hala.pracownicy);
+    if (!pr.doPrzyjecia.length) return;
+    przycisk.disabled = true;
+    for (const id of pr.doPrzyjecia) {
+      const zd = await L.zapisz('zlecenie.przyjete', id, {});
+      if (!zd) {
+        przycisk.disabled = false;
+        L.komunikat('Nie udało się przyjąć zadań. Dotknij jeszcze raz.', 'blad');
+        return;
+      }
+    }
+    L.poZapisie('Zadania przyjęte');
+  }
   L.$('ekran-zmiana').addEventListener('keydown', ev => {
-    const t = ev.target.closest('[data-pozycja]');
+    const t = ev.target.closest('[data-pozycja],[data-a=raport]');
+    if (t && t.dataset.a === 'raport' && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); L.oknoRaportu({}); return; }
     if (t && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); otworzPozycje(t.dataset.pozycja); }
   });
 
