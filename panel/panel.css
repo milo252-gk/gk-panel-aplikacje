@@ -510,8 +510,28 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .pozycje-zlecenia { margin-top: 6px; }
 .pozycje-zlecenia summary { cursor: pointer; font-weight: 700; }
 .pozycje-zlecenia ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
-.pozycje-zlecenia .stan-wykonana > span:first-child { color: var(--zielony); font-weight: 700; }
+.pozycje-zlecenia .stan-wykonana > span:first-child, .pozycje-zlecenia .stan-wykonana .pozycja-otworz > span:first-child { color: var(--zielony); font-weight: 700; }
 .pozycje-zlecenia .stan-pominieta { color: var(--tekst-slaby); }
+/* Przy odbiorze pozycja to przycisk (okno szczegółów): cel dotyku min. 44 px, wygląda jak wiersz listy, nie jak przycisk. */
+.pozycje-zlecenia .pozycja-otworz { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; padding: 4px 8px; margin: 0;
+  background: none; border: 1px solid transparent; border-radius: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pozycje-zlecenia .pozycja-otworz:hover { background: var(--tlo-neutralne); border-color: var(--ramka); }
+.pozycja-otworz .pozycja-znacznik { display: inline-flex; align-items: center; gap: 2px; color: var(--tekst-slaby); font-size: 12px; }
+.pozycja-otworz .pozycja-strzalka { margin-left: auto; font-size: 20px; color: var(--tekst-slaby); }
+/* Okno szczegółów pozycji. */
+#pozycja-zlecenia-tresc { display: grid; gap: 10px; }
+#pozycja-zlecenia-tresc p { margin: 0; }
+.pozycja-kto { font-weight: 700; }
+.pozycja-pole { display: grid; gap: 4px; }
+.pozycja-pole > b { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tekst-slaby); }
+.pozycja-pole .zdjecia { display: flex; flex-wrap: wrap; gap: 8px; }
+.pozycja-pole .zdjecia img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); display: block; }
+.pozycja-pole .zdjecia button.miniatura { padding: 0; min-height: 0; border: 0; background: none; border-radius: 8px; cursor: zoom-in; }
+.pozycja-notatka { white-space: pre-line; }
+.pozycja-uwaga { font-size: 13px; }
+#okno-pozycji-zlecenia .przyciski { flex-wrap: wrap; align-items: center; }
+#okno-pozycji-zlecenia .pozycja-akcje { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+#okno-pozycji-zlecenia .przyciski button { min-height: 44px; }
 /* D56: postęp zlecenia na żywo i próby jakościowe w Raportach. */
 .postep-zlecenia { margin-top: 4px; font-weight: 700; color: var(--niebieski); }
 .sekcja-prob { margin-top: 22px; }

@@ -749,6 +749,8 @@
       if (b.textContent !== c.napis) b.textContent = c.napis;
       b.classList.toggle('spoznione', c.alarm);
     }
+    zlecBufor = new Map(zlecenia.map(z => [z.id, z]));
+    if (okPoz.open) rysujPozycje();                      // okno pozycji odświeża się razem z listą (zlecenie odebrane → zamyka się)
     $('lista-zlecen').innerHTML = wiersze.map(w => w.html).join('')
       || `<p class="pusto">${esc(pustaListaZlecenTekst(chipy))}</p>`;
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
@@ -756,6 +758,10 @@
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
   }
 
+  // Zlecenia z ostatniego rysowania listy — okno szczegółów pozycji czyta stąd (i odświeża się razem z listą).
+  let zlecBufor = new Map();
+  const okPoz = $('okno-pozycji-zlecenia');
+  let pozOtwarta = null;
   /* Wiersz zlecenia na jednej liście (D60: znacznik rodzaju; zadanie dla kierownika — „▶ Wykonaj”). */
   const zdjeciaWiersza = (ids, etykieta, podpis) => ids.length ? `<div class="zdjecia"><span class="slaby">${esc(etykieta)}</span>${ids.map(id =>
     `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : '';
@@ -803,8 +809,10 @@
       title="Zeskanowane maszyny">▣ ${z.maszynyPostep.gotowe}/${z.maszynyPostep.wszystkie} maszyn</span>` : '';
     // D67: pozycje checklisty — kierownik widzi, co odhaczone, co pominięte (z powodem) i co zostało.
     const ZNAK = { wykonana: '✓', pominieta: '–', czeka: '○' };
+    // Do odbioru każda pozycja jest przyciskiem: okno ze szczegółami (zdjęcie, notatka, kto i kiedy) — kierownik ocenia wykonanie.
+    const klik = z.doZamkniecia;
     const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Pozycje (${z.checklista.gotowe}/${z.checklista.wszystkie})</summary>
-      <ul>${z.pozycje.map(p => `<li class="stan-${esc(p.stan)}"><span aria-hidden="true">${ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}</li>`).join('')}</ul></details>` : '';
+      <ul>${z.pozycje.map(p => `<li class="stan-${esc(p.stan)}">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}</li>`).join('')}</ul></details>` : '';
     return `
       <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-rodzaj="zlecenie" data-id="${esc(z.id)}">
         <div class="opis">
@@ -843,6 +851,54 @@
         <div class="akcje">${akcjeZlecenia(z, { zrob, kier, stale })}</div>
       </article>`;
   }
+
+  /* Okno szczegółów pozycji checklisty przy odbiorze (Zlecenia → „Do odbioru”). Pokazuje to, co dział zostawił przy tej pozycji:
+     zdjęcie (powiększa to samo okno co przy zwykłym zleceniu), notatkę, kto i kiedy ją zamknął. Odbiór i zwrot dotyczą CAŁEGO
+     zlecenia — przyciski w oknie klikają te same przyciski wiersza (jedna ścieżka: cofnięcie, pytanie o powód, uprawnienia). */
+  const ZNAK_POZ = { wykonana: '✓', pominieta: '–', czeka: '○' };
+  function rysujPozycje() {
+    const z = pozOtwarta && zlecBufor.get(pozOtwarta.zlecenie);
+    const p = z && z.pozycje.find(x => x.id === pozOtwarta.pozycja);
+    if (!z || !p || !z.doZamkniecia) { if (okPoz.open) okPoz.close(); return; }
+    const sz = p.szczegoly;
+    const dzis = sz.data === W.dataKrotka(hala.teraz());
+    const kiedy = sz.godz ? `${sz.godz}${sz.data && !dzis ? `, ${sz.data}` : ''}` : '';
+    const kto = sz.kto ? esc(sz.kto) : sz.automat ? 'automatycznie (czynność w aplikacji)' : '';
+    const ktoKiedy = p.stan === 'czeka' ? 'Dział jeszcze jej nie zamknął.'
+      : `${p.stan === 'pominieta' ? 'Pominięta' : 'Zrobiona'}${kto ? ` przez ${kto}` : ''}${kiedy ? `, ${esc(kiedy)}` : ''}${!kto && !kiedy ? ' — brak danych, kto i kiedy' : ''}`;
+    const kier = mozeWyslac('zlecenie.zamkniete') && z.moznaOdebrac;
+    $('t-okno-pozycji-zlecenia').textContent = p.nazwa || 'Pozycja';
+    $('pozycja-zlecenia-tresc').innerHTML = `
+      <p class="slaby">Zlecenie: ${esc(z.tytul)} · ${esc(z.numer)} · pozycja ${z.pozycje.indexOf(p) + 1} z ${z.pozycje.length}</p>
+      <p class="pozycja-kto"><span aria-hidden="true">${ZNAK_POZ[p.stan]}</span> ${ktoKiedy}</p>
+      ${p.opis ? `<p class="slaby opis-pozycji">${esc(p.opis)}</p>` : ''}
+      ${p.stan === 'pominieta' ? `<div class="pozycja-pole"><b>Powód pominięcia</b><p>${p.powod ? esc(p.powod) : '<span class="slaby">Bez powodu</span>'}</p></div>` : ''}
+      <div class="pozycja-pole"><b>${ik('aparat')} Zdjęcie wykonania</b>${sz.zdjecia.length
+        ? zdjeciaWiersza(sz.zdjecia, '', [p.nazwa, z.tytul, sz.kto].filter(Boolean).join(' · ')) : '<p class="slaby">Brak zdjęcia</p>'}</div>
+      <div class="pozycja-pole"><b>${ik('notatka')} Opis od wykonawcy</b>${sz.notatka ? `<p class="pozycja-notatka">${esc(sz.notatka)}</p>` : '<p class="slaby">Bez opisu</p>'}</div>
+      <p class="slaby pozycja-uwaga">Odbiór i zwrot dotyczą całego zlecenia — pozycji nie odbiera się osobno.</p>`;
+    $('pozycja-zlecenia-akcje').innerHTML = kier
+      ? `<button type="button" data-pozycja-akcja="zwroc">Zwróć zlecenie</button><button type="button" class="glowny" data-pozycja-akcja="zamknij">${z.status === 'wykonane' ? 'Odbierz zlecenie' : 'Zamknij zlecenie'}</button>` : '';
+    for (const e of $('pozycja-zlecenia-tresc').querySelectorAll('img[data-plik]'))
+      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+  }
+  Panel.pokazPozycje = (zlecenie, pozycja) => {
+    pozOtwarta = { zlecenie, pozycja };
+    rysujPozycje();
+    if (pozOtwarta && zlecBufor.get(zlecenie) && !okPoz.open) okPoz.showModal();
+  };
+  okPoz.addEventListener('click', ev => {
+    const foto = ev.target.closest('[data-zdjecie]');
+    if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
+    const b = ev.target.closest('[data-pozycja-akcja]');
+    if (!b || !pozOtwarta) return;
+    // Przycisk wiersza robi resztę (cofnięcie odbioru, pytanie o powód zwrotu, uprawnienia) — okno tylko go skraca.
+    const wiersz = [...$('lista-zlecen').querySelectorAll('[data-id]')].find(x => x.dataset.id === pozOtwarta.zlecenie);
+    const przycisk = wiersz && wiersz.querySelector(`[data-akcja="${b.dataset.pozycjaAkcja}"]`);
+    okPoz.close();
+    if (przycisk) przycisk.click(); else komunikat('Nie znaleziono zlecenia na liście — odśwież widok.', 'blad');
+  });
+  okPoz.addEventListener('close', () => { if (!okPoz.open) pozOtwarta = null; });   // close przychodzi asynchronicznie — nie kasuj, gdy okno otwarto już na nowo
 
   /* Zdjęcie od działu w dużym rozmiarze — kierownik ocenia wykonanie, a miniatura 64 px nic nie mówi. */
   Panel.pokazZdjecie = (id, podpis) => pokazZdjecie(id, podpis);
@@ -898,6 +954,7 @@
     if (!b) return;
     const wiersz = b.closest('[data-id]');
     const id = wiersz.dataset.id;
+    if (b.dataset.akcja === 'pozycja') { Panel.pokazPozycje(id, b.dataset.pozycja); return; }
     // D60: zgłoszenie, narzędzia, BHP — ta sama lista, ich przyciski obsługuje zgloszenia.js.
     if (wiersz.dataset.rodzaj && wiersz.dataset.rodzaj !== 'zlecenie') { await Panel.widoki.zgloszenia.akcja(wiersz.dataset.rodzaj, b.dataset.akcja, id, b); return; }
     try {

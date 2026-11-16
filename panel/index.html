@@ -631,6 +631,15 @@
   </form>
 </dialog>
 
+<!-- Szczegóły pozycji checklisty przy odbiorze zlecenia (Zlecenia → „Do odbioru”): zdjęcie, notatka, kto i kiedy; panel.js rysujPozycje. -->
+<dialog id="okno-pozycji-zlecenia" class="okno" aria-labelledby="t-okno-pozycji-zlecenia">
+  <form method="dialog">
+    <h2 id="t-okno-pozycji-zlecenia"></h2>
+    <div id="pozycja-zlecenia-tresc"></div>
+    <div class="przyciski"><button type="button" data-zamknij>Zamknij</button><span id="pozycja-zlecenia-akcje" class="pozycja-akcje"></span></div>
+  </form>
+</dialog>
+
 <!-- Okno dnia w kalendarzu Zleceń (kalendarz.js): zaplanowane na ten dzień ze szczegółami + zlecone tego dnia. -->
 <dialog id="okno-dnia" class="okno okno-szerokie" aria-labelledby="t-okno-dnia">
   <form method="dialog">

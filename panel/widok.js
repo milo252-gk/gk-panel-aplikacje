@@ -381,7 +381,9 @@
         pozycje: Array.isArray(d.pozycje) ? d.pozycje.map(p => ({ nazwa: p.nazwa || '', opis: p.opis || '', godz: p.termin ? godzina(p.termin) : '',
           od: p.od ? godzina(p.od) : '', maszynyPostep: maszynyPostepPozycji(d, p),
           stan: (d.wykonane || {})[p.id] ? 'wykonana' : (d.pominiete || {})[p.id] ? 'pominieta' : 'czeka',
-          powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '' })) : [],
+          powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '',
+          // Okno szczegółów pozycji przy odbiorze: wszystko, co dział zostawił przy tej pozycji (zdjęcia, notatka, kto i kiedy).
+          id: p.id, szczegoly: szczegolyPozycji(d, p, pracownicy) })) : [],
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
@@ -2677,6 +2679,22 @@
     const sk = new Set(H().skanyPozycji(d, p.id));
     return { gotowe: m.filter(x => sk.has(x)).length, wszystkie: m.length };
   }
+  /* Szczegóły jednej pozycji checklisty do okna przy odbiorze zlecenia: zdjęcia i notatki z odhaczenia oraz z kroków postępu
+     przypiętych do pozycji (pole `pozycja`), kto i kiedy ją zamknął (autor i czas zdarzenia). Same dane, które hub już trzyma —
+     nic nowego w zdarzeniach. autor spoza listy osób (hub, czynność zrobiona w aplikacji) → kto = null. Czysta funkcja. */
+  function szczegolyPozycji(d, p, pracownicy) {
+    const wpis = ((d && d.wykonane) || {})[p.id], pom = ((d && d.pominiete) || {})[p.id];
+    const kroki = [].concat((d && d.postep) || []).filter(e => e && e.pozycja === p.id);
+    const zapis = wpis || pom || null;
+    const znany = zapis && (pracownicy || []).some(x => x.id === zapis.autor) ? nazwaPracownika(pracownicy, zapis.autor) : null;
+    return {
+      zdjecia: [...new Set([].concat((wpis && wpis.zdjecia) || [], ...kroki.map(e => e.zdjecia || [])).filter(Boolean))],
+      notatka: [wpis && wpis.uwagi, ...kroki.map(e => e.uwagi)].filter(x => x && String(x).trim()).join('\n') || null,
+      powod: (pom && pom.powod) || null,
+      kto: znany, godz: zapis && zapis.czas ? godzina(zapis.czas) : null, data: zapis && zapis.czas ? dataKrotka(zapis.czas) : null,
+      automat: !!(wpis && wpis.dowod && !znany),
+    };
+  }
   function maszynyPostepZlecenia(d) {
     d = d || {};
     if (Array.isArray(d.pozycje) && d.pozycje.length) {
@@ -2706,7 +2724,7 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
