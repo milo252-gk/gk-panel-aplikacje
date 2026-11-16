@@ -1,6 +1,6 @@
 {
   "hub": "https://campus-wear-sound-button.trycloudflare.com",
-  "zmieniono": "2026-11-16T13:14:41.715Z",
+  "zmieniono": "2026-11-16T13:16:37.014Z",
   "wersje": {
     "wspolne": "wspolne-77b1ba1b3dd5",
     "panel": "panel-833c14375ca7",
@@ -9,6 +9,7 @@
     "kj": "kj-d3f261086b5d"
   },
   "programy": {
-    "szkolenia": "https://swim-ethical-municipal-footwear.trycloudflare.com"
+    "szkolenia": "https://swim-ethical-municipal-footwear.trycloudflare.com",
+    "wycena": "https://sega-operated-routing-floyd.trycloudflare.com"
   }
 }
