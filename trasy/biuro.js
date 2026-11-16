@@ -249,7 +249,7 @@ EKRANY.trasy = {
       ${trasy.length ? kartyTrasWgAuta(trasy)
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
              Na ${polskaData(data)} nie ma jeszcze trasy.
-             <div class="male" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
+             <div class="male${jestPodgladem() ? ' ukryty' : ''}" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
                Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (menu → Zapisane trasy).</div></div></div>`}`;
 
     podepnijPrzelacznikWidokuTras(pole, data);
@@ -403,7 +403,7 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
 }
 
 async function rysujDoPrzyjecia(el, poZmianie) {
-  if (!el) return;
+  if (!el || jestPodgladem()) return;      // zatwierdzanie dostaw jest tylko dla biura
   let lista = [];
   try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return; }
   if (!lista.length) { el.innerHTML = ''; return; }
@@ -577,7 +577,7 @@ EKRANY.trasa = {
     if (!id) return pokazEkran('trasy');
     trasaWEdycji = await API.get('/api/trasy/' + id);
     const t = trasaWEdycji;
-    const admin = jestBiuro();
+    const admin = kontoBiura();      // podgląd tras dostaje ten sam widok co kierowca: bez pól i przycisków zmian
     document.getElementById('tytul-ekranu').textContent =
       (t.nazwa || 'Trasa') + ' · ' + polskaData(t.data);
 
@@ -1266,7 +1266,7 @@ function panelPostepu(t, p, d) {
 function oknoSzczegolowPunktu(t, id) {
   const p = t.przystanki.find(x => x.id === id);
   if (!p) return;
-  const admin = jestBiuro();
+  const admin = kontoBiura();      // podgląd tras: tylko odczyt punktu
   const zamkniety = p.status !== 'oczekuje';
 
   okno({
@@ -1371,7 +1371,7 @@ function oknoSzczegolowPunktu(t, id) {
 
       // Doładowanie postępu. Okno MUSI otworzyć się bez tego: kierowca wchodzi
       // w nie z „Historii tras" na telefonie, często bez zasięgu.
-      if (!jestBiuro() || !navigator.onLine) return;
+      if (!kontoBiura() || !navigator.onLine) return;
       API.get('/api/przystanki/' + p.id + '/postep').then(dodatki => {
         const cel = pole.querySelector('#sp-postep');
         const os = pole.querySelector('#sp-os');
@@ -1941,7 +1941,7 @@ function godzinyMinuty(minuty) {
 
 /* ============================================================ USTAWIENIA */
 
-const OPIS_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca' };
+const OPIS_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca', podglad: 'Podgląd tras' };
 
 function kartaFirmyUst(ustawienia) {
   return `
@@ -2683,6 +2683,7 @@ function oknoKonta_admin(k) {
           <option value="kierowca" ${k.rola === 'kierowca' ? 'selected' : ''}>Kierowca — tylko swoje trasy i swój raport pracy</option>
           <option value="biuro" ${k.rola === 'biuro' ? 'selected' : ''}>Biuro — cała codzienna robota, bez Ustawień i kont</option>
           <option value="admin" ${k.rola === 'admin' ? 'selected' : ''}>Administrator — to co biuro, plus konta i Ustawienia</option>
+          <option value="podglad" ${k.rola === 'podglad' ? 'selected' : ''}>Podgląd tras — tylko ogląda plan, niczego nie zmienia</option>
         </select></label>
       <div class="male slaby" style="margin:-4px 0 10px">
         Biuro widzi trasy, klientów, dowody dostaw, ślady GPS i raporty pracy — może więc
@@ -2729,10 +2730,12 @@ function oknoKontaZespolu(k) {
   const nowe = !k;
   k = k || { imie: '', telefon: '', aktywny: 1, role_zespolu: ['trasy_kierowca'] };
   const role = (stan.ustawienia.konta_zespolu || {}).role
-    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca' }, { kod: 'trasy_biuro', nazwa: 'Biuro' }];
+    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca' }, { kod: 'trasy_biuro', nazwa: 'Biuro' },
+        { kod: 'trasy_podglad', nazwa: 'Podgląd tras' }];
   const opisRoli = {
     trasy_kierowca: 'swoje trasy i raport pracy',
     trasy_biuro: 'cała codzienna robota, bez Ustawień i kont',
+    trasy_podglad: 'tylko ogląda plan tras (Pulpit i Trasy), niczego nie zmienia',
   };
   const zaznaczone = new Set(k.role_zespolu || []);
   const imie = escHtml(k.imie || '');

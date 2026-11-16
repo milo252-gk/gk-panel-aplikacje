@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-98d8a2641ec6';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-d9ad693cca77';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -166,6 +166,16 @@ body{
   overscroll-behavior-y:none;
 }
 .ukryty{display:none !important}
+/* Rola „Podgląd tras” (2026-11-16): ogląda plan, nic nie zmienia. Serwer odmawia każdego zapisu (403) — te reguły tylko
+   chowają przyciski zmian, które ekran rysuje dla biura (Pulpit, lista tras). Widok jednej trasy i okno punktu dostają
+   wersję bez edycji już w kodzie (kontoBiura()). */
+.podglad-ukryte{display:none !important}
+body.rola-podglad #p-planuj, body.rola-podglad #p-planuj-2, body.rola-podglad #t-nowa, body.rola-podglad #t-import,
+body.rola-podglad #tr-przebieg, body.rola-podglad #sp-dowod, body.rola-podglad #sp-druk, body.rola-podglad #sp-historia,
+body.rola-podglad #p-do-zrobienia, body.rola-podglad [data-nowa-na]{display:none !important}
+body.rola-podglad .etykieta-podgladu{display:inline-block}
+.etykieta-podgladu{display:none; margin-right:8px; padding:3px 9px; border-radius:10px; font-size:12px; font-weight:700;
+  background:rgba(255,255,255,.22); color:#fff; align-self:center; white-space:nowrap}
 h1,h2,h3{margin:0 0 10px; line-height:1.25}
 h2{font-size:19px} h3{font-size:16px}
 a{color:var(--akcent)}

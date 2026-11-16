@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-98d8a2641ec6';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-d9ad693cca77';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -1203,7 +1203,7 @@ const Powiadomienia = {
      przechodzi na osobę, która się właśnie zalogowała. */
   async odnow() {
     try {
-      if (!this.wlaczoneTutaj() || !this.mozliwe() || Notification.permission !== 'granted') return;
+      if (jestPodgladem() || !this.wlaczoneTutaj() || !this.mozliwe() || Notification.permission !== 'granted') return;
       const sub = await this.subskrypcja();
       if (sub) await API.post('/api/push/zapisz', { subskrypcja: sub.toJSON() });
     } catch (e) { /* spróbujemy przy następnym logowaniu */ }
@@ -1218,6 +1218,10 @@ const Powiadomienia = {
    te same stany i słowa co w GK Flota i w Panelu (STYL-GK §3). */
 async function rysujPowiadomienia(pole) {
   if (!pole) return;
+  if (jestPodgladem()) {       // konto tylko do podglądu nie jest niczyim adresatem — serwer odrzuciłby zapis subskrypcji
+    pole.innerHTML = '<p class="konto-drobne">Konto tylko do podglądu — bez powiadomień.</p>';
+    return;
+  }
   const s = await Powiadomienia.stan();
   pole.innerHTML = s === 'wlaczone'
     ? `<p class="konto-ok">Włączone — także przy zamkniętej aplikacji.</p>
@@ -1946,12 +1950,18 @@ async function poZalogowaniuPonownie(poprzedni, ekran) {
 /* --------------------------------------------------------------- ekrany */
 
 // Z wielkiej litery, jak role w oknie konta aplikacji hali (STYL-GK §3).
-const NAZWA_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca' };
+const NAZWA_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca', podglad: 'Podgląd tras' };
 
 /* Trzy role, dwa progi. 'biuro' to wszystko, co robi sie w biurze; 'administrator'
    to dodatkowo konta i Ustawienia. Kierowca nie widzi ani jednego, ani drugiego. */
 function jestBiuro() { return stan.uz && stan.uz.rola !== 'kierowca'; }
 function jestAdministratorem() { return stan.uz && stan.uz.rola === 'admin'; }
+/* Rola „Podgląd tras” (2026-11-16): ogląda plan, niczego nie zmienia. jestBiuro() jest dla niej prawdą (te same ekrany
+   do odczytu: Pulpit, Trasy), ale przyciski zmian znikają, a serwer i tak odmawia każdego zapisu (403). Sekret tego
+   konta to zwykły PIN 4 cyfry (jak kierowca), nie hasło biura — stąd osobne kontoBiura(). */
+function jestPodgladem() { return !!stan.uz && stan.uz.rola === 'podglad'; }
+function kontoBiura() { return jestBiuro() && !jestPodgladem(); }
+const EKRANY_PODGLADU = ['pulpit', 'trasy', 'trasa'];
 
 function menuDlaRoli() {
   const biuro = jestBiuro();
@@ -1965,6 +1975,14 @@ function menuDlaRoli() {
   document.querySelectorAll('.tylko-kierowca').forEach(e => e.classList.toggle('ukryty', biuro));
   // Arkusz powieksza na telefonie male przyciski kierowcy (style.css, rola-kierowca).
   document.body.classList.toggle('rola-kierowca', !biuro);
+  // Podgląd tras: w menu tylko Pulpit i Trasy (bez Zapisanych tras, Zaległych, Klientów, Raportów, Ustawień, szukajki),
+  // a znacznik na <body> chowa przyciski zmian także tam, gdzie ekran rysuje je dla biura (style.css, rola-podglad).
+  document.body.classList.toggle('rola-podglad', jestPodgladem());
+  // Osobna klasa (nie 'ukryty'), żeby po wylogowaniu podglądu i wejściu biura nic nie zostało schowane.
+  document.querySelectorAll('.menu button[data-ekran]').forEach(b =>
+    b.classList.toggle('podglad-ukryte', jestPodgladem() && !EKRANY_PODGLADU.includes(b.dataset.ekran)));
+  const szukajka = document.getElementById('btn-szukaj');
+  if (szukajka) szukajka.classList.toggle('podglad-ukryte', jestPodgladem());
   // „Moje auto" otwiera GK Flota — ma sens tylko wtedy, gdy programy są połączone.
   const mojeAuto = !biuro && !!(stan.uz && stan.uz.flotex);
   const przyciskAuta = document.getElementById('btn-moje-auto');
@@ -1973,7 +1991,9 @@ function menuDlaRoli() {
   // D65: najwyżej cztery ekrany + „☰ Więcej” (jak w hali). Kierowca z GK Flota
   // ma „Moje auto” zamiast „Klientów” — Klienci są w menu „Więcej”.
   // Ikony liniowe GKIkony (24 px, currentColor) zamiast emoji — STYL-GK §8.
-  const dolne = biuro
+  const dolne = jestPodgladem()
+    ? [['pulpit', 'pulpit', 'Pulpit'], ['trasy', 'mapa', 'Trasy']]
+    : biuro
     ? [['pulpit', 'pulpit', 'Pulpit'], ['trasy', 'mapa', 'Trasy'],
        ['zalegle', 'zegar', 'Zaległe'], ['klienci', 'firma', 'Klienci']]
     : [['moja', 'ciezarowka', 'Moja trasa'], ['zaladunek', 'paczka', 'Załadunek'],
@@ -2000,6 +2020,7 @@ async function pokazEkran(nazwa, parametry) {
   }
   const ekran = EKRANY[nazwa];
   if (!ekran) return;
+  if (jestPodgladem() && !EKRANY_PODGLADU.includes(nazwa)) return;      // podgląd: tylko Pulpit i Trasy
   if (ekran.tylkoBiuro && !jestBiuro()) return;
   if (ekran.tylkoAdministrator && !jestAdministratorem()) return;
   if (ekran.dlaBiura && !jestBiuro()) return;     // np. Ustawienia: biuro widzi swoje sekcje
@@ -2441,7 +2462,7 @@ function odswiezPasekPolaczenia() {
    osoba i rola → Wygląd → Zmień hasło/PIN (formularz rozwija się w oknie) →
    Powiadomienia → Dane w tym urządzeniu → wersja → Zamknij + Wyloguj na dole. */
 function oknoKonta() {
-  const zmien = jestBiuro() ? 'Zmień hasło' : 'Zmień PIN';
+  const zmien = kontoBiura() ? 'Zmień hasło' : 'Zmień PIN';
   okno({
     tytul: 'Moje konto',
     konto: true,
@@ -2582,8 +2603,8 @@ function trescZmianySekretu(zmien) {
   return `<div><button type="button" id="btn-pokaz-zmiane">${zmien}</button></div>
       <fieldset id="zmiana-pinu" class="ukryty"><legend>${zmien}</legend>
         ${pinZPanelu() ? `<p class="konto-drobne">Konto z Panelu (GK Panel Kierownika) —
-          ${jestBiuro() ? 'nowe hasło działa' : 'nowy PIN działa'} we wszystkich aplikacjach GK.</p>` : ''}
-        <label>${jestBiuro() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
+          ${kontoBiura() ? 'nowe hasło działa' : 'nowy PIN działa'} we wszystkich aplikacjach GK.</p>` : ''}
+        <label>${kontoBiura() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
                inputmode="${trybKlawiaturyPinu()}" autocomplete="current-password" maxlength="128"></label>
         <label>${opisNowegoPinu()}<input id="pin-nowy" type="password"
                inputmode="${trybKlawiaturyPinu()}" autocomplete="new-password" maxlength="128"></label>
@@ -2668,7 +2689,7 @@ function podepnijZmianeSekretu(pole) {
     const stary = pole.querySelector('#pin-stary').value;
     const nowy = pole.querySelector('#pin-nowy').value;
     const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }),
-      `${jestBiuro() ? 'Hasło zmienione' : 'PIN zmieniony'} — pozostałe urządzenia zostały wylogowane`);
+      `${kontoBiura() ? 'Hasło zmienione' : 'PIN zmieniony'} — pozostałe urządzenia zostały wylogowane`);
     if (!w) return;
     // Zmiana hasła unieważnia stare sesje, więc trzeba przejąć nowy token,
     // inaczej wyrzuciłoby z aplikacji osobę, która właśnie ją zmieniła.
@@ -2957,7 +2978,7 @@ async function wejdzDoAplikacji() {
    odrzucał wszystko krótsze niż 8. Pola PIN-u są bez inputmode="numeric":
    na telefonie z klawiaturą cyfrową hasła biura nie dałoby się wpisać. */
 function opisNowegoPinu() {
-  if (jestBiuro()) return 'Nowe hasło (min. 8 znaków)';
+  if (kontoBiura()) return 'Nowe hasło (min. 8 znaków)';
   return 'Nowy PIN (4 cyfry)';
 }
 
@@ -2966,7 +2987,7 @@ function pinZPanelu() { return stan.uz.zrodlo === 'gk' && !!stan.uz.konta_z_pane
 /* Klawiatura jak w aplikacjach hali (konto.js): biuro — zwykła (hasło z liter),
    kierowca — cyfrowa: nowy PIN to dokładnie 4 cyfry (D46, 2026-10-16 także na
    kontach tutejszych, jak serwer → sprawdz_dlugosc_pinu i GK Flota). */
-function trybKlawiaturyPinu() { return !jestBiuro() ? 'numeric' : 'text'; }
+function trybKlawiaturyPinu() { return !kontoBiura() ? 'numeric' : 'text'; }
 
 /* Konto biura albo administratora z hasłem krótszym niż 8 znaków (w praktyce
    fabryczne „1234” konta admin) — serwer melduje to polem haslo_startowe.
@@ -2976,7 +2997,7 @@ function trybKlawiaturyPinu() { return !jestBiuro() ? 'numeric' : 'text'; }
    1234 czy 0000 nie dostaje żadnego ostrzeżenia. Pytamy o obecne hasło, zamiast
    wysyłać „1234” za człowieka (zły obecny sekret liczy się do blokady). */
 function oknoStartowegoHasla() {
-  if (!jestBiuro()) return;                 // kierowca: PIN dowolny, bez okna
+  if (!kontoBiura()) return;                // kierowca i podgląd: PIN dowolny, bez okna
   okno({
     tytul: 'Ustaw nowe hasło',
     tresc: `<div class="wstega uwaga">Hasło tego konta ma mniej niż 8 znaków
