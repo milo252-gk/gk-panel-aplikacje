@@ -233,8 +233,12 @@ EKRANY.trasy = {
     const kierowcy = await listaKierowcow();
     // ZAWSZE świeżo — inaczej po skasowaniu magazynu zostaje on na liście wyboru.
     await odswiezLokalizacje();
+    // Widok „Tydzień” (właściciel 2026-11-16): pn–nd pod sobą; wybór pamiętany na tym urządzeniu.
+    const widok = param.widok || (Pamiec.czytaj('widok_tras') === 'tydzien' ? 'tydzien' : 'dzien');
+    if (widok === 'tydzien') { await rysujTydzienTras(pole, data, kierowcy); return; }
     pole.innerHTML = `
       <div class="pasek-narzedzi">
+        ${przelacznikWidokuTras('dzien')}
         <label>Dzień<input type="date" id="t-data" value="${data}"></label>
         <button id="t-wczoraj">← Poprzedni</button><button id="t-jutro">Następny →</button>
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
@@ -242,12 +246,13 @@ EKRANY.trasy = {
       </div>
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
           Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Konta' : 'Ustawieniach → Konta kierowców'}.</div>`}
-      ${trasy.length ? trasy.map(t => kartaTrasy(t)).join('')
+      ${trasy.length ? kartyTrasWgAuta(trasy)
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
              Na ${polskaData(data)} nie ma jeszcze trasy.
              <div class="male" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
                Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (menu → Zapisane trasy).</div></div></div>`}`;
 
+    podepnijPrzelacznikWidokuTras(pole, data);
     pole.querySelector('#t-data').onchange = e => pokazEkran('trasy', { data: e.target.value });
     pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(data, -1) });
     pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(data, 1) });
@@ -257,6 +262,80 @@ EKRANY.trasy = {
       b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasa) }));
   },
 };
+
+/* ------------------------------------------------------------ widok tygodnia */
+
+const DNI_TYGODNIA = ['poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela'];
+
+/* Poniedziałek tygodnia, w którym leży dzień `iso` (tydzień pn–nd). getDay(): 0 = niedziela. */
+function poczatekTygodnia(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return przesunDate(iso, -((d.getDay() + 6) % 7));
+}
+
+function przelacznikWidokuTras(aktywny) {
+  return `<span class="przelacznik-widoku" role="group" aria-label="Widok tras">
+      <button type="button" id="t-widok-dzien" ${aktywny === 'dzien' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Dzień</button>
+      <button type="button" id="t-widok-tydzien" ${aktywny === 'tydzien' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Tydzień</button>
+    </span>`;
+}
+
+function podepnijPrzelacznikWidokuTras(pole, data) {
+  pole.querySelector('#t-widok-dzien').onclick = () => { Pamiec.zapisz('widok_tras', 'dzien'); pokazEkran('trasy', { data, widok: 'dzien' }); };
+  pole.querySelector('#t-widok-tydzien').onclick = () => { Pamiec.zapisz('widok_tras', 'tydzien'); pokazEkran('trasy', { data, widok: 'tydzien' }); };
+}
+
+/* Podsumowanie dnia: ile tras, ile punktów dostarczonych z wszystkich i ile czeka na zatwierdzenie. */
+function podsumowanieDnia(trasy) {
+  const czynne = trasy.filter(t => t.status !== 'odwolana');
+  if (!czynne.length) return 'brak tras';
+  const ile = czynne.reduce((s, t) => s + t.ile, 0);
+  const ok = czynne.reduce((s, t) => s + t.ile_ok, 0);
+  const doPrzyjecia = czynne.reduce((s, t) => s + (t.ile_do_przyjecia || 0), 0);
+  return `${czynne.length} ${odmiana(czynne.length, 'trasa', 'trasy', 'tras')} · ${ok} z ${ile} punktów dostarczone`
+    + (doPrzyjecia ? ` · <b style="color:var(--zolty)">⏳ ${doPrzyjecia} do zatwierdzenia</b>` : '');
+}
+
+async function rysujTydzienTras(pole, data, kierowcy) {
+  const pon = poczatekTygodnia(data);
+  const niedz = przesunDate(pon, 6);
+  // Biuro widzi też odwołane (na końcu dnia, wyszarzone) — jak w widoku dnia.
+  const trasy = await API.get(`/api/trasy?odwolane=1&od=${pon}&do=${niedz}`);
+  trasy.sort((a, b) => (a.status === 'odwolana') - (b.status === 'odwolana') || a.id - b.id);
+  const wg = {};
+  trasy.forEach(t => { (wg[t.data] = wg[t.data] || []).push(t); });
+  const dzis = dzisiaj();
+  const dni = Array.from({ length: 7 }, (_, i) => przesunDate(pon, i));
+  pole.innerHTML = `
+    <div class="pasek-narzedzi">
+      ${przelacznikWidokuTras('tydzien')}
+      <label>Dzień w tygodniu<input type="date" id="t-data" value="${data}"></label>
+      <button id="t-wczoraj">← Poprzedni tydzień</button><button id="t-jutro">Następny tydzień →</button>
+      <button id="t-ten-tydzien">Ten tydzień</button>
+      <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
+    </div>
+    <div class="male slaby" style="margin-bottom:10px">Tydzień ${polskaData(pon)} – ${polskaData(niedz)}</div>
+    ${dni.map((dz, i) => {
+      const lista = wg[dz] || [];
+      return `<section class="dzien-tygodnia${dz === dzis ? ' dzisiaj' : ''}" aria-label="${DNI_TYGODNIA[i]} ${polskaData(dz)}">
+          <div class="dzien-tygodnia-gora">
+            <span class="dzien-tygodnia-nazwa"><b>${DNI_TYGODNIA[i]}</b> ${polskaData(dz)}${dz === dzis ? ' <span class="plakietka p-w_toku">dziś</span>' : ''}</span>
+            <span class="male slaby dzien-tygodnia-podsumowanie">${podsumowanieDnia(lista)}</span>
+            <button type="button" class="maly" data-nowa-na="${dz}">+ Nowa trasa</button>
+          </div>
+          ${kartyTrasWgAuta(lista)}
+        </section>`;
+    }).join('')}`;
+  podepnijPrzelacznikWidokuTras(pole, data);
+  pole.querySelector('#t-data').onchange = e => e.target.value && pokazEkran('trasy', { data: e.target.value, widok: 'tydzien' });
+  pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, -7), widok: 'tydzien' });
+  pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, 7), widok: 'tydzien' });
+  pole.querySelector('#t-ten-tydzien').onclick = () => pokazEkran('trasy', { data: dzis, widok: 'tydzien' });
+  pole.querySelector('#t-import').onclick = () => pokazEkran('import');
+  pole.querySelectorAll('[data-nowa-na]').forEach(b => b.onclick = () => oknoNowejTrasy(b.dataset.nowaNa, kierowcy));
+  pole.querySelectorAll('[data-trasa]').forEach(b =>
+    b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasa) }));
+}
 
 /* Przyjmowanie dostaw od kierowców (właściciel 2026-11-03: „niech działa jak w Panelu kierownika”): dostawa zamknięta na
    telefonie czeka na „Zatwierdź” albo „Zwróć” (powód — kierowca poprawia i zamyka jeszcze raz). Biuro może też zamknąć
@@ -348,6 +427,35 @@ async function rysujDoPrzyjecia(el, poZmianie) {
     oknoZwrotuDostawy(x.id, x.klient_nazwa, poZmianie);
   });
   el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
+}
+
+/* Plan podzielony na auta (właściciel 2026-11-16: „zamiast samochód duży/mały nazwa auta — mały to IVECO, duży to DAF”).
+   Każde auto ma własną sekcję z nazwą auta; kolejność = DAF, IVECO, potem reszta alfabetycznie, na końcu trasy bez auta.
+   Gdy żadna trasa nie ma auta — zwykła lista jak dotąd, bez nagłówków. */
+const KOLEJNOSC_AUT = ['daf', 'iveco'];
+
+function grupyTrasWgAuta(trasy) {
+  const wg = new Map();
+  trasy.forEach(t => {
+    const klucz = t.pojazd ? String(t.pojazd) : '';
+    if (!wg.has(klucz)) wg.set(klucz, { nazwa: t.pojazd_nazwa || '', trasy: [] });
+    wg.get(klucz).trasy.push(t);
+  });
+  const miejsce = g => {
+    if (!g.nazwa) return 1000;
+    const i = KOLEJNOSC_AUT.indexOf(g.nazwa.trim().toLowerCase());
+    return i < 0 ? 100 : i;
+  };
+  return [...wg.values()].sort((a, b) => miejsce(a) - miejsce(b) || a.nazwa.localeCompare(b.nazwa, 'pl'));
+}
+
+function kartyTrasWgAuta(trasy) {
+  const grupy = grupyTrasWgAuta(trasy);
+  // Bez nagłówków tylko gdy żadna trasa nie ma auta; jedno auto też dostaje nagłówek z nazwą.
+  if (!grupy.length || (grupy.length === 1 && !grupy[0].nazwa)) return trasy.map(t => kartaTrasy(t)).join('');
+  return grupy.map(g => `<div class="grupa-rozmiaru">
+      <div class="grupa-rozmiaru-tytul">${escHtml(g.nazwa || 'Bez auta')} <span class="slaby">(${g.trasy.length})</span></div>
+      ${g.trasy.map(t => kartaTrasy(t)).join('')}</div>`).join('');
 }
 
 function kartaTrasy(t) {

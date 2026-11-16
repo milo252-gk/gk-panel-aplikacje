@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-0bf67b96a603';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-98d8a2641ec6';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -840,3 +840,16 @@ body.okno-otwarte .mapa{visibility:hidden}
 .ik{display:inline-flex; vertical-align:-3px; margin-right:6px}
 .ik svg{display:block; width:16px; height:16px}
 .pusto .duza-ikona svg{display:inline-block}
+
+/* Widok tygodnia na ekranie Trasy (pn–nd pod sobą). */
+.przelacznik-widoku{display:inline-flex; gap:0}
+.przelacznik-widoku button{border-radius:0}
+.przelacznik-widoku button:first-child{border-radius:10px 0 0 10px}
+.przelacznik-widoku button:last-child{border-radius:0 10px 10px 0; margin-left:-1px}
+.dzien-tygodnia{margin-bottom:14px}
+.dzien-tygodnia-gora{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:6px 0 8px; padding-bottom:4px; border-bottom:1px solid var(--ramka)}
+.dzien-tygodnia-nazwa{flex:none}
+.dzien-tygodnia-podsumowanie{flex:1 1 200px; min-width:0}
+.dzien-tygodnia.dzisiaj .dzien-tygodnia-gora{border-bottom-color:var(--akcent)}
+.grupa-rozmiaru{margin-bottom:10px}
+.grupa-rozmiaru-tytul{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--slaby,#777); margin:8px 0 6px}
