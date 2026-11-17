@@ -268,12 +268,42 @@ EKRANY.odrzucone = {
           <div class="male slaby">${o.podpis ? 'podpis' : 'bez podpisu'}${o.zdjec
             ? ' · ' + o.zdjec + ' ' + odmiana(o.zdjec, 'zdjęcie', 'zdjęcia', 'zdjęć') : ''}${
             o.odebral ? ' · odebrał: ' + escHtml(o.odebral) : ''}</div>
+          ${o.notatka ? `<div class="male"><span class="slaby">Notatka:</span> ${escHtml(o.notatka)}</div>` : ''}
+          ${o.podpis || o.zdjec ? `<div class="dp-media" data-podglad="${escHtml(o.nazwa)}">
+            <button class="maly" data-pokaz-podglad="${escHtml(o.nazwa)}">Pokaż podpis i zdjęcia</button></div>` : ''}
           <div class="przyciski" style="margin-top:8px">
             <button class="maly" data-pobierz="${escHtml(o.nazwa)}">Pobierz</button>
             ${o.mozna_przyjac ? `<button class="maly glowny" data-przyjmij="${escHtml(o.nazwa)}">
               Przyjmij</button>` : ''}
           </div>
         </div>`).join('')}`;
+
+    /* Podgląd tego, co kierowca zebrał, żeby „Przyjmij” nie było decyzją w ciemno. Zapis z podpisem i zdjęciami
+       jest ciężki, więc pierwsze 6 wczytujemy od razu (po jednym), a reszta na przycisk. */
+    const wczytajPodglad = async (nazwa) => {
+      const cel = pole.querySelector(`[data-podglad="${CSS.escape(nazwa)}"]`);
+      if (!cel) return;
+      const zapis = await API.get('/api/odrzucone/' + encodeURIComponent(nazwa)).catch(() => null);
+      const op = (zapis && zapis.operacja) || {};
+      const miniatura = (adres, opis, klasa) => `<button type="button" class="dp-miniatura${klasa || ''}"
+        data-powieksz="${escHtml(adres)}" data-podpis="${escHtml(opis)}" aria-label="Powiększ: ${escHtml(opis)}">
+        <img src="${escHtml(adres)}" alt="" loading="lazy"></button>`;
+      const zdjecia = Array.isArray(op.zdjecia) ? op.zdjecia.filter(x => typeof x === 'string' && x.startsWith('data:image/')) : [];
+      const podpis = typeof op.podpis === 'string' && op.podpis.startsWith('data:image/') ? op.podpis : '';
+      cel.innerHTML = (podpis ? `<div class="dp-zal"><span class="slaby">Podpis odbierającego</span>
+          <div class="dp-rzad">${miniatura(podpis, 'Podpis odbierającego', ' dp-podpis')}</div></div>` : '')
+        + (zdjecia.length ? `<div class="dp-zal"><span class="slaby">Zdjęcia (${zdjecia.length})</span>
+          <div class="dp-rzad">${zdjecia.map(x => miniatura(x, 'Zdjęcie z zapisu')).join('')}</div></div>` : '')
+        || '<span class="male slaby">Nie udało się wczytać podglądu — użyj „Pobierz”.</span>';
+      cel.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
+    };
+    pole.querySelectorAll('[data-pokaz-podglad]').forEach(b => b.onclick = () => wczytajPodglad(b.dataset.pokazPodglad));
+    (async () => {
+      for (const b of [...pole.querySelectorAll('[data-pokaz-podglad]')].slice(0, 6)) {
+        if (!pole.isConnected) return;
+        await wczytajPodglad(b.dataset.pokazPodglad);
+      }
+    })();
 
     pole.querySelectorAll('[data-pobierz]').forEach(b => b.onclick = async () => {
       const zapis = await sprobuj(() => API.get('/api/odrzucone/' + encodeURIComponent(b.dataset.pobierz)));

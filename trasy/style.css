@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-f44864b18b67';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-90f4ee37411f';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -864,3 +864,25 @@ body.okno-otwarte .mapa{visibility:hidden}
 .dzien-tygodnia.dzisiaj .dzien-tygodnia-gora{border-bottom-color:var(--akcent)}
 .grupa-rozmiaru{margin-bottom:10px}
 .grupa-rozmiaru-tytul{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--slaby,#777); margin:8px 0 6px}
+
+/* ------------------------------------------- „Do zatwierdzenia”: dowody od kierowcy (jak w Panelu) */
+.dp-pole{font-size:14px; margin-top:3px}
+.dp-brak{color:var(--czerwony); font-weight:600}
+.dp-media{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px}
+.dp-zal{display:flex; flex-direction:column; gap:4px}
+.dp-zal>.slaby{font-size:13px}
+.dp-rzad{display:flex; flex-wrap:wrap; gap:6px}
+.dp-miniatura{padding:0; min-height:0; border:1px solid var(--ramka); background:var(--mata-zdjecia);
+              border-radius:8px; overflow:hidden; cursor:zoom-in; line-height:0}
+.dp-miniatura img{width:72px; height:72px; object-fit:cover; display:block}
+.dp-miniatura.dp-podpis img{width:120px; object-fit:contain}
+.dp-miniatura:hover{border-color:var(--akcent)}
+.dp-duze{text-align:center; background:var(--mata-zdjecia); border-radius:10px}
+.dp-duze img{max-width:100%; max-height:70vh; object-fit:contain}
+
+/* Powiększenie zdjęcia z „Do zatwierdzenia” / karty punktu: nakładka ponad oknem, nie zamyka karty pod spodem. */
+.dp-lightbox{position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.82); display:flex; flex-direction:column}
+.dp-lightbox-pasek{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; color:#fff;
+                   padding-top:calc(10px + env(safe-area-inset-top))}
+.dp-lightbox-ramka{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px 12px calc(12px + env(safe-area-inset-bottom)); cursor:zoom-out}
+.dp-lightbox-ramka img{max-width:100%; max-height:100%; object-fit:contain; background:var(--mata-zdjecia); border-radius:8px}

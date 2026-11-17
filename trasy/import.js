@@ -8,6 +8,7 @@
 const stanImportu = {
   token: '', arkusz: '', arkusze: [], podglad: null,
   wierszNaglowka: 0, mapowanie: {}, plan: null, skadMapowanie: '',
+  przesuniecia: {}, sugestie: null,      // zaakceptowane nowe daty: { numer wiersza: 'YYYY-MM-DD' }
 };
 
 const OPISY_POL = {
@@ -17,6 +18,10 @@ const OPISY_POL = {
   dokument: ['Numer dokumentu', 'WZ, zamówienie; może być w tej samej kolumnie co godzina'],
   godzina:  ['Godzina', 'rozumie 8;00 · 9:30 · 10.00, także razem z numerem'],
   kierowca: ['Kierowca / przewoźnik', 'wiersze z tego samego dnia i kierowcy trafią na jedną trasę'],
+  adres:    ['Adres dostawy', 'miejscowość i ulica — po niej program grupuje zamówienia z jednej okolicy'],
+  auto:     ['Samochód', 'nazwa albo rejestracja auta z programu — trasa dostanie to auto'],
+  status:   ['Status zamówienia', 'zakończone i wstrzymane program pomija'],
+  odbiera:  ['Kto odbiera', 'gdy odbiera klient, zamówienia nie bierzemy do trasy'],
 };
 
 /* ------------------------------------------- pamięć ostatniego mapowania
@@ -62,12 +67,16 @@ function mapowanieZPamieci(zapis, kolumn) {
    (?![a-z]) zamiast \b: w JavaScripcie „ń” nie jest literą dla \b, więc
    „Dzień” na końcu komórki nie dawał granicy słowa. */
 const NAZWY_KOLUMN = {
-  data:     [/^(dzie[nń]|data)(?![a-z])/],
+  data:     [/^potwierdzona data/, /^(dzie[nń]|data)(?![a-z])/],
   miejsce:  [/^(klient|odbiorca|miejsce)/, /^adres/],
   towar:    [/^towar/],
   dokument: [/^(dokument|nr(?![a-z])|numer|wz(?![a-z])|zam[oó]wienie)/],
   godzina:  [/^godz/],
   kierowca: [/^(kierowca|przewo[zź]nik)/],
+  adres:    [/^adres/],
+  auto:     [/^(samoch|auto(?![a-z])|pojazd)/],
+  status:   [/^status$/],
+  odbiera:  [/^kto odbiera/],
 };
 
 /* Wiersz nagłówka w pierwszych 10 wierszach → { mapowanie, wierszNaglowka }
@@ -128,7 +137,10 @@ EKRANY.import = {
 
 async function wgrajArkusz(plik) {
   await listaKierowcow();      // zeby krok mapowania mial kogo zaproponowac
+  await odswiezLokalizacje();  // i skad odbieramy towar (np. GK Rostarzewo)
   if (!plik) return;
+  stanImportu.przesuniecia = {};
+  stanImportu.sugestie = null;
   if (plik.size > 12 * 1024 * 1024) {
     komunikat('Plik jest większy niż 12 MB — to raczej nie jest plan dostaw', 'blad');
     return;
@@ -180,6 +192,15 @@ function rysujKrokMapowania() {
 
   const kierowcy = stan.kierowcy || [];
   const busy = stan.pojazdy.filter(b => b.aktywny);
+  const miejscaOdbioru = (stan.lokalizacje || []).filter(l => l.aktywna !== 0);
+  // Plik nie mówi, skąd odbieramy towar, więc o to pytamy — bez podstawiania
+  // „domyślnej” lokalizacji firmy (to nie musi być miejsce odbioru). Ostatni
+  // wybór tej osoby zostaje na następny raz.
+  if (stanImportu.baza == null) {
+    const zapamietane = Number(Pamiec.czytaj('import-baza-' + (stan.uz ? stan.uz.id : 0)));
+    if (miejscaOdbioru.some(l => l.id === zapamietane)) stanImportu.baza = zapamietane;
+  }
+  const domyslneMiejsce = stanImportu.baza;
 
   document.getElementById('im-reszta').innerHTML = `
     <div class="karta">
@@ -246,6 +267,14 @@ function rysujKrokMapowania() {
             <option value="">— nie wybieram —</option>
             ${busy.map(b => `<option value="${b.id}">${escHtml(b.nazwa)}</option>`).join('')}
           </select>
+          <span class="male slaby">gdy plik ma kolumnę z autem, ważniejsze jest auto z pliku</span>
+        </label>
+        <label>Skąd odbieramy towar
+          <select id="im-baza">
+            <option value="">${miejscaOdbioru.length ? '— wybierz, skąd odbieramy —' : '— brak miejsc w Ustawieniach —'}</option>
+            ${miejscaOdbioru.map(l => `<option value="${l.id}" ${l.id === domyslneMiejsce ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
+          </select>
+          <span class="male slaby">plik tego nie mówi — potwierdź miejsce; stąd wyjeżdżają wszystkie trasy z pliku</span>
         </label>
       </div>
       <button class="glowny duzy" id="im-podglad">Pokaż, co z tego powstanie</button>
@@ -264,7 +293,11 @@ function rysujKrokMapowania() {
     stanImportu.wierszNaglowka = Math.max(0, Number(e.target.value) || 0);
     rysujKrokMapowania();
   };
-  pojemnik.querySelector('#im-podglad').onclick = pokazPodgladImportu;
+  pojemnik.querySelector('#im-baza').onchange = e => {
+    stanImportu.baza = Number(e.target.value) || null;
+    if (stanImportu.baza) Pamiec.zapisz('import-baza-' + (stan.uz ? stan.uz.id : 0), String(stanImportu.baza));
+  };
+  pojemnik.querySelector('#im-podglad').onclick = () => pokazPodgladImportu();
 }
 
 function parametryImportu() {
@@ -276,11 +309,67 @@ function parametryImportu() {
     mapowanie: stanImportu.mapowanie,
     kierowca: document.getElementById('im-kierowca').value || null,
     pojazd: document.getElementById('im-pojazd').value || null,
+    baza: document.getElementById('im-baza').value || null,
+    przesuniecia: stanImportu.przesuniecia,
     wczytaj_duplikaty: !!(document.getElementById('im-duplikaty') || {}).checked,
   };
 }
 
-async function pokazPodgladImportu() {
+/* Propozycje wspólnych dni dla zamówień z jednej okolicy. Nic nie zmienia się
+   samo: biuro odznacza to, z czym się nie zgadza, i dopiero „Zastosuj”
+   wstawia nowe daty do podglądu. */
+async function pokazSugestie() {
+  const pole = document.getElementById('im-sugestie');
+  const cofnij = Math.max(0, Number((document.getElementById('im-cofnij') || {}).value) || 0);
+  const naprzod = Math.max(0, Number((document.getElementById('im-naprzod') || {}).value) || 0);
+  const dane = Object.assign(parametryImportu(), { przesuniecia: {}, cofnij_dni: cofnij, naprzod_dni: naprzod });
+  const w = await sprobuj(() => API.post('/api/import/sugestie', dane));
+  if (!w) return;
+  stanImportu.sugestie = w;
+  const dzien = iso => {
+    const d = new Date(iso + 'T12:00:00');
+    return polskaData(iso) + ' (' + ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'][d.getDay()] + ')';
+  };
+  const znak = n => (n > 0 ? '+' : '') + n;
+  pole.innerHTML = w.propozycje.length || w.bez_decyzji.length ? `
+    ${w.propozycje.map((p, i) => `
+      <div class="karta" style="margin:10px 0;background:var(--tlo-2,transparent)">
+        <label class="plaska">
+          <input type="checkbox" data-propozycja="${i}" checked>
+          <span><b>${escHtml(p.nazwa)} — ${dzien(p.data)}</b>
+            <span class="slaby">· ${p.zmian} ${odmiana(p.zmian, 'zamówienie przesunięte', 'zamówienia przesunięte', 'zamówień przesuniętych')}</span></span>
+        </label>
+        <p class="male slaby" style="margin:4px 0 6px">${escHtml(p.powod)}</p>
+        <div class="tabela-przewijana"><table><tbody>
+          ${p.zmiany.map(z => `<tr><td>${escHtml(z.dokument || '')}</td><td>${escHtml(z.klient)}</td>
+            <td class="male">${polskaData(z.od)} → <b>${polskaData(z.do)}</b></td>
+            <td class="male slaby">${z.dni ? znak(z.dni) + ' ' + odmiana(Math.abs(z.dni), 'dzień', 'dni', 'dni') : 'bez zmiany'}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>`).join('')}
+    ${w.bez_decyzji.map(b => `<div class="wstega uwaga">${escHtml(b.nazwa)} (${b.ile}): ${escHtml(b.powod)}.
+      Zamówienia zostają w swoich dniach.</div>`).join('')}
+    ${w.propozycje.length ? `<button class="glowny" id="im-zastosuj">Zastosuj zaznaczone i pokaż podgląd</button>` : ''}`
+  : `<div class="wstega info">Nic do łączenia: zamówienia z jednej okolicy jadą już tego samego dnia
+      (sprawdziłem ${w.grup} ${odmiana(w.grup, 'grupę', 'grupy', 'grup')}).</div>`;
+  const zastosuj = document.getElementById('im-zastosuj');
+  if (zastosuj) zastosuj.onclick = () => {
+    stanImportu.przesuniecia = {};
+    pole.querySelectorAll('[data-propozycja]:checked').forEach(c => {
+      const p = w.propozycje[Number(c.dataset.propozycja)];
+      p.zmiany.forEach(z => { if (z.dni) stanImportu.przesuniecia[z.wiersz] = z.do; });
+    });
+    pokazPodgladImportu(true);
+  };
+}
+
+async function pokazPodgladImportu(zachowajPrzesuniecia) {
+  const selektorBazy = document.getElementById('im-baza');
+  if (selektorBazy && selektorBazy.options.length > 1 && !selektorBazy.value) {
+    komunikat('Wskaż, skąd odbieramy towar — stąd wyjeżdżają trasy z pliku', 'blad');
+    selektorBazy.focus();
+    return;
+  }
+  if (zachowajPrzesuniecia !== true) { stanImportu.przesuniecia = {}; stanImportu.sugestie = null; }
   const plan = await sprobuj(() => API.post('/api/import/podglad', parametryImportu()));
   if (!plan) return;
   stanImportu.plan = plan;
@@ -296,6 +385,29 @@ async function pokazPodgladImportu() {
         ${kafelek('Punkty do wczytania', plan.razem_przystankow, '')}
         ${kafelek('Nowi klienci', nowi, nowi ? 'var(--zolty)' : '')}
       </div>
+
+      ${Object.keys(stanImportu.przesuniecia).length ? `<div class="wstega info" style="margin-top:14px">
+        Zastosowane nowe daty: <b>${Object.keys(stanImportu.przesuniecia).length}</b>
+        ${odmiana(Object.keys(stanImportu.przesuniecia).length, 'zamówienie', 'zamówienia', 'zamówień')}
+        (w tabeli niżej jest „było …”). Plik Excela się nie zmienia.</div>` : ''}
+
+      ${plan.nierozpoznane_auta && plan.nierozpoznane_auta.length ? `<div class="wstega uwaga" style="margin-top:14px">
+        Auta z pliku, których nie ma w programie: <b>${plan.nierozpoznane_auta.map(escHtml).join(', ')}</b>.
+        Te trasy dostaną auto wybrane wyżej (albo żadne) — dopisz auto w Ustawieniach, jeśli ma być rozpoznawane.</div>` : ''}
+
+      ${plan.trasy.length ? `<div class="karta" style="margin-top:14px">
+        <div class="karta-gora"><h3>Wspólne dni dla zamówień z jednej okolicy</h3></div>
+        <p class="male slaby">Program sprawdzi, które zamówienia jadą w tę samą okolicę (np. Leszno) w różne dni,
+          i zaproponuje jeden dzień dla wszystkich. Nic nie zmieni bez Twojej zgody.</p>
+        <div class="dwie">
+          <label>O ile dni wcześniej wolno
+            <input type="number" id="im-cofnij" min="0" max="30" value="3"></label>
+          <label>O ile dni później wolno
+            <input type="number" id="im-naprzod" min="0" max="60" value="14"></label>
+        </div>
+        <button id="im-sugeruj">Zaproponuj dni wg lokalizacji</button>
+        <div id="im-sugestie" style="margin-top:10px"></div>
+      </div>` : ''}
 
       ${plan.duplikatow ? `<div class="wstega uwaga" style="margin-top:14px">
         <b>Pomijam ${plan.duplikatow} ${odmiana(plan.duplikatow, 'powtórkę', 'powtórki', 'powtórek')}.</b>
@@ -319,7 +431,9 @@ async function pokazPodgladImportu() {
             <td class="male">${t.przystanki.map(x => x.duplikat
               ? `<span class="slaby" style="text-decoration:line-through">${escHtml(x.klient.nazwa)}</span>
                  <span class="slaby">— ${escHtml(x.duplikat)}</span>`
-              : `${escHtml(x.klient.nazwa)}${x.godzina ? ' <span class="slaby">' + x.godzina + '</span>' : ''}`
+              : `${escHtml(x.klient.nazwa)}${x.godzina ? ' <span class="slaby">' + x.godzina + '</span>' : ''}${
+                  x.data_pierwotna && x.data_pierwotna !== t.data
+                    ? ' <span class="slaby">(było ' + polskaData(x.data_pierwotna) + ')</span>' : ''}`
             ).join('<br>')}</td>
           </tr>`).join('')}</tbody></table>
         </div>
@@ -355,6 +469,8 @@ async function pokazPodgladImportu() {
         do programu</button>` : ''}
     </div>`;
 
+  const sugeruj = document.getElementById('im-sugeruj');
+  if (sugeruj) sugeruj.onclick = pokazSugestie;
   const wykonaj = document.getElementById('im-wykonaj');
   if (wykonaj) wykonaj.onclick = async () => {
     const zPowtorkami = !!(document.getElementById('im-duplikaty') || {}).checked;

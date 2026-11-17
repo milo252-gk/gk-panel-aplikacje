@@ -129,6 +129,11 @@ function rysujDoZrobienia() {
   if (!el) return;
   const s = pulpitSprawy;
   const poz = [];
+  // Raport pracy tworzy się sam z tras — brak ręcznego raportu kierowcy nie jest już sprawą do sprawdzenia.
+  if (s.braki && Array.isArray(s.braki.braki)) {
+    s.braki = { ...s.braki, braki: s.braki.braki.filter(b => b.rodzaj !== 'brak_raportu') };
+    if (!s.braki.braki.length && !(s.braki.spalanie || []).length) s.braki = null;
+  }
   (s.alarmy || []).forEach(a => poz.push({
     ton: a.poziom === 'blad' ? 'blad' : 'uwaga', ikona: '⚠',
     tytul: a.tytul, opis: a.tresc, doUstawien: a.kod || '',
@@ -392,6 +397,39 @@ async function przyjmijDostawe(id, poZmianie) {
   if (w && poZmianie) poZmianie();
 }
 
+/* „Do zatwierdzenia” pogrupowane po trasach (kolejność listy z serwera zostaje): biuro, które sprawdziło całą
+   oddaną trasę, zatwierdza jej dostarczone punkty jednym ruchem. Nieudane (z powodem) i zwroty zostają do
+   decyzji punkt po punkcie — to nie jest „zatwierdź wszystko”. */
+function grupyDoPrzyjecia(lista) {
+  const wg = new Map();
+  lista.forEach(x => {
+    if (!wg.has(x.trasa)) wg.set(x.trasa, {
+      trasa: x.trasa, pozycje: [], dostarczone: [],
+      nazwa: [x.trasa_nazwa || 'Trasa ' + polskaData(x.data), x.kierowca_imie, polskaData(x.data)].filter(Boolean).join(' · '),
+    });
+    const g = wg.get(x.trasa);
+    g.pozycje.push(x);
+    if (x.status === 'dostarczone') g.dostarczone.push(x);
+  });
+  return [...wg.values()];
+}
+
+async function przyjmijDostawyTrasy(g, poZmianie) {
+  const ile = g.dostarczone.length;
+  if (!await potwierdz('Zatwierdzić dostarczone punkty?',
+    `Zatwierdzisz ${ile} ${odmiana(ile, 'dostarczony punkt', 'dostarczone punkty', 'dostarczonych punktów')} z trasy „${g.nazwa}”. ` +
+    (g.pozycje.length > ile ? `Pozostałe ${g.pozycje.length - ile} (nieudane) zostają do Twojej decyzji. ` : '') +
+    'Sprawdziłeś zdjęcia i podpisy?')) return;
+  let zrobione = 0;
+  for (const x of g.dostarczone) {
+    const w = await sprobuj(() => API.post(`/api/przystanki/${x.id}/przyjmij-dostawe`));
+    if (!w) break;                       // błąd pokazał już komunikat — reszta zostaje do zatwierdzenia
+    zrobione++;
+  }
+  if (zrobione) komunikat(`Zatwierdzono ${zrobione} z ${ile}`, zrobione === ile ? 'ok' : 'blad');
+  if (poZmianie) poZmianie();
+}
+
 function oknoZwrotuDostawy(id, nazwa, poZmianie) {
   okno({
     tytul: 'Zwróć kierowcy: ' + nazwa,
@@ -401,7 +439,7 @@ function oknoZwrotuDostawy(id, nazwa, poZmianie) {
         Podpisy i zdjęcia, które już zrobił, zostają.</p>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: 'Zwróć', klasa: 'czerwony', klik: async z => {
+      { napis: 'Zwróć', klasa: 'glowny', klik: async z => {
         const powod = val('zw-powod').trim();
         if (!powod) { komunikat('Napisz, co kierowca ma poprawić', 'blad'); return; }
         const w = await sprobuj(() => API.post(`/api/przystanki/${id}/zwroc-dostawe`, { powod }), 'Zwrócono kierowcy');
@@ -449,31 +487,109 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
   });
 }
 
+/* „Do zatwierdzenia”: biuro ma ocenić dostawę bez otwierania punktu, więc przy każdej widzi to, co kierowca
+   zebrał — kto odebrał, numer dokumentu, notatkę, podpis i zdjęcia (miniatury jak w Panelu Kierownika,
+   dotknięcie powiększa). Czego punkt wymaga, a kierowca nie dał, jest podpisane na czerwono. */
+const WYMOGI_ETYKIETY = { odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', dokument: 'numer dokumentu' };
+
+function brakiDowodow(x) {
+  if (x.status !== 'dostarczone') return [];
+  const wymogi = String(x.wymogi || '').split(',').filter(Boolean);
+  const zal = x.zalaczniki || [];
+  const ma = {
+    odebral: !!(x.odebral || '').trim(),
+    podpis: zal.some(z => z.typ === 'podpis'),
+    zdjecie: zal.some(z => z.typ === 'zdjecie'),
+    dokument: !!(x.dokument || '').trim(),
+  };
+  return wymogi.filter(w => w in ma && !ma[w]).map(w => WYMOGI_ETYKIETY[w]);
+}
+
+function miniaturyDowodow(zal, typ, etykieta, token, podpis) {
+  const lista = zal.filter(z => z.typ === typ);
+  if (!lista.length || !token) return '';
+  return `<div class="dp-zal"><span class="slaby">${etykieta}${lista.length > 1 ? ' (' + lista.length + ')' : ''}</span><div class="dp-rzad">${
+    lista.map(z => `<button type="button" class="dp-miniatura${typ === 'podpis' ? ' dp-podpis' : ''}" data-powieksz="${
+      escHtml(adresPliku(z.plik, token))}" data-podpis="${escHtml(podpis)}" aria-label="Powiększ: ${escHtml(etykieta)}">
+      <img src="${escHtml(adresPliku(z.plik, token))}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>`;
+}
+
+/* Powiększenie zdjęcia to osobna nakładka, a nie okno(): okno() jest jedno i nadpisałoby otwartą kartę punktu
+   (biuro straciłoby wpisaną notatkę). Zamyka się kliknięciem, Esc albo przyciskiem. */
+function oknoPowiekszenia(adres, podpis) {
+  const stare = document.getElementById('dp-lightbox');
+  if (stare) stare.remove();
+  const tlo = document.createElement('div');
+  tlo.id = 'dp-lightbox';
+  tlo.className = 'dp-lightbox';
+  tlo.setAttribute('role', 'dialog');
+  tlo.setAttribute('aria-label', podpis || 'Podgląd zdjęcia');
+  tlo.innerHTML = `<div class="dp-lightbox-pasek"><span>${escHtml(podpis || '')}</span>
+      <button type="button" class="maly" id="dp-lightbox-zamknij">Zamknij</button></div>
+    <div class="dp-lightbox-ramka"><img src="${escHtml(adres)}" alt="${escHtml(podpis || '')}"></div>`;
+  const zamknij = () => { tlo.remove(); document.removeEventListener('keydown', naKlawisz, true); };
+  const naKlawisz = e => { if (e.key === 'Escape') { e.stopPropagation(); zamknij(); } };
+  tlo.addEventListener('click', e => { if (e.target === tlo || e.target.closest('#dp-lightbox-zamknij') || e.target.closest('.dp-lightbox-ramka')) zamknij(); });
+  document.addEventListener('keydown', naKlawisz, true);
+  document.body.appendChild(tlo);
+  const przycisk = tlo.querySelector('#dp-lightbox-zamknij');
+  if (przycisk) przycisk.focus();
+}
+
+/* Wspólny blok „co kierowca zebrał”: pola, braki i miniatury. Ten sam na pulpicie („Do zatwierdzenia”)
+   i na karcie punktu — dane na wierzchu, bez klikania w 📎. */
+function htmlDowodow(x, token, bezOdebralNotatki) {
+  const zal = x.zalaczniki || [];
+  const pole = (nazwa, wartosc) => wartosc ? `<div class="dp-pole"><span class="slaby">${nazwa}</span> ${escHtml(wartosc)}</div>` : '';
+  const braki = brakiDowodow(x);
+  const podpis = [x.klient_nazwa, x.odebral].filter(Boolean).join(' · ');
+  const miniatury = miniaturyDowodow(zal, 'podpis', 'Podpis odbierającego', token, podpis)
+    + miniaturyDowodow(zal, 'zdjecie', 'Zdjęcia', token, x.klient_nazwa)
+    + miniaturyDowodow(zal, 'zaladunek', 'Załadunek', token, x.klient_nazwa + ' · załadunek');
+  // Karta punktu ma już „Odebrał” i notatkę w pasku statusu — tam nie powtarzamy.
+  return `${bezOdebralNotatki ? '' : pole('Odebrał:', x.odebral)}${pole('Dokument:', x.dokument)}${pole('Towar:', x.towar)}${bezOdebralNotatki ? '' : pole('Notatka:', x.notatka)}
+    ${braki.length ? `<div class="dp-pole dp-brak">Brakuje: ${escHtml(braki.join(', '))}</div>` : ''}
+    ${miniatury ? `<div class="dp-media">${miniatury}</div>` : ''}`;
+}
+
 async function rysujDoPrzyjecia(el, poZmianie) {
   if (!el || jestPodgladem()) return;      // zatwierdzanie dostaw jest tylko dla biura
   let lista = [];
   try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return; }
   if (!lista.length) { el.innerHTML = ''; return; }
+  // Bez tokenu (np. serwer nie odpowiada na plikach) lista działa jak dotąd: liczba załączników zamiast miniatur.
+  let token = '';
+  try { token = await tokenDoPlikow(); } catch (e) { token = ''; }
   el.innerHTML = `<h2 style="margin-top:20px">Do zatwierdzenia
       <span class="plakietka p-oczekuje" style="margin-left:6px">${lista.length}</span></h2>
-    <div class="karta">${lista.map(x => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
+    <div class="karta">${grupyDoPrzyjecia(lista).map(g => `${g.pozycje.length > 1 ? `
+      <div class="przyciski" style="justify-content:space-between;align-items:center;padding:8px 0 2px;border-bottom:2px solid var(--ramka)">
+        <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa', 'dostawy', 'dostaw')} czeka</span></b>
+        ${g.dostarczone.length > 1 ? `<button class="maly glowny" data-przyjmij-trase="${g.trasa}">✓ Zatwierdź dostarczone (${g.dostarczone.length})</button>` : ''}
+      </div>` : ''}${g.pozycje.map(x => {
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
         <b>${escHtml(x.klient_nazwa)}</b>
         ${x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone" style="margin-left:6px">✓ dostarczone</span>'
           : `<span class="plakietka p-nieudane" style="margin-left:6px">✕ ${escHtml(x.powod)}</span>`}
-        <div class="male slaby">${escHtml(x.kierowca_imie || '')} · ${polskaData(x.data)} ${samaGodzina(x.zamkniete_o)}${
-          x.odebral ? ' · odebrał: ' + escHtml(x.odebral) : ''}${x.notatka ? ' · ' + escHtml(x.notatka) : ''}${
-          x.ile_zalacznikow ? ' · 📎 ' + x.ile_zalacznikow : ''}</div>
+        <div class="male slaby">${escHtml(x.kierowca_imie || '')}${x.pojazd_nazwa ? ' · ' + escHtml(x.pojazd_nazwa) + (x.rejestracja ? ' (' + escHtml(x.rejestracja) + ')' : '') : ''} · ${polskaData(x.data)} ${samaGodzina(x.zamkniete_o)}${
+          !token && x.ile_zalacznikow ? ' · 📎 ' + x.ile_zalacznikow : ''}</div>
+        ${htmlDowodow(x, token)}
         <div class="przyciski" style="margin-top:6px">
           <button class="maly glowny" data-przyjmij="${x.id}">✓ Zatwierdź</button>
           <button class="maly" data-zwroc="${x.id}">↩ Zwróć kierowcy</button>
           <button class="maly" data-do-trasy="${x.trasa}">Trasa</button></div>
-      </div>`).join('')}</div>`;
+      </div>`; }).join('')}`).join('')}</div>`;
   el.querySelectorAll('[data-przyjmij]').forEach(bt => bt.onclick = () => przyjmijDostawe(Number(bt.dataset.przyjmij), poZmianie));
+  el.querySelectorAll('[data-przyjmij-trase]').forEach(bt => bt.onclick = () => {
+    const g = grupyDoPrzyjecia(lista).find(y => y.trasa === Number(bt.dataset.przyjmijTrase));
+    if (g) przyjmijDostawyTrasy(g, poZmianie);
+  });
   el.querySelectorAll('[data-zwroc]').forEach(bt => bt.onclick = () => {
     const x = lista.find(y => y.id === Number(bt.dataset.zwroc));
     oknoZwrotuDostawy(x.id, x.klient_nazwa, poZmianie);
   });
   el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
+  el.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
 }
 
 /* Plan podzielony na auta (właściciel 2026-11-16: „zamiast samochód duży/mały nazwa auta — mały to IVECO, duży to DAF”).
@@ -959,6 +1075,13 @@ function wierszPrzystanku(p, indeks, ile, admin) {
   if (p.towar) dopiski.push('📦 ' + escHtml(p.towar));
   if (p.dokument) dopiski.push('📄 ' + escHtml(p.dokument));
   if (p.okno_od || p.okno_do) dopiski.push(`🕒 ${escHtml(p.okno_od || '…')}–${escHtml(p.okno_do || '…')}`);
+  // Co kierowca zostawił przy zamkniętym punkcie — widać w wierszu, bez wchodzenia w „Szczegóły”.
+  if (p.status === 'dostarczone' || p.status === 'nieudane') {
+    if (p.odebral) dopiski.push('👤 odebrał: ' + escHtml(p.odebral));
+    if (p.notatka) dopiski.push('📝 ' + escHtml(String(p.notatka).length > 90 ? String(p.notatka).slice(0, 90) + '…' : p.notatka));
+    if (p.ile_zalacznikow) dopiski.push('📎 ' + p.ile_zalacznikow);
+    else if (p.status === 'dostarczone' && !nasze) dopiski.push('<span style="color:var(--zolty)">⚠ bez podpisu i zdjęcia</span>');
+  }
   if (p.eta) dopiski.push(ETA.opis(p));
   if (p.mapa_lat == null) dopiski.push('<span style="color:var(--zolty)">⚠ brak adresu na mapie</span>');
 
@@ -1442,8 +1565,9 @@ function oknoSzczegolowPunktu(t, id) {
           ${p.zamkniete_o ? ' · ' + escHtml(p.zamkniete_o) : ''}
           ${p.odebral ? '<br>Odebrał: <b>' + escHtml(p.odebral) + '</b>' : ''}
           ${p.notatka ? '<br>' + escHtml(p.notatka) : ''}
-          ${p.ile_zalacznikow ? `<br><span class="male">📎 ${p.ile_zalacznikow}
+          ${p.ile_zalacznikow ? `<br><span class="male" id="sp-licznik">📎 ${p.ile_zalacznikow}
             ${odmiana(p.ile_zalacznikow, 'załącznik', 'załączniki', 'załączników')}</span>` : ''}
+          <div id="sp-dowody"></div>
         </div>` : ''}
       ${admin && zamkniety && p.do_przyjecia ? '<div class="wstega uwaga">⏳ Czeka na zatwierdzenie przez biuro.</div>' : ''}
       ${p.zwrot_powod && !zamkniety ? `<div class="wstega uwaga">↩ Zwrócone kierowcy do poprawy: ${escHtml(p.zwrot_powod)}
@@ -1542,6 +1666,17 @@ function oknoSzczegolowPunktu(t, id) {
       // Doładowanie postępu. Okno MUSI otworzyć się bez tego: kierowca wchodzi
       // w nie z „Historii tras" na telefonie, często bez zasięgu.
       if (!kontoBiura() || !navigator.onLine) return;
+      // Dowody od kierowcy od razu na karcie zamkniętego punktu (podpis, zdjęcia, dokument, braki).
+      if (zamkniety) {
+        Promise.all([API.get('/api/przystanki/' + p.id + '/zalaczniki'), tokenDoPlikow()]).then(([zal, token]) => {
+          const cel = pole.querySelector('#sp-dowody');
+          if (!cel) return;
+          cel.innerHTML = htmlDowodow({ ...p, zalaczniki: zal }, token, true);
+          cel.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
+          const licznik = pole.querySelector('#sp-licznik');
+          if (licznik) licznik.hidden = true;
+        }).catch(() => { /* zostaje licznik załączników i przycisk dowodu */ });
+      }
       API.get('/api/przystanki/' + p.id + '/postep').then(dodatki => {
         const cel = pole.querySelector('#sp-postep');
         const os = pole.querySelector('#sp-os');
@@ -1629,7 +1764,9 @@ function kartaNaZywo(t) {
   if (t.ostatni) {
     slady.push(`${t.ostatni.status === 'dostarczone' ? '✓' : '✕'} ostatnio:
       ${escHtml(t.ostatni.klient)}, ${escHtml(t.ostatni.o)}${
-      t.ostatni.powod ? ' (' + escHtml(t.ostatni.powod) + ')' : ''}`);
+      t.ostatni.powod ? ' (' + escHtml(t.ostatni.powod) + ')' : ''}${
+      t.ostatni.odebral ? ' · odebrał: ' + escHtml(t.ostatni.odebral) : ''}${
+      t.ostatni.status === 'dostarczone' ? (t.ostatni.ile_zalacznikow ? ' · 📎 ' + t.ostatni.ile_zalacznikow : (t.ostatni.nasze ? '' : ' · ⚠ bez podpisu i zdjęcia')) : ''}`);
   }
   if (t.pozycja) {
     slady.push(`🛰 auto ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
@@ -2072,11 +2209,13 @@ async function rysujRaportyBiura(pole, param) {
         <span class="male">przerwa ${r.przerwa_min || 0} min</span><br><b>${godz(r.godziny)}</b>`
         : d.bez_startu ? '<span class="slaby">trasa bez startu</span>'
         : d.w_toku ? '<span class="plakietka p-w_toku">w toku</span>'
-        : '<span class="plakietka p-nieudane">brak raportu kierowcy</span>'}</td>
+        : '<span class="male slaby">bez raportu kierowcy — dane z tras</span>'}</td>
       <td>${roznica == null ? '—' : `<span style="${Math.abs(roznica) >= 1 ? 'color:var(--czerwony);font-weight:700' : ''}">${
         roznica > 0 ? '+' : ''}${liczbaPl(roznica.toFixed(1))} h</span>`}</td>
-      <td>${r && r.km != null ? liczbaPl(r.km) + ' km' : '—'}${
-        d.km_gps != null ? `<br><span class="male slaby">GPS ok. ${liczbaPl(d.km_gps)} km</span>` : ''}</td>
+      <td>${d.km_auto != null ? `<b>${liczbaPl(d.km_auto)} km</b><br><span class="male slaby">${escHtml(d.zrodlo_km_auto || '')}</span>`
+        : (r && r.km != null ? liczbaPl(r.km) + ' km' : '—')}${
+        r && r.km != null && d.zrodlo_km_auto !== 'raport kierowcy' ? `<br><span class="male slaby">raport: ${liczbaPl(r.km)} km</span>` : ''}${
+        d.km_gps != null && d.zrodlo_km_auto !== 'ślad GPS' ? `<br><span class="male slaby">GPS ok. ${liczbaPl(d.km_gps)} km</span>` : ''}</td>
       <td>${r && r.paliwo_l != null ? r.paliwo_l + ' l' : ''}
           ${r && r.paliwo_pln != null ? '<br>' + liczbaPl(r.paliwo_pln.toFixed(2)) + ' zł' : ''}</td>
       <td class="male">${r && r.usterki ? '<b style="color:var(--czerwony)">⚠ ' + escHtml(r.usterki) + '</b><br>' : ''}
@@ -2106,16 +2245,16 @@ async function rysujRaportyBiura(pole, param) {
 
     <div class="trzy" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
       ${kafelekZPodpisem('Dni pracy', sumy.dni || 0, `${sumy.dni_bez_raportu || 0} bez raportu kierowcy`)}
-      ${kafelekZPodpisem('Godziny wg raportów', godz(sumy.godziny_raportow || 0),
-        `wg tras: ${godz(sumy.godziny_zlecen || 0)}`)}
-      ${kafelekZPodpisem('Kilometry wg raportów', liczbaPl(sumy.km_raportow || 0),
-        `z GPS ok. ${liczbaPl(sumy.km_gps || 0)} km`)}
+      ${kafelekZPodpisem('Godziny pracy', godz(sumy.godziny != null ? sumy.godziny : (sumy.godziny_raportow || sumy.godziny_zlecen || 0)),
+        `raporty kierowców: ${godz(sumy.godziny_raportow || 0)} · reszta z tras`)}
+      ${kafelekZPodpisem('Kilometry', liczbaPl(sumy.km != null ? sumy.km : (sumy.km_raportow || 0)),
+        `raporty ${liczbaPl(sumy.km_raportow || 0)} · GPS ${liczbaPl(sumy.km_z_gps || 0)} · szacunek z tras ${liczbaPl(sumy.km_z_trasy || 0)}`)}
       ${kafelekZPodpisem('Dostawy', sumy.dostarczone || 0, `${sumy.nieudane || 0} nieudanych`)}
     </div>
 
-    ${sumy.dni_bez_raportu ? `<div class="wstega uwaga" style="margin-top:12px">
+    ${sumy.dni_bez_raportu ? `<div class="wstega info" style="margin-top:12px">
       ${sumy.dni_bez_raportu} ${odmiana(sumy.dni_bez_raportu, 'dzień nie ma', 'dni nie mają', 'dni nie ma')}
-      raportu kierowcy — godziny i dostawy z tych dni pochodzą z tras.
+      raportu kierowcy — raport powstaje sam: godziny z tras i zamknięć punktów, kilometry z GPS albo z szacunku tras.
       ${odrzucone.length ? `<br>W „Odrzuconych” leży ${odrzucone.length} ${
         odmiana(odrzucone.length, 'raport', 'raporty', 'raportów')} z tego zakresu (telefon go wysłał, ale
         program go nie przyjął): ${odrzucone.slice(0, 5).map(o => escHtml(`${polskaData(o.data)} ${o.kierowca}${
@@ -2138,7 +2277,8 @@ async function rysujRaportyBiura(pole, param) {
       </div>
     </div>
 
-    <div class="male slaby">Kierowcy wypełniają raporty w swoich telefonach. Różnica to rozpiętość dnia z raportu
+    <div class="male slaby">Raport pracy tworzy się sam z każdego dnia (trasy, zamknięcia punktów, ślad GPS); jeśli kierowca
+      wypełni własny raport, jego godziny i kilometry mają pierwszeństwo. Różnica to rozpiętość dnia z raportu
       (od startu do końca, bez odejmowania przerwy) minus rozpiętość z tras (start trasy do końca trasy albo
       ostatniego zamknięcia punktu). Kilometry z GPS są liczone ze śladu w linii prostej, więc wychodzą nieco niższe
       niż z licznika; ślad starszy niż ${wynik.retencja_gps_dni || 30} dni program kasuje.</div>`;
@@ -4077,6 +4217,7 @@ async function rysujBraki(pole, od, doDnia) {
   const w = await API.get(`/api/braki?od=${od}&do=${doDnia}`).catch(() => null);
   if (!w) return;
 
+  w.braki = (w.braki || []).filter(b => b.rodzaj !== 'brak_raportu');   // raport pracy powstaje sam z tras
   const grupy = {};
   for (const b of w.braki) (grupy[b.rodzaj] = grupy[b.rodzaj] || []).push(b);
 
