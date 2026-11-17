@@ -109,6 +109,7 @@ h3.sekcja-listy { margin: 14px 2px 2px; font-size: 1em; }
 .pozycja .czas { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 3.2em; }
 .pozycja .ikona-typu { width: 1.4em; text-align: center; }
 .pozycja .tresc { flex: 1; }
+.pozycja .pozycja-zwrot { display: block; color: var(--czerwony); font-size: .85em; font-weight: 600; }      /* D87: pozycja zwrócona przez kierownika */
 .pozycja .stan { font-size: .85em; font-weight: 600; text-align: right; }
 .pozycja.stan-wykonana { border-left-color: var(--zielony); opacity: .75; }
 .pozycja.stan-wykonana .stan { color: var(--zielony); font-size: 1.2em; }

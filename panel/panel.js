@@ -89,6 +89,10 @@
     document.body.classList.toggle('tryb-ekran', z && ekran);
     // D64: w nagłówku sama ikona konta (STYL-GK §3) — imię tylko w menu na komputerze.
     $('menu-kto').textContent = z && hala.pracownik ? hala.pracownik.nazwa : '';
+    // 2026-11-17: administrator widzi wewnątrz „GK Panel Menedżera” (podpis w menu i karta); logowanie, manifest i ikona bez zmian.
+    const nazwaApki = z ? W.nazwaAplikacji(hala.pracownik) : 'GK Panel Kierownika';
+    if ($('menu-aplikacja').textContent !== nazwaApki) $('menu-aplikacja').textContent = nazwaApki;
+    if (document.title !== nazwaApki) document.title = nazwaApki;
     // Zapis tylko tam, gdzie kontrakt pozwala roli (konto ekranu i kierownik KJ nie zgłaszają awarii).
     $('menu-awaria').hidden = !(z && mozeWyslac('awaria.zgloszona'));
     $('nowe-zlecenie').hidden = !(z && mozeWyslac('zlecenie.utworzone'));
@@ -185,6 +189,7 @@
     'awaria.zgloszona': 'Zgłoszenie awarii', 'zlecenie.utworzone': 'Nowe zlecenie', 'zlecenie.zamkniete': 'Zamknięcie zlecenia',
     'zlecenie.zwrocone': 'Zwrot zlecenia', 'zlecenie.anulowane': 'Odwołanie zlecenia', 'zlecenie.wykonane': 'Wykonanie zlecenia',
     'zlecenie.cofniete': 'Cofnięcie czynności na zleceniu',
+    'zlecenie.zatwierdzone_automatycznie': 'Zatwierdzenie automatyczne', 'zlecenie.pozycja_odebrana': 'Odbiór pozycji checklisty', 'zlecenie.pozycja_zwrocona': 'Zwrot pozycji checklisty',
     'slownik.zapisany': 'Zmiana w administracji', 'slownik.usuniety': 'Usunięcie w administracji',
   };
   function nazwaTypu(typ) {
@@ -519,6 +524,7 @@
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
         rysujJakosc(jakosc, bhpOtwarte);
+        rysujOdbior(d, zlecenia);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
                                 slowniki: d.slowniki, bhp: bhpOtwarte.length, urzadzenia }));
         pokazJeszcze();
@@ -543,6 +549,26 @@
     $('kafelki-liczb').innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie stoi, nic nie czeka</p>' : w.kafelki.map(k => `
       <button type="button" class="${esc(k.klasa)}" data-kafel="${esc(k.kod)}"><span class="etykieta">${esc(k.etykieta)}</span><b>${k.liczba}</b>${k.dopisek ? `<span class="dopisek">${esc(k.dopisek)}</span>` : ''}</button>`).join('');
   }
+  /* D87: sekcja „Do odbioru” na Pulpicie — te same wiersze co w Zlecenia → „Do odbioru” (wierszZlecenia), więc te same dowody i
+     przyciski (Odbierz / Zwróć, także pozycja po pozycji). Najwyżej kilka kart naraz, reszta w Zleceniach; kierownik UR/KJ widzi
+     tylko swój dział (W.odbiorPulpitu → moznaOdebrac), konto ekranu nic (nie ma prawa odbioru). */
+  const MAKS_ODBIOR_NA_PULPICIE = 4;
+  function rysujOdbior(d, lista) {
+    const wiersze = mozeWyslac('zlecenie.zamkniete')
+      ? W.odbiorPulpitu({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik }) : [];
+    $('pulpit-odbior').hidden = !wiersze.length;
+    $('na-zywo').classList.toggle('ma-odbior', wiersze.length > 0);
+    if (!wiersze.length) { $('lista-odbioru').innerHTML = ''; return; }
+    zlecBufor = new Map(wiersze.map(z => [z.id, z]));        // okno szczegółów pozycji czyta stąd
+    if (okPoz.open) rysujPozycje();
+    $('licznik-odbioru').textContent = wiersze.length;
+    $('lista-odbioru').innerHTML = wiersze.slice(0, MAKS_ODBIOR_NA_PULPICIE).map(wierszZlecenia).join('')
+      + (wiersze.length > MAKS_ODBIOR_NA_PULPICIE
+        ? `<button type="button" class="pokaz-wszystkie" data-akcja="odbior-wszystkie">Wszystkie do odbioru w Zleceniach (${wiersze.length})</button>` : '');
+    for (const e of $('lista-odbioru').querySelectorAll('img[data-plik]'))
+      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+  }
+
   // Kafelki zleceń prowadzą do zleceń — „po terminie” do „W toku”, gdzie spóźnione stoją na górze z ⏰ (UI etap 2:
   // osobnego filtra „Po terminie” już nie ma). Reszta jest na tym samym ekranie.
   $('kafelki-liczb').addEventListener('click', ev => {
@@ -779,7 +805,12 @@
     const edytuj = kier && z.moznaEdytowac && mozeWyslac('zlecenie.edytowane')
       ? p('edytuj', '✎ Zmień', '', 'Popraw treść, opis, pozycje, godziny — także w zapisanym zleceniu') : '';
     if (z.moznaZmienic) { glowne.push(p('zlec-teraz', 'Zleć teraz', 'glowny', 'Zleć od razu — dział dostanie powiadomienie')); reszta.push(p('zmien-plan', 'Zmień')); }
-    if (kier && z.doZamkniecia && z.moznaOdebrac) { glowne.push(p('zamknij', z.status === 'wykonane' ? 'Odbierz' : 'Zamknij', 'glowny')); obok.push(p('zwroc', 'Zwróć')); }
+    if (kier && z.doZamkniecia && z.moznaOdebrac) {
+      // D87: checklista oddana pozycja po pozycji — „Odbierz całą” (albo resztę, gdy część już odebrana) i „Zwróć całą”.
+      const lista = z.status === 'wykonane' && z.mozeOdbieracPozycje;
+      glowne.push(p('zamknij', z.status !== 'wykonane' ? 'Zamknij' : lista ? (z.odbior && z.odbior.odebrane > 0 ? 'Odbierz resztę' : 'Odbierz całą') : 'Odbierz', 'glowny'));
+      obok.push(p('zwroc', lista ? 'Zwróć całą' : 'Zwróć'));
+    }
     // Audyt ról 2026-11-09 (D80): „Odwołaj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
     // i admin). Kierownik UR/KJ widział przycisk, a hub odpowiadał 403.
     const anuluj = z.moznaAnulowac && mozeWyslac('zlecenie.anulowane') ? p('anuluj', 'Odwołaj') : '';
@@ -807,11 +838,29 @@
     const maszynyPasek = z.maszynyPostep ? `<span class="postep-maszyn${z.maszynyPostep.gotowe === z.maszynyPostep.wszystkie ? ' pelny' : ''}" style="--p:${z.maszynyPostep.proc}%"
       title="Zeskanowane maszyny">▣ ${z.maszynyPostep.gotowe}/${z.maszynyPostep.wszystkie} maszyn</span>` : '';
     // D67: pozycje checklisty — kierownik widzi, co odhaczone, co pominięte (z powodem) i co zostało.
+    // D87 (właściciel 2026-11-17): przy odbiorze (zlecenie „wykonane” z checklistą) każda pozycja ma na wierszu swoje dowody
+    // (kto i kiedy, notatka, zdjęcia, powód pominięcia) i własne przyciski Odbierz / Zwróć — odbiór nie wymaga już wchodzenia w okno.
     const ZNAK = { wykonana: '✓', pominieta: '–', czeka: '○' };
     // Do odbioru każda pozycja jest przyciskiem: okno ze szczegółami (zdjęcie, notatka, kto i kiedy) — kierownik ocenia wykonanie.
     const klik = z.doZamkniecia;
-    const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Pozycje (${z.checklista.gotowe}/${z.checklista.wszystkie})</summary>
-      <ul>${z.pozycje.map(p => `<li class="stan-${esc(p.stan)}">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}</li>`).join('')}</ul></details>` : '';
+    const poz = kier && z.moznaOdebrac && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
+    const dowody = p => {
+      const sz = p.szczegoly;
+      const kto = sz.kto ? esc(sz.kto) : sz.automat ? 'automatycznie (czynność w aplikacji)' : '';
+      const kiedy = sz.godz ? `${sz.godz}${sz.data && sz.data !== W.dataKrotka(hala.teraz()) ? `, ${sz.data}` : ''}` : '';
+      const linia = [p.stan === 'pominieta' ? 'Pominięta' : 'Zrobiona', kto ? `przez ${kto}` : '', kiedy ? esc(kiedy) : ''].filter(Boolean).join(' ');
+      return `<div class="poz-dowody"><span class="slaby">${linia}</span>${p.stan === 'pominieta' ? ` <span class="tekst-alarm">— nie mogę: ${p.powod ? esc(p.powod) : 'bez powodu'}</span>` : ''}${
+        sz.notatka ? `<div class="poz-notatka">${ik('notatka', 14)} ${esc(sz.notatka)}</div>` : ''}${
+        sz.zdjecia.length ? zdjecia(sz.zdjecia, '', [p.nazwa, z.tytul, sz.kto].filter(Boolean).join(' · ')) : ''}</div>`;
+    };
+    const przyciskiPozycji = p => !poz || p.stan === 'czeka' ? ''
+      : p.odebrana ? `<span class="znacznik ok poz-odebrana" title="${esc(p.odebranaPrzez ? `Odebrana przez ${p.odebranaPrzez}${p.odebranaGodz ? `, ${p.odebranaGodz}` : ''}` : 'Odebrana')}">Odebrana</span>`
+      : `<span class="poz-przyciski"><button type="button" class="maly glowny" data-akcja="poz-odbierz" data-pozycja="${esc(p.id)}" title="Odbierz tę pozycję">Odbierz</button><button type="button" class="maly" data-akcja="poz-zwroc" data-pozycja="${esc(p.id)}" title="Wróci do działu tylko ta pozycja">Zwróć</button></span>`;
+    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? '✓✓' : ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${klik && poz && p.stan !== 'czeka' ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !(klik && poz && p.stan !== 'czeka') ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
+    const naglowekPozycji = z.odbior && z.doZamkniecia && z.status === 'wykonane'
+      ? `Pozycje (${z.odbior.odebrane}/${z.odbior.wszystkie} odebrane)` : `Pozycje (${z.checklista ? z.checklista.gotowe : 0}/${z.checklista ? z.checklista.wszystkie : 0})`;
+    const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>${naglowekPozycji}</summary>
+      <ul>${z.pozycje.map(liPozycji).join('')}</ul></details>` : '';
     return `
       <article class="zlecenie ${z.pilne ? 'pilne' : ''} ${z.poTerminie ? 'po-terminie' : ''}" data-rodzaj="zlecenie" data-id="${esc(z.id)}">
         <div class="opis">
@@ -829,6 +878,8 @@
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
             ${z.doKierownika ? '<span class="znacznik uwaga" title="Kierownik działu je przekaże albo rozdzieli">Do rozdzielenia</span>' : ''}
+            ${z.zatwierdzoneAuto ? '<span class="znacznik neutral" title="Zmiana się skończyła — serwer zatwierdził zlecenie sam, bez odbioru kierownika">Zatwierdzone automatycznie</span>' : ''}
+            ${z.odbiorZakonczony ? `<span class="znacznik neutral" title="Odbiór zleceń zmianowych jest do końca zmiany + ${Hala.karencjaOdbioru(hala.kontrakt && hala.kontrakt.stale)} min">Tylko do wglądu</span>` : ''}
             ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">${ik('aparat')}${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">${ik('notatka')}${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
@@ -851,9 +902,11 @@
       </article>`;
   }
 
-  /* Okno szczegółów pozycji checklisty przy odbiorze (Zlecenia → „Do odbioru”). Pokazuje to, co dział zostawił przy tej pozycji:
-     zdjęcie (powiększa to samo okno co przy zwykłym zleceniu), notatkę, kto i kiedy ją zamknął. Odbiór i zwrot dotyczą CAŁEGO
-     zlecenia — przyciski w oknie klikają te same przyciski wiersza (jedna ścieżka: cofnięcie, pytanie o powód, uprawnienia). */
+  /* Okno szczegółów pozycji checklisty przy odbiorze (Zlecenia → „Do odbioru” i Pulpit). Pokazuje to, co dział zostawił przy tej
+     pozycji: zdjęcie (powiększa to samo okno co przy zwykłym zleceniu), notatkę, kto i kiedy ją zamknął. D87: z okna odbiera się
+     JEDNĄ pozycję („Odbierz pozycję”), zwraca ją do poprawy z powodem („Zwróć pozycję” — wraca tylko ona) albo całą listę
+     („Odbierz całą”, „Zwróć całą”). Wszystkie przyciski idą tą samą ścieżką co przyciski na wierszu (akcjaZlecenia): pasek
+     „Cofnij”, pytanie o powód, uprawnienia. */
   const ZNAK_POZ = { wykonana: '✓', pominieta: '–', czeka: '○' };
   function rysujPozycje() {
     const z = pozOtwarta && zlecBufor.get(pozOtwarta.zlecenie);
@@ -866,18 +919,25 @@
     const ktoKiedy = p.stan === 'czeka' ? 'Dział jeszcze jej nie zamknął.'
       : `${p.stan === 'pominieta' ? 'Pominięta' : 'Zrobiona'}${kto ? ` przez ${kto}` : ''}${kiedy ? `, ${esc(kiedy)}` : ''}${!kto && !kiedy ? ' — brak danych, kto i kiedy' : ''}`;
     const kier = mozeWyslac('zlecenie.zamkniete') && z.moznaOdebrac;
+    const poz = kier && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
     $('t-okno-pozycji-zlecenia').textContent = p.nazwa || 'Pozycja';
     $('pozycja-zlecenia-tresc').innerHTML = `
       <p class="slaby">Zlecenie: ${esc(z.tytul)} · ${esc(z.numer)} · pozycja ${z.pozycje.indexOf(p) + 1} z ${z.pozycje.length}</p>
       <p class="pozycja-kto"><span aria-hidden="true">${ZNAK_POZ[p.stan]}</span> ${ktoKiedy}</p>
+      ${p.odebrana ? `<p class="pozycja-kto tekst-ok">Odebrana${p.odebranaPrzez ? ` przez ${esc(p.odebranaPrzez)}` : ''}${p.odebranaGodz ? `, ${esc(p.odebranaGodz)}` : ''}</p>` : ''}
       ${p.opis ? `<p class="slaby opis-pozycji">${esc(p.opis)}</p>` : ''}
       ${p.stan === 'pominieta' ? `<div class="pozycja-pole"><b>Powód pominięcia</b><p>${p.powod ? esc(p.powod) : '<span class="slaby">Bez powodu</span>'}</p></div>` : ''}
       <div class="pozycja-pole"><b>${ik('aparat')} Zdjęcie wykonania</b>${sz.zdjecia.length
         ? zdjeciaWiersza(sz.zdjecia, '', [p.nazwa, z.tytul, sz.kto].filter(Boolean).join(' · ')) : '<p class="slaby">Brak zdjęcia</p>'}</div>
       <div class="pozycja-pole"><b>${ik('notatka')} Opis od wykonawcy</b>${sz.notatka ? `<p class="pozycja-notatka">${esc(sz.notatka)}</p>` : '<p class="slaby">Bez opisu</p>'}</div>
-      <p class="slaby pozycja-uwaga">Odbiór i zwrot dotyczą całego zlecenia — pozycji nie odbiera się osobno.</p>`;
-    $('pozycja-zlecenia-akcje').innerHTML = kier
-      ? `<button type="button" data-pozycja-akcja="zwroc">Zwróć zlecenie</button><button type="button" class="glowny" data-pozycja-akcja="zamknij">${z.status === 'wykonane' ? 'Odbierz zlecenie' : 'Zamknij zlecenie'}</button>` : '';
+      <p class="slaby pozycja-uwaga">${poz ? 'Odbierasz pozycję po pozycji albo całą listę naraz. Zwrot pozycji wraca do działu tylko ją — reszta zostaje odebrana.'
+        : 'Odbiór i zwrot dotyczą całego zlecenia.'}</p>`;
+    const b = (akcja, napis, klasa) => `<button type="button"${klasa ? ` class="${klasa}"` : ''} data-pozycja-akcja="${akcja}">${napis}</button>`;
+    const cala = z.status === 'wykonane' && z.mozeOdbieracPozycje;
+    $('pozycja-zlecenia-akcje').innerHTML = !kier ? ''
+      : poz ? (p.stan !== 'czeka' && !p.odebrana ? b('poz-zwroc', 'Zwróć pozycję') + b('poz-odbierz', 'Odbierz pozycję', 'glowny') : '')
+          + b('zwroc', 'Zwróć całą') + b('zamknij', z.odbior && z.odbior.odebrane > 0 ? 'Odbierz resztę' : 'Odbierz całą', p.odebrana || p.stan === 'czeka' ? 'glowny' : '')
+      : b('zwroc', cala ? 'Zwróć całą' : 'Zwróć zlecenie') + b('zamknij', z.status === 'wykonane' ? 'Odbierz zlecenie' : 'Zamknij zlecenie', 'glowny');
     for (const e of $('pozycja-zlecenia-tresc').querySelectorAll('img[data-plik]'))
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
   }
@@ -891,11 +951,11 @@
     if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
     const b = ev.target.closest('[data-pozycja-akcja]');
     if (!b || !pozOtwarta) return;
-    // Przycisk wiersza robi resztę (cofnięcie odbioru, pytanie o powód zwrotu, uprawnienia) — okno tylko go skraca.
-    const wiersz = [...$('lista-zlecen').querySelectorAll('[data-id]')].find(x => x.dataset.id === pozOtwarta.zlecenie);
-    const przycisk = wiersz && wiersz.querySelector(`[data-akcja="${b.dataset.pozycjaAkcja}"]`);
+    // Ta sama ścieżka co przyciski wiersza (akcjaZlecenia: cofnięcie odbioru, pytanie o powód zwrotu, uprawnienia) — okno tylko je skraca.
+    const { zlecenie, pozycja } = pozOtwarta;
+    const napis = b.textContent.trim();
     okPoz.close();
-    if (przycisk) przycisk.click(); else komunikat('Nie znaleziono zlecenia na liście — odśwież widok.', 'blad');
+    akcjaZlecenia({ dataset: { akcja: b.dataset.pozycjaAkcja, pozycja }, textContent: napis }, zlecenie);
   });
   okPoz.addEventListener('close', () => { if (!okPoz.open) pozOtwarta = null; });   // close przychodzi asynchronicznie — nie kasuj, gdy okno otwarto już na nowo
 
@@ -946,17 +1006,53 @@
       komunikat('Awaria odwołana', 'ok');
     } catch (e) { komunikat(komunikatBledu(e), 'blad'); }
   });
-  $('lista-zlecen').addEventListener('click', async ev => {
+  /* D87: te same wiersze zleceń stoją na liście Zleceń i w sekcji „Do odbioru” na Pulpicie — jeden obsługiwacz kliknięć. */
+  async function obsluzKlikZlecenia(ev) {
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
     const b = ev.target.closest('[data-akcja]');
     if (!b) return;
+    if (b.dataset.akcja === 'odbior-wszystkie') { Panel.pokazZlecenia('do-zamkniecia', 'biezace'); return; }
     const wiersz = b.closest('[data-id]');
+    if (!wiersz) return;
     const id = wiersz.dataset.id;
     if (b.dataset.akcja === 'pozycja') { Panel.pokazPozycje(id, b.dataset.pozycja); return; }
     // D60: zgłoszenie, narzędzia, BHP — ta sama lista, ich przyciski obsługuje zgloszenia.js.
     if (wiersz.dataset.rodzaj && wiersz.dataset.rodzaj !== 'zlecenie') { await Panel.widoki.zgloszenia.akcja(wiersz.dataset.rodzaj, b.dataset.akcja, id, b); return; }
+    await akcjaZlecenia(b, id);
+  }
+  $('lista-zlecen').addEventListener('click', obsluzKlikZlecenia);
+  $('lista-odbioru').addEventListener('click', obsluzKlikZlecenia);
+
+  /* Odbiór jednej pozycji checklisty (D87). Po ostatniej odebranej zlecenie zamyka się samo — z paskiem „Cofnij”, jak „Odbierz całą”;
+     hub ma siatkę bezpieczeństwa (porzadkuj_odebrane) na wypadek, gdyby to zamknięcie się nie wysłało. */
+  async function odbierzPozycje(id, pozycja) {
+    await hala.zapisz('zlecenie.pozycja_odebrana', id, { pozycja });
+    if (W.czyZamknacPoOdbiorze(hala.obiekt('zlecenie', id))) {
+      const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.zamkniete', id, {},
+        { tekst: 'Odebrane wszystkie pozycje — zlecenie zamknięte.', komunikat, cofnieto: t => komunikat(t, 'ok') });
+      if (!pasek) komunikat('Odebrane wszystkie pozycje — zlecenie zamknięte', 'ok');
+    } else {
+      const z = hala.obiekt('zlecenie', id), o = Hala.odbiorPozycji((z && z.dane) || {});
+      komunikat(`Pozycja odebrana (${o.odebrane}/${o.wszystkie})`, 'ok');
+    }
+  }
+  /* Zwrot jednej pozycji (D87): powód obowiązkowy, wraca do działu tylko ta pozycja, pozostałe zostają odebrane. */
+  async function zwrocPozycje(id, pozycja) {
+    const z = hala.obiekt('zlecenie', id);
+    const p = ((z && z.dane && z.dane.pozycje) || []).find(x => x.id === pozycja);
+    const uwagi = await Panel.zapytajTekst({ tytul: 'Zwrócić pozycję do działu?', etykieta: `„${(p && p.nazwa) || 'Pozycja'}” — co trzeba poprawić? Wróci tylko ta pozycja.`,
+                                             wymagany: true, przycisk: 'Zwróć pozycję' });
+    if (!uwagi) return;
+    if (uwagi.length > 2000) { komunikat(`Powód za długi: ${uwagi.length} znaków, najwyżej 2000. Skróć opis.`, 'blad'); return; }
+    await hala.zapisz('zlecenie.pozycja_zwrocona', id, { pozycja, uwagi });
+    komunikat('Pozycja wróciła do działu — pozostałe zostają odebrane', 'ok');
+  }
+
+  async function akcjaZlecenia(b, id) {
     try {
+      if (b.dataset.akcja === 'poz-odbierz') { await odbierzPozycje(id, b.dataset.pozycja); return; }
+      if (b.dataset.akcja === 'poz-zwroc') { await zwrocPozycje(id, b.dataset.pozycja); return; }
       if (b.dataset.akcja === 'wiecej') { if (wiecejOtwarte.has(id)) wiecejOtwarte.delete(id); else wiecejOtwarte.add(id); narysuj(); return; }
       wiecejOtwarte.delete(id);
       if (b.dataset.akcja === 'wykonaj') { Panel.widoki.zgloszenia.wykonaj(id); return; }
@@ -968,7 +1064,7 @@
       if (b.dataset.akcja === 'zamknij') {
         // Etap 6c: bez pytania — pasek „Odebrane. Cofnij” (kilka sekund); starszy serwer bez cofania dostaje zwykły komunikat.
         const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.zamkniete', id, {}, { komunikat, cofnieto: t => komunikat(t, 'ok') });
-        if (!pasek) komunikat(b.textContent.trim() === 'Odbierz' ? 'Odebrane — zlecenie zamknięte' : 'Zamknięte', 'ok');
+        if (!pasek) komunikat(/^Odbierz/.test(b.textContent.trim()) ? 'Odebrane — zlecenie zamknięte' : 'Zamknięte', 'ok');
       }
       if (b.dataset.akcja === 'anuluj') {
         const powod = await Panel.zapytajTekst({ tytul: 'Odwołać zlecenie?', etykieta: 'Dlaczego? (można zostawić puste)', przycisk: 'Odwołaj zlecenie', wstecz: 'Nie' });
@@ -987,14 +1083,15 @@
         komunikat('Zlecone — dział dostał powiadomienie', 'ok');
       }
       if (b.dataset.akcja === 'zwroc') {
-        const uwagi = await Panel.zapytajTekst({ tytul: 'Zwrócić do działu?', etykieta: 'Co jeszcze trzeba zrobić?', wymagany: true, przycisk: 'Zwróć' });
+        const cala = /całą/.test(b.textContent);
+        const uwagi = await Panel.zapytajTekst({ tytul: cala ? 'Zwrócić całą listę do działu?' : 'Zwrócić do działu?', etykieta: 'Co jeszcze trzeba zrobić?', wymagany: true, przycisk: cala ? 'Zwróć całą' : 'Zwróć' });
         if (!uwagi) return;
         await hala.zapisz('zlecenie.zwrocone', id, { uwagi });
         komunikat('Zwrócone do działu', 'ok');
       }
       if (b.dataset.akcja === 'jako-stale' && Panel.widoki.stale) Panel.widoki.stale.zZlecenia(hala.obiekt('zlecenie', id));
     } catch (e) { komunikat(komunikatBledu(e), 'blad'); }
-  });
+  }
 
   // ------------------------------------------------------------ okna: nowe zlecenie i zgłoszenie awarii
 

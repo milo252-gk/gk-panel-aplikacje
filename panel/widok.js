@@ -395,6 +395,9 @@
       const zaplanowane = z.status === 'zaplanowane';
       const start = Date.parse(d.zaplanowane_na);
       const postep = postepZlecenia(d);
+      const odbior = H().odbiorPozycji(d);
+      const koncowka = H().koniecOdbioru(d, H().karencjaOdbioru(stale));
+      const koniecOdbioru = DO_ZAMKNIECIA.has(z.status) && koncowka !== null && (teraz === undefined ? Date.now() : teraz) >= koncowka;
       return {
         id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
         tytul: d.tytul || '', opis: d.opis || '',
@@ -437,13 +440,27 @@
           stan: (d.wykonane || {})[p.id] ? 'wykonana' : (d.pominiete || {})[p.id] ? 'pominieta' : 'czeka',
           powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '',
           // Okno szczegółów pozycji przy odbiorze: wszystko, co dział zostawił przy tej pozycji (zdjęcia, notatka, kto i kiedy).
-          id: p.id, szczegoly: szczegolyPozycji(d, p, pracownicy) })) : [],
+          id: p.id, szczegoly: szczegolyPozycji(d, p, pracownicy),
+          // D87: odbiór pozycja po pozycji — odebrana (kto, kiedy) albo zwrócona do poprawy (powód); poprawiona = zrobiona po zwrocie.
+          odebrana: !!odbior.pozycje[p.id] && odbior.pozycje[p.id].odebrana, poprawiona: !!odbior.pozycje[p.id] && odbior.pozycje[p.id].poprawiona,
+          odebranaPrzez: odbior.pozycje[p.id] && odbior.pozycje[p.id].odbior ? nazwaPracownika(pracownicy, odbior.pozycje[p.id].odbior.autor) : null,
+          odebranaGodz: odbior.pozycje[p.id] && odbior.pozycje[p.id].odbior ? godzina(odbior.pozycje[p.id].odbior.czas) : null,
+          zwrot: odbior.pozycje[p.id] && odbior.pozycje[p.id].zwrocona
+            ? { uwagi: (odbior.pozycje[p.id].zwrot || {}).uwagi || '', kto: nazwaPracownika(pracownicy, (odbior.pozycje[p.id].zwrot || {}).autor),
+                godz: (odbior.pozycje[p.id].zwrot || {}).czas ? godzina(odbior.pozycje[p.id].zwrot.czas) : null } : null })) : [],
+        // D87: ile pozycji odebrano i ile czeka (zlecenie „wykonane” z checklistą odbiera się też pozycja po pozycji).
+        odbior: Array.isArray(d.pozycje) && d.pozycje.length ? { wszystkie: odbior.wszystkie, odebrane: odbior.odebrane, doOdbioru: odbior.doOdbioru.length,
+          zwrocone: odbior.zwrocone.length, pelne: odbior.pelne } : null,
+        mozeOdbieracPozycje: z.status === 'wykonane' && Array.isArray(d.pozycje) && d.pozycje.length > 0,
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
         // R2 (2026-11-09, D82): kierownik UR/KJ przyjmuje, zamyka i zwraca tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
-        moznaOdebrac: H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true,
+        moznaOdebrac: (H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true) && !koniecOdbioru,
+        // D88: zlecenie zmianowe po końcu zmiany + karencji — tylko do wglądu (serwer zatwierdza je sam i odrzuca odbiór/zwrot).
+        odbiorZakonczony: koniecOdbioru, odbiorDo: koncowka === null ? null : godzina(koncowka),
+        zatwierdzoneAuto: d.zatwierdzone_automatycznie || null,
         // Audyt ról 2026-11-09 (D80): zlecenie anuluje tylko kierownik zakładu i admin (kontrakt: zlecenie.anulowane) — kierownik
         // UR/KJ widział „Anuluj” przy swoich zleceniach, a hub odmawiał (403). moznaAnulowacZlecenie zostaje regułą D45 „czyje”.
         moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && zZakladu && H().moznaAnulowacZlecenie(z, ja, pracownicy),
@@ -2759,6 +2776,27 @@
       automat: !!(wpis && wpis.dowod && !znany),
     };
   }
+  /* D87 (właściciel 2026-11-17): pulpit łączy podgląd załączników z odbiorem. Wiersze „do odbioru” dla zalogowanej osoby: te same,
+     które widzi w Zlecenia → „Do odbioru” (W.zlecenia), tylko zlecenia, które ta osoba może odebrać (kierownik UR/KJ — własny
+     dział, R2/D82). Kolejność jak na liście zleceń: po terminie, pilne, najstarsze. */
+  function odbiorPulpitu(args) {
+    return zlecenia(Object.assign({}, args, { filtr: 'do-zamkniecia' })).filter(z => z.moznaOdebrac && !z.czesc);
+  }
+
+  /* D87: czy po odebraniu pozycji zlecenie ma się zamknąć samo — wszystkie pozycje odebrane, zlecenie nadal „wykonane”.
+     Klient wysyła zlecenie.zamkniete zaraz po ostatniej pozycji (hub ma siatkę bezpieczeństwa — porzadkuj_odebrane). */
+  function czyZamknacPoOdbiorze(zlecenie) {
+    const d = (zlecenie && zlecenie.dane) || {};
+    return !!zlecenie && zlecenie.status === 'wykonane' && H().odbiorPozycji(d).pelne;
+  }
+
+  /* Nazwa aplikacji WEWNĄTRZ po zalogowaniu (właściciel 2026-11-17, wzór: „GK Mistrz” w GK Lider): administrator widzi „GK Panel
+     Menedżera”, kierownik zakładu i reszta — „GK Panel Kierownika”. To tylko napis: manifest, ekran logowania, ikona, push i
+     kontrakt zostają „GK Panel Kierownika”. */
+  function nazwaAplikacji(pracownik) {
+    return ((pracownik && pracownik.role) || []).includes('admin') ? 'GK Panel Menedżera' : 'GK Panel Kierownika';
+  }
+
   function maszynyPostepZlecenia(d) {
     d = d || {};
     if (Array.isArray(d.pozycje) && d.pozycje.length) {
@@ -2793,7 +2831,7 @@
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
-                       zlecenia, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
+                       zlecenia, odbiorPulpitu, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,

@@ -66,6 +66,19 @@
 /* UI etap 3: „1 do odbioru” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
 .kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
+.odbior { grid-area: odbior; }
+/* D87: sekcja „Do odbioru” na Pulpicie (jest tylko, gdy coś czeka na odbiór — panel.js: rysujOdbior ustawia .ma-odbior). */
+.na-zywo.ma-odbior { grid-template-areas: "liczby liczby" "odbior odbior" "obchody obchody" "awarie jakosc"; grid-template-rows: auto auto auto minmax(0, 1fr); }
+@media (min-width: 901px) {
+  .na-zywo.ma-odbior.bez-jakosci { grid-template-areas: "liczby" "odbior" "obchody" "jakosc" "awarie"; grid-template-rows: auto auto auto auto minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .na-zywo.ma-odbior { grid-template-areas: "liczby" "odbior" "obchody" "awarie" "jakosc"; grid-template-rows: auto; }
+}
+/* Na dużym ekranie strona się nie przewija — karty odbioru przewijają się w sekcji, żeby Awarie zostały na widoku. */
+@media (min-width: 1100px) and (min-height: 600px) { .odbior #lista-odbioru { max-height: 40vh; } }
+.odbior h2 .licznik { font-weight: 700; }
+.odbior .pokaz-wszystkie { align-self: flex-start; }
 .awarie { grid-area: awarie; }
 .jakosc { grid-area: jakosc; }
 section { background: var(--karta); box-shadow: var(--obrys-gorny), var(--cien); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
@@ -510,7 +523,7 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .pozycje-zlecenia { margin-top: 6px; }
 .pozycje-zlecenia summary { cursor: pointer; font-weight: 700; }
 .pozycje-zlecenia ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
-.pozycje-zlecenia .stan-wykonana > span:first-child, .pozycje-zlecenia .stan-wykonana .pozycja-otworz > span:first-child { color: var(--zielony); font-weight: 700; }
+.pozycje-zlecenia .stan-wykonana > span:first-child, .pozycje-zlecenia .stan-wykonana .poz-wiersz > span:first-child, .pozycje-zlecenia .stan-wykonana .pozycja-otworz > span:first-child { color: var(--zielony); font-weight: 700; }
 .pozycje-zlecenia .stan-pominieta { color: var(--tekst-slaby); }
 /* Przy odbiorze pozycja to przycisk (okno szczegółów): cel dotyku min. 44 px, wygląda jak wiersz listy, nie jak przycisk. */
 .pozycje-zlecenia .pozycja-otworz { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; padding: 4px 8px; margin: 0;
@@ -518,6 +531,15 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .pozycje-zlecenia .pozycja-otworz:hover { background: var(--tlo-neutralne); border-color: var(--ramka); }
 .pozycja-otworz .pozycja-znacznik { display: inline-flex; align-items: center; gap: 2px; color: var(--tekst-slaby); font-size: 12px; }
 .pozycja-otworz .pozycja-strzalka { margin-left: auto; font-size: 20px; color: var(--tekst-slaby); }
+/* D87: pozycja do odbioru — nazwa (otwiera okno szczegółów) i obok niej Odbierz / Zwróć; pod spodem dowody od działu. */
+.poz-wiersz { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pozycje-zlecenia .poz-wiersz .pozycja-otworz { flex: 1 1 220px; width: auto; }
+.poz-przyciski { display: flex; gap: 6px; flex: none; margin-left: auto; }
+.poz-odebrana { flex: none; margin-left: auto; }
+.pozycje-zlecenia li.odebrana .pozycja-otworz { opacity: .7; }
+.poz-dowody { margin: 0 0 6px 30px; font-size: .9em; }
+.poz-notatka { margin-top: 2px; white-space: pre-line; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.poz-zwrot { margin: 2px 0 6px 30px; font-size: .9em; font-weight: 600; }
 /* Okno szczegółów pozycji. */
 #pozycja-zlecenia-tresc { display: grid; gap: 10px; }
 #pozycja-zlecenia-tresc p { margin: 0; }

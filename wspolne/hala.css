@@ -728,6 +728,9 @@ body:has(.ekran:not([hidden]) .wlasny-skan) .hala-skan-fab { display: none; }
 .hala-pozycja-znak { flex: none; width: 22px; text-align: center; font-weight: 700; font-size: 18px; }
 .hala-pozycja-godz { flex: none; font-variant-numeric: tabular-nums; color: var(--tekst-slaby); font-size: 14px; }
 .hala-pozycja-nazwa { flex: 1; min-width: 0; }
+/* D87: pozycja zwrócona przez kierownika — powód pod nazwą, na czerwono (jedna rzecz = jeden kolor: coś trzeba poprawić) */
+.hala-pozycja-zwrot { display: block; margin-top: 2px; color: var(--czerwony); font-size: 13px; font-weight: 600; }
+.hala-pozycja-zwrot-opis { margin: 0 0 8px; color: var(--czerwony); font-weight: 600; font-size: 14px; }
 .hala-pozycja-wymogi { flex: none; letter-spacing: 2px; }
 .hala-pozycja.stan-wykonana { background: var(--zielony-tlo); }
 .hala-pozycja.stan-wykonana .hala-pozycja-znak { color: var(--zielony); }

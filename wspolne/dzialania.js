@@ -184,6 +184,7 @@
     // Test właściciela 2026-10-13: krok wykonania (D56) pokazywał się w historii jako surowe „postep”.
     'zlecenie.postep': 'Krok wykonania',
     'zlecenie.przekazane': 'Przekazane', 'zlecenie.rozdzielone': 'Rozdzielone',       // D76
+    'zlecenie.zatwierdzone_automatycznie': 'Zatwierdzone automatycznie (koniec zmiany)', 'zlecenie.pozycja_odebrana': 'Pozycja odebrana', 'zlecenie.pozycja_zwrocona': 'Pozycja zwrócona do poprawy',   // D87
     'bhp.zgloszenie': 'Zgłoszone', 'bhp.zamkniete': 'Zamknięte przez kierownika',
   };
 
@@ -200,6 +201,8 @@
         if (typeof d[pole] === 'string' && d[pole].trim() && !(pole === 'tytul' && z.typ !== 'zgloszenie.utworzone')) teksty.push(etykieta + d[pole].trim());
       }
       if (d.skan) teksty.push(`Zeskanowano QR maszyny ${d.skan}`);
+      // D87: uwaga przy zwrocie pozycji to powód zwrotu, nie zwykła notatka.
+      if (z.typ === 'zlecenie.pozycja_zwrocona') { const i = teksty.findIndex(t => t.startsWith('Notatka: ')); if (i >= 0) teksty[i] = 'Powód: ' + teksty[i].slice(9); }
       // D76: komu kierownik działu przekazał albo rozdzielił zlecenie.
       if (z.typ === 'zlecenie.przekazane' && d.wykonawca) teksty.unshift(`Dla: ${nazwa(d.wykonawca)}`);
       if (z.typ === 'zlecenie.rozdzielone' && Array.isArray(d.wykonawcy)) teksty.unshift(`Dla: ${d.wykonawcy.map(nazwa).join(', ')}`);

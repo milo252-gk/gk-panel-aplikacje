@@ -184,6 +184,7 @@
   function pozycjeWiersza(d, teraz, H) {
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms) || !H || !H.lokalny) return '';
       const l = H.lokalny(ms); return `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
+    const odbior = H && H.odbiorPozycji ? H.odbiorPozycji(d || {}).pozycje : {};
     return [].concat((d && d.pozycje) || []).filter(p => p && p.id).map(p => {
       const wyk = (d.wykonane || {})[p.id], pom = (d.pominiete || {})[p.id];
       const maszyny = maszynyPozycji(p);
@@ -194,7 +195,9 @@
                terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
                maszyna: p.maszyna || null, maszyny, skany: skanyPozycji(d, p.id),
                wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true,
-               wymagajSkanu: (p.wymagaj_skanu === true && maszyny.length > 0) || p.czynnosc === 'obchod', stan, wpis: wyk || pom || null };
+               wymagajSkanu: (p.wymagaj_skanu === true && maszyny.length > 0) || p.czynnosc === 'obchod', stan, wpis: wyk || pom || null,
+               // D87: kierownik zwrócił TĘ pozycję do poprawy (powód); null = nie zwrócona albo już poprawiona.
+               zwrot: odbior[p.id] && odbior[p.id].zwrocona ? { uwagi: (odbior[p.id].zwrot || {}).uwagi || '', autor: (odbior[p.id].zwrot || {}).autor || null } : null };
     });
   }
 
@@ -730,7 +733,7 @@
       ${!rozwinieta ? '' : z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia && !z.przed && q.stan !== 'przed' ? '' : 'disabled'}>
           <span class="hala-pozycja-znak" aria-hidden="true">${ZNAK_POZYCJI[q.stan]}</span>
           ${q.odGodz || q.godz ? `<span class="hala-pozycja-godz">${esc(q.odGodz ? (q.godz ? `${q.odGodz}–${q.godz}` : `od ${q.odGodz}`) : q.godz)}</span>` : ''}
-          <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
+          <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.zwrot ? `<span class="hala-pozycja-zwrot">${ikona('powtarzaj', 14)} Wróciła od kierownika${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</span>` : ''}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
             : q.maszyny.length > 1 ? ` <span class="slaby">· ${q.maszyny.length} maszyn${q.wymagajSkanu ? ` · ▣ ${q.maszyny.filter(m => q.skany.includes(m)).length}/${q.maszyny.length}` : ''}</span>` : ''}</span>
           <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? (IKONA_CZYNNOSCI[q.czynnosc] ? ikona(IKONA_CZYNNOSCI[q.czynnosc], 16) : '▣') : ''}${q.wymagajZdjecia ? ikona('aparat', 16) : ''}${q.wymagajNotatki ? ikona('notatka', 16) : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? '▣' : ''}</span>
         </button>${otwarta && otwarta.pozycja === q.id ? formularzPozycji(z, q, otwarta, opcje, nazwaM) : ''}`).join('')}
@@ -765,6 +768,7 @@
       ? `<p class="hala-zlecenie-czynnosc">${q.czynnosc === 'proba' ? ikona('proba', 16) + 'Odhaczy się samo, gdy zapiszesz próbę' : ikona('przeglady', 16) + 'Odhaczy się samo po przeglądzie UR'}${q.maszyna ? ` na: ${esc(nazwaM(q.maszyna))}` : ''}</p>` : '';
     return `<div class="hala-pozycja-panel">
       ${opisPozycji}
+      ${q.zwrot ? `<p class="hala-pozycja-zwrot-opis">Kierownik zwrócił tę pozycję do poprawy${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</p>` : ''}
       ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
       ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">▶ ${esc(cz)}</button>` : samo}
       ${w.wymagajSkanu && wielo ? (() => {

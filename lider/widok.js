@@ -344,7 +344,7 @@
   function checklista(zmianaLinii, teraz, prog) {
     const k = H().kolorChecklisty(zmianaLinii, teraz, prog);
     const d = (zmianaLinii && zmianaLinii.dane) || {};
-    const wyk = d.wykonane || {}, pom = d.pominiete || {};
+    const wyk = d.wykonane || {}, pom = d.pominiete || {}, zwr = d.zwrocone || {};
     const opoz = new Set(k.opoznione.map(p => p.id)), blis = new Set(k.bliskie.map(p => p.id));
     const wiersze = (d.pozycje || []).map(p => {
       // Okno od–do (2026-10-26): przed godziną „od” pozycja jest widoczna, ale nie do odhaczenia (hub też odrzuci).
@@ -354,6 +354,7 @@
       return { id: p.id, nazwa: p.nazwa, typ: p.typ || 'zadanie', wymaga_qr: !!p.wymaga_qr, cel: p.cel || null,
                maszyny: p.maszyny || [], skany: p.skany || [], wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
                termin: p.termin, godz: godzina(p.termin), opis: p.opis || '', od: p.od || null, odGodz: p.od ? godzina(p.od) : '', stan, wpis,
+               zwrot: !wpis && zwr[p.id] ? (zwr[p.id].uwagi || '') : null,        // D87: kierownik zwrócił tę pozycję — powód
                poTerminie: stan === 'wykonana' && wpis && wpis.czas && ms(wpis.czas) > ms(p.termin),
                zaMin: stan === 'czeka' || stan === 'bliska' ? Math.round((ms(p.termin) - teraz) / MIN) : null };
     }).sort((a, b) => ms(a.termin) - ms(b.termin));

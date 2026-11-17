@@ -49,7 +49,7 @@
     <div class="hala-menu-naglowek">
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
-      <div class="hala-menu-kto">GK Panel Kierownika</div>
+      <div class="hala-menu-kto" id="menu-aplikacja">GK Panel Kierownika</div>
     </div>
     <button type="button" role="tab" data-widok="na-zywo" aria-selected="true"><span class="ikona" data-ikona="pulpit" aria-hidden="true"></span><span>Pulpit</span></button>
     <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span><span>Zlecenia</span><span id="plakietka-zlecen" class="plakietka" hidden></span></button>
@@ -75,6 +75,13 @@
       <!-- Właściciel 2026-11-10: to samo okno co „+ Nowe zlecenie” w Zleceniach i pod tym samym warunkiem (kierownik zakładu, admin). -->
       <button type="button" id="pulpit-nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
     </div>
+    <!-- D87 (właściciel 2026-11-17): pulpit łączy podgląd załączników z odbiorem — zlecenia „do odbioru” z dowodami (kto, kiedy, notatka,
+         zdjęcia, powód „Nie mogę”) i przyciskami Odbierz / Zwróć, także pozycja po pozycji. Te same wiersze co w Zlecenia → Do odbioru
+         (panel.js: wierszZlecenia). Sekcji nie ma, gdy nic nie czeka albo rola nie odbiera (konto ekranu). -->
+    <section class="odbior" id="pulpit-odbior" aria-labelledby="t-odbior" hidden>
+      <h2 id="t-odbior">Do odbioru <span id="licznik-odbioru" class="licznik"></span></h2>
+      <div id="lista-odbioru" class="lista"></div>
+    </section>
     <section class="obchody" aria-labelledby="t-obchody">
       <h2 id="t-obchody">Obchody Mistrza i Lidera</h2>
       <div id="kafelki" class="kafelki"></div>

@@ -33,12 +33,14 @@
      moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)
      dzialyKierownika    <-> dzialy_kierownika (D76: zakres kierownika działu)
      dzialyOsoby         <-> dzialy_osoby (D82: działy osoby); mozeOdebracZlecenie <-> blad_odbioru_zlecenia (R2); mozeUrlopOsoby <-> blad_urlopu_osoby (R5)
-     postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia) */
+     postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia)
+     odbiorPozycji       <-> odbior_pozycji    (D87: odbiór checklisty pozycja po pozycji)
+     koniecOdbioru       <-> koniec_odbioru_zmianowego (D88: odbiór zlecenia zmianowego tylko do końca zmiany + karencji) */
 
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.31.0';
+  const WERSJA_KLIENTA = '0.32.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -295,6 +297,12 @@
       const m = d[spec.usun_z_mapy.pole];
       if (k !== null && m && typeof m === 'object' && !Array.isArray(m)) delete m[k];
     }
+    // D87: dalsze mapy (zwrot pozycji czyści też „pominięte” i „odebrane”). Bliźniak: hala.py → zastosuj.
+    for (const r of spec.usun_tez || []) {
+      const k = kluczMapy(r, dane, meta);
+      const m = d[r.pole];
+      if (k !== null && m && typeof m === 'object' && !Array.isArray(m)) delete m[k];
+    }
     for (const pole of spec.zeruj || []) delete d[pole];
     if (spec.zeruj_wg) for (const pole of spec.zeruj_wg.mapa[dane[spec.zeruj_wg.pole]] || []) delete d[pole];
     if (spec.na_z_danych) s.status = dane[spec.na_z_danych.pole];
@@ -403,6 +411,9 @@
                                   wymagaj_skanu: !!p.wymagaj_skanu, od: p.od || d.od || null, opis: p.opis || '', zlecenie: z.id, pozycja: p.id });
         if ((d.wykonane || {})[p.id]) wynik.dane.wykonane[id] = d.wykonane[p.id];
         if ((d.pominiete || {})[p.id]) wynik.dane.pominiete[id] = d.pominiete[p.id];
+        // D87: pozycja zwrócona przez kierownika (nie zrobiona, z powodem) — lider widzi, DLACZEGO wróciła. Klucz tylko, gdy jest zwrot.
+        const zw = (d.pozycje_zwrocone || {})[p.id];
+        if (zw && !(d.wykonane || {})[p.id] && !(d.pominiete || {})[p.id]) (wynik.dane.zwrocone = wynik.dane.zwrocone || {})[id] = zw;
       }
     }
     wynik.dane.pozycje.sort((a, b) => (Date.parse(a.termin) || 0) - (Date.parse(b.termin) || 0));
@@ -451,6 +462,48 @@
     const pozycje = ((d && d.pozycje) || []).filter(p => p && p.id);
     const gotowe = pozycje.filter(p => ((d.wykonane || {})[p.id]) || ((d.pominiete || {})[p.id])).length;
     return { gotowe, wszystkie: pozycje.length, pelne: !!pozycje.length && gotowe === pozycje.length };
+  }
+
+  /* D88 (właściciel 2026-11-17): zlecenie ZMIANOWE (ma `wazne_do` = koniec zmiany) odbiera kierownik tylko w trakcie zmiany i przez
+     karencję (domyślnie 15 min — stale.odbior_zmianowych.karencja_min) po jej końcu; potem serwer zatwierdza je sam, a odbiór
+     i zwrot odrzuca. Zwraca ms końca odbioru albo null (zlecenie nie jest zmianowe — odbiera się bez ograniczenia czasu).
+     Bliźniak: hala.py → koniec_odbioru_zmianowego (wektory odbior_zmianowych). */
+  const KARENCJA_ODBIORU_MIN = 15;
+  function karencjaOdbioru(stale) {
+    const k = ((stale || {}).odbior_zmianowych || {}).karencja_min;
+    return typeof k === 'number' && isFinite(k) && k >= 0 ? k : KARENCJA_ODBIORU_MIN;
+  }
+  function koniecOdbioru(dane, karencjaMin) {
+    const w = Date.parse((dane || {}).wazne_do);
+    return isNaN(w) ? null : w + (karencjaMin === undefined ? KARENCJA_ODBIORU_MIN : karencjaMin) * 60000;
+  }
+
+  /* D87 (właściciel 2026-11-17): odbiór oddanej checklisty pozycja po pozycji. Stan zlecenia ma mapy `pozycje_odebrane`
+     (zlecenie.pozycja_odebrana) i `pozycje_zwrocone` (zlecenie.pozycja_zwrocona — pozycja z powodem, którą dział ma poprawić).
+     Pozycja jest ODEBRANA, gdy jest zrobiona (wykonana albo pominięta) i ma wpis odbioru nie starszy niż jej wykonanie —
+     odhaczenie po odbiorze (dział cofnął i zrobił jeszcze raz) unieważnia odbiór, więc zlecenie nie zamknie się za plecami
+     kierownika. ZWRÓCONA = nie jest zrobiona, a ma wpis zwrotu (czeka na poprawkę działu); `poprawiona` = zrobiona po zwrocie.
+     Brak nowych map (stare zlecenia) = nic nie odebrane, nic nie zwrócone — jak dotąd. Bliźniak: hala.py → odbior_pozycji.
+     Zwraca { wszystkie, odebrane, doOdbioru: [id…] (zrobione, jeszcze nie odebrane), zwrocone: [id…], pelne, pozycje: {id: {…}} }. */
+  function odbiorPozycji(d) {
+    d = d || {};
+    const ode = d.pozycje_odebrane || {}, zwr = d.pozycje_zwrocone || {};
+    const wynik = { wszystkie: 0, odebrane: 0, doOdbioru: [], zwrocone: [], pelne: false, pozycje: {} };
+    const wczesniej = (a, b) => { const x = Date.parse(a), y = Date.parse(b); return !isNaN(x) && !isNaN(y) && x < y; };
+    for (const p of ((d.pozycje) || [])) {
+      if (!p || !p.id) continue;
+      const zr = (d.wykonane || {})[p.id] || (d.pominiete || {})[p.id] || null;
+      const o = ode[p.id] || null, w = zwr[p.id] || null;
+      const odebrana = !!zr && !!o && !wczesniej(o.czas, zr.czas);
+      const zwrocona = !zr && !!w;
+      const poprawiona = !!zr && !!w && !wczesniej(zr.czas, w.czas);
+      wynik.wszystkie += 1;
+      if (odebrana) wynik.odebrane += 1; else if (zr) wynik.doOdbioru.push(p.id);
+      if (zwrocona) wynik.zwrocone.push(p.id);
+      wynik.pozycje[p.id] = { zrobiona: !!zr, odebrana, zwrocona, poprawiona, odbior: odebrana ? o : null, zwrot: w };
+    }
+    wynik.pelne = wynik.wszystkie > 0 && wynik.odebrane === wynik.wszystkie;
+    return wynik;
   }
 
   /* Czasy awarii (ms). Przestój: od zgłoszenia do potwierdzenia lidera, 24/7 bez
@@ -2695,7 +2748,7 @@
 
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
-    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
+    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, koniecOdbioru, karencjaOdbioru, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,

@@ -93,6 +93,7 @@
       html: `<p><span class="znacznik ${esc({ wykonana: 'ok', pominieta: 'neutral', opozniona: 'alarm', bliska: 'uwaga' }[p.stan] || 'info')}">${esc(OPIS_STANU[p.stan] || 'Do zrobienia')}</span>
           Termin <b>${esc(p.godz)}</b>${p.wymaga_qr ? ' · wymaga skanu QR' : ''}${p.cel ? ` · punkt ${esc(p.cel)}` : ''}${p.wymagaj_zdjecia ? ' · zdjęcie' : ''}${p.wymagaj_notatki ? ' · notatka' : ''}</p>
         ${p.opis ? `<p class="opis-pozycji">${esc(p.opis)}</p>` : ''}
+        ${p.zwrot !== null && p.zwrot !== undefined ? `<p class="tekst-alarm">Kierownik zwrócił tę pozycję do poprawy${p.zwrot ? `: ${esc(p.zwrot)}` : ''}</p>` : ''}
         ${zrobiona ? `<p class="ok-tekst">Zrobione ${esc(W.godzina(wpis.czas))}${kto ? ' · ' + esc(kto) : ''}${p.poTerminie ? ' (po terminie)' : ''}</p>
           ${wpis.qr ? `<p class="slaby">Kod: ${esc(wpis.qr)}</p>` : ''}${wpis.uwagi ? `<p>${esc(wpis.uwagi)}</p>` : ''}` : ''}
         ${p.stan === 'pominieta' ? `<p>Pominięte: ${esc(wpis.powod || '')}</p>` : ''}
@@ -227,7 +228,7 @@
   const wierszHtml = w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">
           <span class="czas">${esc(w.godz)}</span>
           <span class="ikona-typu" aria-hidden="true">${ikonaTypu(w.typ)}</span>
-          <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
+          <span class="tresc">${esc(w.nazwa)}${w.zwrot !== null && w.zwrot !== undefined ? `<span class="pozycja-zwrot">${window.GKIkony ? window.GKIkony.html('powtarzaj', 14) + ' ' : ''}Wróciła od kierownika${w.zwrot ? `: ${esc(w.zwrot)}` : ''}</span>` : ''}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
             w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
           <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
         </li>`;
