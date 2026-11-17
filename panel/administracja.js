@@ -133,7 +133,7 @@
 
   /* „Dane” i „Kody QR” to tylko drzwi do istniejących okien: czyszczenie zleceń (czyszczenie.js — wybór pozycji, pełna kopia
      bazy przed usunięciem, serwer odmawia nie-administratorom) i druk kodów QR (kody.js). Nic nie jest tu kopiowane, więc
-     wejścia w Zlecenia → 🧹 i ☰ Więcej → Kody QR działają dokładnie tak samo. Szkielet budowany raz na wejście w część
+     wejście w Zlecenia → 🧹 działa dokładnie tak samo. Szkielet budowany raz na wejście w część
      (przejdz() czyści treść), żeby przerysowanie co 20 s nie zabierało fokusu z przycisku. */
   function rysujDane(el) {
     if (el.querySelector('[data-karta="dane"]')) return;
@@ -267,7 +267,7 @@
     el.innerHTML = `<section class="admin-linia" data-karta="kody">
         <h3>Kody QR</h3>
         <p class="slaby">Kody aplikacji, maszyn, punktów skanu, linii i identyfikatorów osób — każdy osobno albo wszystkie z kategorii.
-          Wejście jest też w ☰ Więcej → Kody QR.</p>
+          Okno to samo co wszędzie, gdzie są kody (kierownik zakładu i administrator).</p>
         <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-kody">${P.ik('drukuj')}Kody QR</button></div>
       </section>`;
   }
@@ -1141,7 +1141,16 @@
 
   // ------------------------------------------------------------ zdarzenia
 
-  for (const b of document.querySelectorAll('#administracja .chip')) b.addEventListener('click', () => przejdz(b.dataset.czesc));
+  /* Chipy-drzwi (właściciel 2026-11-17, Panel bez „☰ Więcej”): nie mają własnej treści w Administracji, tylko otwierają to, co dawniej
+     było w „Więcej” — Wskaźniki i Raporty (zakładki menu; na telefonie schowane, klik programowy działa), Role i uprawnienia (okno),
+     Nie wysłane (okno odrzuconych zapisów, to samo co pasek połączenia). Zaznaczona zostaje poprzednia część. */
+  const DRZWI = {
+    wskazniki: () => { const z = document.querySelector('.zakladki [data-widok="wskazniki"]'); if (z) z.click(); },
+    raporty: () => { const z = document.querySelector('.zakladki [data-widok="raporty"]'); if (z) z.click(); },
+    role: () => { if (P.widoki.role) P.widoki.role.otworz(); },
+    niewyslane: () => { if (P.pokazOdrzucone) P.pokazOdrzucone(); },
+  };
+  for (const b of document.querySelectorAll('#administracja .chip')) b.addEventListener('click', () => (DRZWI[b.dataset.czesc] || (() => przejdz(b.dataset.czesc)))());
   // Rozwinięcie części Serwisu (także przez „Pokaż” przy alarmie) — zapamiętane na kolejne wejścia i przerysowania.
   $('admin-tresc').addEventListener('toggle', ev => {
     if (ev.target.matches && ev.target.matches('details.serwis-czesc')) serwisOtwarte[ev.target.dataset.sekcja] = ev.target.open;

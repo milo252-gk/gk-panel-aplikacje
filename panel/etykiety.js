@@ -149,7 +149,7 @@
                    podpis: 'Identyfikator — zeskanuj przy logowaniu, potem PIN', qr: `HALA:P:${p.id}` }));
   }
 
-  /* Wszystkie kategorie kodów do okna „🖨 Kody QR” (Więcej). Każda: {kod, nazwa, gdzie, elementy: [{klucz, nazwa, podpis,
+  /* Wszystkie kategorie kodów do okna „🖨 Kody QR” (Administracja → Kody QR). Każda: {kod, nazwa, gdzie, elementy: [{klucz, nazwa, podpis,
      etykiety}]} — jeden element = jeden przycisk 🖨 (maszyna = jedna naklejka, punkt skanu = naklejki jego maszyn);
      „Drukuj wszystkie” = etykiety wszystkich elementów bez powtórzeń. Pusta kategoria znika — kierownik nie szuka
      stanowisk, których w zakładzie nie ma.

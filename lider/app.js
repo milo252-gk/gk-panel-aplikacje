@@ -32,7 +32,10 @@
     ekrany: {},                 // nazwa -> { rysuj() } — wypełniają pliki ekranów
     wezwania: [],               // funkcje -> [{ klasa, html, akcja }] — pasek wezwań nad każdym ekranem
     poRysowaniu: [],            // funkcje wołane po każdym przerysowaniu (np. ekran blokujący alertu)
-    stan: { ekran: 'zmiana', linia: null, kolejka: { oczekuje: 0, moje: 0, odrzucone: 0 }, konflikty: [] },
+    stan: { ekran: 'zmiana', linia: null, kolejka: { oczekuje: 0, moje: 0, odrzucone: 0 }, konflikty: [],
+            // „Przyjmuję zadania”: powody odrzucenia przyjęcia z huba (id zlecenia → powód), zdjęta blokada (klucz zmiany) i dotknięcia
+            // zablokowanej pozycji (klucz zmiany → ile razy) — tylko w pamięci tej karty, bez klucza localStorage.
+            przyjecie: { odrzucone: {}, bez: {}, dotkniecia: {} } },
   };
 
   // ------------------------------------------------------------ komunikaty
@@ -501,7 +504,7 @@
     'zmiana.rozpoczeta': 'Otwarcie zmiany', 'checklista.pozycja_wykonana': 'Odhaczenie pozycji',
     'zlecenie.pozycja_wykonana': 'Odhaczenie pozycji', 'zlecenie.pozycja_pominieta': 'Pominięcie pozycji', 'zlecenie.pozycja_cofnieta': 'Cofnięcie pozycji',
     'checklista.pozycja_cofnieta': 'Cofnięcie pozycji', 'checklista.pozycja_pominieta': 'Pominięcie pozycji',
-    'zmiana.przekazanie': 'Przekazanie zmiany', 'zmiana.raport': 'Raport końcowy', 'zmiana.przekazanie_odczytane': 'Odczyt przekazania',
+    'zmiana.przekazanie': 'Przekazanie zmiany', 'zmiana.raport': 'Raport zmiany', 'zmiana.przekazanie_odczytane': 'Odczyt przekazania',
     'proba.zarejestrowana': 'Próba', 'alert.potwierdzony': 'Potwierdzenie alertu', 'reklamacja.odczytana': 'Odczyt reklamacji',
     'obsada.zgloszona': 'Obsada', 'obsada.zdarzenie': 'Zdarzenie obsady', 'bhp.audyt': 'Audyt BHP',
     'bhp.zgloszenie': 'Zgłoszenie BHP', 'bhp.zamkniete': 'Zamknięcie BHP',
@@ -572,7 +575,8 @@
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
     // Nazwa zależy od profilu, tylko po zalogowaniu: mistrz → „GK Mistrz”, reszta → „GK Lider” (manifest i logowanie bez zmian).
     const nazwaApki = W.nazwaAplikacji(p);
-    $('menu-aplikacja').textContent = nazwaApki;
+    const menuApka = $('menu-aplikacja');
+    if (menuApka) menuApka.textContent = nazwaApki;
     document.title = nazwaApki;
   }
 
@@ -644,10 +648,34 @@
   };
   /* „Przyjmuję zadania” (ekran Zmiana) to jedyna droga przejęcia checklisty: pozycji checklisty bieżącej zmiany nie otwieramy w karcie
      zlecenia, dopóki nie zostanie przyjęta (tylko interfejs). Karta checklisty nie ma „Biorę” — przyciski zależą od pozycji (zlecenia.js). */
+  /* Opcje przyjęcia dla bieżącej zmiany (W.przyjecieChecklisty): powody odrzuceń z huba, zdjęta blokada, dotknięcia. */
+  Lider.opcjePrzyjecia = klucz => {
+    const p = Lider.stan.przyjecie;
+    return { odrzucone: p.odrzucone, bezPrzyjecia: !!(klucz && p.bez[klucz]), dotkniecia: (klucz && p.dotkniecia[klucz]) || 0 };
+  };
+  Lider.przyjecieTeraz = () => {
+    const k = Lider.kontekst();
+    return W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy, Lider.opcjePrzyjecia(k.klucz));
+  };
+  /* Dotknięcie zablokowanej pozycji (ekran Zmiana albo karta zlecenia): tekst komunikatu albo null. Drugie dotknięcie (albo
+     odrzucenie z huba) pokazuje „Pracuję bez przyjęcia”. Powód z huba pokazujemy zamiast ogólnego zdania. */
+  Lider.blokadaPrzyjecia = () => {
+    const k = Lider.kontekst();
+    const pr = W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy, Lider.opcjePrzyjecia(k.klucz));
+    if (!pr.zablokowane) return null;
+    if (k.klucz) { Lider.stan.przyjecie.dotkniecia[k.klucz] = (Lider.stan.przyjecie.dotkniecia[k.klucz] || 0) + 1; Lider.narysuj(); }
+    const drugi = (Lider.stan.przyjecie.dotkniecia[k.klucz] || 0) >= 2 ? '. Jeśli to nie działa: „Pracuję bez przyjęcia” na ekranie Zmiana' : '';
+    return (pr.odrzucone ? `Serwer nie przyjął zadań: ${pr.odrzucone}. Dotknij „Przyjmuję zadania” jeszcze raz` : W.NAJPIERW_PRZYJMIJ) + drugi;
+  };
+  Lider.pracujBezPrzyjecia = () => {
+    const k = Lider.kontekst();
+    if (!k.klucz) return;
+    Lider.stan.przyjecie.bez[k.klucz] = true;
+    Lider.narysuj();
+  };
   Lider.najpierwPrzyjmij = z => {
     const lista = Lider.kontekst().lista;
-    return z && lista.zlecenia.some(x => x.id === z.id) && W.przyjecieChecklisty(lista, hala.pracownik, hala.pracownicy).zablokowane
-      ? W.NAJPIERW_PRZYJMIJ : null;
+    return z && lista.zlecenia.some(x => x.id === z.id) ? Lider.blokadaPrzyjecia() : null;
   };
   Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji, najpierwPrzyjmij: Lider.najpierwPrzyjmij }, Lider.dzialZlecen());
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.opcjeZlecen()) };
@@ -661,7 +689,7 @@
       const opisKonta = wMoimKoncie.slice(0, -1).join(', ') + ' i ' + wMoimKoncie[wMoimKoncie.length - 1];
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu-wiecej">
-          <button type="button" class="glowny" data-a="koniec">Koniec zmiany — raport</button>
+          <button type="button" class="glowny" data-a="koniec">Raport zmiany</button>
           <button type="button" data-a="moje">Moje zgłoszenia</button>
           <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>
         </nav>
@@ -721,12 +749,28 @@
   hala.na('slowniki', () => Lider.narysuj());
   hala.na('sesja', () => pokazSesje());
   hala.na('polaczenie', () => rysujPasek());
-  hala.na('kolejka', k => { Lider.stan.kolejka = k; rysujPasek(); });
+  /* Zlecenie.przyjete odrzucone przez serwer (id zlecenia → powód): z listy „Nie wysłane” w telefonie (po restarcie też) i na żywo. */
+  async function odswiezOdrzucenia() {
+    try {
+      const lista = await hala.odrzucone();
+      const m = {};
+      for (const o of lista) if (o.zd && o.zd.typ === 'zlecenie.przyjete' && o.zd.obiekt) m[o.zd.obiekt] = o.powod || 'odrzucone';
+      Lider.stan.przyjecie.odrzucone = m;
+      Lider.narysuj();
+    } catch (e) { /* bez listy — blokada działa bez powodu */ }
+  }
+  let ostatnieOdrzucone = -1;
+  hala.na('kolejka', k => {
+    Lider.stan.kolejka = k; rysujPasek();
+    if (k.odrzucone !== ostatnieOdrzucone) { ostatnieOdrzucone = k.odrzucone; odswiezOdrzucenia(); }
+  });
   hala.na('odrzucone', ({ zdarzenie, plik, powod }) => {
+    if (zdarzenie && zdarzenie.typ === 'zlecenie.przyjete' && zdarzenie.obiekt) { Lider.stan.przyjecie.odrzucone[zdarzenie.obiekt] = powod || 'odrzucone'; Lider.narysuj(); }
     Lider.komunikat(`${zdarzenie ? Lider.nazwaTypu(zdarzenie.typ) : 'Zdjęcie'} — serwer nie przyjął: ${powod}`, 'blad');
     rysujPasek();
   });
   hala.na('konflikt', ({ zdarzenie, uwaga }) => {
+    if (zdarzenie.typ === 'zlecenie.przyjete' && zdarzenie.obiekt) { Lider.stan.przyjecie.odrzucone[zdarzenie.obiekt] = uwaga || 'konflikt'; Lider.narysuj(); }
     Lider.stan.konflikty.unshift({ typ: zdarzenie.typ, czas: zdarzenie.czas, uwaga });
     Lider.stan.konflikty.length = Math.min(Lider.stan.konflikty.length, 30);
     Lider.komunikat(`${Lider.nazwaTypu(zdarzenie.typ)}: ${uwaga}`, 'blad');

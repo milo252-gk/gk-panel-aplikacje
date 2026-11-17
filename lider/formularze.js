@@ -452,7 +452,7 @@
   L.formularzPrzekazania = formularzPrzekazania;
   L.oknaPoStarcie.przekazanie = formularzPrzekazania;
 
-  // ------------------------------------------------------------ raport końcowy (KONTRAKT §6.4)
+  // ------------------------------------------------------------ raport zmiany (KONTRAKT §6.4)
 
   function zbudujRaport(k, uwagi) {
     return W.raport({
@@ -487,15 +487,17 @@
     if (brakZmiany(k)) return;
     // Raport to OSTATNI krok zmiany: kończy zmianę (i checklistę). Z niezrobionymi pozycjami — najpierw pytanie, dopiero po
     // potwierdzeniu otwiera się raport (poprawiony raport już wysłanej zmiany nie pyta drugi raz).
+    // Pytamy, gdy WŁASNA lista jest niekompletna i MÓJ raport nie poszedł (raport drugiej osoby — lidera/mistrza — nie liczy się)
+    // i tylko przy świeżym otwarciu: wznowione okno po restarcie karty (L.oknaPoStarcie.raport) nie pyta drugi raz.
     const koniec = W.stanKonca(k.lista && ((k.lista.dane || {}).pozycje || []).length ? k.lista : k.zl);
-    if (koniec.brakuje && !(k.zl && k.zl.status === 'zamknieta')
+    const wyslany = W.mojRaportWyslany(k.zl, hala.pracownik, hala.pracownicy);
+    if (koniec.brakuje && !wyslany && !o.wznowione
         && !(await L.potwierdz(koniec.pytanie, koniec.opis, 'Zakończ zmianę', 'Wróć'))) return;
     const f = await L.formularz('raport:' + k.klucz, { uwagi: (k.zl && k.zl.dane && k.zl.dane.raport && k.zl.dane.raport.uwagi) || '' });
     const r = zbudujRaport(k, f.dane.uwagi);
     const bezPrzekazania = !(k.zl && k.zl.dane && k.zl.dane.przekazanie);
-    const wyslany = k.zl && k.zl.status === 'zamknieta';
     L.okno({
-      tytul: 'Raport końcowy', klucz: 'raport', parametry: o,
+      tytul: 'Raport zmiany', klucz: 'raport', parametry: o,
       html: `<p class="slaby">${esc(W.opisZmiany(k.zmiana.id, hala.slowniki))} · ${esc(W.nazwaLinii(hala.slowniki, k.linia))}</p>
         ${wyslany ? `<p class="ok-tekst">Raport wysłany ${esc(W.godzina(k.zl.dane.czas_zamkniecia))}. Możesz wysłać poprawiony.</p>` : ''}
         ${bezPrzekazania ? `<div class="ostrzezenie">Nie ma przekazania zmiany dla następnego lidera.
@@ -524,7 +526,7 @@
     });
   }
   L.oknoRaportu = oknoRaportu;
-  L.oknaPoStarcie.raport = oknoRaportu;
+  L.oknaPoStarcie.raport = o => oknoRaportu(Object.assign({}, o, { wznowione: true }));
 
   // ------------------------------------------------------------ ekran „Koniec”
 
@@ -544,11 +546,11 @@
         <li class="wiersz"><span class="tresc">Awarie</span><span class="znacznik ${r.awarie.length ? 'alarm' : 'ok'}">${r.awarie.length}</span></li>
         <li class="wiersz"><span class="tresc">Próby</span><span class="znacznik neutral">${r.proby.liczba}</span></li>
         <li class="wiersz"><span class="tresc">Przekazanie</span>${d.przekazanie ? `<span class="znacznik ok">wysłane ${esc(W.godzina(d.czas_przekazania))}</span>` : '<span class="znacznik uwaga">brak</span>'}</li>
-        <li class="wiersz"><span class="tresc">Raport</span>${k.zl && k.zl.status === 'zamknieta' ? `<span class="znacznik ok">wysłany ${esc(W.godzina(d.czas_zamkniecia))}</span>` : '<span class="znacznik uwaga">niewysłany</span>'}</li>
+        <li class="wiersz"><span class="tresc">Raport</span>${W.mojRaportWyslany(k.zl, hala.pracownik, hala.pracownicy) ? `<span class="znacznik ok">wysłany ${esc(W.godzina(d.czas_zamkniecia))}</span>` : '<span class="znacznik uwaga">niewysłany</span>'}</li>
       </ul>
       <div class="przyciski-kolumna">
         <button type="button" data-a="przekazanie" data-zmiana="${esc(zmianaId)}" data-linia="${esc(k.linia)}">Przekazanie zmiany</button>
-        <button type="button" class="glowny" data-a="raport" data-zmiana="${esc(zmianaId)}" data-linia="${esc(k.linia)}">Raport końcowy</button>
+        <button type="button" class="glowny" data-a="raport" data-zmiana="${esc(zmianaId)}" data-linia="${esc(k.linia)}">Raport zmiany</button>
       </div>
     </article>`;
   }

@@ -97,7 +97,13 @@ dl.dane dd { margin: 0; white-space: pre-wrap; }
 .pozycja { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 10px; margin: 6px 0; cursor: pointer;
   background: var(--karta); border: 1px solid var(--ramka); border-left: 6px solid var(--ramka-mocna); border-radius: var(--promien); }
 .pozycja.ostatni-krok { border-style: dashed; border-left-style: solid; margin-top: 12px; }
-.pozycja.ostatni-krok.stan-czeka { opacity: .7; }
+.pozycja.ostatni-krok.stan-czeka { background: var(--tlo-neutralne); }       /* przygaszone kolorem, nie opacity — tekst zostaje czytelny (AA) */
+.pozycja.ostatni-krok.stan-czeka .tresc { color: var(--tekst-slaby); }
+/* Przed „Przyjmuję zadania” pozycje są przygaszone kolorem tła i tekstu słabego (bez opacity na tekście). */
+.lista.zablokowana .pozycja:not(.stan-wykonana) { background: var(--tlo-neutralne); }
+.lista.zablokowana .pozycja:not(.stan-wykonana) .tresc, .lista.zablokowana .pozycja:not(.stan-wykonana) .czas { color: var(--tekst-slaby); }
+.podpis-blokady { margin: 4px 2px; font-weight: 600; }
+h3.sekcja-listy { margin: 14px 2px 2px; font-size: 1em; }
 .pozycja.ostatni-krok.stan-gotowy { border-left-color: var(--zielony); font-weight: 600; }
 .pozycja.ostatni-krok.stan-gotowy .stan { color: var(--zielony); }
 .pozycja .czas { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 3.2em; }

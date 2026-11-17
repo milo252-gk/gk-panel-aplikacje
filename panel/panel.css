@@ -347,7 +347,7 @@ dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
 /* Arkusz etykiet drukuje się w ukrytej ramce z własnym CSS (PanelEtykiety.dokument, HalaKonto.drukujArkusz) — Panel nie
    ma już CSS druku (właściciel 2026-10-20: jeden sposób druku kodów QR wszędzie). */
 
-/* Okno „🖨 Kody QR” (Więcej): kategorie zwijane, w nagłówku liczba i „Drukuj wszystkie”, w środku 🖨 przy każdym kodzie. */
+/* Okno „🖨 Kody QR” (Administracja → Kody QR): kategorie zwijane, w nagłówku liczba i „Drukuj wszystkie”, w środku 🖨 przy każdym kodzie. */
 dialog.okno.okno-kodow { width: min(680px, calc(100vw - 24px)); }
 .kody-kategoria { border: 1px solid var(--ramka); border-radius: var(--promien); margin: 0 0 8px; background: var(--karta); }
 .kody-kategoria > summary { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-weight: 700;
@@ -597,18 +597,17 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 .blad-tekst { color: var(--czerwony); }
 @media (max-width: 600px) { .dla-dzialy { grid-template-columns: minmax(0, 1fr); } }
 
-/* D74 „☰ Więcej”: na telefonie Wskaźniki, Raporty i Administracja tylko w Więcej — dolny pasek: Na żywo, Zlecenia, Awaria, Więcej. */
+/* Właściciel 2026-11-17: Panel nie ma „☰ Więcej”. Na telefonie dolny pasek to Pulpit, Zlecenia, Awaria, Administracja; Wskaźniki i Raporty
+   (.w-wiecej, schowane na telefonie) są chipami w Administracji — gdy któryś z nich jest otwarty, świeci Administracja. Na komputerze
+   Wskaźniki i Raporty zostają w menu po lewej, więc chipów .chip-telefon tam nie ma. */
 @media (max-width: 820px) {
   .zakladki > button.w-wiecej { display: none; }
-  /* otwarty widok schowany w Więcej — podświetlone Więcej (jak wybrana pozycja w hala.css) */
-  .hala-uklad > .hala-menu.zakladki:has(> button.w-wiecej[aria-selected="true"]) > button[data-widok="wiecej"] { color: var(--granat-tekst); }
+  .hala-uklad > .hala-menu.zakladki:has(> button.w-wiecej[aria-selected="true"]) > button#menu-administracja { color: var(--granat-tekst); }
+  .hala-uklad > .hala-menu.zakladki:has(> button.w-wiecej[aria-selected="true"]) > button#menu-administracja::before {
+    content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--pomarancz);
+  }
 }
-.menu-wiecej { display: grid; gap: 10px; margin: 12px 0; max-width: 520px; }
-.menu-wiecej button { min-height: var(--dotyk); display: flex; align-items: center; justify-content: flex-start; gap: 12px; }
-.menu-wiecej .ikona { display: inline-flex; flex: 0 0 22px; justify-content: center; }
-/* Na komputerze Wskaźniki, Raporty i Administracja są w menu po lewej — „Więcej” zostawia tylko to, czego tam nie ma
-   (na telefonie pasek ma 4 pozycje, więc te trzy są tylko tutaj). */
-@media (min-width: 821px) { .menu-wiecej :is([data-idz="wskazniki"], [data-idz="raporty"], [data-idz="administracja"]) { display: none; } }
+@media (min-width: 821px) { .chip-telefon { display: none; } }
 
 /* Kilka zdjęć w formularzu (zlecenie, awaria): miniatury z ✕ w jednym rzędzie, zawijane. */
 .hala-zdjecie-lista { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }

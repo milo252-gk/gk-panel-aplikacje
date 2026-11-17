@@ -35,7 +35,7 @@
     const zlecaj = pisze && (hala.pracownik.role || []).some(r => r === 'admin'
       || ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role || []).includes(r));
     // Właściciel 2026-10-20: kody QR punktów skanu przy zapisanym (▣ / obchód przy maszynie) — 🖨 = naklejki jego maszyn,
-    // „🖨 Kody QR punktów” = naklejki wszystkich (bez powtórzeń). Te same etykiety co Maszyny i Więcej → 🖨 Kody QR.
+    // „🖨 Kody QR punktów” = naklejki wszystkich (bez powtórzeń). Te same etykiety co Maszyny i Administracja → 🖨 Kody QR.
     const punkty = new Map(window.PanelEtykiety.punktySkanu(d.slowniki).filter(p => p.zrodlo === 'zapisane').map(p => [p.kod, p]));
     $('kody-punktow').hidden = !punkty.size;
     $('kody-punktow').innerHTML = `${P.ik('drukuj')}Kody QR punktów (${window.PanelEtykiety.etykietyElementow([...punkty.values()]).length})`;
@@ -572,7 +572,7 @@
   // na zmianę na dział, bierze je ten, kto jest na zmianie. Dział, którego kierownik nie może zlecać, odpada z domyślnych.
   $('nowa-checklista-zlecen').addEventListener('click', () => otworz({
     checklista: true, dzial: (dzialyKontraktu()[0] || {}).kod || 'produkcja',
-    dzialy: W.DZIALY_NOWEJ_CHECKLISTY.filter(k => dzialyKontraktu().some(d => d.kod === k)), kto: 'dzial', linia: W.LINIA_KAZDA, rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5],
+    dzialy: W.DZIALY_NOWEJ_CHECKLISTY.filter(k => dzialyKontraktu().some(d => d.kod === k)), kto: 'dzial', linia: W.LINIA_KAZDA, rodzaj: 'codziennie', dni: [1, 2, 3, 4, 5, 6],
     zmiany: Object.keys(zmianySlownik()), termin_rodzaj: 'koniec_zmiany', wymagaj_zdjecia: false, wymagaj_notatki: false, bez_swiat: false,
     aktywny: true, pozycje: [{ godzina: '0:30' }, {}] }, null, 'Nowa checklista'));
 

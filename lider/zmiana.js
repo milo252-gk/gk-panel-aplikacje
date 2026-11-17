@@ -1,5 +1,5 @@
 /* Zmiana: checklista zmiany (D67: zlecenie z pozycjami, które hub robi na każdą zmianę z „Checklisty” w Panelu →
-   Zlecenia → 💾 Zapisane), pasek postępu w kolorze Panelu, lista pozycji, obchody z QR, przekazanie od poprzedniej
+   Zlecenia → Zapisane), pasek postępu w kolorze Panelu, lista pozycji, obchody z QR, przekazanie od poprzedniej
    zmiany i przypomnienia.
 
    Klucz zmiany na linii to DOKŁADNIE <linia>/<zmiana.id> z hala.zmianaTeraz() —
@@ -79,7 +79,7 @@
     if (p.stan === 'przed') { L.komunikat(`„${p.nazwa}” zrobisz od ${p.odGodz}${p.godz ? ` (do ${p.godz})` : ''}`, 'info', 'pozycja-przed'); return; }
     const zrobiona = p.stan === 'wykonana';
     // „Przyjmuję zadania” najpierw (tylko UI; hub nadal przyjmie odhaczenie bez przyjęcia). Zrobionej pozycji nie blokujemy — „Cofnij”.
-    if (!zrobiona && W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy).zablokowane) { L.komunikat(W.NAJPIERW_PRZYJMIJ, 'info', 'najpierw-przyjmij'); return; }
+    if (!zrobiona) { const t = L.blokadaPrzyjecia(); if (t) { L.komunikat(t, 'info', 'najpierw-przyjmij'); return; } }
     const wpis = p.wpis || {};
     const kto = W.nazwaPracownika(hala.pracownicy, wpis.autor);
     const glowna = {
@@ -199,19 +199,18 @@
         ${W.przyciskiZmiany(pozycje).map(p => `<button type="button" data-a="${esc(p.a)}">${esc(p.nazwa)}</button>`).join('')}
       </div>`;
 
-  /* Skrót do ekranu „Koniec” (właściciel 2026-11-10): raport końcowy to czynność obowiązkowa raz na zmianę, a była tylko w „Więcej”.
-     Główny przycisk dopiero, gdy checklista jest zrobiona — wcześniej nie konkuruje z pozycjami. W „Więcej” zostaje też. */
-  const koniecZmiany = glowny => `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Koniec zmiany — raport</button></div>`;
+  /* Raport zmiany: jedna nazwa w całej aplikacji (właściciel 2026-11-17). Dwa kształty tego samego kroku, nigdy oba naraz:
+     — lista niekompletna: wiersz-przypomnienie na końcu listy („Na końcu”; dotknięty za wcześnie pyta „Zakończyć zmianę bez
+       wykonania wszystkich zadań?” — oknoRaportu); po wysłaniu „✔ godz.”;
+     — lista kompletna, raport niewysłany: jeden główny przycisk pod listą (zamiast wiersza).
+     To nie pozycja zlecenia (raport to osobne zdarzenie zmiana.raport, KONTRAKT §6.4). */
+  const koniecZmiany = glowny => `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Raport zmiany</button></div>`;
 
-  /* Ostatni krok checklisty: „Raport zmiany” (właściciel 2026-11-16). To nie pozycja zlecenia (raport to osobne zdarzenie
-     zmiana.raport, KONTRAKT §6.4) — wiersz-przypomnienie na końcu listy: „Na końcu”, gdy coś zostało, „Zrób raport” (zielony),
-     gdy reszta zrobiona, „✔ godz.” po wysłaniu. Główna akcja po zrobionej liście to osobny przycisk pod listą (koniecZmiany).
-     Dotknięty za wcześnie nie jest zablokowany, tylko pyta „Zakończyć zmianę bez wykonania wszystkich zadań?” (oknoRaportu). */
-  function ostatniKrok(k, zamknieta) {
+  function ostatniKrok(k, wyslany) {
     const d = (k.zl && k.zl.dane) || {};
-    const stan = zamknieta ? 'wykonana' : W.stanKonca(k.lista).komplet ? 'gotowy' : 'czeka';
-    const opis = zamknieta ? `✔ ${esc(W.godzina(d.czas_zamkniecia))}` : stan === 'gotowy' ? 'Zrób raport' : 'Na końcu';
-    return `<li class="pozycja ostatni-krok stan-${stan}" data-a="raport" role="button" tabindex="0">
+    const opis = wyslany ? `✔ ${esc(W.godzina(d.czas_zamkniecia))}` : 'Na końcu';
+    return `<li class="pozycja ostatni-krok stan-${wyslany ? 'wykonana' : 'czeka'}" data-a="raport" role="button" tabindex="0"
+          aria-label="Raport zmiany — ${wyslany ? 'wysłany ' + esc(W.godzina(d.czas_zamkniecia)) : 'na końcu listy, po wykonaniu zadań'}">
           <span class="czas">—</span>
           <span class="ikona-typu" aria-hidden="true">${ikonaTypu('przekazanie')}</span>
           <span class="tresc">Raport zmiany</span>
@@ -219,12 +218,27 @@
         </li>`;
   }
 
+  /* Dział do wpisania w Panelu → Zlecenia → Zapisane → „+ Checklista” zależnie od roli (pusty ekran). */
+  function opisDzialuListy(pracownik) {
+    const kat = W.kategorieOsoby(pracownik);
+    return kat.length > 1 ? 'dział Lider albo Mistrzowie' : kat[0] === 'mistrz' ? 'dział Mistrzowie' : 'dział Lider';
+  }
+
+  const wierszHtml = w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">
+          <span class="czas">${esc(w.godz)}</span>
+          <span class="ikona-typu" aria-hidden="true">${ikonaTypu(w.typ)}</span>
+          <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
+            w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
+          <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
+        </li>`;
+
   function rysujZmiane(el) {
     const k = L.kontekst();
     if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian. Sprawdź słownik zmian.</p>'; return; }
     const przekazanie = kartaPrzekazania(k);
     const pozycje = (k.lista && k.lista.dane.pozycje) || [];
-    if (!pozycje.length && k.zl && k.zl.status === 'zamknieta') {
+    const wyslany = W.mojRaportWyslany(k.zl, hala.pracownik, hala.pracownicy);      // mój raport (lider/mistrz osobno), nie „ktokolwiek”
+    if (!pozycje.length && wyslany) {
       // Raport wysłany bez otwierania zmiany: „Rozpocznij” byłoby konfliktem (kontrakt 1.7.0 — zamkniętej się nie otwiera).
       el.innerHTML = `${przekazanie}
         <article class="karta otwarcie">
@@ -240,21 +254,31 @@
         <article class="karta otwarcie">
           <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))}</p>
-          <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik układa ją w Panelu → Zlecenia → 💾 Zapisane → „+ Checklista”
-            (dział Lider) — pojawi się tu sama na początku zmiany.</p>
+          <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik układa ją w Panelu → Zlecenia → ${window.GKIkony ? window.GKIkony.html('zapisane', 16) + ' ' : ''}Zapisane → „+ Checklista”
+            (${esc(opisDzialuListy(hala.pracownik))}) — pojawi się tu sama na początku zmiany.</p>
         </article>
         ${przyciskiZmiany([])}
         ${koniecZmiany(false)}`;
       return;
     }
     const c = W.checklista(k.lista, hala.teraz(), prog());
-    const zamknieta = !!(k.zl && k.zl.status === 'zamknieta');
-    const pr = W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy);
+    const zamknieta = wyslany;
+    const pr = W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy, L.opcjePrzyjecia(k.klucz));
     // Jedna czynność przejęcia całej checklisty działu na tę zmianę; potem — kto i o której (kierownik i admin widzą to samo).
     const przyjecie = !pr.stan ? '' : pr.moze && pr.doPrzyjecia.length
       ? `<article class="karta przyjecie"><p><b>${esc(pr.tekst)}</b></p>
-          <button type="button" class="glowny duzy szeroki" data-a="przyjmuje">Przyjmuję zadania</button></article>`
-      : `<p class="slaby przyjecie" role="status">${esc(pr.tekst)}</p>`;
+          ${pr.odrzucone ? `<p class="tekst-alarm" role="alert">Serwer nie przyjął zadań: ${esc(pr.odrzucone)}</p>` : ''}
+          <button type="button" class="glowny duzy szeroki" data-a="przyjmuje">Przyjmuję zadania</button>
+          ${pr.awaryjne ? '<button type="button" class="maly szeroki" data-a="bez-przyjecia">Pracuję bez przyjęcia</button>' : ''}</article>`
+      : `<p class="slaby przyjecie" role="status">${esc(pr.tekst)}${pr.bezPrzyjecia ? ' · pracujesz bez przyjęcia' : ''}</p>`;
+    const komplet = W.stanKonca(k.lista).komplet;
+    const zWierszy = ids => c.wiersze.filter(x => ids.has(x.id));
+    // Osoba z rolami lider+mistrz: dwie sekcje („Mistrz”, „Lider”) na jednej zmianie; przyjęcie i raport obejmują obie.
+    const lista = k.lista.sekcje && k.lista.sekcje.length
+      ? k.lista.sekcje.map(sk => `<h3 class="sekcja-listy">${esc(sk.nazwa)}</h3>
+          <ul class="lista checklista${pr.zablokowane ? ' zablokowana' : ''}">${zWierszy(new Set(sk.ids)).map(wierszHtml).join('')}</ul>`).join('')
+        + (komplet && !zamknieta ? '' : `<ul class="lista checklista">${ostatniKrok(k, zamknieta)}</ul>`)
+      : `<ul class="lista checklista${pr.zablokowane ? ' zablokowana' : ''}">${c.wiersze.map(wierszHtml).join('')}${komplet && !zamknieta ? '' : ostatniKrok(k, zamknieta)}</ul>`;
     el.innerHTML = `${przekazanie}${przyjecie}
       <article class="karta postep-zmiany kolor-${esc(c.kolor)}">
         <div class="postep-gora"><b class="liczba">${c.zrobione}/${c.wszystkie}</b> <span>${c.proc} %</span>
@@ -263,14 +287,9 @@
         <div class="slaby">${c.najblizsza ? `Następne ${esc(c.najblizsza.godz)} · ${esc(c.najblizsza.nazwa)}${c.najblizsza.zaMin >= 0 ? ` <span class="za-ile">(za ${esc(Hala.formatCzasu(c.najblizsza.zaMin * 60000))})</span>` : ''}`
                                          : c.opoznione ? 'Nadrób zaległe pozycje' : 'Wszystko zrobione'}</div>
       </article>
-      <ul class="lista checklista">${c.wiersze.map(w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">
-          <span class="czas">${esc(w.godz)}</span>
-          <span class="ikona-typu" aria-hidden="true">${ikonaTypu(w.typ)}</span>
-          <span class="tresc">${esc(w.nazwa)}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
-            w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
-          <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
-        </li>`).join('')}${ostatniKrok(k, zamknieta)}</ul>
-      ${!zamknieta && W.stanKonca(k.lista).komplet ? koniecZmiany(true) : ''}
+      ${pr.podpis ? `<p class="slaby podpis-blokady" role="status">${esc(pr.podpis)}</p>` : ''}
+      ${lista}
+      ${!zamknieta && komplet ? koniecZmiany(true) : ''}
       ${przyciskiZmiany(pozycje)}`;
   }
 
@@ -289,12 +308,13 @@
     else if (a === 'koniec') L.pokazEkran('koniec');
     else if (a === 'raport') L.oknoRaportu({});
     else if (a === 'przyjmuje') await przyjmijZadania(t);
+    else if (a === 'bez-przyjecia') L.pracujBezPrzyjecia();
   });
 
   /* „Przyjmuję zadania”: zlecenie.przyjete dla każdego zlecenia checklisty tej zmiany w statusie „nowe”, po kolei.
      Pierwszy błąd zatrzymuje (ponowne dotknięcie dokończy resztę). */
   async function przyjmijZadania(przycisk) {
-    const pr = W.przyjecieChecklisty(L.kontekst().lista, hala.pracownik, hala.pracownicy);
+    const pr = L.przyjecieTeraz();
     if (!pr.doPrzyjecia.length) return;
     przycisk.disabled = true;
     for (const id of pr.doPrzyjecia) {
@@ -320,7 +340,7 @@
   function przypomnij() {
     if (!hala.zalogowany()) return;
     const k = L.kontekst();
-    if (!k.lista.dane.pozycje.length || (k.zl && k.zl.status === 'zamknieta')) return;
+    if (!k.lista.dane.pozycje.length || W.mojRaportWyslany(k.zl, hala.pracownik, hala.pracownicy)) return;
     // Jeden wpis na telefon ({zmiana, id pozycji}) — nowa zmiana nadpisuje starą, nic się nie zbiera.
     let juz = new Set();
     try {

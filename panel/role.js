@@ -1,4 +1,4 @@
-/* Panel Kierownika — okno „🔐 Role i uprawnienia” (☰ Więcej; każdy, kto ma Panel).
+/* Panel Kierownika — okno „🔐 Role i uprawnienia” (Administracja → Role i uprawnienia; administrator i kierownik zakładu — od 2026-11-17, dawniej każdy z „Więcej”).
 
    Właściciel 2026-10-27: „zdefiniuj, jakie dostępy i do jakich opcji mają poszczególne role, żeby trzymać ten standard.
    Niech będzie to opisane w samej aplikacji.” Tabela jest liczona z kontraktu (W.uprawnienia): role zapisane w zdarzeniach,

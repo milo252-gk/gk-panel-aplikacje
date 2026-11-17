@@ -105,13 +105,46 @@
     return lm ? { dzial: 'mistrz', linie: lm } : { dzial: 'mistrz' };
   }
 
+  /* Które listy ma osoba na ekranie Zmiana (właściciel 2026-11-17): lider → „lider”; mistrz → „mistrz”; lider+mistrz → obie;
+     kierownik, admin i reszta → „lider” (jak dzialZlecen), a kierownik z rolą mistrz → „mistrz”. */
+  function kategorieOsoby(pracownik) {
+    const role = (pracownik && pracownik.role) || [];
+    const k = [];
+    if (role.includes('lider') || !role.includes('mistrz')) k.push('lider');
+    if (role.includes('mistrz')) k.push('mistrz');
+    return k;
+  }
+
   /* Checklista zmiany dla osoby (Lider.kontekst): mistrz — zlecenia działu „mistrz” całego zakładu (albo jego linii; zlecenie
-     bez linii dotyczy wszystkich), lider i reszta — dział „produkcja” na wybranej linii, jak dotąd. */
+     bez linii dotyczy wszystkich), lider i reszta — dział „produkcja” na wybranej linii, jak dotąd. Osoba z rolami lider+mistrz
+     dostaje OBIE listy złączone w jedną (pozycje po terminie; `sekcje` mówi, która pozycja z której — ekran Zmiana rysuje
+     dwie sekcje „Mistrz” i „Lider”; przyjęcie, odhaczanie i raport działają na całości). */
   function listaChecklisty(zlecenia, pracownik, linia, slowniki, zmiana) {
-    const d = dzialZlecen(pracownik, linia, slowniki);
-    if (d.dzial !== 'mistrz') return H().checklistaZmiany(zlecenia, linia, zmiana, 'produkcja');
-    return H().checklistaZmiany(bezKopiiLinii((zlecenia || []).filter(z => !d.linie || !((z.dane || {}).linia) || d.linie.includes(z.dane.linia))),
-                                null, zmiana, 'mistrz');
+    const kat = kategorieOsoby(pracownik);
+    const lider = () => H().checklistaZmiany(zlecenia, linia, zmiana, 'produkcja');
+    const mistrz = () => {
+      const d = dzialZlecen(pracownik, linia, slowniki);
+      return H().checklistaZmiany(bezKopiiLinii((zlecenia || []).filter(z => !d.linie || !((z.dane || {}).linia) || d.linie.includes(z.dane.linia))),
+                                  null, zmiana, 'mistrz');
+    };
+    if (kat.length === 1) return kat[0] === 'mistrz' ? mistrz() : lider();
+    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider', lista: lider() }]);
+  }
+
+  function polaczListy(czesci) {
+    const w = { dane: { pozycje: [], wykonane: {}, pominiete: {} }, zlecenia: [], mapa: {}, sekcje: [] };
+    for (const c of czesci) {
+      const l = c.lista;
+      w.dane.pozycje.push(...l.dane.pozycje);
+      Object.assign(w.dane.wykonane, l.dane.wykonane);
+      Object.assign(w.dane.pominiete, l.dane.pominiete);
+      w.zlecenia.push(...l.zlecenia);
+      Object.assign(w.mapa, l.mapa);
+      w.sekcje.push({ dzial: c.dzial, nazwa: c.nazwa, ids: l.dane.pozycje.map(p => p.id) });
+    }
+    w.dane.pozycje.sort((a, b) => (Date.parse(a.termin) || 0) - (Date.parse(b.termin) || 0));
+    if (w.sekcje.filter(x => x.ids.length).length < 2) w.sekcje = [];       // jedna z list pusta — bez podziału na sekcje
+    return w;
   }
 
   /* Checklista działu „mistrz” zapisana z linią „każda linia osobno” daje hubowi N zleceń (po jednym na linię) — mistrz dostałby
@@ -134,11 +167,21 @@
      checklistaZmiany (zlecenia checklisty działu na tę zmianę; kilka, gdy zlecone osobno na linie). Czas i osoba z pól
      zlecenia, które klient zna z zdarzenia zlecenie.przyjete: przyjal, czas_przyjecia.
        stan: 'brak' (nikt nie przyjął), 'czesc' (część zleceń przyjęta), 'przyjete', null (brak checklisty albo zrobiona bez przyjęcia)
-       doPrzyjecia: id zleceń w statusie „nowe” (tyle ma przyjąć jedno kliknięcie)
-       moze: lider i mistrz przyjmują (kierownik i admin tylko oglądają); zablokowane: pozycji nie odhaczamy przed przyjęciem. */
-  function przyjecieChecklisty(lista, pracownik, pracownicy) {
+       doPrzyjecia: id zleceń w statusie „nowe” BEZ cudzego wykonawcy (zlecenie.dane.wykonawca innej osoby niż zalogowana) — tyle
+         ma przyjąć jedno kliknięcie (zlecenie przypisane komuś innemu hub i tak odrzuci). Inne statusy niż „nowe” (np. wymagające
+         kierownika) tu nie wchodzą.
+       moze: lider i mistrz przyjmują (kierownik i admin tylko oglądają); zablokowane: pozycji nie odhaczamy przed przyjęciem
+         (tylko UI), chyba że osoba zdjęła blokadę na tę zmianę (opcje.bezPrzyjecia).
+     opcje: { odrzucone: { <id zlecenia>: powód z huba } — zlecenie.przyjete odrzucone przez serwer; dotkniecia: ile razy dotknięto
+       zablokowanej pozycji; bezPrzyjecia: osoba wybrała „Pracuję bez przyjęcia” }.
+       awaryjne: pokaż „Pracuję bez przyjęcia” — gdy hub odrzucił przyjęcie albo osoba dotknęła zablokowanej pozycji drugi raz;
+       odrzucone: powód z huba (pierwszy) albo null; podpis: tekst nad listą w stanie zablokowanym. */
+  function przyjecieChecklisty(lista, pracownik, pracownicy, opcje) {
+    const o = opcje || {};
+    const ja = pracownik && pracownik.id;
     const zl = (lista && lista.zlecenia) || [];
-    const doPrzyjecia = zl.filter(z => z.status === 'nowe').map(z => z.id);
+    const cudze = z => { const w = (z.dane || {}).wykonawca; return !!w && !!ja && w !== ja; };
+    const doPrzyjecia = zl.filter(z => z.status === 'nowe' && !cudze(z)).map(z => z.id);
     const przyjete = zl.filter(z => (z.dane || {}).przyjal)
       .sort((a, b) => (ms((a.dane || {}).czas_przyjecia) || 0) - (ms((b.dane || {}).czas_przyjecia) || 0));
     const role = (pracownik && pracownik.role) || [];
@@ -148,7 +191,26 @@
     const kto = d ? nazwaPracownika(pracownicy, d.przyjal) : null, godz = d && d.czas_przyjecia ? godzina(d.czas_przyjecia) : null;
     const tekst = stan === 'brak' ? 'Nikt jeszcze nie przyjął zadań'
       : stan ? `Przyjął: ${kto}${godz ? ' · ' + godz : ''}${stan === 'czesc' ? ' (część zadań czeka)' : ''}` : '';
-    return { stan, doPrzyjecia, kto, godz, tekst, moze, zablokowane: moze && doPrzyjecia.length > 0 };
+    const odrz = o.odrzucone || {};
+    const powod = zl.map(z => odrz[z.id]).find(Boolean) || null;
+    const zablokowane = moze && doPrzyjecia.length > 0 && !o.bezPrzyjecia;
+    return { stan, doPrzyjecia, kto, godz, tekst, moze, zablokowane, odrzucone: powod,
+             awaryjne: zablokowane && (!!powod || (o.dotkniecia || 0) >= 2), bezPrzyjecia: !!o.bezPrzyjecia && moze && doPrzyjecia.length > 0,
+             podpis: zablokowane ? PODPIS_BLOKADY : '' };
+  }
+  const PODPIS_BLOKADY = 'Najpierw przyjmij zadania, potem odhaczaj';
+
+  /* Czy MÓJ raport zmiany jest już wysłany (właściciel 2026-11-17: lider i mistrz wysyłają po raporcie; rozróżnienie po roli autora
+     TYLKO w kliencie). Obiekt zmiana_linii ma jedno pole raport (późniejszy raport zastępuje treść — hub ich nie rozdziela),
+     więc „mój raport wysłany” = zmiana zamknięta raportem OSOBY z tej samej kategorii (lider/mistrz; autor z oboma rolami liczy
+     się obu). Autor nieznany (stary raport bez pola lider) — jak dawniej: wysłany dla wszystkich. */
+  function mojRaportWyslany(zl, pracownik, pracownicy) {
+    if (!zl || zl.status !== 'zamknieta') return false;
+    const id = ((zl.dane || {}).raport || {}).lider || (zl.dane || {}).lider;
+    const autor = id ? (pracownicy || []).find(p => p && p.id === id) : null;
+    if (!autor) return true;
+    const ich = kategorieOsoby(autor);
+    return kategorieOsoby(pracownik).some(k => ich.includes(k));
   }
 
   /* Koniec zmiany (właściciel 2026-11-16): „Raport zmiany” jest ostatnim krokiem checklisty. Ile pozycji zostało (niezrobionych
@@ -711,7 +773,7 @@
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
-    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, nazwaAplikacji, NAJPIERW_PRZYJMIJ, bezKopiiLinii,
+    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, nazwaAplikacji, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,

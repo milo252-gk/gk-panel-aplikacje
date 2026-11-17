@@ -55,11 +55,11 @@
     <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span><span>Zlecenia</span><span id="plakietka-zlecen" class="plakietka" hidden></span></button>
     <button type="button" role="tab" data-widok="wskazniki" class="w-wiecej" aria-selected="false"><span class="ikona" data-ikona="wskazniki" aria-hidden="true"></span><span>Wskaźniki</span></button>
     <button type="button" role="tab" data-widok="raporty" class="w-wiecej" aria-selected="false"><span class="ikona" data-ikona="raporty" aria-hidden="true"></span><span>Raporty</span></button>
-    <button type="button" role="tab" data-widok="administracja" id="menu-administracja" class="w-wiecej" aria-selected="false" hidden><span class="ikona" data-ikona="administracja" aria-hidden="true"></span><span>Administracja</span></button>
     <button type="button" id="menu-awaria" class="menu-akcja" title="Zgłoś awarię" hidden><span class="ikona" data-ikona="awaria" aria-hidden="true"></span><span class="tylko-komputer">Zgłoś awarię</span><span class="tylko-telefon">Awaria</span></button>
-    <!-- D74 (właściciel 2026-10-16): menu kończy się „☰ Więcej”, jak w UR, KJ i Liderze (D64). Na telefonie Wskaźniki, Raporty
-         i Administracja są tylko w Więcej (.w-wiecej), na komputerze także w menu. -->
-    <button type="button" role="tab" data-widok="wiecej" aria-selected="false"><span class="ikona" data-ikona="wiecej" aria-hidden="true"></span><span>Więcej</span><span id="plakietka-wiecej" class="plakietka" hidden></span></button>
+    <!-- Właściciel 2026-11-17: Panel nie ma „☰ Więcej” — ostatnia pozycja paska to Administracja (STYL-GK §8, wyjątek). Dolny pasek telefonu:
+         Pulpit, Zlecenia, Awaria, Administracja; Wskaźniki i Raporty (.w-wiecej — schowane na telefonie przez wspólne hala.css) są tam
+         chipami w Administracji, a na komputerze zostają w menu po lewej. Plakietka „Nie wysłane” siedzi na Administracji. -->
+    <button type="button" role="tab" data-widok="administracja" id="menu-administracja" aria-selected="false" hidden><span class="ikona" data-ikona="administracja" aria-hidden="true"></span><span>Administracja</span><span id="plakietka-administracja" class="plakietka" hidden></span></button>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 
@@ -180,21 +180,6 @@
     </section>
   </div>
 
-  <div id="wiecej" hidden>
-    <section aria-labelledby="t-wiecej">
-      <h2 id="t-wiecej">Więcej</h2>
-      <nav class="menu-wiecej" aria-label="Więcej">
-        <button type="button" data-idz="wskazniki"><span class="ikona" data-ikona="wskazniki" aria-hidden="true"></span>Wskaźniki</button>
-        <button type="button" data-idz="raporty"><span class="ikona" data-ikona="raporty" aria-hidden="true"></span>Raporty</button>
-        <button type="button" data-idz="administracja" id="wiecej-administracja" hidden><span class="ikona" data-ikona="administracja" aria-hidden="true"></span>Administracja</button>
-        <button type="button" data-idz="kody" id="wiecej-kody" hidden><span class="ikona" data-ikona="kody" aria-hidden="true"></span>Kody QR</button>
-        <button type="button" data-idz="role" id="wiecej-role"><span class="ikona" data-ikona="konta" aria-hidden="true"></span>Role i uprawnienia</button>
-        <button type="button" data-idz="niewyslane" id="wiecej-niewyslane"><span class="ikona" data-ikona="powtarzaj" aria-hidden="true"></span><span id="wiecej-niewyslane-tekst">Nie wysłane</span></button>
-      </nav>
-      <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>
-    </section>
-  </div>
-
   <div id="administracja" class="administracja-widok" hidden>
     <section aria-labelledby="t-administracja">
       <h2 id="t-administracja">Administracja</h2>
@@ -205,14 +190,20 @@
       <!-- UI etap 2: cztery części. Rzadkie rzeczy techniczne (dostęp z telefonów, logowanie z internetu, sieć zakładu,
            Połączenia GK, od 2026-11-10 także kopie i tunel) są razem w „Ustawienia” (kod części: serwis); progi alarmów i godziny
            zmian to „Progi i godziny” (kod: ustawienia). Etykiety QR drukuje przycisk w Maszynach. STYL-GK §8 (2026-11-04): „Dane”
-           (czyszczenie zleceń) i „Kody QR” to wejścia do tych samych okien co Zlecenia → 🧹 i ☰ Więcej → Kody QR. -->
+           (czyszczenie zleceń) i „Kody QR” to wejścia do okien Zlecenia → 🧹 i okna kodów QR (kody.js). -->
       <div class="chipy" id="admin-chipy" role="group" aria-label="Część administracji">
         <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true">Pracownicy</button>
         <button type="button" class="chip" data-czesc="urlopy" aria-pressed="false"><span class="ik" data-ikona="urlop" data-rozmiar="16"></span>Urlopy</button>
         <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
         <button type="button" class="chip" data-czesc="dane" aria-pressed="false">Dane</button>
         <button type="button" class="chip" data-czesc="logowania" aria-pressed="false">Logowania</button>
-        <button type="button" class="chip" data-czesc="kody" aria-pressed="false">Kody QR</button>
+        <!-- Kolejność i ikony jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia, Nie wysłane. Wskaźniki i Raporty: chip
+             otwiera ten sam widok co pozycja menu (na komputerze jej nie dublujemy — .chip-telefon znika); Role i Nie wysłane otwierają te same okna. -->
+        <button type="button" class="chip chip-telefon" data-czesc="wskazniki" aria-pressed="false"><span class="ik" data-ikona="wskazniki" data-rozmiar="16"></span>Wskaźniki</button>
+        <button type="button" class="chip chip-telefon" data-czesc="raporty" aria-pressed="false"><span class="ik" data-ikona="raporty" data-rozmiar="16"></span>Raporty</button>
+        <button type="button" class="chip" data-czesc="kody" aria-pressed="false"><span class="ik" data-ikona="kody" data-rozmiar="16"></span>Kody QR</button>
+        <button type="button" class="chip" data-czesc="role" aria-pressed="false"><span class="ik" data-ikona="konta" data-rozmiar="16"></span>Role i uprawnienia</button>
+        <button type="button" class="chip" data-czesc="niewyslane" id="chip-niewyslane" aria-pressed="false"><span class="ik" data-ikona="powtarzaj" data-rozmiar="16"></span><span id="chip-niewyslane-tekst">Nie wysłane</span></button>
         <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false">Progi i godziny</button>
         <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Ustawienia</button>
       </div>
@@ -591,9 +582,9 @@
 
 <div id="komunikaty" class="komunikaty" popover="manual" role="status" aria-live="polite"></div>
 
-<!-- Właściciel 2026-10-20: wszystkie kody QR w jednym miejscu (Więcej → 🖨 Kody QR) — kategorie z „Drukuj wszystkie”,
+<!-- Właściciel 2026-10-20: wszystkie kody QR w jednym miejscu (Administracja → Kody QR) — kategorie z „Drukuj wszystkie”,
      rozwinięte — 🖨 przy każdym kodzie. Treść rysuje kody.js; druk w ukrytej ramce (HalaKonto.drukujArkusz). -->
-<!-- Właściciel 2026-10-27: standard ról i uprawnień opisany w aplikacji (Więcej → 🔐 Role i uprawnienia); treść rysuje role.js z kontraktu. -->
+<!-- Właściciel 2026-10-27: standard ról i uprawnień opisany w aplikacji (Administracja → Role i uprawnienia); treść rysuje role.js z kontraktu. -->
 <dialog id="okno-roli" class="okno okno-szerokie okno-role" aria-labelledby="t-okno-roli">
   <form method="dialog">
     <h2 id="t-okno-roli">Role i uprawnienia</h2>

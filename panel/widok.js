@@ -2242,7 +2242,7 @@
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
      admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Logowania, Kody QR, Progi i godziny, Ustawienia); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; maszyny (R10, kontrakt: zapis
      słownika maszyn — kierownik zakładu) — Maszyny; szablony (kontrakt: zapis szablony_checklist) — Checklisty. */
-  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny } = {}) {
+  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny, kody, analityka } = {}) {
     const c = [];
     if (admin || zespol) c.push('pracownicy');
     if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
@@ -2250,8 +2250,18 @@
     // Admin dostaje je niżej razem z Danymi, Kodami QR i Ustawieniami (kolejność chipów jak dotąd).
     if (maszyny && !admin) c.push('maszyny');
     // STYL-GK §8 (2026-11-04): „Dane” (czyszczenie zleceń) i „Kody QR” mają wejście także tutaj — to te same okna co
-    // Zlecenia → 🧹 i ☰ Więcej → Kody QR (chip tylko je otwiera). Zespół (kierownicy) ich nie dostaje: D49 — tylko Pracownicy.
-    if (admin) c.push('maszyny', 'dane', 'logowania', 'kody', 'ustawienia');
+    // Zlecenia → 🧹 i Administracja → Kody QR (chip tylko je otwiera). Zespół (kierownicy) ich nie dostaje: D49 — tylko Pracownicy.
+    // Właściciel 2026-11-17: kierownik zakładu ma też „Kody QR” (okno kody.js: kierownik albo administrator).
+    if (admin) c.push('maszyny', 'dane', 'logowania');
+    // Panel bez „☰ Więcej” (2026-11-17, decyzja właściciela: „tylko dla obecnych ról Administracji”): Wskaźniki, Raporty (na telefonie),
+    // „Role i uprawnienia” i „Nie wysłane” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Kierownik UR/KJ
+    // i konto ekranu zostają bez nich (UR/KJ — przy samych Urlopach; „Nie wysłane” mają w pasku połączenia). Chipy Wskaźniki/Raporty
+    // ukrywa CSS na komputerze (są w menu po lewej).
+    // Kolejność jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia, Nie wysłane.
+    if (admin || analityka) c.push('wskazniki', 'raporty');
+    if (admin || kody) c.push('kody');
+    if (admin || analityka) c.push('role', 'niewyslane');
+    if (admin) c.push('ustawienia');
     // D60 (właściciel 2026-10-14: „checklisty nie powinny być schowane w ustawieniach, tylko w zleceniach”):
     // szablony checklisty lidera są w Zlecenia → Zapisane, nie w Administracji (parametr szablony zostaje dla zgodności).
     if (admin) c.push('serwis');

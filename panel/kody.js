@@ -1,4 +1,4 @@
-/* Panel Kierownika — okno „🖨 Kody QR” (☰ Więcej; kierownik zakładu i administrator).
+/* Panel Kierownika — okno „🖨 Kody QR” (Administracja → Kody QR; kierownik zakładu i administrator).
 
    Właściciel 2026-10-20: „Daj mi drukować każdy kod QR osobno, jak i wszystkie z kategorii zbiorczo jak teraz. Upewnij się,
    że w panelu kierownika do druku są wszystkie kody QR.” Kody były w czterech miejscach (Moje konto, Serwis, Maszyny,

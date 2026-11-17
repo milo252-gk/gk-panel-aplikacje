@@ -103,10 +103,9 @@
     const nazwaAdm = W.nazwaAdministracji(czesciAdm);
     const wstawNazwe = (el, nazwa) => { if (el && el.textContent !== nazwa) el.textContent = nazwa; };
     wstawNazwe(document.querySelector('#menu-administracja span:not(.ikona)'), nazwaAdm);
-    wstawNazwe($('wiecej-administracja').lastChild, nazwaAdm);      // tekst po ikonie
     wstawNazwe($('t-administracja'), nazwaAdm);
     // Czytnik ekranu i podpis ikony czytają title/aria-label ustawione raz przy starcie — odświeżamy je razem z widocznym tekstem.
-    for (const id of ['menu-administracja', 'wiecej-administracja', 't-administracja']) {
+    for (const id of ['menu-administracja', 't-administracja']) {
       const el = $(id) && ($(id).closest('button, a') || $(id));
       if (el && el.hasAttribute('title')) el.title = nazwaAdm;
       if (el && el.hasAttribute('aria-label')) el.setAttribute('aria-label', nazwaAdm);
@@ -266,10 +265,12 @@
     const zapisMaszyn = (((hala.kontrakt || {}).slowniki || {}).maszyny || {}).zapis || [];
     return { admin: role.includes('admin'), zespol: HalaZespol.zarzadzaKontami(role, (hala.kontrakt || {}).stale),
              szablony: role.some(r => zapisSzablonow.includes(r)), urlopy: role.some(r => zapisUrlopow.includes(r)),
-             maszyny: role.some(r => zapisMaszyn.includes(r)) };
+             maszyny: role.some(r => zapisMaszyn.includes(r)),
+             // kody.dostepne(): kierownik albo administrator; analityka (Wskaźniki, Raporty): to samo grono (pokazAnalityke).
+             kody: role.some(r => r === 'kierownik' || r === 'admin'), analityka: role.some(r => r === 'kierownik' || r === 'admin') };
   };
 
-  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja', 'wiecej'];
+  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja'];
   for (const b of document.querySelectorAll('.zakladki button[data-widok]')) {
     b.addEventListener('click', () => {
       widokAktywny = b.dataset.widok;
@@ -279,16 +280,9 @@
     });
   }
 
-  // D74 „☰ Więcej”: przejście do widoku (klik w jego zakładkę — także schowaną na telefonie) albo „Nie wysłane”.
-  for (const b of document.querySelectorAll('#wiecej [data-idz]')) {
-    b.addEventListener('click', () => {
-      if (b.dataset.idz === 'niewyslane') { pokazOdrzucone(); return; }
-      if (b.dataset.idz === 'kody') { if (Panel.widoki.kody) Panel.widoki.kody.otworz(); return; }
-      if (b.dataset.idz === 'role') { if (Panel.widoki.role) Panel.widoki.role.otworz(); return; }
-      const z = document.querySelector(`.zakladki [data-widok="${b.dataset.idz}"]`);
-      if (z) z.click();
-    });
-  }
+  // Właściciel 2026-11-17: Panel nie ma „☰ Więcej”. Chipy Administracji (administracja.js) otwierają te same widoki i okna co dawniej
+  // „Więcej”: Wskaźniki i Raporty — zakładki menu (na telefonie schowane, ale klik programowy działa), Nie wysłane — to samo okno co pasek.
+  Panel.pokazOdrzucone = () => pokazOdrzucone();
   /* Wskaźniki i Raporty (wykresy, KPI) — tylko kierownik zakładu i administrator (właściciel 2026-10-27); serwer też odmawia
      (GET /api/v1/panel/wskazniki → 403). Kierownik UR/KJ i ekran widzą Na żywo i Zlecenia. */
   function pokazAnalityke() {
@@ -296,20 +290,20 @@
     for (const w of ['wskazniki', 'raporty']) {
       const t = document.querySelector(`.zakladki [data-widok="${w}"]`);
       if (t) t.hidden = !ok;
-      const m = document.querySelector(`#wiecej [data-idz="${w}"]`);
-      if (m) m.hidden = !ok;
     }
     if (!ok && (widokAktywny === 'wskazniki' || widokAktywny === 'raporty')) { const n = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (n) n.click(); }
   }
-  function rysujWiecej() {
+  /* Liczba „Nie wysłane” (odrzucone zapisy i zdjęcia): plakietka na pozycji Administracja w pasku i licznik na chipie „Nie wysłane”.
+     Plakietka tylko tam, gdzie chip jest (administrator, kierownik zakładu — W.czesciAdministracji); kierownik UR/KJ ma „Urlopy” i swój
+     pasek połączenia. */
+  function rysujPlakietkiAdministracji() {
     pokazAnalityke();
-    $('wiecej-administracja').hidden = $('menu-administracja').hidden;
-    // Właściciel 2026-10-20: wszystkie kody QR do druku w jednym miejscu — dla kierownika zakładu i administratora.
-    $('wiecej-kody').hidden = !(Panel.widoki.kody && Panel.widoki.kody.dostepne());
     const n = ((kolejka && kolejka.odrzucone) || 0) + ((kolejka && kolejka.plikiOdrzucone) || 0);
-    $('wiecej-niewyslane-tekst').textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
-    $('plakietka-wiecej').hidden = !n;
-    $('plakietka-wiecej').textContent = n ? String(n) : '';
+    const maChip = !!hala.pracownik && W.czesciAdministracji(Panel.dostepAdministracji()).includes('niewyslane');
+    const chip = $('chip-niewyslane-tekst');
+    if (chip) chip.textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
+    $('plakietka-administracja').hidden = !(n && maChip);
+    $('plakietka-administracja').textContent = n && maChip ? String(n) : '';
   }
 
   function mozeWyslac(typ) {
@@ -362,7 +356,8 @@
         ${k.opoznione.length ? `<ul class="opoznione" aria-label="Opóźnione">${opoz}</ul>` : ''}
       </article>`;
     }).join('') || `<p class="pusto">${esc(W.pustyObchod(d.slowniki, d.zmiana))}</p>`;
-    return kafelki;
+    // Kafelek mistrza liczy się do „Opóźnione obchody” na Pulpicie tak samo jak kafelek linii (czerwony = po terminie).
+    return mistrz.concat(kafelki);
   }
 
   function rysujAwarie(wiersze) {
@@ -497,7 +492,7 @@
   // Etap 3: osłona „palec na ekranie” (wspolne/palec.js, wzór: UR) — przerysowanie spod palca (tablet kierownika) podmieniało przycisk i połykało dotknięcie.
   const palec = window.HalaPalec.zainstaluj(() => narysuj());
   function narysuj() {
-    try { rysujWiecej(); } catch (e) { /* kolejka jeszcze nieznana przy pierwszym rysowaniu */ }
+    try { rysujPlakietkiAdministracji(); } catch (e) { /* kolejka jeszcze nieznana przy pierwszym rysowaniu */ }
     if (document.hidden) sygnalWTle();
     if (palec.zajety()) return;
     // Strumień potrafi przynieść kilkadziesiąt zdarzeń naraz (np. po powrocie sieci) — rysujemy raz na klatkę.
@@ -554,7 +549,7 @@
     const k = ev.target.closest('[data-kafel]');
     if (k && k.dataset.kafel === 'zlecenia') Panel.pokazZlecenia(null, 'biezace');
     if (k && k.dataset.kafel === 'po-terminie') Panel.pokazZlecenia('otwarte', 'biezace');
-    if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();
+    if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();      // zakładka Raporty (na telefonie schowana — klik programowy działa)
     if (k && k.dataset.kafel === 'bhp') Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp');
     if (k && k.dataset.kafel === 'urzadzenia') pokazUrzadzenia();
   });
@@ -1587,7 +1582,7 @@
   hala.na('sesja', pokazSesje);
   hala.na('polaczenie', rysujPasek);
   hala.na('kolejka', k => {
-    kolejka = k; rysujPasek(hala.polaczenie); rysujWiecej();
+    kolejka = k; rysujPasek(hala.polaczenie); rysujPlakietkiAdministracji();
     const konto = document.getElementById('hala-okno-konta');
     if (konto && konto.open) otworzKonto();          // „Czeka na wysłanie” i „Odrzucone” na bieżąco
     if ($('okno-odrzucone').open) rysujOdrzucone();
