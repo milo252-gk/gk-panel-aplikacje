@@ -236,9 +236,12 @@ EKRANY.trasy = {
     // Widok „Tydzień” (właściciel 2026-11-16): pn–nd pod sobą; wybór pamiętany na tym urządzeniu.
     const widok = param.widok || (Pamiec.czytaj('widok_tras') === 'tydzien' ? 'tydzien' : 'dzien');
     if (widok === 'tydzien') { await rysujTydzienTras(pole, data, kierowcy); return; }
+    const filtr = await filtrAutaTras(trasy);
+    const widoczne = filtr.zastosuj(trasy);
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         ${przelacznikWidokuTras('dzien')}
+        ${filtr.html}
         <label>Dzień<input type="date" id="t-data" value="${data}"></label>
         <button id="t-wczoraj">← Poprzedni</button><button id="t-jutro">Następny →</button>
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
@@ -246,13 +249,16 @@ EKRANY.trasy = {
       </div>
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
           Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Konta' : 'Ustawieniach → Konta kierowców'}.</div>`}
-      ${trasy.length ? kartyTrasWgAuta(trasy)
+      ${widoczne.length ? kartyTrasWgAuta(widoczne)
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
-             Na ${polskaData(data)} nie ma jeszcze trasy.
+             ${filtr.wybrane && trasy.length ? `Na ${polskaData(data)} ${filtr.wybrane === '-' ? 'nie ma tras bez auta' : `auto „${escHtml(filtr.nazwa)}” nie ma tras`}.
+               <div style="margin-top:8px"><button type="button" class="maly" data-filtr-wszystkie>Pokaż wszystkie auta</button></div>`
+               : `Na ${polskaData(data)} nie ma jeszcze trasy.`}
              <div class="male${jestPodgladem() ? ' ukryty' : ''}" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
                Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (menu → Zapisane trasy).</div></div></div>`}`;
 
     podepnijPrzelacznikWidokuTras(pole, data);
+    filtr.podepnij(pole, () => pokazEkran('trasy', { data, widok: 'dzien' }));
     pole.querySelector('#t-data').onchange = e => pokazEkran('trasy', { data: e.target.value });
     pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(data, -1) });
     pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(data, 1) });
@@ -285,6 +291,44 @@ function podepnijPrzelacznikWidokuTras(pole, data) {
   pole.querySelector('#t-widok-tydzien').onclick = () => { Pamiec.zapisz('widok_tras', 'tydzien'); pokazEkran('trasy', { data, widok: 'tydzien' }); };
 }
 
+/* Filtr „Auto” w widoku dnia i tygodnia (właściciel 2026-11-17: zobaczyć i filtrować zlecenia, które realizowało dane auto).
+   Wybór pamiętany na tym urządzeniu pod nowym kluczem 'filtr_auta' (id auta albo pusty = wszystkie). Filtruje po stronie
+   przeglądarki to, co już pobrano — bez zmiany endpointów. Lista auta = wszystkie aktywne auta (gdy API ich nie poda,
+   to te, które występują w pobranych trasach). */
+let _autaDoFiltra = null;   // lista aut z API na czas sesji strony; kasowana po zapisie auta (D5)
+async function filtrAutaTras(trasy) {
+  let auta = _autaDoFiltra;
+  if (!auta) {
+    try { auta = await API.get('/api/pojazdy'); _autaDoFiltra = auta; } catch (e) { auta = []; }
+  }
+  const mapa = new Map();
+  (Array.isArray(auta) ? auta : []).forEach(a => { if (a && a.id != null && a.aktywny !== 0 && a.aktywny !== false) mapa.set(String(a.id), a.nazwa || a.rejestracja || ('Auto ' + a.id)); });
+  trasy.forEach(t => { if (t.pojazd && !mapa.has(String(t.pojazd))) mapa.set(String(t.pojazd), t.pojazd_nazwa || ('Auto ' + t.pojazd)); });
+  let wybrane = String(Pamiec.czytaj('filtr_auta') || '');
+  if (wybrane && wybrane !== '-' && !mapa.has(wybrane)) wybrane = '';   // '-' = „Bez auta”, nie ma go na liście aut
+  const opcje = [...mapa.entries()].sort((a, b) => {
+    const m = n => { const i = KOLEJNOSC_AUT.indexOf(String(n).trim().toLowerCase()); return i < 0 ? 100 : i; };
+    return m(a[1]) - m(b[1]) || a[1].localeCompare(b[1], 'pl');
+  });
+  return {
+    wybrane,
+    nazwa: wybrane === '-' ? 'bez auta' : (mapa.get(wybrane) || ''),
+    html: opcje.length ? `<label${wybrane ? ' class="filtr-aktywny"' : ''}>Auto<select id="t-filtr-auta">
+        <option value="">Wszystkie auta</option>
+        ${opcje.map(([id, nazwa]) => `<option value="${escHtml(id)}"${id === wybrane ? ' selected' : ''}>${escHtml(nazwa)}</option>`).join('')}
+        <option value="-"${wybrane === '-' ? ' selected' : ''}>Bez auta</option>
+      </select></label>${wybrane ? '<button type="button" class="maly" data-filtr-wszystkie>Pokaż wszystkie auta</button>' : ''}` : '',
+    zastosuj: lista => !wybrane ? lista
+      : lista.filter(t => wybrane === '-' ? !t.pojazd : String(t.pojazd || '') === wybrane),
+    podepnij(pole, odswiez) {
+      const s = pole.querySelector('#t-filtr-auta');
+      if (s) s.onchange = () => { Pamiec.zapisz('filtr_auta', s.value); odswiez(); };
+      pole.querySelectorAll('[data-filtr-wszystkie]').forEach(b =>
+        b.onclick = () => { Pamiec.zapisz('filtr_auta', ''); odswiez(); });
+    },
+  };
+}
+
 /* Podsumowanie dnia: ile tras, ile punktów dostarczonych z wszystkich i ile czeka na zatwierdzenie. */
 function podsumowanieDnia(trasy) {
   const czynne = trasy.filter(t => t.status !== 'odwolana');
@@ -302,13 +346,15 @@ async function rysujTydzienTras(pole, data, kierowcy) {
   // Biuro widzi też odwołane (na końcu dnia, wyszarzone) — jak w widoku dnia.
   const trasy = await API.get(`/api/trasy?odwolane=1&od=${pon}&do=${niedz}`);
   trasy.sort((a, b) => (a.status === 'odwolana') - (b.status === 'odwolana') || a.id - b.id);
+  const filtr = await filtrAutaTras(trasy);
   const wg = {};
-  trasy.forEach(t => { (wg[t.data] = wg[t.data] || []).push(t); });
+  filtr.zastosuj(trasy).forEach(t => { (wg[t.data] = wg[t.data] || []).push(t); });
   const dzis = dzisiaj();
   const dni = Array.from({ length: 7 }, (_, i) => przesunDate(pon, i));
   pole.innerHTML = `
     <div class="pasek-narzedzi">
       ${przelacznikWidokuTras('tydzien')}
+      ${filtr.html}
       <label>Dzień w tygodniu<input type="date" id="t-data" value="${data}"></label>
       <button id="t-wczoraj">← Poprzedni tydzień</button><button id="t-jutro">Następny tydzień →</button>
       <button id="t-ten-tydzien">Ten tydzień</button>
@@ -327,6 +373,7 @@ async function rysujTydzienTras(pole, data, kierowcy) {
         </section>`;
     }).join('')}`;
   podepnijPrzelacznikWidokuTras(pole, data);
+  filtr.podepnij(pole, () => pokazEkran('trasy', { data, widok: 'tydzien' }));
   pole.querySelector('#t-data').onchange = e => e.target.value && pokazEkran('trasy', { data: e.target.value, widok: 'tydzien' });
   pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, -7), widok: 'tydzien' });
   pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, 7), widok: 'tydzien' });
@@ -599,7 +646,7 @@ EKRANY.trasa = {
         <!-- UI etap 3: na wierzchu tylko to, co biuro zmienia co dzień (dzień,
              kierowca, auto) — punkty trasy mają być widać bez przewijania.
              Reszta (nazwa, godzina, baza, układ, uwagi, rzadkie przyciski) leży
-             pod zwiniętym „▸ Więcej”; pola zostają w DOM-ie, więc „Zapisz
+             pod zwijanym „▸ Dane trasy”; pola zostają w DOM-ie, więc „Zapisz
              zmiany” zapisuje je tak samo, jak przedtem.                        -->
         <div class="trzy">
           <label>Dzień<input type="date" id="tr-data" value="${t.data}"></label>
@@ -619,10 +666,11 @@ EKRANY.trasa = {
         <div class="przyciski">
           <button class="glowny" id="tr-zapisz">Zapisz zmiany</button>
           <button class="maly" id="tr-mapa-link">${ikonka('mapa')}Wyślij do Google Maps</button>
+          <button class="maly" id="tr-os-akcji">Przebieg trasy — kto i co</button>
         </div>
-        <details class="zaawansowane wiecej-trasy" id="tr-wiecej">
-          <summary><span class="znak-zwiniecia">▸</span> Więcej
-            <span class="slaby">nazwa, godzina, baza, układ, uwagi, kopiowanie, odwołanie${t.uwagi ? ' · 📌 są uwagi' : ''}</span></summary>
+        <details class="zaawansowane wiecej-trasy" id="tr-wiecej" open>
+          <summary><span class="znak-zwiniecia">▸</span> Dane trasy
+            ${t.uwagi ? '<span class="slaby">📌 są uwagi</span>' : ''}</summary>
           <div class="dwie">
             <label>Nazwa<input id="tr-nazwa" value="${escHtml(t.nazwa || '')}"></label>
             <label>Godzina wyjazdu
@@ -786,6 +834,7 @@ EKRANY.trasa = {
       };
       pole.querySelector('#tr-kopiuj').onclick = () => oknoKopiowania(t);
       pole.querySelector('#tr-mapa-link').onclick = () => oknoLinkuDoMap(t.id, false);
+      pole.querySelector('#tr-os-akcji').onclick = () => oknoPrzebiegu(t);
       pole.querySelector('#tr-szablon').onclick = () => okno({
         tytul: 'Dodaj do zapisanych tras',
         tresc: `<p class="male slaby">Zapamiętam klientów i ich kolejność. Bez dat,
@@ -921,6 +970,7 @@ function wierszPrzystanku(p, indeks, ile, admin) {
         ${dopiski.length ? `<span class="dopisek">${dopiski.join(' &nbsp;·&nbsp; ')}</span>` : ''}
       </span>
       <span class="prawo">
+        ${nasze && p.rodzaj ? `<span class="plakietka p-nasze">${escHtml(napisRodzaju(p.rodzaj))}</span>` : ''}
         ${status}
         <span class="przyciski">
           <button class="maly" data-szczegoly="${p.id}">Szczegóły</button>
@@ -1037,6 +1087,12 @@ async function oknoDodawaniaKlientow(t) {
                   `<option value="${x.id}">zaraz po: ${i + 1}. ${
                     escHtml(x.klient_nazwa)}</option>`).join('')}
               </select></label>
+            <div id="dk-rodzaj-blok" style="display:none;margin-top:10px">
+              <label>Nasze miejsca — co kierowca tam robi
+                <select id="dk-rodzaj">${opcjeRodzajuNaszych('')}</select></label>
+              <div class="male slaby" style="margin-top:8px">Kierowca ma podać:</div>
+              <div id="dk-wymogi">${checkboxyWymogow('dk', '')}</div>
+            </div>
             <p class="male slaby">Punkty dopiszą się w takiej kolejności, w jakiej je
               zaznaczysz. Pilną dostawę możesz wstawić w środek dnia — wybierz,
               po którym punkcie ma stanąć.</p>`,
@@ -1044,11 +1100,20 @@ async function oknoDodawaniaKlientow(t) {
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Dodaj zaznaczone', klasa: 'glowny', klik: async z => {
         if (!wybrane.length) { komunikat('Nic nie jest zaznaczone', 'blad'); return; }
+        // Wartości pól czytamy PRZED zamknięciem okna, bo potem pól już nie ma.
+        const rodzajNaszych = (document.getElementById('dk-rodzaj') || {}).value || '';
+        const wymogiNaszych = wymogiZPola(document, 'dk');
         z();
         const po = (document.getElementById('dk-gdzie') || {}).value || '';
-        const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/przystanki`,
-          po ? { punkty: wybrane.map(punktZKlucza), po: Number(po) }
-             : { punkty: wybrane.map(punktZKlucza) }),
+        const tresc = po ? { punkty: wybrane.map(punktZKlucza), po: Number(po) }
+          : { punkty: wybrane.map(punktZKlucza) };
+        // Rodzaj i wymogi dopisujemy tylko wtedy, gdy coś wybrano i jest wśród punktów nasze miejsce —
+        // domyślne dodanie wygląda dla serwera dokładnie jak dotąd.
+        if (wybrane.some(k => k[0] === 'L')) {
+          if (rodzajNaszych) tresc.rodzaj = rodzajNaszych;
+          if (wymogiNaszych) tresc.wymogi = wymogiNaszych;
+        }
+        const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/przystanki`, tresc),
           `Dodano ${wybrane.length} punktów`);
         if (w) pokazEkran('trasa', { id: t.id });
       } },
@@ -1059,6 +1124,7 @@ async function oknoDodawaniaKlientow(t) {
           const klucz = w.value;
           if (w.checked) { if (!wybrane.includes(klucz)) wybrane.push(klucz); }
           else wybrane.splice(wybrane.indexOf(klucz), 1);
+          pokazRodzaj();
         };
       });
       // Nasze miejsca stoją pod długą listą klientów — odnośnik skacze do nich
@@ -1066,6 +1132,10 @@ async function oknoDodawaniaKlientow(t) {
       const doNaszych = pole.querySelector('#dk-do-naszych');
       const pokazDoNaszych = () => {
         doNaszych.style.display = pole.querySelector('#dk-nasze') ? '' : 'none';
+      };
+      // Pola rodzaju/wymogów mają sens dopiero, gdy zaznaczono nasze miejsce.
+      const pokazRodzaj = () => {
+        pole.querySelector('#dk-rodzaj-blok').style.display = wybrane.some(k => k[0] === 'L') ? '' : 'none';
       };
       doNaszych.onclick = () => {
         const sekcja = pole.querySelector('#dk-nasze');
@@ -1165,6 +1235,34 @@ function stanPunktu(t, p) {
   return '🕒 Zaplanowane' + (t.data ? ' na ' + t.data : '');
 }
 
+/* Rodzaj czynności i wymogi dla kierowcy w NASZYCH punktach. Puste = jak dotąd (zwykły postój/doładunek).
+   Klucze te same co RODZAJE_PUNKTU / WYMOGI_PUNKTU w trasex.py. */
+const RODZAJE_NASZYCH = [['', 'Bez określenia'], ['dostawa', 'Dostawa'], ['odbior', 'Odbiór'],
+  ['oba', 'Dostawa i odbiór']];
+const WYMOGI_NASZYCH = [['odebral', 'Kto odebrał'], ['podpis', 'Podpis'], ['zdjecie', 'Zdjęcie'],
+  ['dokument', 'Numer dokumentu']];
+
+function napisRodzaju(r) {
+  const w = RODZAJE_NASZYCH.find(x => x[0] === r);
+  return w && r ? w[1] : '';
+}
+function napisWymogow(lista) {
+  const ustawione = String(lista || '').split(',');
+  return WYMOGI_NASZYCH.filter(x => ustawione.includes(x[0])).map(x => x[1].toLowerCase()).join(', ');
+}
+function opcjeRodzajuNaszych(wybrany) {
+  return RODZAJE_NASZYCH.map(([k, n]) =>
+    `<option value="${k}"${k === (wybrany || '') ? ' selected' : ''}>${n}</option>`).join('');
+}
+function checkboxyWymogow(prefiks, lista) {
+  const ustawione = String(lista || '').split(',');
+  return WYMOGI_NASZYCH.map(([k, n]) => `<label class="plaska" style="display:inline-flex;gap:6px;margin:4px 14px 4px 0">
+      <input type="checkbox" data-wymog="${prefiks}" value="${k}"${ustawione.includes(k) ? ' checked' : ''}> ${n}</label>`).join('');
+}
+function wymogiZPola(pole, prefiks) {
+  return Array.from(pole.querySelectorAll(`input[data-wymog="${prefiks}"]:checked`)).map(x => x.value).join(',');
+}
+
 function naglowekPunktu(t, p) {
   const nr = t.przystanki.indexOf(p) + 1;
   const l = t.licznik || {};
@@ -1178,7 +1276,8 @@ function naglowekPunktu(t, p) {
       t.kierowca_imie ? ' · ' + escHtml(t.kierowca_imie) : ''}${
       t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}${
       t.data ? ' · ' + escHtml(polskaData(t.data)) : ''}</div>
-    <div style="font-weight:700;margin:5px 0 2px">${escHtml(stanPunktu(t, p))}</div>
+    <div style="font-weight:700;margin:5px 0 2px">${escHtml(stanPunktu(t, p))}${
+      p.nasze && p.rodzaj ? ' · ' + escHtml(napisRodzaju(p.rodzaj)) : ''}</div>
     ${wszystkie ? `<div class="postep"><i class="ok" style="width:${proc}%"></i></div>
       <div class="male slaby">Cała trasa: ${zrobione} z ${wszystkie} zamkniętych${
         l.nieudane ? ` (w tym ${l.nieudane} ${odmiana(l.nieudane, 'nieudana', 'nieudane', 'nieudanych')})` : ''}</div>` : ''}
@@ -1235,6 +1334,66 @@ function osCzasuPunktu(t, p, d) {
     <ol class="os-czasu">${zdarzenia.map(z => `<li class="${z.klasa}">
       ${z.tekst}${z.czas ? ` <span class="slaby">· ${escHtml(z.czas)}</span>` : ''}</li>`).join('')}
     </ol>`;
+}
+
+/* Przebieg z dziennika zdarzeń (2026-11-16): „kto · co · godzina” + skąd jest godzina. Dane z
+   GET /api/trasy/<id>/zdarzenia — wpisy dziennika (od wdrożenia) i znaczniki sprzed dziennika. */
+function klasaZdarzenia(z) {
+  if (z.typ === 'zaladunek') return z.szczegoly && z.szczegoly.zgodny === false ? 'nie' : 'ok';
+  if (['dostarczone', 'przyjete', 'koniec_trasy'].includes(z.typ)) return 'ok';
+  if (['nieudane', 'zwrocone', 'cofniete', 'trasa_odwolana', 'trasa_skasowana', 'punkt_zdjety', 'punkt_usuniety']
+    .includes(z.typ)) return 'nie';
+  return '';
+}
+
+/* Skąd jest godzina: z telefonu kierowcy (chwila dotknięcia przycisku, także bez zasięgu) albo z programu
+   (chwila zapisu na serwerze). Gdy zapis na serwerze był później o ponad 2 min — pokazujemy też, kiedy dotarł. */
+function opisZrodlaCzasu(z) {
+  const godz = x => String(x || '').slice(11, 16);
+  const dzien = x => String(x || '').slice(0, 10);
+  let s;
+  if (z.czas_z === 'telefon') {
+    s = 'godzina z telefonu';
+    if (z.zrodlo === 'dziennik' && z.zapisano_pozniej && z.czas_serwera) {
+      s += ', zapisano w biurze o ' + (dzien(z.czas_serwera) === dzien(z.czas) ? godz(z.czas_serwera)
+        : czasNaEkran(z.czas_serwera));
+    }
+  } else {
+    s = 'godzina zapisu w programie';
+  }
+  return s + (z.zegar_rozjechany ? ' · zegar telefonu rozjechany' : '')
+    + (z.zrodlo === 'znacznik' ? ' · wpis sprzed dziennika' : '');
+}
+
+function osZDziennika(lista, opcje) {
+  const o = opcje || {};
+  if (!lista || !lista.length) return '';
+  return `<ol class="os-czasu">${lista.map(z => {
+    const kto = z.kto_imie
+      ? escHtml(z.kto_imie) + (z.rola && (OPIS_ROLI[z.rola] || z.rola).toLowerCase() !== String(z.kto_imie).toLowerCase()
+        ? ' (' + escHtml((OPIS_ROLI[z.rola] || z.rola).toLowerCase()) + ')' : '')
+        + (z.kto_przypuszczalnie ? ' — prawdopodobnie' : '')
+      : 'wykonawca nieznany';
+    return `<li class="${klasaZdarzenia(z)}">
+      ${o.klient && z.klient ? '<b>' + escHtml(z.klient) + '</b> — ' : ''}${escHtml(z.opis)}
+      <div class="male slaby">${kto} · ${escHtml(czasNaEkran(z.czas))} · ${escHtml(opisZrodlaCzasu(z))}</div></li>`;
+  }).join('')}</ol>`;
+}
+
+/* Ekran trasy: wszystkie akcje na trasie w kolejności czasu. */
+function oknoPrzebiegu(t) {
+  okno({
+    tytul: 'Przebieg trasy — kto i co',
+    szerokie: true,
+    tresc: '<div id="pt-tresc" class="male slaby">Wczytuję…</div>',
+    przyciski: [{ napis: 'Zamknij', klik: z => z() }],
+    poOtwarciu: pole => {
+      const cel = pole.querySelector('#pt-tresc');
+      API.get(`/api/trasy/${t.id}/zdarzenia`).then(d => {
+        cel.innerHTML = `<p class="male slaby">Godzina „z telefonu” to chwila dotknięcia przycisku przez kierowcę; podpis i zdjęcia mają godzinę zapisu w programie.</p>${osZDziennika(d.zdarzenia, { klient: true }) || '<div class="pusto">Brak zapisanych akcji.</div>'}`;
+      }).catch(() => { cel.textContent = 'Nie udało się wczytać przebiegu trasy.'; });
+    },
+  });
 }
 
 /* Gdzie jest bus. Doładowywane po otwarciu okna, bo wymaga zapytania do
@@ -1311,7 +1470,11 @@ function oknoSzczegolowPunktu(t, id) {
         </label>
         ${p.nasze ? `<p class="male slaby">To nasze miejsce — doładunek albo odbiór,
           nie dostawa do klienta. Numeru zamówienia się tu nie podaje, a kierowca
-          nie musi potwierdzać przy nim załadunku.</p>`
+          nie musi potwierdzać przy nim załadunku.</p>
+          <label>Rodzaj czynności w tym miejscu
+            <select id="sp-rodzaj">${opcjeRodzajuNaszych(p.rodzaj)}</select></label>
+          <div class="male slaby" style="margin-top:8px">Kierowca ma przy tym punkcie podać:</div>
+          <div id="sp-wymogi">${checkboxyWymogow('sp', p.wymogi)}</div>`
           : `<label>Numer dokumentu (WZ, zamówienie)
           <input id="sp-dokument" value="${escHtml(p.dokument || '')}">
         </label>`}
@@ -1323,6 +1486,8 @@ function oknoSzczegolowPunktu(t, id) {
           <textarea id="sp-uwagi" placeholder="np. wjazd od podwórza, zadzwonić 15 min wcześniej">${escHtml(p.uwagi || '')}</textarea>
         </label>` : `
         ${p.towar ? `<p><b>Towar:</b> ${escHtml(p.towar)}</p>` : ''}
+        ${p.nasze && p.rodzaj ? `<p><b>Rodzaj:</b> ${escHtml(napisRodzaju(p.rodzaj))}</p>` : ''}
+        ${p.nasze && p.wymogi ? `<p><b>Kierowca podaje:</b> ${escHtml(napisWymogow(p.wymogi))}</p>` : ''}
         ${p.uwagi ? `<p><b>Uwagi:</b> ${escHtml(p.uwagi)}</p>` : ''}`}`,
     przyciski: (admin && !zamkniety) ? [
       { napis: 'Zamknij', klik: z => z() },
@@ -1334,6 +1499,11 @@ function oknoSzczegolowPunktu(t, id) {
           okno_do: document.getElementById('sp-do').value,
           uwagi: document.getElementById('sp-uwagi').value,
         };
+        // Rodzaj i wymogi tylko dla naszych punktów — u klienta pól nie ma, więc nie wysyłamy nic nowego.
+        if (p.nasze) {
+          zmiany.rodzaj = document.getElementById('sp-rodzaj').value;
+          zmiany.wymogi = wymogiZPola(document, 'sp');
+        }
         const w = await sprobuj(() => zapisBiura('POST', '/api/przystanki/' + p.id, zmiany, {
           opis: 'punkt ' + (p.klient_nazwa || ''),
           zrodla: ['/api/trasy/' + t.id],
@@ -1376,8 +1546,27 @@ function oknoSzczegolowPunktu(t, id) {
         const cel = pole.querySelector('#sp-postep');
         const os = pole.querySelector('#sp-os');
         if (cel) cel.innerHTML = panelPostepu(t, p, dodatki);
-        if (os) os.innerHTML = osCzasuPunktu(t, p, dodatki);
+        if (os && !os.dataset.dziennik) os.innerHTML = osCzasuPunktu(t, p, dodatki);
       }).catch(() => { /* brak postepu nie moze zepsuc calego okna */ });
+      // Przebieg z dziennika zdarzeń: kto, co i o której (+ skąd godzina). Gdy się nie uda, zostaje stary przebieg.
+      API.get('/api/trasy/' + t.id + '/zdarzenia?przystanek=' + p.id).then(d => {
+        const os = pole.querySelector('#sp-os');
+        if (!os || !d || !(d.zdarzenia || []).length) return;
+        os.dataset.dziennik = '1';
+        os.innerHTML = `<div class="male slaby" style="margin:0 0 4px">Przebieg — kto, co i o której</div>
+          ${osZDziennika(d.zdarzenia)}
+          <details id="sp-cala" style="margin:0 0 12px"><summary class="male">Cała trasa — wszystkie akcje</summary>
+            <div id="sp-cala-tresc" class="male slaby" style="margin-top:6px">Wczytuję…</div></details>`;
+        const szczegoly = os.querySelector('#sp-cala');
+        szczegoly.addEventListener('toggle', () => {
+          if (!szczegoly.open || szczegoly.dataset.wczytane) return;
+          szczegoly.dataset.wczytane = '1';
+          const cel = os.querySelector('#sp-cala-tresc');
+          API.get('/api/trasy/' + t.id + '/zdarzenia').then(c => {
+            cel.innerHTML = osZDziennika(c.zdarzenia, { klient: true }) || 'Brak zapisanych akcji.';
+          }).catch(() => { cel.textContent = 'Nie udało się wczytać przebiegu trasy.'; szczegoly.dataset.wczytane = ''; });
+        });
+      }).catch(() => { /* brak dziennika nie moze zepsuc okna — zostaje przebieg ze znacznikow */ });
     },
   });
 }
@@ -1840,32 +2029,98 @@ function val(id) { return (document.getElementById(id).value || '').trim(); }
 
 /* =============================================================== RAPORTY */
 
+/* Raport pracy (2026-11-16): dzień po dniu ze ZLECEŃ (każdy dzień, w którym kierowca miał trasę) + ręczny raport
+   kierowcy, jeśli jest. Dawny widok pokazywał tylko ręczne raporty, więc dzień bez wpisu kierowcy po prostu znikał. */
+function kafelekZPodpisem(napis, wartosc, podpis) {
+  return `<div class="karta" style="text-align:center">
+      <div class="male slaby">${escHtml(napis)}</div>
+      <div class="liczba-kafelka" style="font-size:26px;font-weight:800">${wartosc}</div>
+      <div class="male slaby">${podpis}</div>
+    </div>`;
+}
+
 async function rysujRaportyBiura(pole, param) {
   const od = param.od || przesunDate(dzisiaj(), -13);
   const doDnia = param.do || dzisiaj();
+  const kierowcaId = param.kierowca ? String(param.kierowca) : '';
   const kierowcy = await listaKierowcow();
-  const wiersze = await API.get(`/api/raporty?od=${od}&do=${doDnia}`);
+  const wynik = await API.get(`/api/raporty/pelne?od=${od}&do=${doDnia}${kierowcaId ? '&kierowca=' + kierowcaId : ''}`);
+  const dni = wynik.dni || [];
+  const sumy = wynik.sumy || {};
+  const odrzucone = wynik.odrzucone_raporty || [];
+  const dlugosc = Math.round((new Date(doDnia + 'T12:00:00') - new Date(od + 'T12:00:00')) / 86400000) + 1;
+  const godz = h => (h == null ? '—' : godzinyMinuty(h * 60));
 
-  const suma = wiersze.reduce((s, w) => ({
-    godziny: s.godziny + (w.godziny || 0),
-    km: s.km + (w.km || 0),
-    paliwo: s.paliwo + (w.paliwo_pln || 0),
-  }), { godziny: 0, km: 0, paliwo: 0 });
+  const wiersz = d => {
+    const r = d.raport;
+    const roznica = d.roznica_godzin;
+    return `<tr>
+      <td>${polskaData(d.data)}</td>
+      <td><b>${escHtml(d.kierowca_imie)}</b></td>
+      <td>${escHtml(d.auta.join(', ') || (r && r.pojazd_nazwa) || '')}</td>
+      <td>${d.tras ? `${d.tras} ${odmiana(d.tras, 'trasa', 'trasy', 'tras')} · ${d.punkty} ${
+        odmiana(d.punkty, 'punkt', 'punkty', 'punktów')}<br>
+        <span class="male">✓ ${d.dostarczone}${d.nieudane ? ` · ✕ ${d.nieudane}` : ''}${
+          d.otwarte ? ` · otwarte ${d.otwarte}` : ''}</span>`
+        : '<span class="slaby">brak tras</span>'}</td>
+      <td>${d.start_zlecen ? `${escHtml(d.start_zlecen)}–${escHtml(d.koniec_zlecen || '?')}<br>
+        <b>${godz(d.godziny_zlecen)}</b>
+        <span class="male slaby" style="display:block">${escHtml(d.zrodlo_godzin || '')}${
+          d.najdluzsza_przerwa_min != null ? ` · najdłuższa przerwa między zamknięciami ${
+            godzinyMinuty(d.najdluzsza_przerwa_min)}` : ''}</span>` : '—'}</td>
+      <td>${r ? `${escHtml(r.start_o || '—')}–${escHtml(r.koniec_o || '—')}<br>
+        <span class="male">przerwa ${r.przerwa_min || 0} min</span><br><b>${godz(r.godziny)}</b>`
+        : d.bez_startu ? '<span class="slaby">trasa bez startu</span>'
+        : d.w_toku ? '<span class="plakietka p-w_toku">w toku</span>'
+        : '<span class="plakietka p-nieudane">brak raportu kierowcy</span>'}</td>
+      <td>${roznica == null ? '—' : `<span style="${Math.abs(roznica) >= 1 ? 'color:var(--czerwony);font-weight:700' : ''}">${
+        roznica > 0 ? '+' : ''}${liczbaPl(roznica.toFixed(1))} h</span>`}</td>
+      <td>${r && r.km != null ? liczbaPl(r.km) + ' km' : '—'}${
+        d.km_gps != null ? `<br><span class="male slaby">GPS ok. ${liczbaPl(d.km_gps)} km</span>` : ''}</td>
+      <td>${r && r.paliwo_l != null ? r.paliwo_l + ' l' : ''}
+          ${r && r.paliwo_pln != null ? '<br>' + liczbaPl(r.paliwo_pln.toFixed(2)) + ' zł' : ''}</td>
+      <td class="male">${r && r.usterki ? '<b style="color:var(--czerwony)">⚠ ' + escHtml(r.usterki) + '</b><br>' : ''}
+          ${r ? escHtml(r.uwagi || '') : ''}
+          ${d.trasy && d.trasy.length ? `<br><a href="#" data-trasa-raport="${d.trasy[0]}">trasa</a>` : ''}</td>
+    </tr>`;
+  };
 
   pole.innerHTML = `
     <div class="pasek-narzedzi">
       <label>Od<input type="date" id="rb-od" value="${od}"></label>
       <label>Do<input type="date" id="rb-do" value="${doDnia}"></label>
+      ${kierowcy.length ? `<label>Kierowca<select id="rb-kierowca">
+        <option value="">— wszyscy —</option>
+        ${kierowcy.map(k => `<option value="${k.id}"${String(k.id) === kierowcaId ? ' selected' : ''}>${
+          escHtml(k.imie)}</option>`).join('')}</select></label>` : ''}
+      <button id="rb-14">Ostatnie 14 dni</button>
       <button id="rb-miesiac">Ten miesiąc</button>
-      <button class="glowny" data-eksport="raporty">⬇ Raporty do Excela</button>
+      <button class="glowny" data-eksport="raport-pracy-pelny">⬇ Raport pracy do Excela</button>
+      <button data-eksport="raporty">⬇ Same raporty kierowców</button>
       <button data-eksport="dostawy">⬇ Dostawy do Excela</button>
     </div>
 
-    <div class="trzy">
-      ${kafelek('Godziny pracy', liczbaPl(suma.godziny.toFixed(1)), '')}
-      ${kafelek('Przejechane km', liczbaPl(suma.km), '')}
-      ${kafelek('Paliwo (zł)', liczbaPl(suma.paliwo.toFixed(2)), '')}
+    <div class="wstega info" style="margin-bottom:12px">Zakres: <b>${polskaData(od)} – ${polskaData(doDnia)}</b>
+      (${dlugosc} ${odmiana(dlugosc, 'dzień', 'dni', 'dni')}) · dni z pracą: ${sumy.dni || 0}.
+      Dni liczone z tras, więc widać też te, w których kierowca nie wypełnił raportu.</div>
+
+    <div class="trzy" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+      ${kafelekZPodpisem('Dni pracy', sumy.dni || 0, `${sumy.dni_bez_raportu || 0} bez raportu kierowcy`)}
+      ${kafelekZPodpisem('Godziny wg raportów', godz(sumy.godziny_raportow || 0),
+        `wg tras: ${godz(sumy.godziny_zlecen || 0)}`)}
+      ${kafelekZPodpisem('Kilometry wg raportów', liczbaPl(sumy.km_raportow || 0),
+        `z GPS ok. ${liczbaPl(sumy.km_gps || 0)} km`)}
+      ${kafelekZPodpisem('Dostawy', sumy.dostarczone || 0, `${sumy.nieudane || 0} nieudanych`)}
     </div>
+
+    ${sumy.dni_bez_raportu ? `<div class="wstega uwaga" style="margin-top:12px">
+      ${sumy.dni_bez_raportu} ${odmiana(sumy.dni_bez_raportu, 'dzień nie ma', 'dni nie mają', 'dni nie ma')}
+      raportu kierowcy — godziny i dostawy z tych dni pochodzą z tras.
+      ${odrzucone.length ? `<br>W „Odrzuconych” leży ${odrzucone.length} ${
+        odmiana(odrzucone.length, 'raport', 'raporty', 'raportów')} z tego zakresu (telefon go wysłał, ale
+        program go nie przyjął): ${odrzucone.slice(0, 5).map(o => escHtml(`${polskaData(o.data)} ${o.kierowca}${
+          o.powod ? ' — ' + o.powod : ''}`)).join('; ')}.
+        <button class="maly" id="rb-odrzucone">Otwórz „Odrzucone”</button>` : ''}</div>` : ''}
 
     <div id="rb-braki"></div>
 
@@ -1873,31 +2128,20 @@ async function rysujRaportyBiura(pole, param) {
       <div class="tabela-przewijana">
         <table>
           <thead><tr>
-            <th>Dzień</th><th>Kierowca</th><th>Auto</th><th>Start</th><th>Koniec</th>
-            <th>Przerwa</th><th>Godziny</th><th>km</th><th>Paliwo</th><th>Usterki / uwagi</th>
+            <th>Dzień</th><th>Kierowca</th><th>Auto</th><th>Trasy</th><th>Godziny wg tras</th>
+            <th>Raport kierowcy</th><th>Różnica</th><th>km</th><th>Paliwo</th><th>Usterki / uwagi</th>
           </tr></thead>
-          <tbody>${wiersze.length ? wiersze.map(w => `<tr>
-              <td>${polskaData(w.data)}</td>
-              <td><b>${escHtml(w.kierowca_imie)}</b></td>
-              <td>${escHtml(w.pojazd_nazwa || '')}</td>
-              <td>${escHtml(w.start_o || '')}</td>
-              <td>${escHtml(w.koniec_o || '')}</td>
-              <td>${w.przerwa_min || 0} min</td>
-              <td><b>${w.godziny != null ? w.godziny : '—'}</b></td>
-              <td>${w.km != null ? liczbaPl(w.km) : '—'}</td>
-              <td>${w.paliwo_l != null ? w.paliwo_l + ' l' : ''}
-                  ${w.paliwo_pln != null ? '<br>' + liczbaPl(w.paliwo_pln.toFixed(2)) + ' zł' : ''}</td>
-              <td class="male">${w.usterki ? '<b style="color:var(--czerwony)">⚠ ' + escHtml(w.usterki) + '</b><br>' : ''}
-                  ${escHtml(w.uwagi || '')}</td>
-            </tr>`).join('')
-    : '<tr><td colspan="10"><div class="pusto">Brak raportów w tym okresie.</div></td></tr>'}
+          <tbody>${dni.length ? dni.map(wiersz).join('')
+    : '<tr><td colspan="10"><div class="pusto">W tym okresie nie ma ani tras, ani raportów.</div></td></tr>'}
           </tbody>
         </table>
       </div>
     </div>
 
-    ${kierowcy.length ? `<div class="male slaby">
-      Kierowcy wypełniają raporty w swoich telefonach — tutaj tylko je przeglądasz i eksportujesz.</div>` : ''}`;
+    <div class="male slaby">Kierowcy wypełniają raporty w swoich telefonach. Różnica to rozpiętość dnia z raportu
+      (od startu do końca, bez odejmowania przerwy) minus rozpiętość z tras (start trasy do końca trasy albo
+      ostatniego zamknięcia punktu). Kilometry z GPS są liczone ze śladu w linii prostej, więc wychodzą nieco niższe
+      niż z licznika; ślad starszy niż ${wynik.retencja_gps_dni || 30} dni program kasuje.</div>`;
 
   // Adres pobrania trafia do historii przeglądarki, więc nie wkładamy w niego
   // tokenu sesji — bierzemy osobny, ważny pięć minut i tylko do pobierania.
@@ -1906,7 +2150,9 @@ async function rysujRaportyBiura(pole, param) {
     if (!w) return;
     // adresDanych(): z GitHub Pages plik CSV wydaje program w biurze, nie Pages.
     const adres = adresDanych(`/api/eksport/${przycisk.dataset.eksport}.csv`
-      + `?od=${od}&do=${doDnia}&t=${encodeURIComponent(w.token)}`);
+      + `?od=${od}&do=${doDnia}`
+      + (przycisk.dataset.eksport === 'raport-pracy-pelny' && kierowcaId ? '&kierowca=' + kierowcaId : '')
+      + `&t=${encodeURIComponent(w.token)}`);
     const link = document.createElement('a');
     link.href = adres;
     link.download = '';
@@ -1917,11 +2163,24 @@ async function rysujRaportyBiura(pole, param) {
 
   rysujBraki(pole.querySelector('#rb-braki'), od, doDnia);
 
+  pole.querySelectorAll('[data-trasa-raport]').forEach(a => a.onclick = e => {
+    e.preventDefault();
+    pokazEkran('trasa', { id: Number(a.dataset.trasaRaport) });
+  });
+  const przyciskOdrzuconych = pole.querySelector('#rb-odrzucone');
+  if (przyciskOdrzuconych) przyciskOdrzuconych.onclick = () => pokazEkran('odrzucone');
+
   const odswiez = () => pokazEkran('raporty', {
     od: pole.querySelector('#rb-od').value, do: pole.querySelector('#rb-do').value,
+    kierowca: (pole.querySelector('#rb-kierowca') || {}).value || '',
   });
   pole.querySelector('#rb-od').onchange = odswiez;
   pole.querySelector('#rb-do').onchange = odswiez;
+  const wybor = pole.querySelector('#rb-kierowca');
+  if (wybor) wybor.onchange = odswiez;
+  pole.querySelector('#rb-14').onclick = () => pokazEkran('raporty', {
+    od: przesunDate(dzisiaj(), -13), do: dzisiaj(), kierowca: kierowcaId,
+  });
   pole.querySelector('#rb-miesiac').onclick = () => {
     const d = new Date();
     pokazEkran('raporty', {
@@ -1929,6 +2188,7 @@ async function rysujRaportyBiura(pole, param) {
       // ostatni dzień poprzedniego miesiąca.
       od: dataLokalna(new Date(d.getFullYear(), d.getMonth(), 1)),
       do: dzisiaj(),
+      kierowca: kierowcaId,
     });
   };
 }
@@ -2273,6 +2533,22 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       </div>
       <label>Stopka wiadomości
         <textarea id="u-poczta-stopka" placeholder="np. Pozdrawiamy, GK Factory · tel. 62 000 00 00">${escHtml(ustawienia.poczta_stopka || '')}</textarea></label>
+      <fieldset class="szablony-poczty">
+        <legend>Treść wiadomości do klienta</legend>
+        <p class="male slaby">Wiadomość składa się sama z tych szablonów. W tekście wpisz zmienne w nawiasach
+          klamrowych — program podstawi dane punktu: <code>{adres}</code> adres klienta,
+          <code>{data}</code> dzień słownie z dniem tygodnia („16 listopada 2026 (poniedziałek)”),
+          <code>{data_krotka}</code> 16.11.2026, <code>{okno}</code> godziny, <code>{towar}</code>,
+          <code>{dokument}</code>, <code>{firma}</code>, <code>{klient}</code>, <code>{osoba}</code>,
+          <code>{odebral}</code>. Linia „Towar: {towar}” znika, gdy towaru nie ma.
+          Nieznana zmienna zostaje w tekście bez zmian.</p>
+        ${[['poczta_temat_plan', 'Temat — plan dostawy', 2], ['poczta_szablon_plan', 'Treść — plan dostawy', 8],
+           ['poczta_temat_dostawa', 'Temat — dostawa zrealizowana', 2], ['poczta_szablon_dostawa', 'Treść — dostawa zrealizowana', 6]]
+          .map(([klucz, nazwa, wiersze]) => `
+        <label>${nazwa}
+          <textarea id="u-${klucz}" rows="${wiersze}">${escHtml(ustawienia[klucz] || '')}</textarea></label>
+        <button type="button" class="maly" data-przywroc="${klucz}">Przywróć domyślny</button>`).join('')}
+      </fieldset>
       <div class="przyciski">
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
         <button id="u-poczta-test">Wyślij wiadomość próbną</button>
@@ -2332,6 +2608,8 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       ['poczta_serwer', 'u-poczta-serwer'], ['poczta_port', 'u-poczta-port'],
       ['poczta_nadawca', 'u-poczta-nadawca'], ['poczta_login', 'u-poczta-login'],
       ['poczta_haslo', 'u-poczta-haslo'], ['poczta_stopka', 'u-poczta-stopka'], ['ors_klucz', 'u-ors'],
+      ['poczta_temat_plan', 'u-poczta_temat_plan'], ['poczta_szablon_plan', 'u-poczta_szablon_plan'],
+      ['poczta_temat_dostawa', 'u-poczta_temat_dostawa'], ['poczta_szablon_dostawa', 'u-poczta_szablon_dostawa'],
       ['tunel_token', 'u-tunel-token'], ['tunel_adres', 'u-tunel-adres'],
       ['ikol_login', 'u-ikol-login'], ['ikol_haslo', 'u-ikol-haslo'], ['ikol_appkey', 'u-ikol-appkey'],
       ['flotex_adres', 'u-flotex-adres'], ['flotex_klucz', 'u-flotex-klucz'],
@@ -2484,6 +2762,10 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
         .then(() => komunikat('Adres skopiowany — wyślij go kierowcom', 'ok'))
         .catch(() => komunikat('Skopiuj adres ręcznie', 'blad'));
     };
+    pole.querySelectorAll('[data-przywroc]').forEach(b => b.onclick = () => {
+      const klucz = b.dataset.przywroc;
+      document.getElementById('u-' + klucz).value = (ustawienia.poczta_szablony_domyslne || {})[klucz] || '';
+    });
     pole.querySelector('#u-poczta-test').onclick = async () => {
       const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
         poczta_serwer: val('u-poczta-serwer'), poczta_port: val('u-poczta-port'),
@@ -2886,7 +3168,7 @@ function oknoBusa(b) {
           aktywny: nowy ? 1 : (document.getElementById('bu-aktywny').checked ? 1 : 0),
           czas_pracy: document.getElementById('bu-czas-pracy').checked ? 1 : 0,
         }), 'Zapisano');
-        if (w) { z(); wrocDoUstawien(); }
+        if (w) { _autaDoFiltra = null; z(); wrocDoUstawien(); }
       } },
     ],
   });
@@ -3630,17 +3912,41 @@ function oknoPowiadomienia(p) {
       <label>Kiedy planujecie być <span class="slaby">(trafi do treści)</span>
         <input id="pw-okno" value="${escHtml(p.eta ? 'ok. ' + p.eta : okno_txt)}"
                placeholder="np. 12:30–13:00"></label>
-      <p class="male slaby">Treść składa program: nazwa firmy, dzień, podana godzina,
-        towar i numer dokumentu. Nic nie wysyła się samo — wysyłasz Ty, tym przyciskiem.</p>`,
+      <p class="male slaby" id="pw-temat">Temat: …</p>
+      <label>Treść wiadomości <span class="slaby">(możesz ją poprawić tylko dla tej jednej wysyłki)</span>
+        <textarea id="pw-tresc" rows="9"></textarea></label>
+      <p class="male slaby" id="pw-uwaga"></p>
+      <p class="male slaby">Treść składa program z szablonu (adres klienta, dzień z dniem tygodnia,
+        podana godzina, towar, dokument). Nic nie wysyła się samo — wysyłasz Ty, tym przyciskiem.</p>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: '✉️ Wyślij', klasa: 'glowny', klik: async z => {
-        const w = await sprobuj(() => API.post(`/api/przystanki/${p.id}/powiadom`,
-          { okno: val('pw-okno') }), 'Wiadomość wysłana');
+        const dane = { okno: val('pw-okno') };
+        // Własny tekst idzie tylko wtedy, gdy biuro go poprawiło — inaczej serwer składa treść sam.
+        if (pw.edytowano) dane.tresc = val('pw-tresc');
+        const w = await sprobuj(() => API.post(`/api/przystanki/${p.id}/powiadom`, dane),
+          'Wiadomość wysłana');
         if (w) z();
       } },
     ],
   });
+  const pw = { edytowano: false, numer: 0 };
+  const odswiez = async () => {
+    const numer = ++pw.numer;
+    try {
+      const w = await API.get(`/api/przystanki/${p.id}/powiadom/podglad?okno=${encodeURIComponent(val('pw-okno'))}`);
+      if (numer !== pw.numer || !jest('pw-tresc')) return;
+      document.getElementById('pw-temat').textContent = 'Temat: ' + w.temat;
+      if (!pw.edytowano) document.getElementById('pw-tresc').value = w.tresc;
+      document.getElementById('pw-uwaga').textContent = w.brak_adresu
+        ? 'Klient nie ma zapisanego adresu — uzupełnij go w kartotece, zanim wyślesz powiadomienie.' : '';
+    } catch (e) {
+      if (jest('pw-uwaga')) document.getElementById('pw-uwaga').textContent = poLudzku(e);
+    }
+  };
+  document.getElementById('pw-tresc').addEventListener('input', () => { pw.edytowano = true; });
+  document.getElementById('pw-okno').addEventListener('change', odswiez);
+  odswiez();
 }
 
 /* Przeniesienie punktu i „zaległe” pytają, gdy telefon kierowcy może jeszcze

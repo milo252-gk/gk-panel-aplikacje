@@ -133,6 +133,12 @@ function nastepnyPrzystanek(trasa) {
   return lista.find(p => p.status === 'oczekuje') || null;
 }
 
+/* Rodzaj czynności i wymogi w NASZYM punkcie ustawia biuro. Puste = zwykły postój (jak dotąd). */
+const NAPISY_RODZAJU = { dostawa: 'Dostawa', odbior: 'Odbiór', oba: 'Dostawa i odbiór' };
+function wymogiPunktu(p) {
+  return p && p.nasze ? String(p.wymogi || '').split(',').filter(Boolean) : [];
+}
+
 function kartaPrzystanku(p, numer, klikalny, nastepny) {
   const okno = (p.okno_od || p.okno_do)
     ? `<span class="plakietka p-planowana">🕒 ${escHtml(p.okno_od || '…')}–${escHtml(p.okno_do || '…')}</span>` : '';
@@ -176,7 +182,8 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
         <span class="adres">${adresHtml(p) || '<i>brak adresu</i>'}</span>
         ${dopiski.length ? `<span class="dopisek">${dopiski.join(' &nbsp;·&nbsp; ')}</span>` : ''}
       </span>
-      <span class="prawo">${nasze ? '<span class="plakietka p-nasze">NASZE</span>' : ''}${plakietka}${okno}</span>
+      <span class="prawo">${nasze ? '<span class="plakietka p-nasze">NASZE</span>' : ''}${
+        nasze && NAPISY_RODZAJU[p.rodzaj] ? `<span class="plakietka p-nasze">${NAPISY_RODZAJU[p.rodzaj]}</span>` : ''}${plakietka}${okno}</span>
     </button>`;
 }
 
@@ -398,7 +405,10 @@ function oknoPrzystanku(id) {
         ${p.klient_uwagi ? `<div class="wstega uwaga" style="margin:10px 0 0">${escHtml(p.klient_uwagi)}</div>` : ''}
       </div>
       ${p.nasze ? `<div class="wstega info">To nasze miejsce — doładunek albo odbiór,
-          nie dostawa do klienta. Nie ma tu podpisu ani numeru zamówienia.</div>` : ''}
+          nie dostawa do klienta. ${wymogiPunktu(p).length ? '' : 'Nie ma tu podpisu ani numeru zamówienia.'}
+          ${NAPISY_RODZAJU[p.rodzaj] ? `<br><b>Co zrobić:</b> ${NAPISY_RODZAJU[p.rodzaj]}.` : ''}
+          ${wymogiPunktu(p).length ? `<br><b>Biuro prosi o:</b> ${wymogiPunktu(p).map(w =>
+            ({ odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', dokument: 'numer dokumentu' }[w] || w)).join(', ')}.` : ''}</div>` : ''}
       ${p.towar ? `<p><b>Towar:</b> ${escHtml(p.towar)}</p>` : ''}
       ${p.dokument && !p.nasze ? `<p><b>Dokument:</b> ${escHtml(p.dokument)}</p>` : ''}
       ${p.uwagi ? `<p><b>Uwagi do dostawy:</b> ${escHtml(p.uwagi)}</p>` : ''}
@@ -501,17 +511,22 @@ function oknoDostarczone(p) {
   // We własnym magazynie nie ma komu podpisać odbioru ani kogo wpisać jako
   // odbierającego — to doładunek, nie dostawa. Zostaje zdjęcie i notatka.
   const nasze = !!p.nasze;
+  // Wymogi ustawione przez biuro dla naszego punktu (np. odbiór z podpisem). Bez nich — jak dotąd.
+  const wymogi = wymogiPunktu(p);
 
   okno({
     tytul: (nasze ? 'Postój: ' : 'Dostawa: ') + p.klient_nazwa,
     tresc: `
-      ${nasze ? '' : `<label>Kto odebrał <span class="slaby">(imię i nazwisko lub „magazyn”)</span>
+      ${!nasze || wymogi.includes('odebral') ? `<label>Kto odebrał <span class="slaby">(imię i nazwisko lub „magazyn”)</span>
         <input id="d-odebral" autocapitalize="words" placeholder="np. Jan Kowalski">
-      </label>
-      <label>Podpis odbierającego
+      </label>` : ''}
+      ${!nasze || wymogi.includes('podpis') ? `<label>Podpis odbierającego
         <canvas class="pole-podpisu" id="d-podpis"></canvas>
       </label>
-      <button class="maly" id="d-czysc-podpis" type="button">Wyczyść podpis</button>`}
+      <button class="maly" id="d-czysc-podpis" type="button">Wyczyść podpis</button>` : ''}
+      ${nasze && wymogi.includes('dokument') ? `<label>Numer dokumentu <span class="slaby">(WZ, PZ, zamówienie)</span>
+        <input id="d-dokument" maxlength="60" value="${escHtml(p.dokument || '')}">
+      </label>` : ''}
       <label style="margin-top:16px">Zdjęcia <span class="slaby">(towar, dokument, miejsce)</span></label>
       ${przyciskAparatu('d-zdjecia')}
       <div class="miniatury" id="d-miniatury"></div>
@@ -533,12 +548,23 @@ function oknoDostarczone(p) {
           podpis: podpisPole && !podpisPole.pusty() ? podpisPole.obraz() : null,
           zdjecia: zdjecia.slice(),
         };
+        if (nasze && wymogi.includes('dokument')) dane.dokument = wart('d-dokument').trim();
         // Ostrzeżenie o braku dowodu ma sens tylko przy dostawie do odbiorcy.
         // Przy własnym magazynie pokazywałoby się ZAWSZE, a ostrzeżenie, które
         // zawsze się pojawia, przestaje cokolwiek znaczyć.
         if (!nasze && !dane.odebral && !dane.podpis && !dane.zdjecia.length) {
           if (!await potwierdz('Brak dowodu dostawy',
             'Nie ma podpisu, zdjęcia ani nazwiska odbierającego. Zapisać mimo to?')) return;
+        }
+        // Własny punkt z wymogami biura: miękkie ostrzeżenie o tym, czego brakuje (nie blokuje — kierowca bywa w terenie).
+        if (nasze && wymogi.length) {
+          const brakuje = [];
+          if (wymogi.includes('odebral') && !dane.odebral) brakuje.push('kto odebrał');
+          if (wymogi.includes('podpis') && !dane.podpis) brakuje.push('podpis');
+          if (wymogi.includes('zdjecie') && !dane.zdjecia.length) brakuje.push('zdjęcie');
+          if (wymogi.includes('dokument') && !dane.dokument) brakuje.push('numer dokumentu');
+          if (brakuje.length && !await potwierdz('Brakuje: ' + brakuje.join(', '),
+            'Biuro prosi o to przy tym punkcie. Zapisać mimo to?')) return;
         }
         z();
         if (oknoDostarczone.odepnij) oknoDostarczone.odepnij();

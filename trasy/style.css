@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-d9ad693cca77';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-f44864b18b67';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -791,6 +791,7 @@ body.okno-otwarte .mapa{visibility:hidden}
 .zaawansowane>summary .slaby{font-weight:400; font-size:13px}
 /* „▸ Więcej” w edytorze trasy (UI etap 3) — ten sam wzór co „Zaawansowane”,
    tylko mniejszy: siedzi w karcie, nad listą punktów, i nie może jej spychać. */
+.pasek-narzedzi label.filtr-aktywny select{border-color:var(--akcent); box-shadow:0 0 0 2px var(--pomarancz-tlo)}
 .zaawansowane.wiecej-trasy{margin-top:12px}
 .zaawansowane.wiecej-trasy>summary{font-size:15px; padding:8px 2px}
 .zaawansowane.wiecej-trasy[open]>summary{margin-bottom:10px}
