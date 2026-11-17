@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-3be4bb9251aa';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-1241735254c5';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -2847,7 +2847,7 @@ const Powiadomienia = {
 function opisPowiadomien() {
   return jestBiuro()
     ? 'Auto, które stoi, poważna usterka, przegląd do zatwierdzenia i terminy floty.'
-    : 'Przegląd do zrobienia i przypomnienie, odrzucony przegląd, zamknięta usterka.';
+    : 'Przegląd do zrobienia i przypomnienie, zwrócony przegląd, zamknięta usterka.';
 }
 
 /* Jeden przycisk w oknie „Moje konto”: Włącz powiadomienia / Włączone + Wyłącz —

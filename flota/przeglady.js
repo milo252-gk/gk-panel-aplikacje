@@ -38,7 +38,7 @@ const OPIS_STATUSU = {
   oczekuje: 'czeka na kierowcę',
   wykonany: 'do sprawdzenia',
   zatwierdzony: 'zatwierdzony',
-  odrzucony: 'odrzucony',
+  odrzucony: 'zwrócony',
   zalegly: 'zaległy',
 };
 
@@ -149,7 +149,12 @@ function pozycjaProtokolu(g, biuro) {
           escHtml(kilometry(g.przebieg))}${g.ile_zdjec != null
             ? ` · ${g.ile_zdjec} ` + odmiana(g.ile_zdjec, 'zdjęcie', 'zdjęcia', 'zdjęć')
             : ''}</span>` : ''}
-        ${g.powod ? `<span class="dopisek">Powód odrzucenia: ${escHtml(g.powod)}</span>` : ''}
+        ${g.wykonano_o && g.status !== 'oczekuje' && g.status !== 'zalegly'
+          ? `<span class="dopisek slaby">oddany ${escHtml(polskaData(g.wykonano_o))}</span>` : ''}
+        ${g.uwagi ? `<span class="dopisek"><b>Uwagi kierowcy:</b> ${escHtml(g.uwagi)}</span>` : ''}
+        ${(g.status === 'wykonany' || g.status === 'odrzucony') && (g.braki || []).length
+          ? `<span class="dopisek brak-kadrow">Brakuje zdjęć: ${g.braki.map(b => escHtml(b.etykieta || b)).join(', ')}</span>` : ''}
+        ${g.powod ? `<span class="dopisek">Powód zwrotu: ${escHtml(g.powod)}</span>` : ''}
       </span>
       <span class="prawo">
         <span class="plakietka p-${escHtml(g.status)}">${
@@ -254,7 +259,7 @@ EKRANY.protokol = {
         <button id="pr-wroc">← Wróć</button>
         <span class="przyciski">
           ${biuro && (g.status === 'wykonany' || g.status === 'zatwierdzony')
-            ? '<button class="niszczacy" id="pr-odrzuc">Odrzuć</button>' : ''}
+            ? '<button class="niszczacy" id="pr-odrzuc">Zwróć kierowcy</button>' : ''}
           ${biuro && (g.status === 'wykonany' || g.status === 'odrzucony')
             ? '<button class="glowny" id="pr-zatwierdz">Zatwierdź</button>' : ''}
         </span>
@@ -344,14 +349,14 @@ function oknoOdrzucenia(g) {
                        'Zdjęcia z poprzedniego miesiąca', 'Zdjęcie za ciemne — nie widać nadwozia',
                        'Stan licznika nie zgadza się ze zdjęciem'];
   okno({
-    tytul: 'Odrzucenie przeglądu za ' + miesiacSlownie(g.okres),
+    tytul: 'Zwrot przeglądu za ' + miesiacSlownie(g.okres),
     tresc: `
       <p class="slaby">Powód zobaczy kierowca w telefonie — napisz konkret,
       a nie „źle". Zdjęcia zostają w przeglądzie, nic nie jest kasowane.</p>
       <div class="chipy">${PODPOWIEDZI.map(p =>
         `<button type="button" class="chip" data-podpowiedz="${escHtml(p)}">${
           escHtml(p)}</button>`).join('')}</div>
-      <label class="pole">Powód odrzucenia *
+      <label class="pole">Powód zwrotu *
         <textarea id="od-powod" rows="3" maxlength="500"
           placeholder="np. Na zdjęciu licznika nie widać cyfr — zrób je bez odbicia"></textarea>
       </label>`,
@@ -369,7 +374,7 @@ function oknoOdrzucenia(g) {
     },
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: 'Odrzuć przegląd', klasa: 'glowny niszczacy', klik: async (zamknij) => {
+      { napis: 'Zwróć kierowcy', klasa: 'glowny niszczacy', klik: async (zamknij) => {
         const powod = (document.getElementById('od-powod').value || '').trim();
         if (powod.length < 3) {
           komunikat('Napisz, co jest nie tak — kierowca ma z tego wiedzieć, po co wraca do auta',
@@ -383,7 +388,7 @@ function oknoOdrzucenia(g) {
             if (!sciezka.startsWith('/api/przeglady')) return;
             wPamieci(d, g.id, x => Object.assign(x, { status: 'odrzucony', powod, zatwierdzil: null }));
           },
-        }), 'Przegląd odrzucony — kierowca zobaczy powód')) return;
+        }), 'Przegląd zwrócony — kierowca zobaczy powód')) return;
         zamknij();
         odswiezEkran();
       } },

@@ -69,7 +69,7 @@ function kartaMojegoAuta(p, okres, czeka) {
   const wTelefonie = przegladCzeka(czeka, p.id, pr.okres || okres);
   return `
     ${odrzucony && !wTelefonie ? `<div class="wstega blad">
-      Biuro odrzuciło Twój przegląd za ${escHtml(miesiacSlownie(pr.okres || okres))}.<br>
+      Biuro zwróciło Twój przegląd do poprawy za ${escHtml(miesiacSlownie(pr.okres || okres))}.<br>
       <b>Powód: ${escHtml(pr.powod || 'nie podano')}</b><br>
       Popraw to i wyślij jeszcze raz — zdjęcia, które biuro już ma, zostają;
       zrób na nowo tylko te, o które prosi biuro.</div>` : ''}
@@ -169,7 +169,7 @@ EKRANY.przeglad = {
         czeka na wysłanie na tym urządzeniu — wyślę go sam, gdy wróci zasięg.
         Nie rób go drugi raz.</div>` : ''}
       ${pr.status === 'odrzucony' ? `<div class="wstega blad">
-        Biuro odrzuciło poprzednią wysyłkę.<br><b>${escHtml(pr.powod || '')}</b></div>` : ''}
+        Biuro zwróciło poprzednią wysyłkę do poprawy.<br><b>${escHtml(pr.powod || '')}</b></div>` : ''}
       ${naSerwerze.length ? `<div class="wstega info">Biuro ma już zdjęcia:
         ${naSerwerze.map(k => escHtml(Zdjecia.opisKadru(k).etykieta)).join(', ')}.
         Dorób tylko brakujące albo te, o które prosi biuro.</div>` : ''}

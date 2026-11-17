@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-3be4bb9251aa';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-1241735254c5';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -93,6 +93,8 @@
   /* D65: wysokość przycisku pod palec — jak --dotyk w hali i GK Trasy: 44 px na
      komputerze, 52 px na telefonie (niżej, max-width:820px). */
   --dotyk:44px;
+  /* mniejszy przycisk (np. „Zajmij się”, drobne akcje w wierszu): 34 px na komputerze, 44 px na telefonie — jak hala.css */
+  --dotyk-maly:34px;
 }
 
 /* ======================================================== MOTYW CIEMNY ===
@@ -215,7 +217,7 @@ button.glowny{background:var(--granat); border-color:var(--granat); color:var(--
 button.zielony{background:var(--zielony); border-color:var(--zielony); color:var(--na-barwie)}
 button.czerwony{background:var(--czerwony); border-color:var(--czerwony); color:var(--na-barwie)}
 button.duzy{width:100%; min-height:54px; font-size:16px; margin-top:6px}
-button.maly{min-height:34px; padding:5px 10px; font-size:13px; border-radius:8px}
+button.maly{min-height:var(--dotyk-maly); padding:5px 10px; font-size:13px; border-radius:8px}
 button.tekstowy{border:0; background:none; color:var(--akcent); padding:6px 4px; min-height:auto}
 button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line-height:1;
                  min-height:44px; min-width:44px; display:inline-flex; align-items:center;
@@ -952,6 +954,10 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   /* D65: na telefonie każdy przycisk ≥ --dotyk (52 px), jak w hali i GK Trasy;
      pasek dolny 64 px jak GK Trasy (2026-10-16). */
   :root{--dotyk:52px; --dol-wys:64px}
+  :root{--dotyk-maly:44px}
+  /* strzałki kolejności i krzyżyk na zdjęciu: pod palec, nie 26/36 px */
+  .uchwyty button{min-height:var(--dotyk-maly); min-width:var(--dotyk-maly); font-size:14px}
+  .miniatura button{width:var(--dotyk-maly); height:var(--dotyk-maly); min-height:var(--dotyk-maly); line-height:var(--dotyk-maly)}
   /* Chipy, przycisk konta w nagłówku, pigułki „Wygląd” i stopka „Moje konto” —
      52 px dla każdej roli, jak GK Trasy (2026-10-16; dawniej 44 px). */
   .okno-konta .okno-stopka button,
@@ -979,3 +985,6 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
 .ik{display:inline-flex; vertical-align:-3px; margin-right:6px}
 .ik svg{display:block; width:16px; height:16px}
 .pusto .duza-ikona svg{display:inline-block}
+
+/* Lista przeglądów: braki zdjęć na wierzchu, żeby biuro oceniało bez otwierania karty (jak „Do odbioru” w Panelu). */
+.pozycja .dopisek.brak-kadrow{color:var(--czerwony); font-weight:600}
