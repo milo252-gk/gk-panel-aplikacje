@@ -20,6 +20,9 @@ EKRANY.pulpit = {
     // mignąć przed odpowiedziami serwera. „oczekiwane” = skąd jeszcze czekamy na odpowiedź (do chwili, gdy wszystkie
     // wrócą, nie piszemy „Wszystko w porządku”, bo to mogłoby być nieprawdą).
     const podglad = jestPodgladem();
+    if (!podglad) await listaKierowcow().catch(() => []);       // lista do filtra „Kierowca”
+    const nieudaneWidoczne = podglad ? p.nieudane
+      : filtrujPulpit(p.nieudane, czytajFiltryPulpitu(), AKCESORIA_PULPITU.nieudane(p.trasy));
     pulpitSprawy = {
       alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null,
       punkty: razem.ile, dostarczone: razem.ok, nieudane: razem.nie,
@@ -43,19 +46,30 @@ EKRANY.pulpit = {
 
       <div id="p-kafelki" class="kafelki-liczb" aria-label="Najważniejsze liczby dnia"></div>
 
+      ${podglad ? '' : htmlFiltrowPulpitu(czytajFiltryPulpitu())}
+
       <div id="p-do-przyjecia"></div>
 
       <div id="p-zywo"></div>
 
       ${p.nieudane.length ? `
         <h2 style="margin-top:20px" id="p-nieudane">Nieudane dostawy — do decyzji</h2>
-        <div class="karta">
-          ${p.nieudane.map(n => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
+        ${nieudaneWidoczne.length < p.nieudane.length ? `<p class="male slaby" style="margin:0 0 6px">Filtry ukrywają ${p.nieudane.length - nieudaneWidoczne.length} z ${p.nieudane.length}.</p>` : ''}
+        ${nieudaneWidoczne.length ? '' : '<span id="p-nieudane-karta" hidden></span>'}
+        <div class="karta" id="p-nieudane-karta"${nieudaneWidoczne.length ? '' : ' hidden'}>
+          ${nieudaneWidoczne.map(n => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)" data-nieudany="${n.id}">
               <b>${escHtml(n.klient_nazwa)}</b>
               <span class="plakietka p-nieudane" style="margin-left:6px">${escHtml(n.powod)}</span>
               <div class="male slaby">${samaGodzina(n.zamkniete_o)} ${escHtml(n.notatka || '')}</div>
+              <div class="nu-dowody"></div>
+              <div class="przyciski" style="margin-top:6px"><button class="maly" data-do-trasy="${n.trasa}">Trasa</button></div>
             </div>`).join('')}
         </div>` : ''}
+
+      ${podglad ? '' : `<details class="zaawansowane" id="p-zatwierdzone">
+        <summary><span class="znak-zwiniecia">▸</span> Ostatnio zatwierdzone (24 h) <span class="filtry-licznik" id="p-zatwierdzone-licznik" hidden></span></summary>
+        <div id="p-zatwierdzone-tresc" class="male slaby">Otwórz, żeby zobaczyć dostawy zatwierdzone w ostatniej dobie.</div>
+      </details>`}
 
       <h2 style="margin-top:20px">Gdzie są auta
         <span class="male slaby" style="font-weight:400">
@@ -76,6 +90,11 @@ EKRANY.pulpit = {
     if (!podglad) { pulpitSprawy.doPrzyjecia = ileDoPrzyjecia; pulpitSprawy.oczekiwane.delete('przyjecie'); rysujKafelkiPulpitu(); }
     await rysujZywo(pole.querySelector('#p-zywo'), data);
     odswiezajZywo(data);
+    wzbogacNieudane(pole.querySelector('#p-nieudane-karta'), nieudaneWidoczne);
+    if (!podglad) {
+      podepnijFiltryPulpitu(pole, () => pokazEkran('pulpit', { data }));
+      podepnijZatwierdzone(pole.querySelector('#p-zatwierdzone'));
+    }
 
     // Alarmy (kopie, adres na Pages, tunel, dysk) — tylko administrator
     // może coś z nimi zrobić, więc tylko on je widzi.
@@ -147,6 +166,108 @@ let pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: n
 function brakiDoSprawdzenia(lista) {
   return (lista || []).filter(b => b.rodzaj !== 'brak_raportu' && b.rodzaj !== 'niezamkniety');
 }
+
+/* ------------------------------------------------ filtry Pulpitu (2026-11-18)
+
+   Jeden zwarty pasek nad sekcjami Pulpitu („Do zatwierdzenia”, „Nieudane — do decyzji”, „Ostatnio zatwierdzone”):
+   kierowca, auto, klient (tekst), rodzaj zatwierdzenia (tylko dla zatwierdzonych), sortowanie i „Wyczyść”. Filtruje to,
+   co już pobrano (żadnych nowych endpointów); kafelki z liczbami nadal liczą wszystko. Pamięć OSOBNO DLA KAŻDEJ OSOBY:
+   NOWY klucz „filtry-pulpit-<id osoby>” (Pamiec, przedrostek gk-trasy.) — istniejących kluczy nie ruszamy. */
+const FILTRY_PULPITU_POLA = ['kierowca', 'auto', 'klient', 'rodzaj', 'sort'];
+const FILTRY_PULPITU_SORT = { nowe: 'Najnowsze → najstarsze', stare: 'Najstarsze → najnowsze', kierowca: 'Kierowca A–Z' };
+
+function czytajFiltryPulpitu() {
+  const f = { kierowca: '', auto: '', klient: '', rodzaj: '', sort: '' };
+  try {
+    const z = JSON.parse(Pamiec.czytaj('filtry-pulpit-' + (stan.uz && stan.uz.id != null ? stan.uz.id : 'x')) || '{}');
+    if (z && typeof z === 'object') FILTRY_PULPITU_POLA.forEach(k => { if (typeof z[k] === 'string') f[k] = z[k]; });
+  } catch (e) { /* uszkodzony zapis — jak pusty */ }
+  if (f.sort && !FILTRY_PULPITU_SORT[f.sort]) f.sort = '';
+  if (f.rodzaj !== 'reczne' && f.rodzaj !== 'auto') f.rodzaj = '';
+  return f;
+}
+
+function zapiszFiltryPulpitu(f) {
+  const z = { v: 1 };
+  FILTRY_PULPITU_POLA.forEach(k => { if (f[k]) z[k] = f[k]; });
+  Pamiec.zapisz('filtry-pulpit-' + (stan.uz && stan.uz.id != null ? stan.uz.id : 'x'), JSON.stringify(z));
+}
+
+function ileFiltrowPulpitu(f) { return FILTRY_PULPITU_POLA.filter(k => k !== 'sort' && f[k]).length + (f.sort ? 1 : 0); }
+
+/* Czyste filtrowanie i sortowanie listy sekcji. `a`: kierowca(x), auto(x), klient(x), czas(x) i (tylko zatwierdzone)
+   rodzaj(x) = 'reczne' | 'auto'. Pole, którego sekcja nie ma (np. rodzaj w „Nieudanych”), jest pomijane. */
+function filtrujPulpit(lista, f, a) {
+  const klient = String(f.klient || '').trim().toLowerCase();
+  let w = (lista || []).filter(x =>
+    (!f.kierowca || a.kierowca(x) === f.kierowca) && (!f.auto || a.auto(x) === f.auto)
+    && (!klient || String(a.klient(x) || '').toLowerCase().includes(klient))
+    && (!f.rodzaj || !a.rodzaj || a.rodzaj(x) === f.rodzaj));
+  if (f.sort) {
+    const czas = x => String(a.czas(x) || '');
+    w = w.map((x, i) => [x, i]).sort((p, q) => {
+      if (f.sort === 'kierowca') {
+        const r = String(a.kierowca(p[0]) || '~').localeCompare(String(a.kierowca(q[0]) || '~'), 'pl');
+        if (r) return r;
+      } else {
+        const r = czas(p[0]).localeCompare(czas(q[0])) * (f.sort === 'nowe' ? -1 : 1);
+        if (r) return r;
+      }
+      return p[1] - q[1];
+    }).map(p => p[0]);
+  }
+  return w;
+}
+
+function htmlFiltrowPulpitu(f) {
+  const ile = ileFiltrowPulpitu(f);
+  const opcje = (lista, wybrany, wszystkie) => `<option value="">${wszystkie}</option>`
+    + lista.map(n => `<option value="${escHtml(n)}"${n === wybrany ? ' selected' : ''}>${escHtml(n)}</option>`).join('');
+  const kierowcy = (stan.kierowcy || []).map(k => k.imie).filter(Boolean).sort((p, q) => p.localeCompare(q, 'pl'));
+  const auta = (stan.pojazdy || []).filter(b => b.aktywny).map(b => b.nazwa).filter(Boolean).sort((p, q) => p.localeCompare(q, 'pl'));
+  const akt = k => (f[k] ? ' class="filtr-aktywny"' : '');
+  return `<div class="filtry-listy${ile ? ' aktywne' : ''}" id="p-filtry" role="group" aria-label="Filtry i sortowanie Pulpitu">
+      <div class="filtry-gora">
+        <span class="filtry-podsumowanie" style="font-weight:700">Filtry sekcji poniżej</span>
+        ${ile ? `<span class="filtry-plakietka" title="Włączone filtry">${ile} ${odmiana(ile, 'filtr', 'filtry', 'filtrów')}</span>` : ''}
+        <button type="button" class="maly filtry-wyczysc" data-pf-wyczysc${ile ? '' : ' disabled'}>Wyczyść</button>
+      </div>
+      <div class="filtry-pasek">
+        <label${akt('sort')}>Sortowanie<select data-pf="sort"><option value="">Domyślnie</option>
+          ${Object.keys(FILTRY_PULPITU_SORT).map(k => `<option value="${k}"${f.sort === k ? ' selected' : ''}>${FILTRY_PULPITU_SORT[k]}</option>`).join('')}</select></label>
+        <label${akt('kierowca')}>Kierowca<select data-pf="kierowca">${opcje(kierowcy, f.kierowca, 'Wszyscy')}</select></label>
+        <label${akt('auto')}>Auto<select data-pf="auto">${opcje(auta, f.auto, 'Wszystkie auta')}</select></label>
+        <label${akt('klient')}>Klient<input type="search" data-pf="klient" value="${escHtml(f.klient)}" placeholder="część nazwy" autocomplete="off"></label>
+        <label${akt('rodzaj')}>Zatwierdzone<select data-pf="rodzaj"><option value="">Wszystkie</option>
+          <option value="reczne"${f.rodzaj === 'reczne' ? ' selected' : ''}>ręcznie (biuro)</option>
+          <option value="auto"${f.rodzaj === 'auto' ? ' selected' : ''}>automatycznie</option></select></label>
+      </div>
+    </div>`;
+}
+
+function podepnijFiltryPulpitu(pole, przerysuj) {
+  const f = czytajFiltryPulpitu();
+  pole.querySelectorAll('[data-pf]').forEach(el => el.onchange = () => {
+    f[el.dataset.pf] = el.value;
+    zapiszFiltryPulpitu(f); przerysuj();
+  });
+  pole.querySelectorAll('[data-pf-wyczysc]').forEach(b => b.onclick = () => {
+    FILTRY_PULPITU_POLA.forEach(k => { f[k] = ''; });
+    zapiszFiltryPulpitu(f); przerysuj();
+  });
+}
+
+/* Dostęp do pól elementów poszczególnych sekcji Pulpitu. */
+const AKCESORIA_PULPITU = {
+  przyjecie: { kierowca: x => x.kierowca_imie, auto: x => x.pojazd_nazwa, klient: x => x.klient_nazwa, czas: x => x.zamkniete_o },
+  zatwierdzone: { kierowca: x => x.kierowca_imie, auto: x => x.pojazd_nazwa, klient: x => x.klient_nazwa, czas: x => x.przyjeto_o,
+                  rodzaj: x => (x.przyjete_auto ? 'auto' : 'reczne') },
+  nieudane: trasy => {
+    const po = new Map((trasy || []).map(t => [t.id, t]));
+    return { kierowca: n => (po.get(n.trasa) || {}).kierowca_imie, auto: n => (po.get(n.trasa) || {}).pojazd_nazwa,
+             klient: n => n.klient_nazwa, czas: n => n.zamkniete_o };
+  },
+};
 
 /* Czysta funkcja (testowana w przeglądarce bez okna): ze stanu pulpitu robi listę kafelków, w kolejności
    wagi — najpierw sprawy, potem liczby dnia. Nic nie dotyka strony. */
@@ -902,16 +1023,114 @@ function htmlDowodow(x, token, bezOdebralNotatki) {
     ${miniatury ? `<div class="dp-media">${miniatury}</div>` : ''}`;
 }
 
+/* „Nieudane dostawy — do decyzji” na Pulpicie: powód i notatka były gołym tekstem. Doładowujemy dowody punktu (miniatury
+   zdjęć i podpisu — te same funkcje co „Do zatwierdzenia”), z kliknięciem do powiększenia. Bez tokenu albo błędu
+   zostaje to, co było. */
+async function wzbogacNieudane(el, lista) {
+  if (!el || !(lista || []).length) return;
+  el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
+  if (jestPodgladem()) return;            // podgląd nie czyta załączników (serwer odmawia)
+  let token = '';
+  try { token = await tokenDoPlikow(); } catch (e) { return; }
+  for (const n of lista) {
+    let zal = [];
+    try { zal = await API.get(`/api/przystanki/${n.id}/zalaczniki`); } catch (e) { zal = []; }
+    const slot = el.querySelector(`[data-nieudany="${n.id}"] .nu-dowody`);
+    if (slot) slot.innerHTML = htmlDowodow({ klient_nazwa: n.klient_nazwa, status: 'nieudane', zalaczniki: zal }, token, true);
+  }
+  el.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
+}
+
+/* „Ostatnio zatwierdzone (24 h)”: zwijana sekcja tylko do odczytu. Bez nowego endpointu: trasy z dzisiaj i wczoraj i ich
+   punkty z `przyjeto_o` w ostatniej dobie (ręcznie albo automatycznie), z dowodami po rozwinięciu. */
+function sekcjaZatwierdzonychHtml(punkty, token) {
+  if (!punkty.length) return '<div class="male slaby">Przez ostatnią dobę nic nie zostało zatwierdzone.</div>';
+  return `<div class="karta">${punkty.map(x => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
+      <b>${escHtml(x.klient_nazwa)}</b>
+      ${x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone" style="margin-left:6px">✓ dostarczone</span>'
+        : `<span class="plakietka p-nieudane" style="margin-left:6px">✕ ${escHtml(x.powod || 'nieudane')}</span>`}
+      <span class="plakietka p-oczekuje" style="margin-left:6px">${x.przyjete_auto ? 'zatwierdzone automatycznie' : 'zatwierdzone przez biuro'}</span>
+      <div class="male slaby">${escHtml(x.kierowca_imie || '')} · ${escHtml(polskaData(x.data))} · zatwierdzono ${escHtml(polskaData(x.przyjeto_o))} ${escHtml(samaGodzina(x.przyjeto_o))}</div>
+      ${x.notatka ? `<div class="male">${escHtml(x.notatka)}</div>` : ''}
+      ${htmlDowodow(x, token, true)}
+      <div class="przyciski" style="margin-top:6px"><button class="maly" data-do-trasy="${x.trasa}">Trasa</button></div>
+    </div>`).join('')}</div>`;
+}
+
+async function punktyZatwierdzone() {
+      const teraz = new Date();
+      const dwa = n => String(n).padStart(2, '0');
+      const f = d => `${d.getFullYear()}-${dwa(d.getMonth() + 1)}-${dwa(d.getDate())} ${dwa(d.getHours())}:${dwa(d.getMinutes())}:${dwa(d.getSeconds())}`;
+      const granica = f(new Date(teraz.getTime() - 24 * 3600 * 1000));
+      const trasy = [].concat(...await Promise.all([dzisiaj(), przesunDate(dzisiaj(), -1)].map(d => API.get('/api/trasy?data=' + d))));
+      const pelne = await Promise.all(trasy.map(t => API.get('/api/trasy/' + t.id).catch(() => null)));
+      const punkty = [];
+      pelne.filter(Boolean).forEach(t => (t.przystanki || []).forEach(p => {
+        if (p.przyjeto_o && p.przyjeto_o >= granica && !p.do_przyjecia && (p.status === 'dostarczone' || p.status === 'nieudane')) {
+          punkty.push(Object.assign({}, p, { data: t.data, kierowca_imie: t.kierowca_imie, pojazd_nazwa: t.pojazd_nazwa, trasa: t.id }));
+        }
+      }));
+      punkty.sort((a, b) => String(b.przyjeto_o).localeCompare(String(a.przyjeto_o)));
+      return punkty;
+}
+
+/* Sekcja jest zwinięta, ale z licznikiem (dane liczymy od razu, w tle); lista i dowody rysują się dopiero po rozwinięciu. */
+function podepnijZatwierdzone(blok) {
+  if (!blok) return;
+  let punkty = null, rysowane = false;
+  const licznik = blok.querySelector('#p-zatwierdzone-licznik');
+  const wczytaj = punktyZatwierdzone().then(p => {
+    punkty = p;
+    const ile = filtrujPulpit(p, czytajFiltryPulpitu(), AKCESORIA_PULPITU.zatwierdzone).length;
+    if (licznik) { licznik.textContent = ile === p.length ? String(p.length) : ile + ' z ' + p.length; licznik.hidden = false; }
+  }).catch(() => { punkty = null; });
+  blok.addEventListener('toggle', async () => {
+    if (!blok.open || rysowane) return;
+    rysowane = true;
+    const cel = blok.querySelector('#p-zatwierdzone-tresc');
+    cel.textContent = 'Wczytuję…';
+    try {
+      await wczytaj;
+      if (!punkty) throw new Error('brak danych');
+      let token = '';
+      try { token = await tokenDoPlikow(); } catch (e) { token = ''; }
+      const wszystkie = punkty;
+      punkty = filtrujPulpit(wszystkie, czytajFiltryPulpitu(), AKCESORIA_PULPITU.zatwierdzone);
+      for (const x of punkty) {
+        try { x.zalaczniki = await API.get(`/api/przystanki/${x.id}/zalaczniki`); } catch (e) { x.zalaczniki = []; }
+      }
+      cel.innerHTML = (punkty.length < wszystkie.length
+        ? `<div class="male slaby" style="margin-bottom:6px">Filtry ukrywają ${wszystkie.length - punkty.length} z ${wszystkie.length}.</div>` : '')
+        + sekcjaZatwierdzonychHtml(punkty, token);
+      cel.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
+      cel.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
+    } catch (e) {
+      rysowane = false;
+      cel.textContent = 'Nie udało się wczytać — zamknij i otwórz jeszcze raz.';
+    }
+  });
+}
+
 async function rysujDoPrzyjecia(el, poZmianie) {
   if (!el || jestPodgladem()) return 0;    // zatwierdzanie dostaw jest tylko dla biura
   let lista = [];
   try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return 0; }
   if (!lista.length) { el.innerHTML = ''; return 0; }
+  // Filtry Pulpitu (kierowca, auto, klient, sortowanie) ograniczają tylko to, co widać; liczba dla kafelka zostaje pełna.
+  const wszystkie = lista;
+  const widoczna = filtrujPulpit(wszystkie, czytajFiltryPulpitu(), AKCESORIA_PULPITU.przyjecie);
+  if (!widoczna.length) {
+    el.innerHTML = `<h2 style="margin-top:20px">Do zatwierdzenia
+      <span class="plakietka p-oczekuje" style="margin-left:6px">0 z ${wszystkie.length}</span></h2>
+      <p class="male slaby">Filtry ukrywają wszystkie dostawy czekające na zatwierdzenie (${wszystkie.length}) — kliknij „Wyczyść”.</p>`;
+    return wszystkie.length;
+  }
+  lista = widoczna;
   // Bez tokenu (np. serwer nie odpowiada na plikach) lista działa jak dotąd: liczba załączników zamiast miniatur.
   let token = '';
   try { token = await tokenDoPlikow(); } catch (e) { token = ''; }
   el.innerHTML = `<h2 style="margin-top:20px">Do zatwierdzenia
-      <span class="plakietka p-oczekuje" style="margin-left:6px">${lista.length}</span></h2>
+      <span class="plakietka p-oczekuje" style="margin-left:6px">${lista.length === wszystkie.length ? lista.length : lista.length + ' z ' + wszystkie.length}</span></h2>
     <p class="male slaby" style="margin:0 0 6px">Dostawy zatwierdzają się same 15 minut po zamknięciu całej trasy
       — do tego czasu możesz zwrócić kierowcy to, co trzeba poprawić.</p>
     <div class="karta">${grupyDoPrzyjecia(lista).map(g => `${g.pozycje.length > 1 ? `
@@ -945,7 +1164,7 @@ async function rysujDoPrzyjecia(el, poZmianie) {
   });
   el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
   el.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
-  return lista.length;                     // pulpit pokazuje tę liczbę jako kafelek „Do zatwierdzenia”
+  return wszystkie.length;                // pulpit pokazuje tę liczbę jako kafelek „Do zatwierdzenia” (pełną, bez filtrów)
 }
 
 /* Plan podzielony na auta (właściciel 2026-11-16: „zamiast samochód duży/mały nazwa auta — mały to IVECO, duży to DAF”).
@@ -2135,7 +2354,10 @@ function kartaNaZywo(t) {
       ${escHtml(t.ostatni.klient)}, ${escHtml(t.ostatni.o)}${
       t.ostatni.powod ? ' (' + escHtml(t.ostatni.powod) + ')' : ''}${
       t.ostatni.odebral ? ' · odebrał: ' + escHtml(t.ostatni.odebral) : ''}${
-      t.ostatni.status === 'dostarczone' ? (t.ostatni.ile_zalacznikow ? ' · 📎 ' + t.ostatni.ile_zalacznikow : (t.ostatni.nasze ? '' : ' · ⚠ bez podpisu i zdjęcia')) : ''}`);
+      t.ostatni.status === 'dostarczone' ? (t.ostatni.ile_zalacznikow
+        ? (t.ostatni.id ? ` · <button type="button" class="maly dowody-zywo" data-dowody-zywo="${t.ostatni.id}" data-klient="${escHtml(t.ostatni.klient)}" title="Pokaż zdjęcia i podpis">📎 ${t.ostatni.ile_zalacznikow}</button>`
+          : ' · 📎 ' + t.ostatni.ile_zalacznikow)
+        : (t.ostatni.nasze ? '' : ' · ⚠ bez podpisu i zdjęcia')) : ''}`);
   }
   if (t.pozycja) {
     slady.push(`🛰 auto ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
@@ -2201,6 +2423,8 @@ async function rysujZywo(cel, data) {
 
   cel.querySelectorAll('[data-trasa-zywo]').forEach(b =>
     b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasaZywo) }));
+  cel.querySelectorAll('[data-dowody-zywo]').forEach(b =>
+    b.onclick = () => oknoZalacznikow(Number(b.dataset.dowodyZywo), b.dataset.klient || 'Dowody'));
   cel.querySelectorAll('[data-punkt-zywo]').forEach(b =>
     b.onclick = async () => {
       const t = await API.get('/api/trasy/' + b.dataset.trasa);

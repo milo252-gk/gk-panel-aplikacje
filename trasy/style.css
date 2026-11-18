@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-100ad759ccfe';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-b741e7d50675';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -796,9 +796,9 @@ body.okno-otwarte .mapa{visibility:hidden}
   .komunikaty{bottom:18px}
   .pasek-polaczenia{margin-left:224px; width:auto}
   /* Wstęgi „Bez połączenia z programem” i zapisów biura wstawiają się przed <main>: bez tego zaczynały się pod menu. */
-  #wstega-bez-programu,#wstega-zapisy-biura{margin:12px 26px 0 250px}
+  #wstega-bez-programu,#wstega-zapisy-biura,#pasek-dzwieku{margin:12px 26px 0 250px}
 }
-@media (max-width:820px){ #wstega-bez-programu,#wstega-zapisy-biura{margin:10px 12px 0} }
+@media (max-width:820px){ #wstega-bez-programu,#wstega-zapisy-biura,#pasek-dzwieku{margin:10px 12px 0} }
 
 /* ------------------------------------------------ sekcje zwijane (Ustawienia)
    Na co dzien otwiera sie jedna, reszta ma nie zajmowac ekranu.            */
@@ -954,3 +954,5 @@ body.okno-otwarte .mapa{visibility:hidden}
                    padding-top:calc(10px + env(safe-area-inset-top))}
 .dp-lightbox-ramka{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px 12px calc(12px + env(safe-area-inset-bottom)); cursor:zoom-out}
 .dp-lightbox-ramka img{max-width:100%; max-height:100%; object-fit:contain; background:var(--mata-zdjecia); border-radius:8px}
+/* „📎 N” na kafelku trasy w toku (Pulpit) otwiera galerię dowodów — mały przycisk w linii tekstu. */
+.dowody-zywo{min-height:0; padding:1px 8px; font-size:13px; vertical-align:baseline}

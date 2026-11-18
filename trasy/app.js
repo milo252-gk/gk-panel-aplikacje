@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-100ad759ccfe';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-b741e7d50675';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -2694,6 +2694,49 @@ function poleDzwieku() {
 function napisDzwieku() {
   return Dzwiek.wlaczony() ? '🔔 Dźwięk powiadomień: włączony' : '🔕 Dźwięk powiadomień: wyłączony';
 }
+/* Pasek u góry (ocena UX D1, 2026-11-18): dźwięk powiadomień jest wyłączony przełącznikiem albo przeglądarka go jeszcze
+   nie wpuściła (czeka na pierwsze dotknięcie) — ktoś, kto polega na dźwięku przy nieudanej dostawie, ma to widzieć od
+   razu, a nie dopiero w „Moim koncie”. Znika, gdy dźwięk działa. Mechanika ta sama (Dzwiek, GKDzwieki). */
+function stanPaskaDzwieku() {
+  if (!Dzwiek.wlaczony()) return 'wylaczony';
+  const g = window.GKDzwieki;
+  if (g && typeof g.gotowy === 'function' && !g.gotowy()) return 'czeka';
+  return '';
+}
+
+function odswiezPasekDzwieku() {
+  const tresc = document.getElementById('tresc');
+  let pasek = document.getElementById('pasek-dzwieku');
+  const stanu = stan.uz ? stanPaskaDzwieku() : '';
+  if (!stanu) { if (pasek) pasek.remove(); return; }
+  if (!pasek) {
+    if (!tresc || !tresc.parentNode) return;
+    pasek = document.createElement('div');
+    pasek.id = 'pasek-dzwieku';
+    pasek.className = 'wstega uwaga';
+    pasek.setAttribute('role', 'status');
+    tresc.parentNode.insertBefore(pasek, tresc);
+  }
+  if (pasek.dataset.stan === stanu) return;
+  pasek.dataset.stan = stanu;
+  pasek.innerHTML = (stanu === 'wylaczony'
+    ? '🔇 Dźwięk powiadomień jest wyłączony — nie usłyszysz nieudanej dostawy. '
+    : '🔇 Przeglądarka jeszcze nie wpuściła dźwięku — dotknij, żeby go włączyć. ')
+    + '<button type="button" class="maly glowny" id="btn-wlacz-dzwiek">Włącz dźwięk</button>';
+  pasek.querySelector('#btn-wlacz-dzwiek').onclick = () => {
+    Dzwiek.ustaw(true);
+    try { window.GKDzwieki && window.GKDzwieki.odblokuj(); } catch (e) { /* bez dźwięku w tej przeglądarce */ }
+    Dzwiek.zagraj('info');
+    odswiezPasekDzwieku();
+  };
+}
+
+let zegarPaskaDzwieku = 0;
+function startPaskaDzwieku() {
+  odswiezPasekDzwieku();
+  if (!zegarPaskaDzwieku) zegarPaskaDzwieku = setInterval(odswiezPasekDzwieku, 2000);
+}
+
 const PROBA_DZWIEKOW = [['info', 0], ['pilne', 1100], ['awaria', 3200]];
 function podepnijDzwiek(pole) {
   const przelacz = pole.querySelector('#btn-dzwiek');
@@ -3101,6 +3144,7 @@ async function wejdzDoAplikacji() {
   // z jednej wersji. Gdy nie — funkcja sama przeladuje aplikacje.
   await sprawdzSpojnoscWersji();
   await wczytajSlowniki();
+  startPaskaDzwieku();
   synchronizuj();
   wyslijZapisyBiura();
   if (typeof pobierzTraseNaJutro === 'function') pobierzTraseNaJutro(true);   // D78: na jutro bez zasięgu
