@@ -141,6 +141,13 @@ EKRANY.pulpit = {
    swoją część stanu i przerysowuje cały rząd, więc kolejność jest stała bez względu na to, która przyjdzie pierwsza. */
 let pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null, oczekiwane: new Set() };
 
+/* Jeden filtr braków dla kafelka „Do sprawdzenia” na Pulpicie i dla listy po kliknięciu (ekran „Do sprawdzenia”):
+   raport pracy powstaje sam z tras, a punkty z minionych tras („niezamknięty”) liczy kafelek „Zaległe dostawy” —
+   tu ich nie powtarzamy, żeby liczba na kafelku zgadzała się z listą (recenzja 2026-11-18). */
+function brakiDoSprawdzenia(lista) {
+  return (lista || []).filter(b => b.rodzaj !== 'brak_raportu' && b.rodzaj !== 'niezamkniety');
+}
+
 /* Czysta funkcja (testowana w przeglądarce bez okna): ze stanu pulpitu robi listę kafelków, w kolejności
    wagi — najpierw sprawy, potem liczby dnia. Nic nie dotyka strony. */
 function kafelkiPulpitu(s) {
@@ -148,8 +155,7 @@ function kafelkiPulpitu(s) {
   // Raport pracy tworzy się sam z tras — brak ręcznego raportu kierowcy nie jest już sprawą do sprawdzenia.
   let braki = s.braki;
   if (braki && Array.isArray(braki.braki)) {
-    // „niezamkniety” = punkt z minionej trasy — to samo, co liczy kafelek „Zaległe dostawy” (decyzja właściciela 2026-11-18).
-    braki = { ...braki, braki: braki.braki.filter(b => b.rodzaj !== 'brak_raportu' && b.rodzaj !== 'niezamkniety') };
+    braki = { ...braki, braki: brakiDoSprawdzenia(braki.braki) };
     if (!braki.braki.length && !(braki.spalanie || []).length) braki = null;
   }
   (s.alarmy || []).forEach(a => lista.push({
@@ -202,6 +208,7 @@ function rysujKafelkiPulpitu() {
       ? `<button type="button" class="${k.klasa}" data-kafel="${i}"${tytul}>${wnetrze}</button>`
       : `<div class="${k.klasa}"${tytul}>${wnetrze}</div>`;
   }).join('');
+  if (typeof MiaryTras !== 'undefined') MiaryTras.dolaczDoKafli(el, w.spokoj ? [] : w.kafelki);   // „i” z definicją (miary.js)
 
   el.querySelectorAll('[data-kafel]').forEach(b => {
     const k = w.kafelki[Number(b.dataset.kafel)];
@@ -469,8 +476,11 @@ function opcjeFiltra(wykaz, elementy, idDe, nazwaDe) {
   return [...mapa.entries()].sort((p, q) => String(p[1]).localeCompare(String(q[1]), 'pl'));
 }
 
-/* Zwijany blok „Filtry”: w nagłówku licznik „N z M” i krótkie podsumowanie tego, co włączone.
-   def: { lista, pola, statusy, kierowcy, auta, miejsca, sortDomyslny (opis „jak dotąd”), otwarteDomyslnie }. */
+/* Blok „Filtry” NA WIERZCHU listy (właściciel 2026-11-18: filtrowanie i sortowanie mają być od razu widoczne, nie
+   schowane w rozwijanym bloku). Górny wiersz: licznik „N z M”, plakietka liczby włączonych filtrów, krótkie podsumowanie
+   i „Wyczyść filtry”; pod nim pola. Na komputerze pola układają się zwarcie w wierszach, na telefonie — w jednym,
+   poziomo przewijanym rzędzie tuż nad listą. Logika, domyślne wartości i pamięć filtrów bez zmian.
+   def: { lista, pola, statusy, kierowcy, auta, miejsca, sortDomyslny (opis „Domyślnie”) }. */
 function htmlFiltrow(f, def, ile, razem) {
   const aktywne = aktywneFiltry(f, def.pola);
   const nazwaOpcji = (opcje, id) => { const o = (opcje || []).find(p => String(p[0]) === String(id)); return o ? o[1] : String(id); };
@@ -490,14 +500,17 @@ function htmlFiltrow(f, def, ile, razem) {
         ${opcje.map(([id, nazwa]) => `<option value="${escHtml(id)}"${String(id) === f[k] ? ' selected' : ''}>${escHtml(nazwa)}</option>`).join('')}
         ${specjalna ? `<option value="-"${f[k] === '-' ? ' selected' : ''}>${escHtml(specjalna)}</option>` : ''}
       </select></label>`;
-  const otwarte = f.otwarte === '1' || (f.otwarte === '' && !!def.otwarteDomyslnie);
-  return `<details class="filtry-listy${aktywne.length ? ' aktywne' : ''}" data-filtry-lista="${def.lista}"${otwarte ? ' open' : ''}>
-      <summary><span class="znak-zwiniecia">▸</span> Filtry
+  return `<div class="filtry-listy${aktywne.length ? ' aktywne' : ''}" data-filtry-lista="${def.lista}" role="group" aria-label="Filtry i sortowanie">
+      <div class="filtry-gora">
         <span class="filtry-licznik" title="Tyle pozycji pasuje do filtrów">${ile} z ${razem}</span>
-        <span class="slaby filtry-podsumowanie">${podsumowanie}</span></summary>
-      <div class="filtry-siatka">
+        ${aktywne.length ? `<span class="filtry-plakietka" title="Włączone filtry">${aktywne.length} ${odmiana(aktywne.length, 'filtr', 'filtry', 'filtrów')}</span>` : ''}
+        <span class="slaby filtry-podsumowanie">${podsumowanie}</span>
+        ${def.uwaga ? `<span class="male slaby filtry-uwaga">${escHtml(def.uwaga)}</span>` : ''}
+        <button type="button" class="maly filtry-wyczysc" data-filtr-wyczysc${aktywne.length ? '' : ' disabled'}>Wyczyść filtry</button>
+      </div>
+      <div class="filtry-pasek">
         <label${f.sort ? ' class="filtr-aktywny"' : ''}>${FILTRY_ETYKIETY.sort}<select data-filtr="sort">
-          <option value="">${escHtml(def.sortDomyslny || 'Jak dotąd')}</option>
+          <option value="">${escHtml(def.sortDomyslny || 'Domyślnie')}</option>
           <option value="nowe"${f.sort === 'nowe' ? ' selected' : ''}>${FILTRY_SORTOWANIA.nowe}</option>
           <option value="stare"${f.sort === 'stare' ? ' selected' : ''}>${FILTRY_SORTOWANIA.stare}</option>
         </select></label>
@@ -508,23 +521,21 @@ function htmlFiltrow(f, def, ile, razem) {
         ${wybor('auto', def.auta || [], 'Wszystkie auta', 'Bez auta')}
         ${wybor('miejsce', def.miejsca || [], 'Wszystkie miejsca', 'Baza domyślna')}
       </div>
-      <div class="filtry-dol">
-        ${def.uwaga ? `<span class="male slaby">${escHtml(def.uwaga)}</span>` : ''}
-        <button type="button" class="maly" data-filtr-wyczysc${aktywne.length ? '' : ' disabled'}>Wyczyść filtry</button>
-      </div>
-    </details>`;
+    </div>`;
 }
 
 /* Podpięcie bloku: zmiana pola zapisuje wybór tej osoby i woła `przerysuj` (ekran rysuje listę od nowa).
-   „Wyczyść filtry” zeruje tylko pola, które ta lista ma; rozwinięcie bloku też jest pamiętane. */
+   „Wyczyść filtry” zeruje tylko pola, które ta lista ma. Przewinięcie poziomego rzędu na telefonie zostaje przy
+   przerysowaniu (zapamiętane w `przesuniecieFiltrow`), żeby wybór kolejnego pola nie cofał rzędu na początek. */
+let przesuniecieFiltrow = 0;
 function podepnijFiltry(pole, lista, f, def, przerysuj) {
-  const blok = pole.querySelector('details.filtry-listy');
+  const blok = pole.querySelector('.filtry-listy');
   if (blok) {
-    blok.addEventListener('toggle', () => {
-      const nowe = blok.open ? '1' : '0';
-      if (f.otwarte === nowe || (f.otwarte === '' && blok.open === !!def.otwarteDomyslnie)) return;
-      f.otwarte = nowe; zapiszFiltry(lista, f);
-    });
+    const pasek = blok.querySelector('.filtry-pasek');
+    if (pasek) {
+      pasek.scrollLeft = przesuniecieFiltrow;
+      pasek.addEventListener('scroll', () => { przesuniecieFiltrow = pasek.scrollLeft; }, { passive: true });
+    }
     blok.querySelectorAll('[data-filtr]').forEach(el => el.onchange = () => {
       f[el.dataset.filtr] = el.value;
       if ((el.dataset.filtr === 'od' || el.dataset.filtr === 'do') && f.od && f.do && f.od > f.do) {
@@ -570,7 +581,6 @@ function defFiltrowTras(widok, trasy, kierowcy, filtrAuta) {
     auta: filtrAuta.opcje, miejsca,
     etykietaOd: 'Od dnia', etykietaDo: 'Do dnia',
     uwaga: widok === 'lista' ? 'Bez dat: 30 dni wstecz i 14 dni do przodu (najwyżej 366 dni).' : '',
-    otwarteDomyslnie: widok === 'lista',
   };
 }
 
@@ -686,9 +696,43 @@ async function rysujTydzienTras(pole, data, kierowcy) {
 /* Przyjmowanie dostaw od kierowców (właściciel 2026-11-03: „niech działa jak w Panelu kierownika”): dostawa zamknięta na
    telefonie czeka na „Zatwierdź” albo „Zwróć” (powód — kierowca poprawia i zamyka jeszcze raz). Biuro może też zamknąć
    punkt za kierowcę (np. gdy padł telefon) — takie zamknięcie jest przyjęte od razu. */
-async function przyjmijDostawe(id, poZmianie) {
-  const w = await sprobuj(() => API.post(`/api/przystanki/${id}/przyjmij-dostawe`), 'Zatwierdzono');
+async function przyjmijDostawe(id, poZmianie, trasaId) {
+  const w = await sprobuj(() => zapisBiura('POST', `/api/przystanki/${id}/przyjmij-dostawe`, {}, {
+    opis: 'zatwierdzenie dostawy', popraw: poprawDostawe(id, trasaId, 'przyjete'),
+  }), 'Zatwierdzono');
   if (w && poZmianie) poZmianie();
+}
+
+/* Poprawka zapamiętanych odpowiedzi po zapisie dostawy (przyjmij / zwróć / zamknij za kierowcę), gdy zapis czeka w
+   komputerze, bo programu nie ma: ekran ma od razu pokazać, że dostawa zniknęła z „Do zatwierdzenia”, a punkt ma nowy
+   stan. `jak`: 'przyjete' | 'zwrot' | 'dostarczone' | 'nieudane' (zamknięcie przez biuro). Serwer i tak zrobi swoje
+   po powrocie — to tylko podgląd na czas bez połączenia. */
+function poprawDostawe(idPunktu, trasaId, jak, dodatki) {
+  const teraz = new Date().toISOString();
+  return (sciezka, d) => {
+    if (sciezka === '/api/do-przyjecia' && Array.isArray(d)) {
+      if (!d.some(x => x && x.id === idPunktu)) return;
+      return d.filter(x => !x || x.id !== idPunktu);
+    }
+    if (/^\/api\/trasy\/\d+$/.test(sciezka) && d && Array.isArray(d.przystanki)) {
+      wPamieci(d.przystanki, idPunktu, x => {
+        x.do_przyjecia = 0;
+        if (jak === 'przyjete') { x.przyjeto_o = teraz; return; }
+        if (jak === 'zwrot') { x.status = 'oczekuje'; x.przyjeto_o = null; x.zamkniete_o = null; x.powod = ''; return; }
+        Object.assign(x, { status: jak, przyjeto_o: teraz, zamkniete_o: teraz }, dodatki || {});
+      });
+      return;
+    }
+    // Liczniki trasy na Pulpicie i w listach tras: „do zatwierdzenia” maleje, a zamknięcie biura dolicza dostarczoną/nieudaną.
+    const trasy = sciezka.startsWith('/api/pulpit') && d && Array.isArray(d.trasy) ? d.trasy
+      : (sciezka.startsWith('/api/trasy?') && Array.isArray(d) ? d : null);
+    if (!trasy || trasaId == null) return;
+    wPamieci(trasy, trasaId, t => {
+      if (jak !== 'dostarczone' && jak !== 'nieudane') t.ile_do_przyjecia = Math.max(0, (t.ile_do_przyjecia || 0) - 1);
+      if (jak === 'dostarczone') t.ile_ok = (t.ile_ok || 0) + 1;
+      if (jak === 'nieudane') t.ile_nie = (t.ile_nie || 0) + 1;
+    });
+  };
 }
 
 /* „Do zatwierdzenia” pogrupowane po trasach (kolejność listy z serwera zostaje): biuro, które sprawdziło całą
@@ -715,18 +759,23 @@ async function przyjmijDostawyTrasy(g, poZmianie) {
     `Zatwierdzisz ${ile} ${odmiana(ile, 'dostarczony punkt', 'dostarczone punkty', 'dostarczonych punktów')} z trasy „${g.nazwa}”. ` +
     (g.pozycje.length > ile ? `Pozostałe ${g.pozycje.length - ile} (nieudane) zostają do Twojej decyzji. ` : '') +
     'Sprawdziłeś zdjęcia i podpisy?')) return;
-  let zrobione = 0;
+  let zrobione = 0, wKolejce = 0;
   for (const x of g.dostarczone) {
-    const w = await sprobuj(() => API.post(`/api/przystanki/${x.id}/przyjmij-dostawe`));
+    const w = await sprobuj(() => zapisBiura('POST', `/api/przystanki/${x.id}/przyjmij-dostawe`, {}, {
+      opis: 'zatwierdzenie dostawy ' + (x.klient_nazwa || ''), popraw: poprawDostawe(x.id, g.trasa, 'przyjete'),
+    }));
     if (!w) break;                       // błąd pokazał już komunikat — reszta zostaje do zatwierdzenia
     zrobione++;
+    if (w.wKolejce) wKolejce++;
   }
-  if (zrobione) komunikat(`Zatwierdzono ${zrobione} z ${ile}`, zrobione === ile ? 'ok' : 'blad');
+  if (zrobione) komunikat(`Zatwierdzono ${zrobione} z ${ile}` + (wKolejce ? ' — zapisane w tym komputerze, wyślę, gdy program odpowie' : ''),
+    zrobione === ile ? 'ok' : 'blad');
   if (poZmianie) poZmianie();
 }
 
-function oknoZwrotuDostawy(id, nazwa, poZmianie) {
+function oknoZwrotuDostawy(id, nazwa, poZmianie, trasaId) {
   okno({
+    szkic: 'zwrot-' + id,
     tytul: 'Zwróć kierowcy: ' + nazwa,
     tresc: `<label>Co kierowca ma poprawić? <span style="color:var(--czerwony)">*</span>
         <textarea id="zw-powod" maxlength="200" placeholder="np. brak zdjęcia dokumentu, zły odbierający"></textarea></label>
@@ -737,7 +786,9 @@ function oknoZwrotuDostawy(id, nazwa, poZmianie) {
       { napis: 'Zwróć', klasa: 'glowny', klik: async z => {
         const powod = val('zw-powod').trim();
         if (!powod) { komunikat('Napisz, co kierowca ma poprawić', 'blad'); return; }
-        const w = await sprobuj(() => API.post(`/api/przystanki/${id}/zwroc-dostawe`, { powod }), 'Zwrócono kierowcy');
+        const w = await sprobuj(() => zapisBiura('POST', `/api/przystanki/${id}/zwroc-dostawe`, { powod }, {
+          opis: 'zwrot dostawy: ' + nazwa, popraw: poprawDostawe(id, trasaId, 'zwrot'),
+        }), 'Zwrócono kierowcy');
         if (w) { z(); if (poZmianie) poZmianie(); }
       } },
     ],
@@ -751,6 +802,7 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
   let powody = [];
   try { powody = powodyNieudanych(); } catch (e) { powody = []; }
   okno({
+    szkic: 'zamkniecie-' + p.id,
     tytul: 'Zamknij za kierowcę: ' + p.klient_nazwa,
     tresc: `<div class="wstega info">Zamykasz ten punkt w imieniu kierowcy. W uwagach punktu zostanie ślad, kto to zrobił.</div>
       <label class="plaska"><input type="radio" name="zb-status" value="dostarczone" checked> ✓ Dostarczone</label>
@@ -774,8 +826,11 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
         const status = document.querySelector('input[name="zb-status"]:checked').value;
         const powod = status === 'nieudane' ? (val('zb-inny').trim() || val('zb-powod')) : '';
         if (status === 'nieudane' && !powod) { komunikat('Przy nieudanej dostawie wybierz albo wpisz powód', 'blad'); return; }
-        const w = await sprobuj(() => API.post(`/api/przystanki/${p.id}/zamknij-za-kierowce`,
-          { status, powod, odebral: val('zb-odebral'), notatka: val('zb-notatka') }), 'Zamknięto punkt');
+        const dane = { status, powod, odebral: val('zb-odebral'), notatka: val('zb-notatka') };
+        const w = await sprobuj(() => zapisBiura('POST', `/api/przystanki/${p.id}/zamknij-za-kierowce`, dane, {
+          opis: 'zamknięcie punktu za kierowcę: ' + p.klient_nazwa,
+          popraw: poprawDostawe(p.id, p.trasa, status, { powod, odebral: dane.odebral, notatka: dane.notatka }),
+        }), 'Zamknięto punkt');
         if (w) { z(); if (poZmianie) poZmianie(); }
       } },
     ],
@@ -876,14 +931,17 @@ async function rysujDoPrzyjecia(el, poZmianie) {
           <button class="maly" data-zwroc="${x.id}">↩ Zwróć kierowcy</button>
           <button class="maly" data-do-trasy="${x.trasa}">Trasa</button></div>
       </div>`; }).join('')}`).join('')}</div>`;
-  el.querySelectorAll('[data-przyjmij]').forEach(bt => bt.onclick = () => przyjmijDostawe(Number(bt.dataset.przyjmij), poZmianie));
+  el.querySelectorAll('[data-przyjmij]').forEach(bt => bt.onclick = () => {
+    const x = lista.find(y => y.id === Number(bt.dataset.przyjmij));
+    przyjmijDostawe(Number(bt.dataset.przyjmij), poZmianie, x && x.trasa);
+  });
   el.querySelectorAll('[data-przyjmij-trase]').forEach(bt => bt.onclick = () => {
     const g = grupyDoPrzyjecia(lista).find(y => y.trasa === Number(bt.dataset.przyjmijTrase));
     if (g) przyjmijDostawyTrasy(g, poZmianie);
   });
   el.querySelectorAll('[data-zwroc]').forEach(bt => bt.onclick = () => {
     const x = lista.find(y => y.id === Number(bt.dataset.zwroc));
-    oknoZwrotuDostawy(x.id, x.klient_nazwa, poZmianie);
+    oknoZwrotuDostawy(x.id, x.klient_nazwa, poZmianie, x.trasa);
   });
   el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
   el.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
@@ -991,6 +1049,7 @@ async function zgodaNaBus(idBusa) {
 function oknoNowejTrasy(data, kierowcy) {
   const busy = stan.pojazdy.filter(p => p.aktywny);
   okno({
+    szkic: 'nowa-trasa',
     tytul: 'Nowa trasa',
     tresc: `
       <label>Dzień<input type="date" id="nt-data" value="${data}"></label>
@@ -1187,6 +1246,8 @@ EKRANY.trasa = {
     pole.querySelector('#tr-wroc').onclick = () => pokazEkran('trasy', { data: t.data });
 
     if (admin) {
+      // Szkic formularza trasy (dzień, kierowca, auto, nazwa, uwagi…) — wraca po odświeżeniu strony / powrocie programu.
+      Szkice.przypnij(pole, 'trasa-' + t.id, { filtr: /^tr-(data|kierowca|pojazd|nazwa|uwagi|wyjazd|baza|uklad)$/ });
       pole.querySelector('#tr-zapisz').onclick = async () => {
         // Pytamy tylko przy ZMIANIE auta — o tym już przypisanym mówi wstęga
         // na górze, a pytanie przy każdej poprawce uwag nauczyłoby klikać „tak".
@@ -1220,7 +1281,7 @@ EKRANY.trasa = {
             }));
           },
         }), 'Zapisano');
-        if (w) pokazEkran('trasa', { id: t.id });
+        if (w) { Szkice.usun('trasa-' + t.id); pokazEkran('trasa', { id: t.id }); }
       };
       // R11 (2026-11-09): „Odwołaj trasę” — biuro i administrator (miękko: trasa znika z planu i z telefonu kierowcy,
       // zostaje w historii razem z dowodami). „Usuń trasę” (kasowanie) — tylko administrator; biuro tego przycisku
@@ -1250,6 +1311,7 @@ EKRANY.trasa = {
       pole.querySelector('#tr-mapa-link').onclick = () => oknoLinkuDoMap(t.id, false);
       pole.querySelector('#tr-os-akcji').onclick = () => oknoPrzebiegu(t);
       pole.querySelector('#tr-szablon').onclick = () => okno({
+        szkic: 'zapisana-z-trasy-' + t.id,
         tytul: 'Dodaj do zapisanych tras',
         tresc: `<p class="male slaby">Zapamiętam klientów i ich kolejność. Bez dat,
             bez potwierdzeń — żeby dało się z tego robić kolejne dni.</p>
@@ -1258,8 +1320,8 @@ EKRANY.trasa = {
         przyciski: [
           { napis: 'Anuluj', klik: z => z() },
           { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
-            const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/szablon`,
-              { nazwa: val('zs-nazwa') }), 'Trasa dodana do zapisanych');
+            const w = await sprobuj(() => zapisBiura('POST', `/api/trasy/${t.id}/szablon`,
+              { nazwa: val('zs-nazwa') }, { opis: 'zapisana trasa „' + val('zs-nazwa') + '”' }), 'Trasa dodana do zapisanych');
             if (w) { z(); pokazEkran('szablony'); }
           } },
         ],
@@ -1619,6 +1681,7 @@ async function zaproponujKolejnosc(t) {
 
 function oknoKopiowania(t) {
   okno({
+    szkic: 'kopiowanie-' + t.id,
     tytul: 'Kopiuj trasę na inny dzień',
     tresc: `<p class="male slaby">Powstanie nowa trasa z tą samą listą klientów i kolejnością.
               Potwierdzenia dostaw nie są kopiowane.</p>
@@ -1626,9 +1689,15 @@ function oknoKopiowania(t) {
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Kopiuj', klasa: 'glowny', klik: async z => {
-        const nowa = await sprobuj(() => API.post(`/api/trasy/${t.id}/kopiuj`,
-          { data: document.getElementById('kp-data').value }), 'Skopiowano');
-        if (nowa) { z(); pokazEkran('trasa', { id: nowa.id }); }
+        const dzien = document.getElementById('kp-data').value;
+        // Bez programu kopia czeka w tym komputerze (numer nowej trasy nada program), więc po zapisie wracamy do planu
+        // tego dnia zamiast otwierać trasę, której jeszcze nie ma.
+        const nowa = await sprobuj(() => zapisBiura('POST', `/api/trasy/${t.id}/kopiuj`, { data: dzien }, {
+          opis: 'kopia trasy na ' + polskaData(dzien),
+        }), 'Skopiowano');
+        if (!nowa) return;
+        z();
+        pokazEkran(nowa.wKolejce ? 'trasy' : 'trasa', nowa.wKolejce ? { data: dzien } : { id: nowa.id });
       } },
     ],
   });
@@ -1868,6 +1937,7 @@ function oknoSzczegolowPunktu(t, id) {
           <div id="sp-dowody"></div>
         </div>` : ''}
       ${admin && zamkniety && p.do_przyjecia ? '<div class="wstega uwaga">⏳ Czeka na zatwierdzenie przez biuro.</div>' : ''}
+      ${admin && zamkniety && !p.do_przyjecia && p.przyjeto_o && p.przyjete_auto ? '<div class="wstega info">✓ Zatwierdzone automatycznie (po 15 minutach od ostatniego dowodu) — możesz jeszcze zwrócić dostawę kierowcy.</div>' : ''}
       ${p.zwrot_powod && !zamkniety ? `<div class="wstega uwaga">↩ Zwrócone kierowcy do poprawy: ${escHtml(p.zwrot_powod)}
           ${p.zwrocono_o ? ' · ' + escHtml(p.zwrocono_o) : ''}</div>` : ''}
       <div id="sp-os">${osCzasuPunktu(t, p, null)}</div>
@@ -1943,8 +2013,8 @@ function oknoSzczegolowPunktu(t, id) {
         if (przycisk) przycisk.onclick = akcja;
       };
       const odswiez = () => { zamknijOkno(); pokazEkran('trasa', { id: t.id }); };
-      podepnij('#sp-przyjmij', () => przyjmijDostawe(p.id, odswiez));
-      podepnij('#sp-zwroc', () => { zamknijOkno(); oknoZwrotuDostawy(p.id, p.klient_nazwa, () => pokazEkran('trasa', { id: t.id })); });
+      podepnij('#sp-przyjmij', () => przyjmijDostawe(p.id, odswiez, t.id));
+      podepnij('#sp-zwroc', () => { zamknijOkno(); oknoZwrotuDostawy(p.id, p.klient_nazwa, () => pokazEkran('trasa', { id: t.id }), t.id); });
       podepnij('#sp-zamknij-biuro', () => { zamknijOkno(); oknoZamknieciaPrzezBiuro(p, () => pokazEkran('trasa', { id: t.id })); });
       podepnij('#sp-dowod', () => oknoZalacznikow(p.id, p.klient_nazwa));
       podepnij('#sp-druk', () => wydrukPotwierdzenia(p.id));
@@ -2370,6 +2440,7 @@ function oknoKlienta(k) {
   }
 
   okno({
+    szkic: 'klient-' + (nowy ? 'nowy' : k.id),
     tytul: nowy ? 'Nowy klient' : k.nazwa,
     tresc: `
       <label>Nazwa <span style="color:var(--czerwony)">*</span>
@@ -2442,11 +2513,17 @@ function oknoKlienta(k) {
           aktywny: nowy ? 1 : (document.getElementById('kl-aktywny').checked ? 1 : 0),
         };
         if (!dane.nazwa) { komunikat('Podaj nazwę klienta', 'blad'); return; }
-        const w = await sprobuj(() => API.post('/api/klienci', dane), 'Zapisano');
+        // Edycja istniejącego klienta może poczekać w komputerze; nowy — nie (numer nadaje program).
+        const w = await sprobuj(() => nowy ? API.post('/api/klienci', dane)
+          : zapisBiura('POST', '/api/klienci', dane, {
+            opis: 'klient „' + dane.nazwa + '”', zrodla: ['/api/klienci'],
+            popraw: (sciezka, d) => { if (sciezka === '/api/klienci') wPamieci(d, k.id, x => Object.assign(x, dane)); },
+          }), 'Zapisano');
         if (!w) return;
         z();
         if (dane.ulica || dane.miasto) {
-          sprobuj(() => API.post(`/api/klienci/${w.id}/geokoduj`))
+          sprobuj(() => nowy ? API.post(`/api/klienci/${w.id}/geokoduj`)
+            : zapisBiura('POST', `/api/klienci/${k.id}/geokoduj`, {}, { opis: 'adres klienta „' + dane.nazwa + '” na mapie' }))
             .then(() => pokazEkran('klienci'));
         } else {
           pokazEkran('klienci');
@@ -2838,7 +2915,16 @@ async function rysujUstawieniaBiura(pole) {
     };
     zajety(true);
     let w = null;
-    try { w = await sprobuj(() => API.post('/api/ustawienia', dane), 'Zapisano'); }
+    // Ustawienia operacyjne (bez kluczy, haseł i tokenów — tych nie kolejkujemy) mogą poczekać w komputerze.
+    try {
+      w = await sprobuj(() => zapisBiura('POST', '/api/ustawienia', dane, {
+        opis: 'ustawienia firmy', zrodla: ['/api/ustawienia'],
+        popraw: (sciezka, d) => {
+          if (sciezka !== '/api/ustawienia' || !d || typeof d !== 'object') return;
+          Object.keys(dane).forEach(k => { if (k !== 'baza_lat' && k !== 'baza_lon') d[k] = dane[k]; });
+        },
+      }), 'Zapisano');
+    }
     finally { zajety(false); }
     if (w) wrocDoUstawien();
   };
@@ -3587,6 +3673,7 @@ function oknoBusa(b) {
   const nowy = !b;
   b = b || { nazwa: '', rejestracja: '', uwagi: '', aktywny: 1, czas_pracy: 1 };
   okno({
+    szkic: 'auto-' + (nowy ? 'nowe' : b.id),
     tytul: nowy ? 'Nowe auto' : b.nazwa,
     tresc: `
       <label>Nazwa <span class="slaby">(np. „Ducato”, „Auto 1”)</span>
@@ -3604,11 +3691,17 @@ function oknoBusa(b) {
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
-        const w = await sprobuj(() => API.post('/api/pojazdy', {
+        const dane = {
           id: b.id, nazwa: val('bu-nazwa'), rejestracja: val('bu-rej'), uwagi: val('bu-uwagi'),
           aktywny: nowy ? 1 : (document.getElementById('bu-aktywny').checked ? 1 : 0),
           czas_pracy: document.getElementById('bu-czas-pracy').checked ? 1 : 0,
-        }), 'Zapisano');
+        };
+        // Edycja istniejącego auta może poczekać w komputerze; nowe auto — nie (numer nadaje program).
+        const w = await sprobuj(() => nowy ? API.post('/api/pojazdy', dane)
+          : zapisBiura('POST', '/api/pojazdy', dane, {
+            opis: 'auto „' + dane.nazwa + '”', zrodla: ['/api/pojazdy'],
+            popraw: (sciezka, d) => { if (sciezka === '/api/pojazdy') wPamieci(d, b.id, x => Object.assign(x, dane)); },
+          }), 'Zapisano');
         if (w) { _autaDoFiltra = null; z(); wrocDoUstawien(); }
       } },
     ],
@@ -4365,8 +4458,9 @@ function oknoPowiadomienia(p) {
         const dane = { okno: val('pw-okno') };
         // Własny tekst idzie tylko wtedy, gdy biuro go poprawiło — inaczej serwer składa treść sam.
         if (pw.edytowano) dane.tresc = val('pw-tresc');
-        const w = await sprobuj(() => API.post(`/api/przystanki/${p.id}/powiadom`, dane),
-          'Wiadomość wysłana');
+        // Bez programu wiadomość czeka w tym komputerze i wyjdzie do klienta dopiero po powrocie połączenia.
+        const w = await sprobuj(() => zapisBiura('POST', `/api/przystanki/${p.id}/powiadom`, dane,
+          { opis: 'e-mail do klienta: ' + (p.klient_nazwa || '') }), 'Wiadomość wysłana');
         if (w) z();
       } },
     ],
@@ -4428,6 +4522,7 @@ async function oknoPrzeniesienia(trasa, p) {
       + '<option value="">— załóż nową trasę tego dnia —</option>';
   };
   okno({
+    szkic: 'przeniesienie-' + p.id,
     tytul: 'Przenieś: ' + p.klient_nazwa,
     tresc: `
       <p class="male slaby">Punkt przejdzie razem z towarem, numerem dokumentu,
@@ -4449,7 +4544,14 @@ async function oknoPrzeniesienia(trasa, p) {
         const dane = cel ? { trasa: cel }
           : { data: dzien, kierowca: document.getElementById('pn-kierowca').value || null };
         const w = await zRyzykiemKolejki(dane,
-          d => API.post(`/api/przystanki/${p.id}/przenies`, d), 'Przeniesione');
+          d => zapisBiura('POST', `/api/przystanki/${p.id}/przenies`, d, {
+            opis: 'przeniesienie punktu ' + (p.klient_nazwa || ''),
+            zrodla: ['/api/trasy/' + trasa.id],
+            popraw: (sciezka, dt) => {
+              if (sciezka !== '/api/trasy/' + trasa.id || !dt || !Array.isArray(dt.przystanki)) return;
+              dt.przystanki = dt.przystanki.filter(x => x.id !== p.id);
+            },
+          }), 'Przeniesione');
         if (w) { z(); pokazEkran('trasa', { id: trasa.id }); }
       } },
     ],
@@ -4518,7 +4620,7 @@ async function rysujBraki(pole, od, doDnia) {
   const w = await API.get(`/api/braki?od=${od}&do=${doDnia}`).catch(() => null);
   if (!w) return;
 
-  w.braki = (w.braki || []).filter(b => b.rodzaj !== 'brak_raportu');   // raport pracy powstaje sam z tras
+  w.braki = brakiDoSprawdzenia(w.braki);   // ten sam filtr co kafelek na Pulpicie
   const grupy = {};
   for (const b of w.braki) (grupy[b.rodzaj] = grupy[b.rodzaj] || []).push(b);
 

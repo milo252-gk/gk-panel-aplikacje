@@ -132,8 +132,52 @@ EKRANY.import = {
       <div id="im-reszta"></div>`;
     pole.querySelector('#im-wroc').onclick = () => pokazEkran('trasy');
     pole.querySelector('#im-plik').onchange = e => wgrajArkusz(e.target.files[0]);
+    przywrocSzkicImportu();
   },
 };
+
+/* Szkic kreatora (2026-11-18): sam plik zostaje w programie (token), więc do pamięci tej przeglądarki idzie tylko stan
+   kreatora — arkusz, mapowanie kolumn, miejsce odbioru, kierowca, auto, data. Po odświeżeniu strony albo powrocie programu
+   ekran pyta „Przywrócić niezapisane?”; szkic kasuje udane wczytanie. Plik w programie żyje godzinę — potem trzeba
+   go wskazać jeszcze raz. */
+function zapiszSzkicImportu() {
+  if (!stanImportu.token || !kolejkowanieBiuraWlaczone()) return;
+  const v = id => (document.getElementById(id) || {}).value || '';
+  Szkice.zapisz('import', {
+    token: stanImportu.token, arkusz: stanImportu.arkusz, arkusze: stanImportu.arkusze,
+    wierszNaglowka: stanImportu.wierszNaglowka, mapowanie: stanImportu.mapowanie,
+    plik: stanImportu.nazwaPliku || '', baza: stanImportu.baza || null,
+    od: v('im-od'), kierowca: v('im-kierowca'), pojazd: v('im-pojazd'),
+  });
+}
+
+async function przywrocSzkicImportu() {
+  if (!kolejkowanieBiuraWlaczone()) return;
+  const s = Szkice.czytaj('import');
+  if (!s || !s.pola.token || stanImportu.token) return;
+  const d = new Date(s.czas);
+  const kiedy = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if (!await potwierdz('Przywrócić niezapisane?',
+    `Z ${kiedy} jest tu rozpoczęte wczytywanie planu z Excela${s.pola.plik ? ' („' + s.pola.plik + '”)' : ''}. Wrócić do niego?`,
+    { tak: 'Przywróć', nie: 'Odrzuć' })) { Szkice.usun('import'); return; }
+  let podglad;
+  try { podglad = await API.post('/api/import/arkusz', { token: s.pola.token, arkusz: s.pola.arkusz }); }
+  catch (e) {
+    Szkice.usun('import');
+    komunikat('Plik z poprzedniej próby nie jest już w programie — wskaż go jeszcze raz', 'uwaga');
+    return;
+  }
+  await listaKierowcow();
+  await odswiezLokalizacje();
+  Object.assign(stanImportu, {
+    token: s.pola.token, arkusz: s.pola.arkusz, arkusze: s.pola.arkusze || [s.pola.arkusz], podglad, plan: null,
+    wierszNaglowka: s.pola.wierszNaglowka || 0, mapowanie: s.pola.mapowanie || {}, skadMapowanie: '',
+    nazwaPliku: s.pola.plik || '', baza: s.pola.baza || null, przesuniecia: {}, sugestie: null,
+  });
+  rysujKrokMapowania();
+  const ustaw = (id, wart) => { const el = document.getElementById(id); if (el && wart) el.value = wart; };
+  ustaw('im-od', s.pola.od); ustaw('im-kierowca', s.pola.kierowca); ustaw('im-pojazd', s.pola.pojazd);
+}
 
 async function wgrajArkusz(plik) {
   await listaKierowcow();      // zeby krok mapowania mial kogo zaproponowac
@@ -155,6 +199,7 @@ async function wgrajArkusz(plik) {
   const w = await sprobuj(() => API.post('/api/import/wgraj', { plik: base64 }));
   if (!w) return;
   stanImportu.token = w.token;
+  stanImportu.nazwaPliku = plik.name || '';
   stanImportu.arkusze = w.arkusze;
   stanImportu.arkusz = w.arkusze[0];
   stanImportu.podglad = w.podglad;
@@ -298,6 +343,8 @@ function rysujKrokMapowania() {
     if (stanImportu.baza) Pamiec.zapisz('import-baza-' + (stan.uz ? stan.uz.id : 0), String(stanImportu.baza));
   };
   pojemnik.querySelector('#im-podglad').onclick = () => pokazPodgladImportu();
+  pojemnik.oninput = pojemnik.onchange = zapiszSzkicImportu;     // szkic kreatora po każdej zmianie
+  zapiszSzkicImportu();
 }
 
 /* Kierowca wybrany w kroku 4 („Przypisz trasy kierowcy”) — do podglądu, gdy plik nie podaje kierowcy. */
@@ -324,10 +371,19 @@ function parametryImportu() {
 /* Propozycje wspólnych dni dla zamówień z jednej okolicy. Nic nie zmienia się
    samo: biuro odznacza to, z czym się nie zgadza, i dopiero „Zastosuj”
    wstawia nowe daty do podglądu. */
+/* Liczba dni z pola „o ile dni wcześniej / później wolno”: PUSTE pole to wartość domyślna (3 i 14), nie 0 — skasowanie
+   liczby nie ma po cichu zawężać okna do zera („Nic do łączenia”). Wpisane „0” znaczy 0. */
+function dniZPola(id, domyslnie) {
+  const surowe = String((document.getElementById(id) || {}).value == null ? '' : (document.getElementById(id) || {}).value).trim();
+  if (surowe === '') return domyslnie;
+  const n = Number(surowe);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : domyslnie;
+}
+
 async function pokazSugestie() {
   const pole = document.getElementById('im-sugestie');
-  const cofnij = Math.max(0, Number((document.getElementById('im-cofnij') || {}).value) || 0);
-  const naprzod = Math.max(0, Number((document.getElementById('im-naprzod') || {}).value) || 0);
+  const cofnij = dniZPola('im-cofnij', 3);
+  const naprzod = dniZPola('im-naprzod', 14);
   const dane = Object.assign(parametryImportu(), { przesuniecia: {}, cofnij_dni: cofnij, naprzod_dni: naprzod });
   const w = await sprobuj(() => API.post('/api/import/sugestie', dane));
   if (!w) return;
@@ -491,6 +547,7 @@ async function pokazPodgladImportu(zachowajPrzesuniecia) {
       + 'Istniejące trasy zostają nietknięte — te dojdą obok.')) return;
     const w = await sprobuj(() => API.post('/api/import/wykonaj', parametryImportu()));
     if (!w) return;
+    Szkice.usun('import');
     komunikat(`Wczytano ${w.trasy.length} ${odmiana(w.trasy.length, 'trasę', 'trasy', 'tras')}`
       + (w.pominietych_powtorek ? `, pominięto ${w.pominietych_powtorek} `
         + odmiana(w.pominietych_powtorek, 'powtórkę', 'powtórki', 'powtórek') : ''), 'ok');

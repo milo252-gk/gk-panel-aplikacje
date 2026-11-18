@@ -23,7 +23,7 @@ EKRANY.szablony = {
       lista: 'szablony', pola: ['sort', 'od', 'do', 'kierowca', 'auto'].concat(miejsca.length ? ['miejsce'] : []),
       kierowcy: opcjeFiltra(kierowcy.map(k => ({ id: k.id, nazwa: k.imie })), szablony, s => s.kierowca, s => s.kierowca_imie),
       auta: opcjeFiltra(busy, szablony, s => s.pojazd, s => s.pojazd_nazwa), miejsca,
-      sortDomyslny: 'Jak dotąd (nazwa A–Z)', etykietaOd: 'Zapisana od dnia', etykietaDo: 'Zapisana do dnia',
+      sortDomyslny: 'Domyślnie (nazwa A–Z)', etykietaOd: 'Zapisana od dnia', etykietaDo: 'Zapisana do dnia',
     };
     const f = czytajFiltry('szablony');
     const rysujEkran = () => {
@@ -135,7 +135,7 @@ async function oknoSzablonu(s, kierowcy, busy) {
         const nazwa = val('sb-nazwa');
         if (!nazwa) { komunikat('Podaj nazwę zapisanej trasy', 'blad'); return; }
         if (!wybrane.length) { komunikat('Zaznacz przynajmniej jeden punkt', 'blad'); return; }
-        const w = await sprobuj(() => API.post('/api/szablony', {
+        const dane = {
           id: s.id, nazwa,
           kierowca: document.getElementById('sb-kierowca').value || null,
           pojazd: document.getElementById('sb-pojazd').value || null,
@@ -143,7 +143,17 @@ async function oknoSzablonu(s, kierowcy, busy) {
           baza: document.getElementById('sb-baza').value || null,
           uklad: document.getElementById('sb-uklad').value,
           punkty: wybrane.map(punktZKlucza),
-        }), 'Zapisano');
+        };
+        // Edycja istniejącej zapisanej trasy może poczekać w komputerze; nowa — nie (numer nadaje program).
+        const w = await sprobuj(() => nowy ? API.post('/api/szablony', dane)
+          : zapisBiura('POST', '/api/szablony', dane, {
+            opis: 'zapisana trasa „' + nazwa + '”', zrodla: ['/api/szablony'],
+            popraw: (sciezka, d) => {
+              if (sciezka !== '/api/szablony') return;
+              wPamieci(d, s.id, x => Object.assign(x, { nazwa, kierowca: dane.kierowca, pojazd: dane.pojazd,
+                uwagi: dane.uwagi, baza: dane.baza, uklad: dane.uklad }));
+            },
+          }), 'Zapisano');
         if (w) { z(); pokazEkran('szablony'); }
       } },
     ],
@@ -166,6 +176,7 @@ async function oknoSzablonu(s, kierowcy, busy) {
 
 function oknoTrasyZSzablonu(s, kierowcy, busy) {
   okno({
+    szkic: 'trasa-z-zapisanej-' + s.id,
     tytul: 'Nowa trasa z zapisanej trasy „' + s.nazwa + '”',
     tresc: `
       <p class="male slaby">Powstanie nowa trasa z ${s.ile}
@@ -184,12 +195,16 @@ function oknoTrasyZSzablonu(s, kierowcy, busy) {
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Utwórz trasę', klasa: 'glowny', klik: async z => {
         if (!await zgodaNaBus(document.getElementById('ts-pojazd').value || s.pojazd)) return;
-        const w = await sprobuj(() => API.post(`/api/szablony/${s.id}/trasa`, {
-          data: document.getElementById('ts-data').value,
+        const dzien = document.getElementById('ts-data').value;
+        // Bez programu trasa czeka w tym komputerze (numer nada program) — wracamy do planu tego dnia.
+        const w = await sprobuj(() => zapisBiura('POST', `/api/szablony/${s.id}/trasa`, {
+          data: dzien,
           kierowca: document.getElementById('ts-kierowca').value || null,
           pojazd: document.getElementById('ts-pojazd').value || null,
-        }), 'Trasa utworzona');
-        if (w) { z(); pokazEkran('trasa', { id: w.id }); }
+        }, { opis: 'trasa z zapisanej „' + s.nazwa + '” na ' + polskaData(dzien) }), 'Trasa utworzona');
+        if (!w) return;
+        z();
+        pokazEkran(w.wKolejce ? 'trasy' : 'trasa', w.wKolejce ? { data: dzien } : { id: w.id });
       } },
     ],
   });

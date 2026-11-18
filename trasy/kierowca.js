@@ -169,7 +169,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
   // Pierwszy był widoczny od zawsze, dwa kolejne tylko w oknie punktu.
   if (p.status !== 'oczekuje' && p.status !== 'odwolany' && !p.czeka_na_wyslanie) {
     if (p.do_przyjecia) dopiski.push('wysłane — biuro jeszcze nie zatwierdziło');
-    else if (p.przyjeto_o) dopiski.push('✓ zatwierdzone przez biuro');
+    else if (p.przyjeto_o) dopiski.push(p.przyjete_auto ? '✓ zatwierdzone automatycznie' : '✓ zatwierdzone przez biuro');
   }
   if (p.status === 'odwolany') dopiski.push('biuro zdjęło ten punkt — nie jedź');
 
@@ -433,7 +433,7 @@ function oknoPrzystanku(id) {
           ${p.notatka ? '<br>' + escHtml(p.notatka) : ''}
         </div>
         ${przyjetaPrzezBiuro
-          ? `<div class="male slaby" id="info-przyjete">✓ Biuro zatwierdziło tę dostawę. Jeśli to pomyłka, zadzwoń do biura —
+          ? `<div class="male slaby" id="info-przyjete">${p.przyjete_auto ? '✓ Dostawa zatwierdzona automatycznie.' : '✓ Biuro zatwierdziło tę dostawę.'} Jeśli to pomyłka, zadzwoń do biura —
               biuro może ją zwrócić do poprawy.</div>`
           : '<button class="tekstowy" id="btn-cofnij">Pomyłka — otwórz ten punkt ponownie</button>'}` : ''}
       <a class="glowny" href="${linkNawigacji(p)}" target="_blank" rel="noopener"

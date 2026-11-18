@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-548df7ddbdfa';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-100ad759ccfe';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -403,7 +403,7 @@ async function zamknijZPytaniem() {
 }
 
 /* konto: true — okno „Moje konto” w wyglądzie okna konta aplikacji hali (style.css → .okno-konta). */
-function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto }) {
+function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto, szkic }) {
   const tlo = document.getElementById('okno-tlo');
   tlo.classList.toggle('okno-konta', !!konto);
   document.getElementById('okno-tytul').textContent = tytul || '';
@@ -422,13 +422,92 @@ function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto }) {
   tlo.classList.remove('ukryty');
   odswiezZnacznikOkna();
   poleTresci.scrollTop = 0;
-  if (poOtwarciu) poOtwarciu(poleTresci);
+  szkicOkna = szkic || '';
+  const poPoOtwarciu = poOtwarciu ? Promise.resolve(poOtwarciu(poleTresci)).catch(() => {}) : Promise.resolve();
+  // Szkic (2026-11-18): niezapisany formularz wraca po odświeżeniu strony albo powrocie programu; zamknięcie okna
+  // (zapis, „Anuluj”, krzyżyk) go kasuje, a odświeżenie strony — nie.
+  if (szkic) poPoOtwarciu.then(() => Szkice.przypnij(poleTresci, szkic));
   return zamknijOkno;
 }
+let szkicOkna = '';
 function zamknijOkno() {
+  if (szkicOkna) { Szkice.usun(szkicOkna); szkicOkna = ''; }
   document.getElementById('okno-tlo').classList.add('ukryty');
   odswiezZnacznikOkna();
 }
+
+/* ----------------------------------------------------- szkice formularzy
+
+   Niezapisany formularz (okno albo ekran) leży w pamięci przeglądarki tego komputera pod kluczem
+   „gk-trasy.szkic.<id osoby>.<nazwa>” (ta sama konwencja przedrostka co reszta pamięci Tras; istniejących kluczy
+   i kolejki nie ruszamy). Po odświeżeniu strony, po aktualizacji programu albo po powrocie połączenia pytamy
+   „Przywrócić niezapisane?”. Szkic kasuje zapis, zamknięcie okna i „Odrzuć”; ważny jest dobę. Pola haseł, PIN-ów,
+   tokenów i kluczy nigdy do szkicu nie trafiają. */
+const Szkice = (() => {
+  const WAZNOSC_MS = 24 * 60 * 60 * 1000;
+  const TAJNE = /(^|[-_])(pin|haslo|hasło|token|sekret|klucz)([-_]|$)|password/i;
+  const klucz = nazwa => 'szkic.' + (stan.uz ? stan.uz.id : 0) + '.' + nazwa;
+  function usun(nazwa) { Pamiec.usun(klucz(nazwa)); }
+  function czytaj(nazwa) {
+    let s = null;
+    try { s = JSON.parse(Pamiec.czytaj(klucz(nazwa)) || 'null'); } catch (e) { s = null; }
+    if (!s || !s.pola || !(Date.now() - s.czas < WAZNOSC_MS)) { if (s) usun(nazwa); return null; }
+    return s;
+  }
+  function zapisz(nazwa, pola) { Pamiec.zapisz(klucz(nazwa), JSON.stringify({ pola, czas: Date.now() })); }
+  /* Wartości pól kontenera: po id (pola tekstowe, listy, pola wyboru) i po nazwie (przyciski radiowe). */
+  function zbierz(kontener, filtr) {
+    const pola = {};
+    kontener.querySelectorAll('input, textarea, select').forEach(el => {
+      const typ = (el.type || '').toLowerCase();
+      if (['password', 'file', 'button', 'submit', 'hidden'].includes(typ)) return;
+      if (TAJNE.test(el.id || '') || TAJNE.test(el.name || '') || /password/.test(el.autocomplete || '')) return;
+      if (typ === 'radio') { if (el.name && el.checked) pola['r:' + el.name] = el.value; return; }
+      if (!el.id || (filtr && !filtr.test(el.id))) return;
+      pola[el.id] = typ === 'checkbox' ? !!el.checked : el.value;
+    });
+    return pola;
+  }
+  function wypelnij(kontener, pola) {
+    Object.keys(pola).forEach(k => {
+      const v = pola[k];
+      if (k.startsWith('r:')) {
+        const r = [...kontener.querySelectorAll('input[type=radio]')].find(x => x.name === k.slice(2) && x.value === v);
+        if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+        return;
+      }
+      const el = kontener.querySelector('#' + (window.CSS && CSS.escape ? CSS.escape(k) : k));
+      if (!el) return;
+      if (el.type === 'checkbox') el.checked = !!v;
+      else if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) return;
+      else el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  /* Pilnuje formularza: najpierw (gdy jest szkic różny od stanu wyjściowego) pyta o przywrócenie, potem zapisuje każdą
+     zmianę. Zmiana wracająca do stanu wyjściowego kasuje szkic. `opcje.filtr` — wzorzec id pól objętych szkicem. */
+  async function przypnij(kontener, nazwa, opcje) {
+    const o = opcje || {};
+    if (!kontener || !stan.uz || !kolejkowanieBiuraWlaczone()) return;
+    const wyjsciowe = zbierz(kontener, o.filtr);
+    const s = czytaj(nazwa);
+    if (s && JSON.stringify(s.pola) !== JSON.stringify(wyjsciowe)) {
+      const o2 = new Date(s.czas);
+      const kiedy = String(o2.getHours()).padStart(2, '0') + ':' + String(o2.getMinutes()).padStart(2, '0');
+      if (await potwierdz('Przywrócić niezapisane?', `Z ${kiedy} jest tu niezapisany formularz — przywrócić to, co wpisano?`,
+        { tak: 'Przywróć', nie: 'Odrzuć' })) wypelnij(kontener, s.pola);
+      else usun(nazwa);
+    } else if (s) usun(nazwa);
+    const naZmiane = () => {
+      const teraz = zbierz(kontener, o.filtr);
+      if (JSON.stringify(teraz) === JSON.stringify(wyjsciowe)) usun(nazwa); else zapisz(nazwa, teraz);
+    };
+    kontener.addEventListener('input', naZmiane);
+    kontener.addEventListener('change', naZmiane);
+  }
+  return { przypnij, usun, czytaj, zapisz, zbierz, wypelnij };
+})();
 
 /* Co robimy, gdy otwiera się albo zamyka okno modalne.
 
@@ -771,7 +850,7 @@ const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|ko
 const KODY_BEZ_PROGRAMU = [502, 503, 504, 530];
 const ODSTEP_PROBY_PROGRAMU_MS = 30 * 1000;
 
-const bezProgramu = { od: '', daneZ: '', proba: 0, zapisow: 0 };
+const bezProgramu = { od: '', daneZ: '', proba: 0, zapisow: 0, ostatniSukces: '' };
 
 function kluczOdpowiedzi(sciezka) {
   return PAMIEC_ODPOWIEDZI + stan.uz.id + ':' + sciezka;
@@ -851,8 +930,22 @@ function programOdpowiada() {
   bezProgramu.daneZ = '';
   clearInterval(bezProgramu.proba);
   bezProgramu.proba = 0;
-  pokazWstegeBezProgramu(true);
-  wyslijZapisyBiura();
+  const czekalo = zapisyBiura.ile || 0;
+  pokazWstegeBezProgramu(true, czekalo);
+  // Po powrocie programu (np. po aktualizacji serwera, 2–5 min) czekające zapisy idą same, a ekran odświeża się sam,
+  // gdy nikt nic nie pisze w oknie ani w formularzu: wstęga mówi „Połączenie wróciło — dane odświeżone” i po kilku
+  // sekundach znika sama. Przy otwartym oknie z formularzem zostaje wstęga z przyciskiem „Odśwież dane”.
+  Promise.resolve(wyslijZapisyBiura()).then(() => {
+    if (bezProgramu.od || typeof moznaPrzeladowac !== 'function' || !moznaPrzeladowac()) return;
+    const wstega = document.getElementById('wstega-bez-programu');
+    if (!wstega || !/wróciło/.test(wstega.textContent)) return;
+    const wyslano = Math.max(0, czekalo - (zapisyBiura.ile || 0));
+    wstega.className = 'wstega ok';
+    wstega.textContent = 'Połączenie wróciło — dane odświeżone' + (wyslano
+      ? `, wysłano ${wyslano} ${odmiana(wyslano, 'zapis', 'zapisy', 'zapisów')}` : '');
+    odswiezEkran();
+    setTimeout(() => { if (wstega.parentNode && !bezProgramu.od) wstega.remove(); }, 6000);
+  }).catch(() => { /* ręczny przycisk zostaje */ });
 }
 
 async function sprobujProgram() {
@@ -872,7 +965,7 @@ function chwilaDanych(iso) {
   return d.toDateString() === dzis.toDateString() ? godz : `${d.getDate()}.${d.getMonth() + 1}, ${godz}`;
 }
 
-function pokazWstegeBezProgramu(wrocil) {
+function pokazWstegeBezProgramu(wrocil, czekalo) {
   const tresc = document.getElementById('tresc');
   let wstega = document.getElementById('wstega-bez-programu');
   if (!wstega) {
@@ -883,7 +976,8 @@ function pokazWstegeBezProgramu(wrocil) {
   }
   if (wrocil) {
     wstega.className = 'wstega ok';
-    wstega.innerHTML = 'Połączenie z programem wróciło. '
+    wstega.innerHTML = 'Połączenie z programem wróciło'
+      + (czekalo ? `, czekające zapisy (${czekalo}) idą same` : '') + '. '
       + '<button class="glowny maly" id="btn-odswiez-dane">Odśwież dane</button>';
     wstega.querySelector('#btn-odswiez-dane').onclick = () => { wstega.remove(); odswiezEkran(); };
     return;
@@ -937,6 +1031,14 @@ function odcisk(dane) {
   return h.toString(16) + ':' + t.length;
 }
 
+/* Kolejkowanie zapisów biura jest domyślnie włączone — dla biura i administratora. Kierowca nie używa zapisBiura
+   (jego zapisy idą przez kolejkę telefonu). Wyłączenie: Moje konto → „Zapisy bez połączenia” (klucz tylko tego urządzenia). */
+const USTAWIENIE_ZAPISU_BEZ_POLACZENIA = 'zapis-bez-polaczenia';
+function kolejkowanieBiuraWlaczone() {
+  if (typeof kontoBiura === 'function' && !kontoBiura()) return false;
+  return typeof Pamiec === 'undefined' || Pamiec.czytaj(USTAWIENIE_ZAPISU_BEZ_POLACZENIA) !== '0';
+}
+
 function bezPolaczeniaZProgramem(e) {
   return !!(e && (e.bezPolaczenia || KODY_BEZ_PROGRAMU.indexOf(e.kod) >= 0));
 }
@@ -977,6 +1079,9 @@ async function poprawPamiec(popraw) {
    popraw(sciezka, dane) }. Zwraca odpowiedź programu albo { wKolejce: true }. */
 async function zapisBiura(metoda, sciezka, dane, opcje) {
   const o = opcje || {};
+  // Opcja „Zapisy bez połączenia” (Moje konto, tylko biuro): wyłączona albo konto kierowcy — zwyczajny zapis, a bez
+  // programu komunikat „nie zapisano” (kierowca ma własną kolejkę, synchronizuj).
+  if (!kolejkowanieBiuraWlaczone()) return API.zadanie(metoda, sciezka, dane);
   const op = { uuid: numerOperacji(), metoda, sciezka, dane: dane === undefined ? null : dane,
                opis: o.opis || sciezka, uzytkownik: stan.uz ? stan.uz.id : null,
                dodano: new Date().toISOString(), zrodla: [] };
@@ -990,6 +1095,9 @@ async function zapisBiura(metoda, sciezka, dane, opcje) {
     }
   }
   if (!stan.uz) throw new Error('Zaloguj się ponownie — zapis bez konta nie poczeka');
+  // Program nie odpowiedział na zapis: od tej chwili wstęga „Bez połączenia” i próba co kilkanaście sekund — także wtedy,
+  // gdy nic nie czytaliśmy (sam zapis, bez zapamiętanej odpowiedzi GET), inaczej zapis czekałby do ręcznego odświeżenia.
+  if (!bezProgramu.od) pracaBezProgramu(bezProgramu.ostatniSukces || new Date().toISOString());
   for (const z of o.zrodla || []) {
     const kopia = await odpowiedzZPamieci(z);
     op.zrodla.push({ sciezka: z, odcisk: kopia ? odcisk(kopia.dane) : '' });
@@ -1034,7 +1142,11 @@ async function wyslijZapisyBiura() {
         await API.zadanie(op.metoda, op.sciezka, op.dane === null ? undefined : op.dane,
                           { 'X-GK-Operacja': op.uuid });
       } catch (e) {
-        if (bezPolaczeniaZProgramem(e) || !e.kod || e.kod >= 500 || e.kod === 401) return;
+        if (bezPolaczeniaZProgramem(e) || !e.kod || e.kod >= 500 || e.kod === 401) {
+          // Program zniknął w trakcie wysyłania (np. restart w środku kolejki): wracamy do próby co kilkanaście sekund.
+          if (!bezProgramu.od && bezPolaczeniaZProgramem(e)) pracaBezProgramu(bezProgramu.ostatniSukces || new Date().toISOString());
+          return;
+        }
         op.blad = poLudzku(e);
         await Kolejka.zapamietaj(PAMIEC_ZAPISOW + op.uuid, op);
         continue;
@@ -1128,6 +1240,7 @@ const API = {
       blad.kod = odp.status;
       throw blad;
     }
+    bezProgramu.ostatniSukces = new Date().toISOString();   // „dane z …” we wstędze, gdy pierwszy zapis bez programu nie czytał nic z pamięci
     programOdpowiada();
     if (metoda === 'GET') zapamietajOdpowiedz(sciezka, wynik).catch(() => { /* pamięć to tylko zapas */ });
     return wynik;
@@ -2474,6 +2587,10 @@ function oknoKonta() {
       </fieldset>
       ${trescZmianySekretu(zmien)}
       ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${napisKodowQR()}</button>` : ''}
+      <div class="przyciski-konta konto-pomoc">
+        <button type="button" id="btn-instrukcja">Instrukcja</button>
+        ${kontoBiura() ? '<button type="button" id="btn-role">Role i uprawnienia</button>' : ''}
+      </div>
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${jestBiuro()
           ? 'Nieudana dostawa i raport z usterkami — od razu, także przy zamkniętej aplikacji.'
@@ -2482,6 +2599,12 @@ function oknoKonta() {
         ${poleDzwieku()}
       </fieldset>
       <fieldset><legend>Dane w tym urządzeniu</legend>
+        ${kontoBiura() ? `<p class="konto-drobne">Gdy program w biurze nie odpowiada (np. trwa aktualizacja serwera), zmiany i niezapisane
+            formularze czekają w tym komputerze, a po powrocie połączenia wysyłają się same. Nowych tras, punktów, klientów, aut
+            i importu z Excela to nie dotyczy — tych bez programu nie zapiszesz.</p>
+          <div class="przyciski-konta">
+            <button type="button" id="btn-zapis-bez-polaczenia" aria-pressed="${kolejkowanieBiuraWlaczone()}">${napisZapisuBezPolaczenia()}</button>
+          </div>` : ''}
         <p class="konto-drobne">Czeka na wysłanie: <span id="ile-w-kolejce">…</span></p>
         <p class="konto-drobne ${stan.obceWKolejce ? '' : 'ukryty'}" id="obce-w-kolejce"></p>
         <div id="odrzucone-zapisy"></div>
@@ -2504,6 +2627,24 @@ function oknoKonta() {
       });
       const kodyQR = pole.querySelector('#btn-kody-qr');
       if (kodyQR) kodyQR.onclick = oknoKodowAplikacji;
+      const bezPolaczenia = pole.querySelector('#btn-zapis-bez-polaczenia');
+      if (bezPolaczenia) bezPolaczenia.onclick = () => {
+        // Wyłączenie wraca do komunikatu „nie zapisano” przy braku programu; zapisy już czekające i tak się wyślą.
+        if (kolejkowanieBiuraWlaczone()) Pamiec.zapisz(USTAWIENIE_ZAPISU_BEZ_POLACZENIA, '0');
+        else Pamiec.usun(USTAWIENIE_ZAPISU_BEZ_POLACZENIA);
+        bezPolaczenia.textContent = napisZapisuBezPolaczenia();
+        bezPolaczenia.setAttribute('aria-pressed', String(kolejkowanieBiuraWlaczone()));
+      };
+      // Instrukcja jest zwykłą stroną z web/ (instrukcja.html): działa z telefonu także z GitHub Pages (adres względny,
+      // z tym samym stemplem wersji co reszta — tak ma ją kopia offline z sw.js) i otwiera się w nowej karcie.
+      pole.querySelector('#btn-instrukcja').onclick = () => {
+        window.open(`instrukcja.html?v=${typeof WERSJA_SKRYPTU === 'string' ? WERSJA_SKRYPTU : ''}`, '_blank', 'noopener');
+      };
+      const przyciskRol = pole.querySelector('#btn-role');
+      if (przyciskRol) przyciskRol.onclick = () => {
+        zamknijOkno();
+        otworzRole(oknoKonta).catch(e => { komunikat(poLudzku(e), 'blad'); oknoKonta(); });
+      };
       podepnijZmianeSekretu(pole);
       rysujPowiadomienia(pole.querySelector('#push-konto'));
       podepnijDzwiek(pole);
@@ -2533,6 +2674,10 @@ function oknoKonta() {
       }
     },
   });
+}
+
+function napisZapisuBezPolaczenia() {
+  return kolejkowanieBiuraWlaczone() ? '💾 Zapisy bez połączenia: włączone' : '💾 Zapisy bez połączenia: wyłączone';
 }
 
 /* Dźwięk w Moim koncie → Powiadomienia (2026-10-16, ten sam układ w GK Flota):

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>GK Trasy — instrukcja</title>
+<!-- Instrukcja do czytania w telefonie (przycisk „Instrukcja” w Moim koncie). Leży w web/, więc trafia na GitHub Pages
+     razem z aplikacją i otwiera się także tam; sw.js trzyma jej kopię na brak zasięgu. Pełna instrukcja do wydruku to
+     Instrukcja.pdf w folderze programu na komputerze w biurze. Bez skryptów i bez danych. -->
+<style>
+  :root { --grafit: #4E4E4E; --pomarancz: #E0922E; --tlo: #f6f6f7; --karta: #ffffff; --tekst: #2b2b2d; --slaby: #6d6d72; --linia: #e2e2e4; }
+  @media (prefers-color-scheme: dark) { :root { --tlo: #191817; --karta: #232221; --tekst: #ECEBE9; --slaby: #ADABA8; --linia: #3E3D3B; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.5;
+         color: var(--tekst); background: var(--tlo); padding-bottom: env(safe-area-inset-bottom); }
+  header { background: var(--grafit); color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+           border-bottom: 3px solid var(--pomarancz); position: sticky; top: 0; }
+  header img { height: 32px; width: auto; filter: brightness(0) invert(1); }   /* znak jest grafitowy jak pasek — jednolita biel, jak w menu aplikacji */
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  header a { color: #fff; font-weight: 600; text-decoration: none; padding: 8px 12px; border: 1px solid rgba(255,255,255,.5); border-radius: 8px; min-height: 44px; display: inline-flex; align-items: center; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  section { background: var(--karta); border: 1px solid var(--linia); border-radius: 12px; padding: 4px 16px 12px; margin-bottom: 14px; }
+  h2 { font-size: 18px; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--pomarancz); }
+  p, ul, ol { margin: 6px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  .slabe { color: var(--slaby); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <img src="logo-gkf.png" alt="GK Factory" width="57" height="32">
+  <h1>GK Trasy — instrukcja</h1>
+  <a href="./">Wróć do aplikacji</a>
+</header>
+<main>
+
+<section>
+<h2>Do czego służy</h2>
+<p>Biuro układa w GK Trasy trasy dostaw, a kierowcy w telefonach odhaczają każdą dostawę zdjęciem i podpisem klienta. Dzięki temu biuro na bieżąco widzi, co jest rozwiezione, a raport pracy kierowcy wypełnia się sam.</p>
+</section>
+
+<section>
+<h2>Kierowca: dzień pracy</h2>
+<ol>
+  <li><b>Moja trasa</b> — lista punktów na dziś w kolejności jazdy; przy każdym adres, telefon do klienta i przycisk nawigacji.</li>
+  <li><b>Załadunek</b> — przed wyjazdem sprawdź numer zamówienia przy każdej pozycji (zdjęcie ładunku jest nieobowiązkowe).</li>
+  <li><b>Dostawa</b> — po rozładunku zrób zdjęcie, weź podpis i wybierz „Dostarczone”. Jeśli się nie udało, wybierz „Nieudane” i powód.</li>
+  <li><b>Raport pracy</b> — start, koniec, przerwa, licznik i tankowanie; część pól program podpowiada sam.</li>
+</ol>
+<p><b>Bez zasięgu</b> aplikacja działa dalej: zapisy czekają w telefonie (pasek u góry pokazuje ile) i same się wysyłają, gdy wróci internet. Nie kasuj danych aplikacji, zanim pasek nie pokaże, że wszystko poszło.</p>
+</section>
+
+<section>
+<h2>Biuro: codzienna praca</h2>
+<ul>
+  <li><b>Pulpit</b> — kafelki liczb dnia (zaległe, odrzucone zapisy, do zatwierdzenia, nieudane), trasy w toku i mapa aut. Przy kafelkach jest <b>„i”</b> — dotknij, a zobaczysz, jak ta liczba jest liczona.</li>
+  <li><b>Trasy</b> — plan na dzień, tydzień albo listę; „+ Nowa trasa”, przenoszenie punktów, kopiowanie tras, wczytywanie planu z Excela.</li>
+  <li><b>Kalendarz</b> — miesiąc tras: w kratce liczba tras i punktów dnia, czerwona liczba to nieudane dostawy. Dotknięcie dnia otwiera ten dzień w Trasach.</li>
+  <li><b>Do zatwierdzenia</b> — dostawy zamknięte przez kierowców czekają na decyzję biura: zatwierdź albo zwróć do poprawy.</li>
+  <li><b>Zaległe dostawy</b> — punkty z minionych dni, które nie dojechały; zaznacz je i wyznacz nadrobienie.</li>
+  <li><b>Wskaźniki</b> — ile dostaw udało się za pierwszym razem, które nie wyszły i dlaczego (powód, kierowca, klient). Okres: Dziś, Wczoraj, Ostatnie 7 dni, Ten miesiąc albo własny zakres; wybrany okres zostaje do końca dnia.</li>
+  <li><b>Raport pracy</b> — dzień po dniu z tras i raportów kierowców; eksport do Excela.</li>
+</ul>
+</section>
+
+<section>
+<h2>Role</h2>
+<p>Kierowca widzi swoje trasy. Biuro układa trasy, zatwierdza dostawy, prowadzi klientów i kierowców. Administrator ma jeszcze konta biura, ustawienia techniczne, kopie i kasowanie na stałe. Konto „Podgląd tras” tylko ogląda plan. Pełną tabelę „kto co może” znajdziesz w <b>Moje konto → Role i uprawnienia</b> (dla biura i administratora).</p>
+</section>
+
+<section>
+<h2>Moje konto</h2>
+<p>Ikona osoby u góry: wygląd (jasny, ciemny, jak w telefonie), zmiana PIN-u lub hasła, powiadomienia i dźwięk, stan zapisów w telefonie oraz wersja programu. Hasło wpisujesz raz na 16 godzin na urządzeniu, na co dzień wystarczy PIN.</p>
+<p class="slabe">Coś nie działa? Zajrzyj do „Moje konto”, zrób zrzut ekranu z wersją i pokaż go w biurze.</p>
+</section>
+
+</main>
+</body>
+</html>

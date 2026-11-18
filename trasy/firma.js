@@ -71,6 +71,7 @@ function oknoLokalizacji(l, administrator) {
   l = l || { nazwa: '', ulica: '', kod: '', miasto: '', osoba: '', telefon: '',
              email: '', nip: '', godziny: '', uwagi: '', domyslna: 0, aktywna: 1 };
   okno({
+    szkic: 'lokalizacja-' + (nowa ? 'nowa' : l.id),
     tytul: nowa ? 'Nowa lokalizacja' : escHtml(l.nazwa),
     tresc: `
       <label>Nazwa<input id="lo-nazwa" value="${escHtml(l.nazwa)}"
@@ -139,8 +140,17 @@ function oknoLokalizacji(l, administrator) {
           aktywna: nowa ? 1 : (document.getElementById('lo-aktywna').checked ? 1 : 0),
         };
         if (!dane.nazwa) return komunikat('Podaj nazwę lokalizacji', 'blad');
-        if (!await sprobuj(() => API.post('/api/lokalizacje', dane))) return;
-        z(); komunikat('Zapisane', 'ok');
+        // Edycja istniejącej lokalizacji może poczekać w komputerze; nowa — nie (numer nadaje program, ekran go potrzebuje).
+        const w = await sprobuj(() => nowa ? API.post('/api/lokalizacje', dane)
+          : zapisBiura('POST', '/api/lokalizacje', dane, {
+            opis: 'lokalizacja „' + dane.nazwa + '”', zrodla: ['/api/lokalizacje'],
+            popraw: (sciezka, d) => {
+              if (sciezka.split('?')[0] !== '/api/lokalizacje') return;
+              wPamieci(d, l.id, x => Object.assign(x, dane, { domyslna: dane.domyslna ? 1 : 0 }));
+            },
+          }));
+        if (!w) return;
+        z(); komunikat(w.wKolejce ? KOMUNIKAT_KOLEJKI_BIURA : 'Zapisane', 'ok');
         await odswiezLokalizacje();
         pokazEkran('lokalizacje');
       } },
@@ -175,7 +185,7 @@ EKRANY.zalegle = {
       lista: 'zalegle', pola: ['sort', 'od', 'do', 'status', 'kierowca', 'auto'], statusy: FILTRY_STATUSY.zalegle,
       kierowcy: opcjeFiltra((stan.kierowcy || []).map(k => ({ id: k.id, nazwa: k.imie })), zalegle, z => z.kierowca, z => z.kierowca_imie),
       auta: opcjeFiltra((stan.pojazdy || []).filter(b => b.aktywny), zalegle, z => z.pojazd, z => z.pojazd_nazwa),
-      sortDomyslny: 'Jak dotąd (najstarsze pierwsze)', etykietaOd: 'Dzień trasy od', etykietaDo: 'Dzień trasy do',
+      sortDomyslny: 'Domyślnie (najstarsze pierwsze)', etykietaOd: 'Dzień trasy od', etykietaDo: 'Dzień trasy do',
     };
     const f = czytajFiltry('zalegle');
 
@@ -241,8 +251,17 @@ EKRANY.zalegle = {
           + `trasę ${polskaData(data)}.`)) return;
         const w = await zRyzykiemKolejki(
           { punkty, data, kierowca: kierowca ? Number(kierowca) : null },
-          d => API.post('/api/zalegle/przenies', d));
+          d => zapisBiura('POST', '/api/zalegle/przenies', d, {
+            opis: `przeniesienie zaległych dostaw (${punkty.length}) na ${polskaData(data)}`,
+            zrodla: ['/api/zalegle'],
+            popraw: (sciezka, dt) => {
+              if (sciezka !== '/api/zalegle' || !dt || !Array.isArray(dt.zalegle)) return;
+              dt.zalegle = dt.zalegle.filter(x => !punkty.includes(x.id));
+            },
+          }));
         if (!w) return;
+        // Bez programu numer trasy nada dopiero on — zostajemy na liście, z której punkty już zniknęły.
+        if (w.wKolejce) { komunikat(KOMUNIKAT_KOLEJKI_BIURA, 'ok'); pokazEkran('zalegle'); return; }
         komunikat(`Przeniesione: ${w.przeniesione.length}`, 'ok');
         pokazEkran('trasa', { id: w.trasa });
       };
