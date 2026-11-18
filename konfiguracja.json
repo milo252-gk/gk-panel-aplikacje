@@ -1,6 +1,6 @@
 {
   "hub": "https://contests-outreach-modules-particle.trycloudflare.com",
-  "zmieniono": "2026-11-18T02:03:37.613Z",
+  "zmieniono": "2026-11-18T02:04:31.347Z",
   "wersje": {
     "wspolne": "wspolne-c41ad19c431a",
     "panel": "panel-31021645f5d2",
@@ -9,6 +9,7 @@
     "kj": "kj-8a9f7965a8b1"
   },
   "programy": {
-    "szkolenia": "https://diagnostic-signal-precision-essential.trycloudflare.com"
+    "szkolenia": "https://diagnostic-signal-precision-essential.trycloudflare.com",
+    "wycena": "https://forum-ontario-tattoo-payments.trycloudflare.com"
   }
 }
