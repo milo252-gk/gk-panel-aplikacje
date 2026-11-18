@@ -80,7 +80,7 @@
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś kierownika o rolę lidera albo mistrza.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś kierownika o rolę lidera, mistrza albo brygadzisty SP.';
     // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo PIN, blokada na 5 minut…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
   };

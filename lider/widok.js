@@ -69,9 +69,16 @@
      tych linii (albo bez linii). Bez zaznaczenia — wszystkie (null), jak dotąd. Lider i każdy inny → null: lider wybiera
      dowolną linię (przesunięcie) jak dotąd. Push hub kieruje tą samą regułą (na_linii w hala.py). Linie spoza słownika
      (usunięte) się nie liczą. */
+  /* Brygadzista SP (Strefa Płyt, 2026-11-18): uprawnienia i ekran DOKŁADNIE jak mistrz, ale własny dział „brygadzista-sp” i bez
+     linii przypisanych na sztywno (wszystkie linie). Osoba z rolą mistrz jest mistrzem (dział „mistrz”), nawet jeśli ma i tę rolę.
+     Bliźniak po stronie huba: kontrakt (role zdarzeń) i na_linii w hala.py. */
+  const ROLA_BRYGADZISTY = 'brygadzista_sp', DZIAL_BRYGADZISTY = 'brygadzista-sp';
+  const jestMistrzem = role => (role || []).includes('mistrz') || (role || []).includes(ROLA_BRYGADZISTY);
+  const dzialMistrza = role => (role || []).includes('mistrz') ? 'mistrz' : (role || []).includes(ROLA_BRYGADZISTY) ? DZIAL_BRYGADZISTY : null;
+
   function linieMistrza(pracownik, slowniki) {
     const role = (pracownik && pracownik.role) || [];
-    if (!role.includes('mistrz')) return null;
+    if (!role.includes('mistrz')) return null;       // brygadzista SP: zawsze wszystkie linie
     const sl = slowniki && slowniki.linie;
     const linie = ((pracownik && pracownik.linie) || []).filter(l => !sl || sl[l]);
     return linie.length ? linie : null;
@@ -90,7 +97,7 @@
     const lista = liniePosortowane(slowniki, (pracownik && pracownik.linie) || []).filter(l => !lm || lm.includes(l.kod));
     // Jedna linia w zakładzie (D51) — jest linią każdego: Panel przy jednej linii chowa pole „Linie” osoby, więc nowy
     // lider nie ma przypisanej linii, a nie jest „przesunięty” (wcześniej: „Hala (przesunięcie)”).
-    return (role.includes('mistrz') && !lm) || !wieleLinii(slowniki) ? lista.map(l => Object.assign(l, { moja: true })) : lista;
+    return (jestMistrzem(role) && !lm) || !wieleLinii(slowniki) ? lista.map(l => Object.assign(l, { moja: true })) : lista;
   }
 
   /* Czyje zlecenia pokazuje aplikacja (D34): mistrz — dział „mistrz”, bez zawężenia do wybranej linii (pracuje na całej
@@ -100,9 +107,9 @@
      rolami jest mistrzem: jego zadań nikt inny nie zrobi, a zlecenia linii mają swojego lidera. */
   function dzialZlecen(pracownik, linia, slowniki) {
     const role = (pracownik && pracownik.role) || [];
-    if (!role.includes('mistrz')) return { dzial: 'produkcja', linia };
-    const lm = linieMistrza(pracownik, slowniki);
-    return lm ? { dzial: 'mistrz', linie: lm } : { dzial: 'mistrz' };
+    if (!jestMistrzem(role)) return { dzial: 'produkcja', linia };
+    const lm = linieMistrza(pracownik, slowniki), dzial = dzialMistrza(role);
+    return lm ? { dzial, linie: lm } : { dzial };
   }
 
   /* Które listy ma osoba na ekranie Zmiana (właściciel 2026-11-17): lider → „lider”; mistrz → „mistrz”; lider+mistrz → obie;
@@ -110,8 +117,8 @@
   function kategorieOsoby(pracownik) {
     const role = (pracownik && pracownik.role) || [];
     const k = [];
-    if (role.includes('lider') || !role.includes('mistrz')) k.push('lider');
-    if (role.includes('mistrz')) k.push('mistrz');
+    if (role.includes('lider') || !jestMistrzem(role)) k.push('lider');
+    if (jestMistrzem(role)) k.push('mistrz');
     return k;
   }
 
@@ -125,7 +132,7 @@
     const mistrz = () => {
       const d = dzialZlecen(pracownik, linia, slowniki);
       return H().checklistaZmiany(bezKopiiLinii((zlecenia || []).filter(z => !d.linie || !((z.dane || {}).linia) || d.linie.includes(z.dane.linia))),
-                                  null, zmiana, 'mistrz');
+                                  null, zmiana, d.dzial);
     };
     if (kat.length === 1) return kat[0] === 'mistrz' ? mistrz() : lider();
     return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider', lista: lider() }]);
@@ -152,7 +159,7 @@
      bez linii (właściwy układ: jedno na zmianę) i innych działów nie są ruszane. Bliźniak: PanelWidok.bezKopiiLiniiMistrza. */
   function bezKopiiLinii(zlecenia) {
     const wybrane = new Map();
-    const klucz = z => { const d = z.dane || {}; return d.dzial === 'mistrz' && d.linia && Array.isArray(d.pozycje) && d.pozycje.length
+    const klucz = z => { const d = z.dane || {}; return (d.dzial === 'mistrz' || d.dzial === DZIAL_BRYGADZISTY) && d.linia && Array.isArray(d.pozycje) && d.pozycje.length
       ? `${d.stale || ''}|${d.tytul || ''}|${d.wystapienie || ''}` : null; };
     for (const z of zlecenia || []) {
       const k = klucz(z);
@@ -185,7 +192,7 @@
     const przyjete = zl.filter(z => (z.dane || {}).przyjal)
       .sort((a, b) => (ms((a.dane || {}).czas_przyjecia) || 0) - (ms((b.dane || {}).czas_przyjecia) || 0));
     const role = (pracownik && pracownik.role) || [];
-    const moze = role.includes('lider') || role.includes('mistrz');
+    const moze = role.includes('lider') || jestMistrzem(role);
     const stan = doPrzyjecia.length && !przyjete.length ? 'brak' : doPrzyjecia.length ? 'czesc' : przyjete.length ? 'przyjete' : null;
     const d = przyjete.length ? przyjete[0].dane : null;
     const kto = d ? nazwaPracownika(pracownicy, d.przyjal) : null, godz = d && d.czas_przyjecia ? godzina(d.czas_przyjecia) : null;
@@ -228,7 +235,9 @@
      manifest, ekran logowania, <title> przed logowaniem, push i kontrakt zostają „GK Lider”. */
   function nazwaAplikacji(pracownik) {
     const role = (pracownik && pracownik.role) || [];
-    return role.includes('mistrz') && !role.includes('kierownik') && !role.includes('admin') ? 'GK Mistrz' : 'GK Lider';
+    if (role.includes('kierownik') || role.includes('admin')) return 'GK Lider';
+    if (role.includes('mistrz')) return 'GK Mistrz';
+    return role.includes(ROLA_BRYGADZISTY) ? 'GK Brygadzista SP' : 'GK Lider';
   }
 
   /* Jedno zdanie, gdy ktoś chce odhaczyć pozycję przed „Przyjmuję zadania” (ekran Zmiana i karta zlecenia). */

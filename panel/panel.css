@@ -150,6 +150,11 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .kafelek.ma-podglad { cursor: pointer; }
 .kafelek.ma-podglad .karta-pozycje, .kafelek.ma-podglad .kafelek-odbior { cursor: auto; }
 .karta-pozycje-przycisk { margin-top: 8px; }
+/* Podpis działu pod nazwą checklisty na karcie obchodu: „Mistrz”, „Lider · Linia 1”, „UR”… */
+.podpis-karty { margin: -2px 0 4px; font-size: .85em; }
+.odrzucenia { margin-top: 4px; }
+.odrzucenia > summary { cursor: pointer; color: var(--czerwony); font-weight: 600; }
+.odrzucenia ul { margin: 4px 0 0; padding-left: 18px; }
 .opoznione .link-wiecej { background: none; border: 0; padding: 0; min-height: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
 /* Filtry pozycji w rozwiniętej karcie: zwarte chipy, na telefonie jeden przewijany rząd. */
 .karta-chipy { margin: 4px 0 8px; }
@@ -408,6 +413,14 @@ legend { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); padding: 
 
 .zlecenie .zdjecia, .awaria .zdjecia { display: flex; gap: 6px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
 .zlecenie .zdjecia > .slaby { font-size: .85em; }
+/* ZAWSZE zwarte miniatury (właściciel 2026-11-18, zrzut z produkcji: zdjęcie dowodu w karcie obchodu na Pulpicie miało pełny rozmiar,
+   ~600 px wysokości). Reguły wyżej obejmują tylko .zlecenie/.awaria — dowody pozycji w karcie obchodu (.karta-pozycje), w „Do odbioru” na
+   Pulpicie i każde inne miejsce z .zdjecia dostają tu ogólny wzór: kafelek 96 px (80 na telefonie), object-fit: cover; pełny rozmiar
+   dopiero po kliknięciu (okno-zdjecia). Bardziej szczegółowe reguły (64 px w wierszu zlecenia, 96 px w oknie pozycji) zostają. */
+.zdjecia { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.zdjecia button.miniatura { padding: 0; min-height: 0; border: 0; background: none; border-radius: 8px; cursor: zoom-in; line-height: 0; }
+.zdjecia img[data-plik] { width: 96px; height: 96px; max-width: 100%; max-height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); display: block; background: var(--tlo); }
+@media (max-width: 600px) { .zdjecia img[data-plik] { width: 80px; height: 80px; } }
 .zlecenie .zdjecia img, .awaria .zdjecia img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ramka); display: block; }
 /* Miniatura to przycisk — dotknięcie pokazuje zdjęcie w dużym oknie (kierownik ocenia wykonanie). */
 .zlecenie .zdjecia button.miniatura, .awaria .zdjecia button.miniatura { padding: 0; min-height: 0; border: 0; background: none; border-radius: 8px; cursor: zoom-in; }

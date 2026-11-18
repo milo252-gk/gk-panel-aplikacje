@@ -283,6 +283,8 @@
       for (const p of pola) if (p in dane) wpis[p] = kopia(dane[p]);
       Object.assign(wpis, { autor: meta.autor, czas: meta.czas, zdarzenie: meta.zdarzenie });
       (d[pole] = d[pole] || []).push(wpis);
+      const maks = (spec.dopisz_maks || {})[pole];      // 1.28.0: tylko N ostatnich wpisów. Bliźniak: hala.py → zastosuj.
+      if (Number.isInteger(maks) && maks > 0 && d[pole].length > maks) d[pole] = d[pole].slice(-maks);
     }
     if (spec.mapa) {
       const k = kluczMapy(spec.mapa, dane, meta);
@@ -307,7 +309,7 @@
     for (const pole of spec.zeruj || []) delete d[pole];
     if (spec.zeruj_wg) for (const pole of spec.zeruj_wg.mapa[dane[spec.zeruj_wg.pole]] || []) delete d[pole];
     if (spec.na_z_danych) s.status = dane[spec.na_z_danych.pole];
-    else if (spec.na) s.status = spec.na;
+    else if (spec.na && (spec.na_gdy_z === undefined || spec.na_gdy_z.includes(stan.status))) s.status = spec.na;   // 1.29.0: `na_gdy_z`
     if (s.status === null) s.status = Object.keys(ob.statusy)[0];
     if (nowy && typeof dane.linia === 'string') s.linia = dane.linia;     // linię ustala zdarzenie tworzące
     s.zmieniono = zd.czas;
@@ -493,6 +495,15 @@
      kierownika. ZWRÓCONA = nie jest zrobiona, a ma wpis zwrotu (czeka na poprawkę działu); `poprawiona` = zrobiona po zwrocie.
      Brak nowych map (stare zlecenia) = nic nie odebrane, nic nie zwrócone — jak dotąd. Bliźniak: hala.py → odbior_pozycji.
      Zwraca { wszystkie, odebrane, doOdbioru: [id…] (zrobione, jeszcze nie odebrane), zwrocone: [id…], pelne, pozycje: {id: {…}} }. */
+  /* 1.29.0 (decyzja właściciela 2026-11-18): odbiór i zwrot POJEDYNCZEJ pozycji także w otwartej checkliście (nowe, przyjęte) — nie
+     tylko po oddaniu („wykonane”). Pozycja musi być zrobiona (wykonana albo pominięta). Odbiór nie zmienia statusu; zwrot pozycji
+     w otwartej checkliście cofa wykonanie tej pozycji i zostawia status (zmienia go tylko zwrot z „wykonane” → „nowe”).
+     Zamknięcie zlecenia po ostatniej odebranej pozycji — dalej tylko ze statusu „wykonane”. Bliźniak: hala.py → blad_odbioru_pozycji. */
+  const STATUSY_ODBIORU_POZYCJI = ['nowe', 'przyjete', 'wykonane'];
+  function mozeOdbieracPozycje(zlecenie) {
+    const z = zlecenie || {}, d = z.dane || {};
+    return STATUSY_ODBIORU_POZYCJI.includes(z.status) && Array.isArray(d.pozycje) && d.pozycje.length > 0;
+  }
   function odbiorPozycji(d) {
     d = d || {};
     const ode = d.pozycje_odebrane || {}, zwr = d.pozycje_zwrocone || {};
@@ -2756,7 +2767,7 @@
 
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
-    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, koniecOdbioru, koniecZwrotu, karencjaOdbioru, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
+    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,

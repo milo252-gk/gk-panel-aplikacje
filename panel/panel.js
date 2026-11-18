@@ -350,6 +350,9 @@
      rozwija listę z dowodami zrobionych pozycji — jeszcze przed oddaniem checklisty. Domyślnie zwinięte, stan przeżywa przerysowania
      (klucz karty → true), rozwinięta karta zajmuje cały rząd. Tylko odczyt (bez Odbierz/Zwróć); lista rysowana dopiero po rozwinięciu. */
   const pozycjeKarty = new Map();
+  // Odbierz / Zwróć przy ZROBIONEJ pozycji w rozwiniętej karcie, także gdy checklista nie jest jeszcze oddana (właściciel 2026-11-18).
+  // Hub musi przyjmować pozycja_odebrana / pozycja_zwrocona dla otwartych checklist — bez tego zapis zostanie odrzucony (komunikat). Wyłącznik:
+  const ODBIOR_POZYCJI_W_KARCIE = true;
   // Filtr pozycji w rozwiniętej karcie (Wszystkie / Do zrobienia / Spóźnione / Zrobione / Pominięte) — klucz karty → kod; bez pamięci w urządzeniu.
   const filtrPozycjiKarty = new Map();
   $('kafelki').addEventListener('click', ev => {
@@ -369,26 +372,23 @@
   });
   $('kafelki').addEventListener('click', obsluzKlikZlecenia);
   function rysujKafelki(d, awarie) {
-    const kafelki = W.obchody({
+    // Jedna karta na każdą checklistę (tytuł = nazwa checklisty, podpis = dział): mistrz, lider (linie), brygadzista SP, UR, KJ (W.obchodyKarty).
+    const karty = W.obchodyKarty({
       slowniki: d.slowniki, pracownicy: d.pracownicy, zmiana: d.zmiana, teraz: d.teraz, stale: d.stale,
-      prog: hala.ustawienie('prog_zolty_min', 30), awarie,
+      prog: hala.ustawienie('prog_zolty_min', 30), awarie, ja: hala.pracownik,
       zmianaLinii: klucz => hala.obiekt('zmiana_linii', klucz), zlecenia: hala.obiekty('zlecenie'),
-    });
-    // Mistrz „wyżej niż lider”: jego kafelek (jeśli jest checklista działu mistrz na tę zmianę) stoi przed kafelkami linii.
-    const mistrz = W.obchodyMistrza({
-      pracownicy: d.pracownicy, zmiana: d.zmiana, teraz: d.teraz, prog: hala.ustawienie('prog_zolty_min', 30), zlecenia: hala.obiekty('zlecenie'),
     });
     // D87: odbiór checklisty bieżącej zmiany jest w karcie obchodu (nie w osobnej sekcji Pulpitu). Roli bez prawa odbioru
     // (konto ekranu, lider…) karta wygląda jak dotąd.
     const mozeOdbierac = mozeWyslac('zlecenie.zamkniete');
     const odbiory = new Map(), podglady = new Map();
-    for (const k of mistrz.concat(kafelki)) {
+    for (const k of karty) {
       if (mozeOdbierac) {
-        const pg = W.pozycjeObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.linia === null ? 'mistrz' : 'produkcja',
+        const pg = W.pozycjeObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.dzial || 'produkcja', zlecenieId: k.zlecenieId,
                                       slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik });
         if (pg.length) podglady.set(k.klucz, pg);
       }
-      const w = mozeOdbierac ? W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.linia === null ? 'mistrz' : 'produkcja',
+      const w = mozeOdbierac ? W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.dzial || 'produkcja', zlecenieId: k.zlecenieId,
                                                 slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik }) : [];
       if (w.length) odbiory.set(k.klucz, w);
     }
@@ -397,21 +397,30 @@
     const karencja = mozeOdbierac ? W.zmianaWKarencji({ zmiana: d.zmiana, slowniki: d.slowniki, stale: d.stale, teraz: d.teraz }) : null;
     const kartyKarencji = [];
     if (karencja) {
-      for (const k of [{ linia: null, naglowek: 'Checklista mistrza', klucz: 'mistrz' }].concat(kafelki)) {
-        const w = W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: karencja.zmiana, linia: k.linia, dzial: k.linia === null ? 'mistrz' : 'produkcja',
+      // Po karencji też karta na checklistę: tytuł = nazwa checklisty, podpis działu (jak karty bieżącej zmiany).
+      const zrodla = W.DZIALY_OBCHODOW.map(([dzial, , podpis]) => ({ dzial, linia: null, podpis, klucz: dzial }))
+        .concat(karty.filter(k => k.dzial === 'produkcja').map(k => ({ dzial: 'produkcja', linia: k.linia, podpis: k.podpis, klucz: `produkcja/${k.linia}` })));
+      const widziane = new Set();
+      for (const k of zrodla) {
+        const w = W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: karencja.zmiana, linia: k.linia, dzial: k.dzial,
                                     slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik });
-        if (w.length) kartyKarencji.push({ klucz: `karencja/${karencja.zmiana.id}/${k.klucz}`, naglowek: k.naglowek, napis: karencja.napis, wiersze: w });
+        for (const z of w) {
+          if (widziane.has(z.id)) continue;
+          widziane.add(z.id);
+          kartyKarencji.push({ klucz: `karencja/${karencja.zmiana.id}/${z.id}`, naglowek: z.tytul || 'Checklista', podpis: k.podpis, napis: karencja.napis, wiersze: [z] });
+        }
       }
     }
     zlecBufor = new Map([].concat(...odbiory.values(), ...kartyKarencji.map(k => k.wiersze)).map(z => [z.id, z]));        // okno szczegółów pozycji czyta stąd
     if (okPoz.open) rysujPozycje();
     const kartaKarencji = k => `<article class="kafelek kolor-zolty ma-odbior karencja${odbiorKarty.get(k.klucz) === true ? ' odbior-otwarty' : ''}" data-klucz="${esc(k.klucz)}">
         <header><h3>${esc(k.naglowek)}</h3><span class="znacznik uwaga">Poprzednia zmiana</span></header>
+        ${k.podpis ? `<div class="podpis-karty slaby">${esc(k.podpis)}</div>` : ''}
         <div class="stan-zmiany">${esc(k.napis)}</div>
         <details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbiorKarty.get(k.klucz) === true ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${k.wiersze.length}</span></summary>
           <div class="lista">${k.wiersze.map(wierszZlecenia).join('')}</div></details>
       </article>`;
-    $('kafelki').innerHTML = mistrz.concat(kafelki).map(k => {
+    $('kafelki').innerHTML = karty.map(k => {
       const proc = k.wszystkie ? Math.round(k.zrobione * 100 / k.wszystkie) : 0;
       const stan = k.zamknieta ? 'Raport wysłany' : k.przyjecie && k.przyjecie.tekst ? k.przyjecie.tekst : k.wirtualna ? 'Nie otwarta' : (k.lider || 'Otwarta');
       const pod = podglady.get(k.klucz) || [], podOtwarty = pod.length > 0 && pozycjeKarty.get(k.klucz) === true;
@@ -422,19 +431,20 @@
       const odb = odbiory.get(k.klucz) || [], odbOtwarty = odb.length && odbiorKarty.get(k.klucz) === true;
       return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}${odb.length ? ' ma-odbior' : ''}${odbOtwarty ? ' odbior-otwarty' : ''}${pod.length ? ' ma-podglad' : ''}${podOtwarty ? ' pozycje-otwarte' : ''}" data-klucz="${esc(k.klucz)}">
         <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">⛔ Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
+        ${k.podpis ? `<div class="podpis-karty slaby">${esc(k.podpis)}</div>` : ''}
         <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${k.wszystkie}" aria-valuenow="${k.zrobione}"><span style="width:${proc}%"></span></div>
         <div class="liczby"><b>${k.zrobione}/${k.wszystkie}</b>${k.najblizsza ? ` <span>Następne ${esc(k.najblizsza.godz)} · ${esc(k.najblizsza.nazwa)}</span>` : k.wszystkie ? ' <span>Wszystko zrobione</span>' : ' <span>Brak planu</span>'}</div>
         ${k.opoznione.length ? `<ul class="opoznione" aria-label="Opóźnione">${opoz}</ul>` : ''}
         ${pod.length ? `<button type="button" class="maly karta-pozycje-przycisk" data-karta-pozycje aria-expanded="${podOtwarty}" aria-controls="pk-${esc(k.klucz)}">Wszystkie pozycje · ${podZrobione}/${podWszystkie} <span aria-hidden="true">${podOtwarty ? '▴' : '▾'}</span></button>` : ''}
-        ${podOtwarty ? `<div class="karta-pozycje" id="pk-${esc(k.klucz)}">${chipyPozycji(pod, filtrPozycjiKarty.get(k.klucz) || 'wszystkie')}${pod.map(z => podgladPozycji(z, pod.length > 1, filtrPozycjiKarty.get(k.klucz) || 'wszystkie')).join('')}</div>` : ''}
+        ${podOtwarty ? `<div class="karta-pozycje" id="pk-${esc(k.klucz)}">${chipyPozycji(pod, filtrPozycjiKarty.get(k.klucz) || 'wszystkie')}${pod.map(z => podgladPozycji(z, pod.length > 1, filtrPozycjiKarty.get(k.klucz) || 'wszystkie', mozeOdbierac)).join('')}</div>` : ''}
         ${odb.length ? `<details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbOtwarty ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${odb.length}</span></summary>
           <div class="lista">${odb.map(wierszZlecenia).join('')}</div></details>` : ''}
       </article>`;
     }).concat(kartyKarencji.map(kartaKarencji)).join('') || `<p class="pusto">${esc(W.pustyObchod(d.slowniki, d.zmiana))}</p>`;
     ladujZdjeciaLeniwie($('kafelki'));
     // Kafelek mistrza liczy się do „Opóźnione obchody” na Pulpicie tak samo jak kafelek linii (czerwony = po terminie).
-    return mistrz.concat(kafelki);
+    return karty;
   }
 
   /* Lista wszystkich pozycji jednej checklisty w karcie obchodu: zrobione (z dowodami), po terminie i do zrobienia. */
@@ -444,13 +454,14 @@
     return `<div class="chipy karta-chipy" role="group" aria-label="Pokaż pozycje">${W.FILTRY_POZYCJI.map(([kod, nazwa]) =>
       `<button type="button" class="chip maly" data-karta-filtr="${kod}" aria-pressed="${kod === wybrany}">${esc(nazwa)} · ${licz(kod)}</button>`).join('')}</div>`;
   }
-  function podgladPozycji(z, zTytulem, filtr) {
+  function podgladPozycji(z, zTytulem, filtr, mozeOdbierac) {
     const ZN = { wykonana: '✓', pominieta: '–', czeka: '○' };
     const widoczne = z.pozycje.filter(p => W.pozycjaPasujeDoFiltru(p, filtr || 'wszystkie'));
     if (!widoczne.length) return zTytulem ? '' : '<p class="slaby">Brak pozycji w tym filtrze.</p>';
-    return `<section class="karta-pozycje-lista">${zTytulem ? `<div class="slaby">${esc(z.tytul)}</div>` : ''}<ul>${widoczne.map(p => `
+    const wolno = ODBIOR_POZYCJI_W_KARCIE && !!mozeOdbierac && z.moznaOdebrac && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
+    return `<section class="karta-pozycje-lista" data-id="${esc(z.id)}">${zTytulem ? `<div class="slaby">${esc(z.tytul)}</div>` : ''}<ul>${widoczne.map(p => `
       <li class="stan-${esc(p.stan)}${p.spozniona ? ' spozniona' : ''}"><div class="poz-wiersz"><span aria-hidden="true">${ZN[p.stan]}</span> ${p.godz ? `<span class="slaby">${esc(p.godz)}</span> ` : ''}${esc(p.nazwa)}${
-        p.spozniona ? ' <span class="znacznik alarm">po terminie</span>' : p.stan === 'czeka' ? ' <span class="slaby">do zrobienia</span>' : ''}</div>${p.stan !== 'czeka' ? dowodyPozycji(z, p) : ''}</li>`).join('')}</ul></section>`;
+        p.spozniona ? ' <span class="znacznik alarm">po terminie</span>' : p.stan === 'czeka' ? ' <span class="slaby">do zrobienia</span>' : ''}${przyciskiPozycjiHtml(z, p, wolno)}</div>${p.stan !== 'czeka' ? dowodyPozycji(z, p) : ''}</li>`).join('')}</ul></section>`;
   }
 
   function rysujAwarie(wiersze) {
@@ -1089,6 +1100,13 @@
     return widoczne.join('') + p('wiecej', `Więcej ${otwarte ? '▴' : '▾'}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
       + (otwarte ? ukryte.join('') : '');
   }
+  /* Przyciski Odbierz / Zwróć przy ZROBIONEJ pozycji (albo znacznik „Odebrana”) — jedno miejsce dla wiersza zlecenia („Do odbioru”) i dla rozwiniętej
+     karty obchodu (checklista jeszcze nie oddana, właściciel 2026-11-18). `wolno` = czy ta osoba może teraz odbierać; zwrot ukryty w karencji D88. */
+  function przyciskiPozycjiHtml(z, p, wolno) {
+    if (!wolno || p.stan === 'czeka') return '';
+    return p.odebrana ? `<span class="znacznik ok poz-odebrana" title="${esc(p.odebranaPrzez ? `Odebrana przez ${p.odebranaPrzez}${p.odebranaGodz ? `, ${p.odebranaGodz}` : ''}` : 'Odebrana')}">Odebrana</span>`
+      : `<span class="poz-przyciski"><button type="button" class="maly glowny" data-akcja="poz-odbierz" data-pozycja="${esc(p.id)}" title="Odbierz tę pozycję" aria-label="Odbierz: ${esc(p.nazwa)}">Odbierz</button>${z.zwrotDozwolony === false ? '' : `<button type="button" class="maly" data-akcja="poz-zwroc" data-pozycja="${esc(p.id)}" title="Wróci do działu tylko ta pozycja" aria-label="Zwróć: ${esc(p.nazwa)}">Zwróć</button>`}</span>`;
+  }
   /* Dowody jednej pozycji checklisty (kto i kiedy, notatka, zdjęcia, powód pominięcia) — tylko odczyt. Ten sam kod w wierszu zlecenia
      (Do odbioru, wgląd w zamknięte) i w podglądzie pozycji w karcie obchodu na Pulpicie. */
   function dowodyPozycji(z, p) {
@@ -1123,9 +1141,7 @@
     const wglad = kier && z.prawoOdbioru && !z.doZamkniecia && z.pozycje.length > 0 && !z.otwarte;
     const pokazDowody = p => p.stan !== 'czeka' && ((klik && poz) || wglad);
     const dowody = p => dowodyPozycji(z, p);
-    const przyciskiPozycji = p => !poz || p.stan === 'czeka' ? ''
-      : p.odebrana ? `<span class="znacznik ok poz-odebrana" title="${esc(p.odebranaPrzez ? `Odebrana przez ${p.odebranaPrzez}${p.odebranaGodz ? `, ${p.odebranaGodz}` : ''}` : 'Odebrana')}">Odebrana</span>`
-      : `<span class="poz-przyciski"><button type="button" class="maly glowny" data-akcja="poz-odbierz" data-pozycja="${esc(p.id)}" title="Odbierz tę pozycję" aria-label="Odbierz: ${esc(p.nazwa)}">Odbierz</button>${z.zwrotDozwolony === false ? '' : `<button type="button" class="maly" data-akcja="poz-zwroc" data-pozycja="${esc(p.id)}" title="Wróci do działu tylko ta pozycja" aria-label="Zwróć: ${esc(p.nazwa)}">Zwróć</button>`}</span>`;
+    const przyciskiPozycji = p => przyciskiPozycjiHtml(z, p, poz);
     const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? '✓✓' : ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${pokazDowody(p) ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !pokazDowody(p) ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
     const naglowekPozycji = z.odbior && z.doZamkniecia && z.status === 'wykonane'
       ? `Pozycje (${z.odbior.odebrane}/${z.odbior.wszystkie} odebrane)` : `Pozycje (${z.checklista ? z.checklista.gotowe : 0}/${z.checklista ? z.checklista.wszystkie : 0})${wglad ? ' — kto, kiedy, notatki i zdjęcia' : ''}`;
@@ -1164,6 +1180,9 @@
           ${/* Dowody zwykłego zlecenia (bez pozycji) — jak „Do odbioru”, tylko do odczytu: kto i kiedy zrobił i odebrał (notatka i zdjęcia niżej). */
             kier && z.prawoOdbioru && !z.pozycje.length && z.wykonanoPrzez && !z.otwarte
               ? `<div class="slaby poz-dowody">Zrobione przez ${esc(z.wykonanoPrzez)}${z.wykonanoKiedy ? ` ${esc(z.wykonanoKiedy)}` : ''}${z.odebranoKiedy && z.status === 'zamkniete' ? ` · odebrane ${esc(z.odebranoKiedy)}` : ''}</div>` : ''}
+          ${/* „Nie mogę (N)” — kto, kiedy i powód każdego odrzucenia (zwarte, rozwijane); tylko do odczytu dla odbierających, na zamkniętych/odebranych. */
+            kier && z.prawoOdbioru && !z.otwarte && z.odrzucenia && z.odrzucenia.length
+              ? `<details class="slaby odrzucenia"><summary>Nie mogę (${z.odrzucenia.length})</summary><ul>${z.odrzucenia.map(o => `<li>${esc(o.kto)}${o.kiedy ? `, ${esc(o.kiedy)}` : ''}: ${esc(o.powod)}</li>`).join('')}</ul></details>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
           ${z.notatka ? `<div class="odpowiedz">${ik('notatka')}${esc(z.notatka)}</div>` : ''}
           ${z.uwagiZwrotu && (z.otwarte || (kier && z.prawoOdbioru)) ? `<div class="slaby">Zwrócone${z.zwrotKiedy && !z.otwarte ? ` (${esc(z.zwrotKiedy)})` : ''}: ${esc(z.uwagiZwrotu)}</div>` : ''}
@@ -1299,6 +1318,9 @@
      hub ma siatkę bezpieczeństwa (porzadkuj_odebrane) na wypadek, gdyby to zamknięcie się nie wysłało. */
   async function odbierzPozycje(id, pozycja) {
     await hala.zapisz('zlecenie.pozycja_odebrana', id, { pozycja });
+    // Toast sukcesu tylko, gdy stan (ta sama reguła co w hubie) naprawdę przyjął odbiór — inaczej widać tylko komunikat o odrzuceniu zapisu.
+    const po = hala.obiekt('zlecenie', id);
+    if (!((Hala.odbiorPozycji((po && po.dane) || {}).pozycje[pozycja] || {}).odebrana)) return;
     if (W.czyZamknacPoOdbiorze(hala.obiekt('zlecenie', id))) {
       const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.zamkniete', id, {},
         { tekst: 'Odebrane wszystkie pozycje — zlecenie zamknięte.', komunikat, cofnieto: t => komunikat(t, 'ok') });
@@ -1312,12 +1334,17 @@
   async function zwrocPozycje(id, pozycja) {
     const z = hala.obiekt('zlecenie', id);
     const p = ((z && z.dane && z.dane.pozycje) || []).find(x => x.id === pozycja);
-    const uwagi = await Panel.zapytajTekst({ tytul: 'Zwrócić pozycję do działu?', etykieta: `„${(p && p.nazwa) || 'Pozycja'}” — co trzeba poprawić? Wróci tylko ta pozycja.`,
+    // Checklista jeszcze nie oddana (nowe/przyjęte): zlecenie zostaje u osoby, wraca tylko pozycja — nie „do działu”.
+    const otwarta = !!z && z.status !== 'wykonane';
+    const uwagi = await Panel.zapytajTekst({ tytul: otwarta ? 'Zwrócić pozycję do poprawy?' : 'Zwrócić pozycję do działu?',
+                                             etykieta: `„${(p && p.nazwa) || 'Pozycja'}” — co trzeba poprawić? Wróci tylko ta pozycja${otwarta ? ', zlecenie zostaje u osoby' : ''}.`,
                                              wymagany: true, przycisk: 'Zwróć pozycję' });
     if (!uwagi) return;
     if (uwagi.length > 2000) { komunikat(`Powód za długi: ${uwagi.length} znaków, najwyżej 2000. Skróć opis.`, 'blad'); return; }
     await hala.zapisz('zlecenie.pozycja_zwrocona', id, { pozycja, uwagi });
-    komunikat('Pozycja wróciła do działu — pozostałe zostają odebrane', 'ok');
+    const po = hala.obiekt('zlecenie', id);
+    if (!((Hala.odbiorPozycji((po && po.dane) || {}).pozycje[pozycja] || {}).zwrocona)) return;       // odrzucone przez regułę — bez toastu sukcesu
+    komunikat(otwarta ? 'Pozycja wraca do poprawy — zlecenie zostaje u osoby' : 'Pozycja wróciła do działu — pozostałe zostają odebrane', 'ok');
   }
 
   async function akcjaZlecenia(b, id) {

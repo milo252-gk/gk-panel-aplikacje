@@ -94,13 +94,33 @@
      Mistrz działa na cały zakład, więc lista to wszystkie zlecenia działu „mistrz” tej zmiany (checklistaZmiany bez linii).
      Kafelek ma ten sam kształt, kolory (kolorChecklisty) i pola co kafelek lidera (rysujKafelki). Brak zlecenia mistrza na
      tę zmianę → brak kafelka (zakład bez checklist mistrza nic nie widzi). Awarii i „Stoi” nie liczymy — to sprawa linii. */
-  function obchodyMistrza({ pracownicy, zmiana, teraz, prog, zlecenia }) {
+  /* Działy z własną kartą obchodu na Pulpicie (właściciel 2026-11-18): dane-napędzane — karta pojawia się tylko, gdy dział ma na bieżącą
+     zmianę zlecenia-checklisty (z pozycjami). Kolejność: mistrz, UR, KJ, brygadzista SP, potem karty lidera (linie). Dział „brygadzista-sp”
+     (Strefa Płyt, aplikacja Lider) jest obsłużony po kodzie; musi go jeszcze mieć kontrakt/hub (stale.dzialy) — bez tego nie powstaną zlecenia. */
+  const DZIALY_OBCHODOW = [['mistrz', 'Checklista mistrza', 'Mistrz'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
+                           ['brygadzista-sp', 'Checklista brygadzisty SP', 'Brygadzista SP']];
+  function obchodyMistrza(arg) { return obchodyDzialow(Object.assign({}, arg, { tylko: ['mistrz'] })); }
+  /* Karty obchodów działów innych niż lider. `ja` + `stale`: kierownik UR/KJ widzi tylko kartę swojego działu (Hala.dzialyKierownika),
+     kierownik zakładu i admin wszystkie. `tylko` — zawężenie kodów (test, mistrz). */
+  function obchodyDzialow({ pracownicy, zmiana, teraz, prog, zlecenia, ja, stale, tylko }) {
     if (!zmiana) return [];
-    const lista = H().checklistaZmiany(bezKopiiLiniiMistrza(zlecenia), null, zmiana, 'mistrz');
-    if (!lista.dane.pozycje.length) return [];
+    const role = (ja && ja.role) || [];
+    const zakres = ja && H().dzialyKierownika ? H().dzialyKierownika(role, (stale && stale.dzialy) || []) : null;
+    const wynik = [];
+    for (const [dzial, naglowek, nazwa] of DZIALY_OBCHODOW) {
+      if (tylko && !tylko.includes(dzial)) continue;
+      if (zakres && zakres.length && !zakres.includes(dzial)) continue;
+      const k = obchodDzialu({ dzial, naglowek, nazwa, pracownicy, zmiana, teraz, prog, zlecenia });
+      if (k) wynik.push(k);
+    }
+    return wynik;
+  }
+  function obchodDzialu({ dzial, naglowek, nazwa, pracownicy, zmiana, teraz, prog, zlecenia }) {
+    const lista = H().checklistaZmiany(dzial === 'mistrz' ? bezKopiiLiniiMistrza(zlecenia) : zlecenia, null, zmiana, dzial);
+    if (!lista.dane.pozycje.length) return null;
     const k = H().kolorChecklisty(lista, teraz, prog);
-    return [{
-      linia: null, nazwa: 'Mistrz', klucz: `mistrz/${zmiana.id}`, naglowek: 'Checklista mistrza',
+    return {
+      dzial, linia: null, nazwa, klucz: `${dzial}/${zmiana.id}`, naglowek,
       kolor: k.kolor, zrobione: k.zrobione, wszystkie: k.wszystkie,
       przyjecie: przyjecieListy(lista, pracownicy),
       lider: nazwaPracownika(pracownicy, lista.zlecenia.map(z => (z.dane || {}).przyjal).find(Boolean)),
@@ -108,7 +128,7 @@
                                    zaMin: Math.max(0, Math.round((Date.parse(k.najblizsza.termin) - teraz) / MIN)) } : null,
       opoznione: k.opoznione.map(p => ({ nazwa: p.nazwa, godz: godzina(p.termin) })),
       awarie: 0, zatrzymania: 0,
-    }];
+    };
   }
 
   /* Kafelek na linię. Lider, który nie otworzył zmiany, nie wysłał jeszcze migawki
@@ -444,6 +464,9 @@
         wykonanoPrzez: d.wykonal ? nazwaPracownika(pracownicy, d.wykonal) : null,
         wykonanoKiedy: d.czas_wykonania ? `${dataKrotka(d.czas_wykonania)} ${godzina(d.czas_wykonania)}` : null,
         odebranoKiedy: d.czas_zamkniecia ? `${dataKrotka(d.czas_zamkniecia)} ${godzina(d.czas_zamkniecia)}` : null,
+        // Historia powodów „Nie mogę” (hub 1.28: dane.odrzucenia = [{powod, autor, czas}], od najstarszego, max 10; starsze zlecenia bez pola).
+        odrzucenia: (Array.isArray(d.odrzucenia) ? d.odrzucenia : []).filter(o => o && o.powod).map(o => ({
+          powod: String(o.powod), kto: nazwaPracownika(pracownicy, o.autor), kiedy: o.czas ? `${dataKrotka(o.czas)} ${godzina(o.czas)}` : '' })),
         zwrotKiedy: d.czas_zwrotu ? `${dataKrotka(d.czas_zwrotu)} ${godzina(d.czas_zwrotu)}` : null,
         wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true,
         wymagajSkanu: d.wymagaj_skanu === true, zeskanowano: !!d.skan_maszyny,
@@ -472,7 +495,8 @@
         // D87: ile pozycji odebrano i ile czeka (zlecenie „wykonane” z checklistą odbiera się też pozycja po pozycji).
         odbior: Array.isArray(d.pozycje) && d.pozycje.length ? { wszystkie: odbior.wszystkie, odebrane: odbior.odebrane, doOdbioru: odbior.doOdbioru.length,
           zwrocone: odbior.zwrocone.length, pelne: odbior.pelne } : null,
-        mozeOdbieracPozycje: z.status === 'wykonane' && Array.isArray(d.pozycje) && d.pozycje.length > 0,
+        // Hub 1.29: pozycje odbiera się także w OTWARTEJ checkliście (nowe/przyjęte), nie tylko po oddaniu — reguła z klienta (Hala.STATUSY_ODBIORU_POZYCJI).
+        mozeOdbieracPozycje: H().mozeOdbieracPozycje ? H().mozeOdbieracPozycje(z) : (z.status === 'wykonane' && Array.isArray(d.pozycje) && d.pozycje.length > 0),
         stale: d.stale || null, staleNazwa: d.stale ? ((szablony[d.stale] || {}).tytul || d.stale) : null,
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
@@ -928,7 +952,7 @@
       }
       // Co faktycznie zlecono tego dnia (dzień, który już był albo trwa): numer, status — kierownik widzi, co się stało z zaplanowanym.
       const zlecone = (zlecenia || []).filter(z => z.status !== 'zaplanowane' && z.dane && z.dane.czas_zlecenia && dzienZakladu(Date.parse(z.dane.czas_zlecenia)) === c.data)
-        .map(z => ({ id: z.id, numer: z.numer || '—', tytul: z.dane.tytul || '', status: z.etykieta || z.status, godz: godzina(Date.parse(z.dane.czas_zlecenia)),
+        .map(z => ({ id: z.id, numer: z.numer || '—', tytul: z.dane.tytul || '', status: etykietaZlecenia(z, z.dane), godz: godzina(Date.parse(z.dane.czas_zlecenia)),
                      checklista: Array.isArray(z.dane.pozycje) && z.dane.pozycje.length > 0, stale: !!z.dane.stale,
                      postep: Array.isArray(z.dane.pozycje) && z.dane.pozycje.length ? H().postepPozycji(z.dane) : null }))
         .sort((a, b) => (a.godz < b.godz ? -1 : 1));
@@ -1838,7 +1862,7 @@
   const ZRODLA_LOGOWAN = { zaklad: 'sieć zakładu', internet: 'internet', lokalny: 'ten komputer' };
   const PROGRAMY_LOGOWAN = { panel: 'Panel', lider: 'Lider', ur: 'Utrzymanie Ruchu', kj: 'Kontrola Jakości', trasy: 'Trasy', flota: 'Flota',
                              szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
-  const NAZWY_ROL_LOGOWAN = { admin: 'administrator', kierownik: 'kierownik zakładu', biuro: 'biuro', lider: 'lider', mistrz: 'mistrz', mechanik: 'mechanik',
+  const NAZWY_ROL_LOGOWAN = { admin: 'administrator', kierownik: 'kierownik zakładu', biuro: 'biuro', lider: 'lider', mistrz: 'mistrz', brygadzista_sp: 'brygadzista SP', mechanik: 'mechanik',
                               kontroler: 'kontroler', kierowca: 'kierowca', 'kierownik-ur': 'kierownik UR', 'kierownik-kj': 'kierownik KJ' };
   function logowania(odp) {
     const o = odp || {};
@@ -2970,7 +2994,7 @@
      (bezKopiiLiniiMistrza), linia pomijana; dzial 'produkcja' (lider) — linia karty. Te same wiersze co w Zlecenia → Do odbioru
      (zlecenia() z filtrem 'do-zamkniecia'), więc te same dowody i przyciski. Zmiana zlecenia jak H().zlecenieZmiany (wazne_do
      = koniec zmiany; bez niego — czas zlecenia w oknie zmiany). */
-  function odbiorObchodu({ zlecenia: lista, zmiana, linia, dzial, slowniki, pracownicy, stale, teraz, ja }) {
+  function odbiorObchodu({ zlecenia: lista, zmiana, linia, dzial, slowniki, pracownicy, stale, teraz, ja, zlecenieId }) {
     if (!zmiana) return [];
     const dz = dzial || 'produkcja';
     const start = Date.parse(zmiana.od), koniec = Date.parse(zmiana.do);
@@ -2982,10 +3006,64 @@
     const pasujace = baza.filter(z => {
       const d = (z && z.dane) || {};
       return d.dzial === dz && Array.isArray(d.pozycje) && d.pozycje.length > 0 && DO_ZAMKNIECIA.has(z.status)
-        && !(d.linia && linia && d.linia !== linia) && naZmianie(d);
+        && !(d.linia && linia && d.linia !== linia) && naZmianie(d) && (!zlecenieId || z.id === zlecenieId);
     });
     return zlecenia({ zlecenia: pasujace, slowniki, pracownicy, stale, teraz, filtr: 'do-zamkniecia', ja })
       .filter(z => !z.czesc && z.prawoOdbioru && (z.moznaOdebrac || z.odbiorZakonczony));
+  }
+
+  /* Karty obchodów na Pulpicie — JEDNA KARTA NA KAŻDĄ CHECKLISTĘ (właściciel 2026-11-18): tytuł = nazwa checklisty (tytuł zlecenia z huba),
+     pod nim podpis działu („Mistrz”, „Lider · Linia 1”, „Brygadzista SP”, „UR”, „KJ”). Kolejność: mistrz, lider (linie jak dotąd), brygadzista SP,
+     UR, KJ; w obrębie działu wg najwcześniejszego terminu pozycji i nazwy. Linia lidera bez żadnej checklisty zostaje jedną kartą jak dawniej
+     (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Kierownik UR/KJ widzi z kart działów tylko swój. */
+  const KOLEJNOSC_KART = ['mistrz', 'produkcja', 'brygadzista-sp', 'ur', 'kj'];
+  function obchodyKarty({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia, ja }) {
+    if (!zmiana) return [];
+    const liniowe = obchody({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia });
+    const wiele = wieleLinii(slowniki);
+    const role = (ja && ja.role) || [];
+    const zakres = ja && H().dzialyKierownika ? H().dzialyKierownika(role, (stale && stale.dzialy) || []) : null;
+    const podpisDzialu = new Map(DZIALY_OBCHODOW.map(([kod, , nazwa]) => [kod, nazwa]));
+    const najwczesniej = z => Math.min(...((z.dane || {}).pozycje || []).map(p => Date.parse(p.termin)).filter(x => !isNaN(x)), Infinity);
+    const sortuj = lista => lista.slice().sort((a, b) => (najwczesniej(a) - najwczesniej(b)) || String((a.dane || {}).tytul || '').localeCompare(String((b.dane || {}).tytul || ''), 'pl'));
+    const maPozycje = z => { const d = (z && z.dane) || {}; return Array.isArray(d.pozycje) && d.pozycje.length > 0; };
+    const karta = (z, dzial, kodLinii, podpis, baza) => {
+      const lista = H().checklistaZmiany([z], kodLinii, zmiana, dzial);
+      if (!lista.dane.pozycje.length) return null;
+      const k = H().kolorChecklisty(lista, teraz, prog);
+      return Object.assign({}, baza || {}, {
+        dzial, linia: kodLinii, zlecenieId: z.id, nazwa: podpis, podpis, klucz: `${dzial}/${kodLinii || '-'}/${z.id}`,
+        naglowek: String((z.dane || {}).tytul || '').trim() || 'Checklista',
+        kolor: k.kolor, zrobione: k.zrobione, wszystkie: k.wszystkie,
+        przyjecie: przyjecieListy(lista, pracownicy),
+        lider: nazwaPracownika(pracownicy, lista.zlecenia.map(x => (x.dane || {}).przyjal).find(Boolean)),
+        najblizsza: k.najblizsza ? { nazwa: k.najblizsza.nazwa, godz: godzina(k.najblizsza.termin),
+                                     zaMin: Math.max(0, Math.round((Date.parse(k.najblizsza.termin) - teraz) / MIN)) } : null,
+        opoznione: k.opoznione.map(p => ({ nazwa: p.nazwa, godz: godzina(p.termin) })),
+      });
+    };
+    const wynik = [];
+    for (const dzial of KOLEJNOSC_KART) {
+      if (dzial === 'produkcja') {
+        for (const lin of liniowe) {
+          const podpis = wiele ? `Lider · ${lin.nazwa}` : 'Lider';
+          const checklisty = sortuj((zlecenia || []).filter(z => ((z.dane || {}).dzial === 'produkcja') && maPozycje(z)
+            && H().checklistaZmiany([z], lin.linia, zmiana, 'produkcja').zlecenia.length > 0));
+          const karty = checklisty.map((z, i) => karta(z, 'produkcja', lin.linia, podpis,
+            Object.assign({}, lin, i === 0 ? {} : { awarie: 0, zatrzymania: 0 }))).filter(Boolean);
+          if (karty.length) wynik.push(...karty);
+          else wynik.push(Object.assign({}, lin, { dzial: 'produkcja', zlecenieId: null, podpis, naglowek: wiele ? lin.nazwa : 'Obchód' }));
+        }
+        continue;
+      }
+      if (zakres && zakres.length && !zakres.includes(dzial)) continue;
+      const baza = dzial === 'mistrz' ? bezKopiiLiniiMistrza(zlecenia) : (zlecenia || []);
+      for (const z of sortuj(baza.filter(x => ((x.dane || {}).dzial === dzial) && maPozycje(x)))) {
+        const k = karta(z, dzial, null, podpisDzialu.get(dzial) || dzial, { awarie: 0, zatrzymania: 0 });
+        if (k) wynik.push(k);
+      }
+    }
+    return wynik;
   }
 
   /* Podgląd WSZYSTKICH pozycji checklisty w karcie obchodu PRZED oddaniem (właściciel 2026-11-18, zrzut z produkcji: karta pokazywała
@@ -3005,7 +3083,7 @@
       default: return true;
     }
   }
-  function pozycjeObchodu({ zlecenia: lista, zmiana, linia, dzial, slowniki, pracownicy, stale, teraz, ja }) {
+  function pozycjeObchodu({ zlecenia: lista, zmiana, linia, dzial, slowniki, pracownicy, stale, teraz, ja, zlecenieId }) {
     if (!zmiana) return [];
     const dz = dzial || 'produkcja';
     const start = Date.parse(zmiana.od), koniec = Date.parse(zmiana.do), nowMs = teraz === undefined ? Date.now() : teraz;
@@ -3017,7 +3095,7 @@
     const pasujace = baza.filter(z => {
       const d = (z && z.dane) || {};
       return d.dzial === dz && Array.isArray(d.pozycje) && d.pozycje.length > 0 && OTWARTE.has(z.status)
-        && !(d.linia && linia && d.linia !== linia) && naZmianie(d);
+        && !(d.linia && linia && d.linia !== linia) && naZmianie(d) && (!zlecenieId || z.id === zlecenieId);
     });
     return zlecenia({ zlecenia: pasujace, slowniki, pracownicy, stale, teraz, filtr: 'wszystkie', ja })
       .filter(z => !z.czesc && z.prawoOdbioru && z.pozycje.length)
@@ -3084,7 +3162,7 @@
   }
 
   const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
+                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
