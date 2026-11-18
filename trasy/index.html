@@ -55,26 +55,26 @@
 })();
 </script>
 <title>GK Trasy</title>
-<link rel="manifest" href="manifest.webmanifest?v=trasex-b741e7d50675">
-<link rel="icon" href="ikona.svg?v=trasex-b741e7d50675">
+<link rel="manifest" href="manifest.webmanifest?v=trasex-a82dad280e24">
+<link rel="icon" href="ikona.svg?v=trasex-a82dad280e24">
 <!-- iPhone nie bierze ikony z manifestu ani z SVG — na ekranie poczatkowym
      pokazywal zrzut strony. Potrzebny jest PNG 180x180. -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=trasex-b741e7d50675">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=trasex-a82dad280e24">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GK Trasy">
 <!-- Ciemny pasek z bialym tekstem — jak naglowek aplikacji (theme-color). -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="vendor/leaflet.css?v=trasex-b741e7d50675">
-<link rel="stylesheet" href="style.css?v=trasex-b741e7d50675">
-<link rel="stylesheet" href="wskazniki.css?v=trasex-b741e7d50675">
+<link rel="stylesheet" href="vendor/leaflet.css?v=trasex-a82dad280e24">
+<link rel="stylesheet" href="style.css?v=trasex-a82dad280e24">
+<link rel="stylesheet" href="wskazniki.css?v=trasex-a82dad280e24">
 </head>
 <body>
 
 <!-- ===================================================== EKRAN LOGOWANIA -->
 <div id="ekran-logowania" class="logowanie ukryty">
   <form class="karta-logowania" id="form-logowania">
-    <img class="znak-logo" src="logo-gkf.png?v=trasex-b741e7d50675"
+    <img class="znak-logo" src="logo-gkf.png?v=trasex-a82dad280e24"
          alt="GK Factory" width="666" height="374">
     <h1>GK Trasy</h1>
     <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
@@ -128,7 +128,7 @@
 
   <nav class="menu" id="menu">
     <div class="menu-naglowek">
-      <img class="menu-logo" src="logo-gkf.png?v=trasex-b741e7d50675" alt="GK Factory"
+      <img class="menu-logo" src="logo-gkf.png?v=trasex-a82dad280e24" alt="GK Factory"
            width="666" height="374">
       <div class="menu-imie" id="menu-imie"></div>
       <!-- Pod imieniem nazwa aplikacji, jak w aplikacjach hali (hala-menu-kto); rola jest w Moim koncie. -->
@@ -194,31 +194,31 @@
 <div id="komunikaty" class="komunikaty"></div>
 <div id="zajetosc" class="zajetosc ukryty"><div class="kolo"></div></div>
 
-<script src="vendor/leaflet.js?v=trasex-b741e7d50675"></script>
+<script src="vendor/leaflet.js?v=trasex-a82dad280e24"></script>
 <!-- app.js pierwszy: to on zaklada wspolny 'stan' i rejestr EKRANY,
      z ktorych korzystaja biuro.js i kierowca.js. -->
 <!-- Wspólne dźwięki GK (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js, który je podpina. -->
-<script src="gk-dzwieki.js?v=trasex-b741e7d50675"></script>
+<script src="gk-dzwieki.js?v=trasex-a82dad280e24"></script>
 <!-- Wspólny zestaw ikon liniowych menu (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js (menuDlaRoli). -->
-<script src="gk-ikony.js?v=trasex-b741e7d50675"></script>
-<script src="kolejka.js?v=trasex-b741e7d50675"></script>
-<script src="gk-offline.js?v=trasex-b741e7d50675"></script>
-<script src="mapa.js?v=trasex-b741e7d50675"></script>
-<script src="podpis.js?v=trasex-b741e7d50675"></script>
-<script src="skrot.js?v=trasex-b741e7d50675"></script>
-<script src="app.js?v=trasex-b741e7d50675"></script>
-<script src="eta.js?v=trasex-b741e7d50675"></script>
-<script src="dowody.js?v=trasex-b741e7d50675"></script>
-<script src="biuro.js?v=trasex-b741e7d50675"></script>
-<script src="import.js?v=trasex-b741e7d50675"></script>
-<script src="firma.js?v=trasex-b741e7d50675"></script>
-<script src="szablony.js?v=trasex-b741e7d50675"></script>
-<script src="zaproszenie.js?v=trasex-b741e7d50675"></script>
+<script src="gk-ikony.js?v=trasex-a82dad280e24"></script>
+<script src="kolejka.js?v=trasex-a82dad280e24"></script>
+<script src="gk-offline.js?v=trasex-a82dad280e24"></script>
+<script src="mapa.js?v=trasex-a82dad280e24"></script>
+<script src="podpis.js?v=trasex-a82dad280e24"></script>
+<script src="skrot.js?v=trasex-a82dad280e24"></script>
+<script src="app.js?v=trasex-a82dad280e24"></script>
+<script src="eta.js?v=trasex-a82dad280e24"></script>
+<script src="dowody.js?v=trasex-a82dad280e24"></script>
+<script src="biuro.js?v=trasex-a82dad280e24"></script>
+<script src="import.js?v=trasex-a82dad280e24"></script>
+<script src="firma.js?v=trasex-a82dad280e24"></script>
+<script src="szablony.js?v=trasex-a82dad280e24"></script>
+<script src="zaproszenie.js?v=trasex-a82dad280e24"></script>
 <!-- 2026-11-18: wskaźniki dostaw, kalendarz miesiąca, role i uprawnienia, „i” z definicjami (nowe pliki, tylko odczyt). -->
-<script src="miary.js?v=trasex-b741e7d50675"></script>
-<script src="wskazniki.js?v=trasex-b741e7d50675"></script>
-<script src="miesiac.js?v=trasex-b741e7d50675"></script>
-<script src="role.js?v=trasex-b741e7d50675"></script>
-<script src="kierowca.js?v=trasex-b741e7d50675"></script>
+<script src="miary.js?v=trasex-a82dad280e24"></script>
+<script src="wskazniki.js?v=trasex-a82dad280e24"></script>
+<script src="miesiac.js?v=trasex-a82dad280e24"></script>
+<script src="role.js?v=trasex-a82dad280e24"></script>
+<script src="kierowca.js?v=trasex-a82dad280e24"></script>
 </body>
 </html>

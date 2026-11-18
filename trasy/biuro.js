@@ -73,10 +73,11 @@ EKRANY.pulpit = {
 
       <h2 style="margin-top:20px">Gdzie są auta
         <span class="male slaby" style="font-weight:400">
-          ${p.ostatnie_pozycje.length ? '' : '— żaden kierowca nie udostępnia teraz położenia'}</span>
+          ${p.ostatnie_pozycje.length ? '' : (p.ikol ? '— brak dziś pozycji z lokalizatorów' : '— żaden kierowca nie udostępnia teraz położenia')}</span>
       </h2>
-      ${p.ostatnie_pozycje.length ? '' : `<div class="male slaby mapa-podpowiedz">Auta pojawią się na mapie, gdy kierowca włączy
-        udostępnianie położenia w „Mojej trasie”. Do tego czasu mapa jest zmniejszona.
+      ${p.ostatnie_pozycje.length ? '' : `<div class="male slaby mapa-podpowiedz">${p.ikol
+        ? 'Auta pojawią się na mapie, gdy lokalizator w aucie przekaże pozycję (Ustawienia → Zaawansowane → Lokalizatory w autach: przypisz lokalizator do kierowcy). Do tego czasu mapa jest zmniejszona.'
+        : 'Auta pojawią się na mapie, gdy kierowca włączy udostępnianie położenia w „Mojej trasie”. Do tego czasu mapa jest zmniejszona.'}
         <button type="button" class="maly" id="p-mapa-rozmiar" aria-expanded="false">Powiększ mapę</button></div>`}
       <div class="mapa${p.ostatnie_pozycje.length ? '' : ' zwinieta'}" id="p-mapa"></div>`;
 
@@ -141,16 +142,40 @@ EKRANY.pulpit = {
       if (dodatkowe.length) Mapa.dopasujWidok(mapa, punkty.concat(dodatkowe));
     }).catch(() => {});
     if (p.baza && !punkty.length) punkty.push(p.baza);
-    p.ostatnie_pozycje.forEach(poz => {
-      // przez moduł, nie przez Leaflet wprost — mapa może być od Google
-      Mapa.znacznikPozycji(mapa, [poz.lat, poz.lon],
-        `<b>${escHtml(poz.kierowca_imie)}</b><br>ostatnio: ${escHtml(poz.czas)}`
-        + `<br><span style="opacity:.7">${poz.zrodlo === 'lokalizator' ? 'lokalizator w aucie' : 'telefon kierowcy'}</span>`);
-      punkty.push([poz.lat, poz.lon]);
-    });
+    pulpitAuta = { mapa, znaczniki: {}, data };
+    rysujAutaNaMapie(p.ostatnie_pozycje);
+    p.ostatnie_pozycje.forEach(poz => punkty.push([poz.lat, poz.lon]));
     Mapa.dopasujWidok(mapa, punkty);
   },
 };
+
+/* Auta na mapie pulpitu. Wołane raz przy rysowaniu i potem co 30 s z odświeżania
+   „na żywo”: pinezka przesuwa się na nowe miejsce, nie znika i nie wraca. */
+let pulpitAuta = null;   // { mapa, znaczniki: { kierowca: pinezka }, data }
+
+function rysujAutaNaMapie(pozycje) {
+  if (!pulpitAuta) return;
+  const { mapa, znaczniki } = pulpitAuta;
+  const widziane = new Set();
+  pozycje.forEach(poz => {
+    widziane.add(String(poz.kierowca));
+    const dymek = `<b>${escHtml(poz.kierowca_imie)}</b><br>ostatnio: ${escHtml(poz.czas)}`
+      + `<br><span style="opacity:.7">${poz.zrodlo === 'lokalizator' ? 'lokalizator w aucie' : 'telefon kierowcy'}</span>`;
+    const jest = znaczniki[poz.kierowca];
+    // przez moduł, nie przez Leaflet wprost — mapa może być od Google
+    if (jest) Mapa.przesunZnacznik(jest, [poz.lat, poz.lon], dymek);
+    else znaczniki[poz.kierowca] = Mapa.znacznikPozycji(mapa, [poz.lat, poz.lon], dymek);
+  });
+  Object.keys(znaczniki).forEach(k => {
+    if (!widziane.has(k)) { Mapa.usunZnacznik(mapa, znaczniki[k]); delete znaczniki[k]; }
+  });
+}
+
+async function odswiezAutaNaMapie() {
+  if (!pulpitAuta) return;
+  const p = await API.get('/api/pulpit?data=' + pulpitAuta.data);
+  rysujAutaNaMapie(p.ostatnie_pozycje || []);
+}
 
 /* Pulpit: rząd kafelków liczb zamiast listy „Do zrobienia” (właściciel 2026-11-17: „upodobnij pulpity Tras i Panelu
    Kierownika”). Jak w Panelu: pokazujemy tylko kafelki z liczbą większą od zera, kolor mówi o wadze (czerwony =
@@ -262,6 +287,8 @@ const AKCESORIA_PULPITU = {
   przyjecie: { kierowca: x => x.kierowca_imie, auto: x => x.pojazd_nazwa, klient: x => x.klient_nazwa, czas: x => x.zamkniete_o },
   zatwierdzone: { kierowca: x => x.kierowca_imie, auto: x => x.pojazd_nazwa, klient: x => x.klient_nazwa, czas: x => x.przyjeto_o,
                   rodzaj: x => (x.przyjete_auto ? 'auto' : 'reczne') },
+  // „Trasy w toku”: element to wiersz z /api/tablica; klient — nazwy punktów, jeśli już je znamy (patrz klienciTrasZywo).
+  zywo: { kierowca: t => t.kierowca, auto: t => t.pojazd, klient: t => klienciTrasZywo(t), czas: t => t.start_o || t.wyjazd || '' },
   nieudane: trasy => {
     const po = new Map((trasy || []).map(t => [t.id, t]));
     return { kierowca: n => (po.get(n.trasa) || {}).kierowca_imie, auto: n => (po.get(n.trasa) || {}).pojazd_nazwa,
@@ -2391,6 +2418,10 @@ function kartaNaZywo(t) {
     ${(t.alerty || []).map(a => `<div class="male" style="margin-top:6px;color:${
       kolor[a.waga] || 'inherit'}"><b>${a.waga === 'pilne' ? '⛔' : a.waga === 'uwaga' ? '⚠' : 'ℹ'}</b>
       ${escHtml(a.tekst)}</div>`).join('')}
+    <details class="zaawansowane zywo-punkty" data-zywo-punkty="${t.id}">
+      <summary><span class="znak-zwiniecia">▸</span> Punkty trasy (${l.wszystkie || 0})</summary>
+      <div class="zywo-punkty-tresc male slaby">Wczytuję…</div>
+    </details>
     <div class="przyciski" style="margin-top:10px">
       <button class="maly" data-trasa-zywo="${t.id}">Otwórz trasę</button>
       ${b ? `<button class="maly" data-punkt-zywo="${b.id}" data-trasa="${t.id}">Szczegóły punktu</button>` : ''}
@@ -2406,11 +2437,18 @@ async function rysujZywo(cel, data) {
   const dane = await API.get('/api/tablica' + (data ? '?data=' + data : ''));
   const pilne = dane.trasy.reduce((s, t) =>
     s + (t.alerty || []).filter(a => a.waga === 'pilne').length, 0);
+  // Filtry Pulpitu (kierowca, auto, klient, sortowanie) ograniczają tylko widok; liczba pilnych (kafelek) zostaje pełna.
+  const wszystkieTrasy = dane.trasy;
+  const fz = jestPodgladem() ? null : czytajFiltryPulpitu();
+  if (fz && fz.klient) await wczytajKlientowTras(wszystkieTrasy);
+  dane.trasy = fz ? filtrujPulpit(wszystkieTrasy, fz, AKCESORIA_PULPITU.zywo) : wszystkieTrasy;
   cel.innerHTML = `
-    <h2 style="margin-top:20px">Trasy w toku
+    <h2 style="margin-top:20px">Trasy w toku${dane.trasy.length < wszystkieTrasy.length
+      ? ` <span class="plakietka p-oczekuje" style="margin-left:6px">${dane.trasy.length} z ${wszystkieTrasy.length}</span>` : ''}
       <span class="male slaby" style="font-weight:400">— stan na ${escHtml(dane.teraz)},
         odświeża się co 30 s</span></h2>
     ${dane.trasy.length ? dane.trasy.map(kartaNaZywo).join('')
+      : wszystkieTrasy.length ? `<p class="male slaby">Filtry ukrywają wszystkie trasy (${wszystkieTrasy.length}) — kliknij „Wyczyść”.</p>`
       : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('kalendarz', 38)}</span>
            Na ten dzień nie ma jeszcze żadnej trasy.
            <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">Zaplanuj trasę</button></div>
@@ -2431,8 +2469,111 @@ async function rysujZywo(cel, data) {
       ETA.policz(t);
       oknoSzczegolowPunktu(t, Number(b.dataset.punktZywo));
     });
+  podepnijPunktyZywo(cel, data);
   const planuj2 = cel.querySelector('#p-planuj-2');
   if (planuj2) planuj2.onclick = () => pokazEkran('trasy', { data: dane.data });
+}
+
+/* ---- Rozwijana lista punktów trasy w toku (2026-11-18, decyzja właściciela)
+   Zwinięta domyślnie; które trasy rozwinięto, pamięta NOWY klucz „zywo-rozwiniete-<id osoby>” (Pamiec, przedrostek
+   gk-trasy.) — istniejących kluczy nie ruszamy. Dane punktów są w /api/trasy/<id>, dowody (miniatury) doładowują się
+   dopiero po rozwinięciu z /api/przystanki/<id>/zalaczniki — te same funkcje co „Do zatwierdzenia” (htmlDowodow).
+   Zamknięty punkt czekający na biuro ma tu „Zatwierdź” i „Zwróć kierowcy” (zapisBiura — działa też w kolejce).
+   Konto „podgląd” widzi tylko stan punktów: bez dowodów i bez przycisków. */
+const klienciTras = new Map();            // id trasy -> nazwy klientów punktów (dla filtra „Klient”)
+const dowodyZywo = new Map();             // id punktu -> załączniki (zamknięty punkt zmienia się rzadko)
+
+function klienciTrasZywo(t) {
+  return klienciTras.get(t.id) || [t.biezacy && t.biezacy.klient, t.ostatni && t.ostatni.klient].filter(Boolean).join(' ');
+}
+
+async function wczytajKlientowTras(trasy) {
+  await Promise.all(trasy.map(async t => {
+    try {
+      const pelna = await API.get('/api/trasy/' + t.id);
+      klienciTras.set(t.id, (pelna.przystanki || []).map(x => x.klient_nazwa).filter(Boolean).join(' '));
+    } catch (e) { /* zostają nazwy bieżącego i ostatniego punktu */ }
+  }));
+}
+
+function kluczRozwinietychZywo() { return 'zywo-rozwiniete-' + (stan.uz && stan.uz.id != null ? stan.uz.id : 'x'); }
+
+function czytajRozwinieteZywo() {
+  try {
+    const z = JSON.parse(Pamiec.czytaj(kluczRozwinietychZywo()) || '[]');
+    return new Set(Array.isArray(z) ? z.filter(Number.isInteger) : []);
+  } catch (e) { return new Set(); }
+}
+
+function zapiszRozwinieteZywo(zbior) { Pamiec.zapisz(kluczRozwinietychZywo(), JSON.stringify([...zbior].slice(-40))); }
+
+function htmlPunktuZywo(x, token, podglad) {
+  const zamkniety = x.status === 'dostarczone' || x.status === 'nieudane';
+  const czeka = !!x.do_przyjecia && zamkniety;
+  const status = x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone">✓ dostarczone</span>'
+    : x.status === 'nieudane' ? `<span class="plakietka p-nieudane">✕ ${escHtml(x.powod || 'nieudane')}</span>`
+    : x.status === 'odwolany' ? '<span class="plakietka p-oczekuje">odwołany</span>'
+    : '<span class="plakietka p-oczekuje">do zrobienia</span>';
+  const zatw = czeka ? '<span class="plakietka p-oczekuje">czeka na zatwierdzenie</span>'
+    : (zamkniety && x.przyjeto_o ? `<span class="plakietka p-oczekuje">${x.przyjete_auto ? 'zatwierdzone automatycznie' : 'zatwierdzone przez biuro'}</span>` : '');
+  return `<div class="zywo-punkt" data-zywo-punkt="${x.id}">
+      <div><b>${escHtml(x.klient_nazwa || 'punkt')}</b> ${status} ${zatw}</div>
+      <div class="male slaby">${zamkniety && x.zamkniete_o ? escHtml(samaGodzina(x.zamkniete_o)) : ''}${
+        x.odebral && !podglad ? ' · odebrał: ' + escHtml(x.odebral) : ''}</div>
+      ${x.notatka && !podglad ? `<div class="male">${escHtml(x.notatka)}</div>` : ''}
+      ${zamkniety && !podglad ? htmlDowodow(x, token, true) : ''}
+      ${czeka && !podglad ? `<div class="przyciski" style="margin-top:6px">
+        <button class="maly glowny" data-zywo-przyjmij="${x.id}">✓ Zatwierdź</button>
+        <button class="maly" data-zywo-zwroc="${x.id}">↩ Zwróć kierowcy</button></div>` : ''}
+    </div>`;
+}
+
+async function wypelnijPunktyZywo(det, data) {
+  const id = Number(det.dataset.zywoPunkty);
+  const cel = det.querySelector('.zywo-punkty-tresc');
+  const podglad = jestPodgladem();
+  try {
+    const t = await API.get('/api/trasy/' + id);
+    let token = '';
+    if (!podglad) { try { token = await tokenDoPlikow(); } catch (e) { token = ''; } }
+    const punkty = (t.przystanki || []).slice().sort((a, b) => (a.kolejnosc || 0) - (b.kolejnosc || 0));
+    if (!podglad) {
+      for (const x of punkty) {
+        if (x.status !== 'dostarczone' && x.status !== 'nieudane') continue;
+        if (!dowodyZywo.has(x.id)) {
+          try { dowodyZywo.set(x.id, await API.get(`/api/przystanki/${x.id}/zalaczniki`)); } catch (e) { dowodyZywo.set(x.id, []); }
+        }
+        x.zalaczniki = dowodyZywo.get(x.id);
+      }
+    }
+    cel.classList.remove('male', 'slaby');
+    cel.innerHTML = punkty.length ? punkty.map(x => htmlPunktuZywo(x, token, podglad)).join('')
+      : '<div class="male slaby">Trasa nie ma jeszcze punktów.</div>';
+    cel.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
+    const przerysuj = () => { dowodyZywo.clear(); pokazEkran('pulpit', { data }); };
+    cel.querySelectorAll('[data-zywo-przyjmij]').forEach(bt => bt.onclick = () =>
+      przyjmijDostawe(Number(bt.dataset.zywoPrzyjmij), przerysuj, id));
+    cel.querySelectorAll('[data-zywo-zwroc]').forEach(bt => bt.onclick = () => {
+      const x = punkty.find(y => y.id === Number(bt.dataset.zywoZwroc));
+      if (x) oknoZwrotuDostawy(x.id, x.klient_nazwa, przerysuj, id);
+    });
+  } catch (e) {
+    cel.textContent = 'Nie udało się wczytać punktów — zamknij i otwórz jeszcze raz.';
+  }
+}
+
+function podepnijPunktyZywo(cel, data) {
+  const otwarte = czytajRozwinieteZywo();
+  cel.querySelectorAll('[data-zywo-punkty]').forEach(det => {
+    const id = Number(det.dataset.zywoPunkty);
+    det.addEventListener('toggle', () => {
+      const z = czytajRozwinieteZywo();
+      if (det.open) z.add(id); else z.delete(id);
+      zapiszRozwinieteZywo(z);
+      if (det.open) wypelnijPunktyZywo(det, data);
+    });
+    if (otwarte.has(id)) det.open = true;     // po podpięciu zdarzenia — „toggle” samo wczyta punkty
+  });
 }
 
 function odswiezajZywo(data) {
@@ -2447,6 +2588,7 @@ function odswiezajZywo(data) {
     const cel = document.getElementById('p-zywo');
     if (!cel) { clearInterval(zegarTablicy); zegarTablicy = null; return; }
     try { await rysujZywo(cel, data); } catch (e) { /* następna próba za 30 s */ }
+    try { await odswiezAutaNaMapie(); } catch (e) { /* jw. */ }
   }, 30000);
 }
 
@@ -2992,6 +3134,11 @@ function kartaGodzinUst(ustawienia) {
         <p class="male slaby">Po tylu minutach bez kontaktu z telefonem kierowcy
           ekran „Na żywo" zapali ostrzeżenie. Brak kontaktu zwykle znaczy brak
           zasięgu, a nie brak pracy — ale biuro ma o tym wiedzieć.</p>
+        <label class="plaska"><input type="checkbox" id="u-push-zatw"
+          ${String(ustawienia.push_do_zatwierdzenia || '1') === '0' ? '' : 'checked'}>
+          Powiadom biuro, gdy kierowca zamknie dostawę i czeka ona na zatwierdzenie</label>
+        <p class="male slaby">Jedno powiadomienie na trasę (po minucie, żeby nie dzwoniło przy każdym punkcie);
+          nic, jeśli dostawę zdążono już zatwierdzić. Dotyka telefonów z włączonymi powiadomieniami.</p>
         <p class="male slaby">W ciągu dnia godziny liczą się od ostatniej zamkniętej dostawy,
           a nie od porannego planu — po pierwszym opóźnieniu reszta i tak byłaby nieprawdziwa.</p>
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}`;
@@ -3126,6 +3273,8 @@ async function rysujUstawieniaBiura(pole) {
       czas_rozladunku_min: val('u-rozladunek'),
       czas_zaladunku_min: val('u-zaladunek'),
       cisza_alarm_min: val('u-cisza'),
+      push_do_zatwierdzenia: document.getElementById('u-push-zatw')
+        && !document.getElementById('u-push-zatw').checked ? '0' : '1',
       przerwy_wlaczone: document.getElementById('u-przepisy')
         && !document.getElementById('u-przepisy').checked ? '0' : '1',
       jazda_do_przerwy_min: val('u-jazda-przerwa'),
@@ -3366,6 +3515,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       ['flotex_adres', 'u-flotex-adres'], ['flotex_klucz', 'u-flotex-klucz'],
       ['hub_adres', 'u-hub-adres'], ['hub_klucz', 'u-hub-klucz'], ['kopia_folder', 'u-kopia-folder'],
     ].forEach(([klucz, id]) => { if (jest(id)) daneUstawien[klucz] = val(id); });
+    if (jest('u-push-zatw')) daneUstawien.push_do_zatwierdzenia = document.getElementById('u-push-zatw').checked ? '1' : '0';
     if (jest('u-przepisy')) daneUstawien.przerwy_wlaczone = document.getElementById('u-przepisy').checked ? '1' : '0';
     if (jest('u-poczta-szyfrowanie')) daneUstawien.poczta_szyfrowanie = document.getElementById('u-poczta-szyfrowanie').value;
     if (jest('u-tunel-token')) {

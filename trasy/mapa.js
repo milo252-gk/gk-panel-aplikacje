@@ -276,8 +276,23 @@ const Mapa = (() => {
     };
   }
 
+  /* Odswiezanie aut na zywo: przesuwamy istniejaca pinezke zamiast przerysowywac
+     cala mape (przerysowanie zabijaloby przesuniecie i przyblizenie, ktore ustawil
+     uzytkownik). */
+  function przesunZnacznik(znacznik, punkt, dymek) {
+    const p = wsp(punkt);
+    znacznik.setLatLng([p.lat, p.lng]);
+    if (dymek) znacznik.setPopupContent(dymek);
+  }
+
+  function usunZnacznik(mapa, znacznik) {
+    mapa.removeLayer(znacznik);
+    mapa._nasze = (mapa._nasze || []).filter(w => w !== znacznik);
+  }
+
   return {
     zaloz, odswiezWszystkie, rysujTrase, rysujSlad, znacznikPozycji,
+    przesunZnacznik, usunZnacznik,
     znacznikFirmowy, znacznikNumer, zwykla, dopasujWidok, przebiegPoDrogach,
   };
 })();
