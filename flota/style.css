@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-d5a69098ed99';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-9d56d50edb93';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -350,6 +350,21 @@ button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line
 /* Ikony liniowe GKIkony (gk-ikony.js, STYL-GK §8) w menu bocznym: 20 px, currentColor — biel menu; tak samo jak „Wyloguj”. */
 .menu .ikona-menu{display:inline-flex; justify-content:center}
 .menu .ikona-menu svg{display:block}
+/* Menu dłuższe niż okno (10–11 pozycji, 2026-11-18): przewijane cienkim paskiem, a „Wyloguj” przylepione na dole.
+   Poza blokiem wspólnym z GK Flota. Na komputerze w niskim oknie pozycje są gęstsze, ale nadal 44 px (telefon bez zmian). */
+.menu{overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-width:thin;
+      scrollbar-color:var(--menu-kreska) transparent}
+.menu-stopka{position:sticky; bottom:0; background:var(--marka-tlo)}
+@media (min-width:821px) and (max-height:900px){
+  .menu button{min-height:44px; padding:8px 18px}
+  .menu-naglowek{padding:12px 18px 8px}
+  .menu .menu-logo{width:104px; margin-bottom:4px}
+}
+@media (min-width:821px) and (max-height:720px){
+  .menu-naglowek{padding:8px 18px 6px}
+  .menu .menu-logo{width:88px; margin-bottom:2px}
+  .menu-rola{display:none}
+}
 
 main{padding:16px; max-width:1180px; margin:0 auto;
      padding-bottom:calc(var(--dol-wys) + 24px)}
