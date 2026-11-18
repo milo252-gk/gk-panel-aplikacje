@@ -212,6 +212,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-polaczenie.offline { background: var(--grafit); }
 .hala-polaczenie.kolejka { background: var(--grafit-jasny); }
 .hala-polaczenie.brak-huba, .hala-polaczenie.odrzucone { background: var(--strefa); }
+/* Telefon (ocena UX 2026-11-17, poz. 11): pasek „Brak sieci / N czeka na wysłanie” stał u góry i nakładał się na nagłówek
+   (godziny zmiany). Teraz dolny, tuż nad dolnym paskiem ekranów — nagłówek zostaje czytelny; pływający „Skanuj” przesuwa się wyżej. */
+@media (max-width: 820px) {
+  body .hala-polaczenie:not(.ok) { position: fixed; top: auto; left: 0; right: 0; width: auto; z-index: 46;
+    bottom: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); padding: 3px 10px; line-height: 1.35; }
+  body:has(.hala-polaczenie:not(.ok)) .hala-skan-fab { bottom: calc(var(--dol-wys) + 48px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* ------------------------------------------------ ekran logowania (standard GK) */
 /* Jak w GK Flota: grafit GK z przygaszonym, ciepłym rozświetleniem, na nim biała karta z logo. Gradient dokładnie
@@ -617,12 +624,12 @@ dialog.hala-okno label.hala-zespol-zaznacz > input { width: 20px; height: 20px; 
 /* ------------------------------------------------ jak liczymy wskaźnik (miary.js, D47): „i” przy kafelku i nagłówku */
 /* Mała okrągła litera „i” obok podpisu; obszar dotyku większy niż kółko (::after), więc w rękawicach też trafia. */
 button.hala-info { position: relative; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
-  min-height: 0; width: 20px; height: 20px; padding: 0; margin: 0 0 0 6px; border-radius: 50%; border: 1px solid var(--ramka-mocna);
-  background: var(--karta); color: var(--tekst-slaby); font: italic 700 12px/1 Georgia, 'Times New Roman', serif; cursor: help;
+  min-height: 0; width: 26px; height: 26px; padding: 0; margin: 0 0 0 6px; border-radius: 50%; border: 1px solid var(--ramka-mocna);
+  background: var(--karta); color: var(--tekst-slaby); font: italic 700 14px/1 Georgia, 'Times New Roman', serif; cursor: help;
   text-transform: none; letter-spacing: 0; flex: 0 0 auto; }
-button.hala-info::after { content: ''; position: absolute; inset: -12px; }
+button.hala-info::after { content: ''; position: absolute; inset: -10px; }
 button.hala-info[aria-expanded="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
-@media (max-width: 820px) { button.hala-info { width: 24px; height: 24px; font-size: 14px; } button.hala-info::after { inset: -14px; } }
+@media (max-width: 820px) { button.hala-info { width: 28px; height: 28px; font-size: 15px; } button.hala-info::after { inset: -12px; } }
 .hala-info-dymek { position: fixed; inset: auto; margin: 0; box-sizing: border-box; gap: 4px; padding: 10px 12px;
   border: 1px solid var(--ramka-mocna); border-radius: 10px; background: var(--karta); color: var(--tekst);
   box-shadow: var(--cien-mocny); font-size: 14px; line-height: 1.4; z-index: 1100; }
@@ -691,9 +698,11 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 /* D64: pasek „Dźwięk powiadomień wyłączony — dotknij” (HalaDzwieki.pasek; wzór GK UR) — Lider, UR i KJ jednakowo.
    Przyklejony pod nagłówkiem, nie do przeoczenia, aż ktoś dotknie ekranu. */
 .hala-dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5; display: flex;
-  align-items: center; justify-content: center; gap: 10px; min-height: 56px; padding: 10px 14px; background: var(--zolty-tlo);
-  color: var(--tekst); border-bottom: 3px solid var(--zolty); text-align: center; font-weight: 700; font-size: 1.05em; cursor: pointer; }
-.hala-dzwonek .ikona { font-size: 1.6em; line-height: 1; }
+  align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 4px 12px; background: var(--zolty-tlo);
+  color: var(--tekst); border-bottom: 2px solid var(--zolty); text-align: center; font-weight: 700; font-size: .9em; cursor: pointer; }
+.hala-dzwonek .ikona { font-size: 1.1em; line-height: 1; display: inline-flex; }
+.hala-dzwonek .ikona svg { width: 20px; height: 20px; display: block; }
+.hala-dzwonek { box-sizing: border-box; line-height: 1.25; }
 .hala-dzwonek[hidden] { display: none; }
 
 /* D61: druk jednego kodu aplikacji — mały przycisk pod opisem (wszystkie naraz: „🖨 Drukuj wszystkie” na dole okna). */
@@ -711,6 +720,14 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 body:has(.ekran:not([hidden]) .wlasny-skan) .hala-skan-fab { display: none; }
 .hala-skan-fab:focus-visible { outline: 3px solid var(--tekst); outline-offset: 2px; }
 @media (min-width: 821px) { .hala-skan-fab { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); } }
+/* Ocena UX 2026-11-17, poz. 2 (P1): pływający przycisk przykrywał „Więcej” karty zlecenia i prawe części kart. Na telefonie jest
+   mniejszy (48 px), a po przewinięciu listy w dół zwija się do samej ikony (dzialania.js → przyciskSkanu dodaje .zwiniety; wraca
+   na górze ekranu i przy przewijaniu w górę). Zapas pod listą (body.hala-ma-skan) jest wyżej. Funkcja bez zmian. */
+@media (max-width: 820px) {
+  .hala-skan-fab { min-height: 48px; padding: 0 16px; font-size: 15px; gap: 6px; right: 12px; transition: padding .15s; }
+  .hala-skan-fab.zwiniety { padding: 0; width: 48px; justify-content: center; }
+  .hala-skan-fab.zwiniety .napis { display: none; }
+}
 /* D56: wymagania zlecenia odhaczane na żywo i kroki postępu. */
 .hala-zlecenie-wymogi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .hala-krok-wymogu { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700;

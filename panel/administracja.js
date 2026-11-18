@@ -39,7 +39,7 @@
   const jestAdmin = () => !!(hala.pracownik && (hala.pracownik.role || []).includes('admin'));
   const uprawnienia = osoba => HalaZespol.uprawnieniaOsoby(jestAdmin() ? null : (zakres || { admin: false, role: [], linie: null }),
                                                   osoba, hala.pracownik && hala.pracownik.id);
-  let szukaj = '', nieaktywni = false;
+  let szukaj = '', nieaktywni = false, szukajMaszyn = '';
 
   async function wczytajPracownikow() {
     if (wczytuje) return;
@@ -288,7 +288,7 @@
     if (!el.querySelector('#admin-szukaj')) {
       el.innerHTML = `
         <div class="admin-pasek">
-          <input id="admin-szukaj" type="search" placeholder="Szukaj osoby" aria-label="Szukaj osoby" value="${esc(szukaj)}">
+          <input id="admin-szukaj" type="search" placeholder="Szukaj osoby (imię, login)" aria-label="Szukaj osoby: imię, nazwisko albo login" value="${esc(szukaj)}">
           <label class="zaznacz"><input type="checkbox" id="admin-nieaktywni" ${nieaktywni ? 'checked' : ''}> Pokaż wyłączone</label>
           <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Lider, UR, KJ)">${P.ik('drukuj')}Identyfikatory</button>
           <button type="button" class="glowny" id="admin-dodaj">+ Dodaj osobę</button>
@@ -521,11 +521,12 @@
   function rysujMaszyny(el) {
     const sl = hala.slowniki || {};
     const linie = sl.linie || {}, wiele = W.wieleLinii(sl);
-    const maszyny = Object.entries(sl.maszyny || {})
-      .sort(([ka, a], [kb, b]) => String((a || {}).nazwa || ka).localeCompare(String((b || {}).nazwa || kb), 'pl', { numeric: true }));
+    const maszyny = W.maszynyAdmin(sl, szukajMaszyn);
     if (!el.querySelector('#lista-maszyn')) {
+      // Pole „Szukaj” rysujemy raz (przerysowanie co 20 s nie zabiera kursora) — jak przy Pracownikach.
       el.innerHTML = `
         <div class="admin-pasek">
+          <input id="admin-szukaj-maszyn" type="search" placeholder="Szukaj maszyny" aria-label="Szukaj maszyny: nazwa, kod albo typ" value="${esc(szukajMaszyn)}">
           <button type="button" class="glowny" data-akcja="nowa-maszyna">+ Nowa maszyna</button>
           <button type="button" id="drukuj-etykiety" data-akcja="etykiety" aria-expanded="false">${P.ik('drukuj')}Drukuj etykiety</button>
         </div>
@@ -538,7 +539,7 @@
             <span><button type="button" class="maly" data-akcja="etykieta" data-kod="${esc(mk)}" title="Drukuj etykietę QR tej maszyny">${P.ik('drukuj')}Etykieta</button>
             <button type="button" class="maly" data-akcja="maszyna" data-kod="${esc(mk)}">Zmień</button>
             <button type="button" class="maly" data-akcja="wycofaj" data-kod="${esc(mk)}">Wycofaj</button></span></div>`).join('')
-          || '<p class="pusto">Nie ma jeszcze maszyn</p>';
+          || `<p class="pusto">${szukajMaszyn.trim() ? 'Nie znaleziono maszyny. Sprawdź nazwę albo kod.' : 'Nie ma jeszcze maszyn'}</p>`;
     const el2 = $('lista-maszyn');
     if (el2.dataset.odcisk !== lista) { el2.dataset.odcisk = lista; el2.innerHTML = lista; }
     // Nic do druku (pusty słownik) — przycisk nieczynny, zamiast pustego arkusza.
@@ -1157,6 +1158,7 @@
   }, true);
   $('admin-tresc').addEventListener('input', ev => {
     if (ev.target.id === 'admin-szukaj') { szukaj = ev.target.value; rysuj(); }
+    if (ev.target.id === 'admin-szukaj-maszyn') { szukajMaszyn = ev.target.value; rysuj(); }
   });
   $('admin-tresc').addEventListener('change', ev => {
     if (ev.target.id === 'admin-nieaktywni') { nieaktywni = ev.target.checked; rysuj(); }
@@ -1225,7 +1227,7 @@
 
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
-    lista = null; zakres = null; szukaj = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
+    lista = null; zakres = null; szukaj = ''; szukajMaszyn = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
     odrzucone = null; bladOdrzuconych = '';
     kopieStan = null; alarmy = []; alarmyCzas = 0; serwisOtwarte = { dostep: null, polaczenia: false }; etykietyOtwarte = false;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;

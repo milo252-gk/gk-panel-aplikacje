@@ -34,7 +34,7 @@
   function kartaListy(w, teraz) {
     const p = w.postep;
     return `<a class="karta przeglad ${esc(w.stan.kod)} ${w.moj ? 'moj' : ''}" href="#przeglad/${encodeURIComponent(w.id)}">
-      <div class="wiersz"><span class="znacznik ${esc(w.stan.klasa)}">${esc(w.stan.nazwa)}</span>
+      <div class="wiersz"><span class="znacznik ${esc(w.stan.klasa)}">${esc(w.etykieta || w.stan.nazwa)}</span>
         ${w.stan.kod === 'zaplanowany' && w.termin && w.dzien === W.dzienZakladu(teraz) ? ''
           : `<span class="slaby">termin ${esc(!w.termin ? '—' : w.dzien === W.dzienZakladu(teraz) ? 'dziś' : W.data(w.termin))}</span>`}
         ${w.oczekuje ? '<span class="slaby">czeka na wysłanie</span>' : ''}</div>
@@ -60,7 +60,7 @@
         <div class="wybor filtr" id="filtr-przegladow">${[['wszystkie', 'Wszystkie'], ['moje', 'Moje']].map(([kod, n]) =>
           `<button type="button" data-filtr="${kod}" aria-pressed="${f === kod}">${n}</button>`).join('')}</div>
         ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">Planie</a>.' : ' Poproś kierownika UR o plan przeglądów.'}</p>` : ''}
-        ${sekcja('Opóźnione', g.opoznione, 'tekst-alarm')}
+        ${sekcja('Po terminie', g.opoznione, 'tekst-alarm')}
         ${sekcja('W trakcie', g.wTrakcie)}
         ${sekcja('Dziś', g.dzis, '', 'Na dziś nic nie zaplanowano')}
         ${sekcja('Najbliższy tydzień', g.tydzien)}

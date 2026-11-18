@@ -98,7 +98,7 @@
       el.setAttribute('role', 'button');
       el.tabIndex = 0;
       el.hidden = true;
-      el.innerHTML = '<span class="ikona" aria-hidden="true">' + (global.GKIkony ? global.GKIkony.html('glos-wyl', 26) : '') + '</span><span>Dźwięk powiadomień wyłączony — <u>dotknij, żeby włączyć</u></span>';
+      el.innerHTML = '<span class="ikona" aria-hidden="true">' + (global.GKIkony ? global.GKIkony.html('glos-wyl', 20) : '') + '</span><span>Dźwięk wyłączony — <u>dotknij, żeby włączyć</u></span>';
       const miejsce = o.przed || doc.querySelector('#aplikacja > main, #aplikacja > .ekrany');
       if (miejsce && miejsce.parentNode) miejsce.parentNode.insertBefore(el, miejsce); else doc.body.prepend(el);
       const wlacz = () => { odblokuj(); setTimeout(() => { zagraj('pilne'); pokaz(); }, 150); };
@@ -694,8 +694,15 @@
       b.type = 'button'; b.id = 'hala-skan-fab'; b.className = 'hala-skan-fab';
       doc.body.classList.add('hala-ma-skan');          // D64: miejsce pod listą i nad komunikatami (hala.css)
       b.setAttribute('aria-label', 'Skanuj kod QR maszyny');
-      b.innerHTML = '<span aria-hidden="true">▣</span> Skanuj';
+      b.innerHTML = '<span aria-hidden="true">▣</span><span class="napis"> Skanuj</span>';
       doc.body.appendChild(b);
+      // Telefon: po przewinięciu w dół przycisk zwija się do ikony, żeby nie zasłaniać przycisków kart (hala.css, ocena UX 2026-11-17).
+      let ostatniY = 0;
+      global.addEventListener('scroll', () => {
+        const y = global.scrollY || 0;
+        b.classList.toggle('zwiniety', y > 80 && y > ostatniY);
+        ostatniY = y;
+      }, { passive: true });
     }
     const pokaz = () => { b.hidden = !hala.zalogowany(); };
     hala.na('sesja', pokaz);

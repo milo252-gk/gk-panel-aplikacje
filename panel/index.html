@@ -66,7 +66,7 @@
   <header class="naglowek">
     <div class="zmiana" id="zmiana"></div>
     <div class="zegar" id="zegar">--:--</div>
-    <div class="kto"><button id="dzwiek" class="maly" aria-pressed="false"><span class="ik" data-ikona="dzwonek-wyl" data-rozmiar="18"></span></button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
+    <div class="kto"><button id="szukaj" class="maly" type="button" aria-label="Szukaj" title="Szukaj: zlecenie (ZL-…), osoba, maszyna, linia, dział (klawisz /)"><span class="ik" data-ikona="jakosc" data-rozmiar="18"></span><span class="szukaj-napis">Szukaj</span></button><button id="dzwiek" class="maly" aria-pressed="false"><span class="ik" data-ikona="dzwonek-wyl" data-rozmiar="18"></span></button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
   <div id="na-zywo" class="na-zywo">
@@ -75,13 +75,7 @@
       <!-- Właściciel 2026-11-10: to samo okno co „+ Nowe zlecenie” w Zleceniach i pod tym samym warunkiem (kierownik zakładu, admin). -->
       <button type="button" id="pulpit-nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
     </div>
-    <!-- D87 (właściciel 2026-11-17): pulpit łączy podgląd załączników z odbiorem — zlecenia „do odbioru” z dowodami (kto, kiedy, notatka,
-         zdjęcia, powód „Nie mogę”) i przyciskami Odbierz / Zwróć, także pozycja po pozycji. Te same wiersze co w Zlecenia → Do odbioru
-         (panel.js: wierszZlecenia). Sekcji nie ma, gdy nic nie czeka albo rola nie odbiera (konto ekranu). -->
-    <section class="odbior" id="pulpit-odbior" aria-labelledby="t-odbior" hidden>
-      <h2 id="t-odbior">Do odbioru <span id="licznik-odbioru" class="licznik"></span></h2>
-      <div id="lista-odbioru" class="lista"></div>
-    </section>
+    <!-- D87 (właściciel 2026-11-17): odbiór checklisty jest w karcie obchodu (panel.js: rysujKafelki → „Do odbioru”), nie w osobnej sekcji. -->
     <section class="obchody" aria-labelledby="t-obchody">
       <h2 id="t-obchody">Obchody Mistrza i Lidera</h2>
       <div id="kafelki" class="kafelki"></div>
@@ -132,6 +126,25 @@
             <option value="2">2 dni</option><option value="7">7 dni</option><option value="30">30 dni</option><option value="90">90 dni</option>
           </select></label>
           <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
+          <!-- Filtry i sortowanie (właściciel 2026-11-17): status, linia, maszyna, zakres dat (po dacie zlecenia) i kolejność — w zwijanym
+               bloku, żeby codzienny układ (Dział, Osoba, Rodzaj) został jak był. Pod spodem: co jest aktywne, „N z M”, „Wyczyść filtry”.
+               Ustawienia pamięta przeglądarka osobno dla każdej osoby (hala.panel.filtry.<id>). -->
+          <details class="filtry-wiecej" id="filtry-wiecej">
+            <summary>Więcej filtrów i sortowanie</summary>
+            <div class="filtry-wiecej-pola">
+              <label>Status<select name="status"><option value="">wszystkie</option></select></label>
+              <label id="filtr-linia">Linia<select name="linia"><option value="">wszystkie</option></select></label>
+              <label id="filtr-maszyna">Maszyna<select name="maszyna"><option value="">wszystkie</option></select></label>
+              <label>Od dnia<input type="date" name="od"></label>
+              <label>Do dnia<input type="date" name="doDnia"></label>
+              <label>Kolejność<select name="sort"></select></label>
+            </div>
+          </details>
+          <div class="filtry-stan" id="filtry-stan">
+            <span id="filtry-licznik" class="licznik" aria-live="polite"></span>
+            <span id="filtry-opis" class="slaby"></span>
+            <button type="button" id="filtry-czysc" class="maly" hidden>Wyczyść filtry</button>
+          </div>
         </form>
         <div id="lista-zlecen" class="lista"></div>
       </div>

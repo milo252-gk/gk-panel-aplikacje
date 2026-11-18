@@ -208,7 +208,7 @@
     const sl = hala.slowniki;
     const opcje = W.miejscaDoWyboru(sl);
     const lista = opcje.length > (f.linia ? 1 : 0) ? `<details class="bez-skanu"><summary>${f.linia ? 'Inne miejsce? Wybierz z listy' : 'Kod nieczytelny? Wybierz z listy'}</summary>
-        <select id="p-wybor-stanowiska"><option value="">— wybierz —</option>
+        <select id="p-wybor-stanowiska" aria-label="Miejsce kontroli — wybierz z listy"><option value="">— wybierz —</option>
         ${opcje.map(o => `<option value="${esc(o.wartosc)}">${esc(o.opis)}</option>`).join('')}</select></details>` : '';
     if (!f.linia) {
       box.innerHTML = `<h2>Miejsce kontroli</h2>

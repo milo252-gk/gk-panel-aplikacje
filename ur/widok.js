@@ -427,7 +427,7 @@
      z okna dni) — lista awarii z `zastepczy` i `czeka` = id: ur.js przełączy na kartę, gdy awaria dojdzie. Pusta karta
      „Nie ma takiej awarii” była ślepą uliczką. Zepsute „%” w adresie nie może wywrócić nawigacji — wtedy bez parametru. */
   function ekranZAdresu(hash, ekrany, jestAwaria) {
-    const [nazwa, ...reszta] = (String(hash || '').replace(/^#/, '') || 'awarie').split('/');
+    const [nazwa, ...reszta] = (String(hash || '').replace(/^#/, '') || ((ekrany || []).includes('pulpit') ? 'pulpit' : 'awarie')).split('/');
     let parametr = null;
     try { parametr = reszta.map(decodeURIComponent).join('/') || null; } catch (e) { parametr = null; }
     if (!(ekrany || []).includes(nazwa)) return { nazwa: 'awarie', parametr };
@@ -530,6 +530,24 @@
       .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
   }
 
+  /* D5 (właściciel 2026-11-17): lista Przeglądów mówi, co jest pilne. Termin przeglądu to koniec dnia (bez godziny), więc „po terminie”
+     liczymy w pełnych dniach zakładu: 0 = termin był wczoraj albo dziś już minął (przegląd opóźniony), N = od N dni. Etykieta
+     na karcie listy: „Po terminie: 3 dni” (czerwona), „Na dziś” (zamiast siedmiu identycznych „Zaplanowany”), inaczej status jak dotąd. */
+  function dniPoTerminie(p, teraz) {
+    if (statusPrzegladu(p, teraz).kod !== 'opozniony') return 0;
+    const d = (p.dane || {}).termin;
+    if (!d) return 0;
+    const a = Date.parse(dzienZakladu(d) + 'T00:00:00Z'), b = Date.parse(dzienZakladu(teraz) + 'T00:00:00Z');
+    return Math.max(1, Math.round((b - a) / 86400000));
+  }
+  const odmianaDni = n => (n === 1 ? 'dzień' : 'dni');
+  function etykietaListy(p, teraz) {
+    const s = statusPrzegladu(p, teraz);
+    if (s.kod === 'opozniony') { const n = dniPoTerminie(p, teraz); return `Po terminie: ${n} ${odmianaDni(n)}`; }
+    if (s.kod === 'zaplanowany' && (p.dane || {}).termin && dzienZakladu(p.dane.termin) === dzienZakladu(teraz)) return 'Na dziś';
+    return s.nazwa;
+  }
+
   function wierszPrzegladu(p, { slowniki, pracownicy, teraz, ja }) {
     const d = p.dane || {};
     const karta = kartaDla(slowniki, d.karta);
@@ -540,6 +558,7 @@
       karta: d.karta, kartaNazwa: nazwaKarty(slowniki, d.karta), termin: d.termin || null, dzien: d.termin ? dzienZakladu(d.termin) : null,
       mechanik: d.mechanik || null, mechanikNazwa: nazwaPracownika(pracownicy, d.mechanik || d.wykonawca),
       moj: !!ja && (d.mechanik === ja || d.wykonawca === ja), postep: post, oczekuje: !!p._oczekuje,
+      dniPoTerminie: dniPoTerminie(p, teraz), etykieta: etykietaListy(p, teraz),
     };
   }
 
@@ -560,9 +579,28 @@
       else g.pozniej.push(w);
     }
     const wgTerminu = (a, b) => (Number(b.moj) - Number(a.moj)) || String(a.termin).localeCompare(String(b.termin)) || String(a.maszyna).localeCompare(String(b.maszyna));
-    for (const k of ['opoznione', 'wTrakcie', 'dzis', 'tydzien', 'pozniej']) g[k].sort(wgTerminu);
+    for (const k of ['wTrakcie', 'dzis', 'tydzien', 'pozniej']) g[k].sort(wgTerminu);
+    // Opóźnione: najpierw najdłużej spóźnione (pilność), dopiero potem moje i alfabet.
+    g.opoznione.sort((a, b) => String(a.termin).localeCompare(String(b.termin)) || (Number(b.moj) - Number(a.moj)) || String(a.maszyna).localeCompare(String(b.maszyna)));
     g.zrobione.sort((a, b) => String(b.termin).localeCompare(String(a.termin)));
     return g;
+  }
+
+  /* D5: pulpit startowy UR — kafelki liczb jak w Panelu Kierownika (tylko niezerowe; same zera → „Wszystko w porządku”). Klik w kafelek
+     prowadzi do listy (adres z #). przeglady — obiekty „przeglad”, awarie — obiekty „awaria”, zlecenia — liczba zleceń działu UR do
+     zrobienia (HalaZlecenia.doZrobienia, liczy to samo co plakietka). Awarie liczymy jak plakietki (aktywna; „zgłoszona” = czeka na przyjęcie). */
+  function pulpit({ przeglady, awarie, zlecenia, slowniki, pracownicy, teraz, ja }) {
+    const g = listaPrzegladow({ przeglady, slowniki, pracownicy, teraz, ja, filtr: 'wszystkie' });
+    const aktywne = (awarie || []).filter(a => a && a.aktywny);
+    const nowe = aktywne.filter(a => a.status === 'zgloszona').length;
+    const kafelki = [
+      { kod: 'awarie-nowe', etykieta: 'Awarie do przyjęcia', liczba: nowe, klasa: 'pilne', adres: '#awarie' },
+      { kod: 'awarie', etykieta: 'Awarie otwarte', liczba: aktywne.length, klasa: 'uwaga', adres: '#awarie' },
+      { kod: 'po-terminie', etykieta: 'Przeglądy po terminie', liczba: g.opoznione.length, klasa: 'pilne', adres: '#przeglady' },
+      { kod: 'dzis', etykieta: 'Przeglądy na dziś', liczba: g.dzis.length + g.wTrakcie.length, klasa: 'uwaga', adres: '#przeglady' },
+      { kod: 'zlecenia', etykieta: 'Zlecenia do wykonania', liczba: Number(zlecenia) || 0, klasa: 'uwaga', adres: '#zlecenia' },
+    ].filter(k => k.liczba > 0);
+    return { kafelki, spokoj: !kafelki.length };
   }
 
   /* Punkt pomiarowy: poza [min, max] → niezgodne (i świeci). Bez granic — zgodne. */
@@ -956,7 +994,7 @@
     ukladAkcji, KROKI_WIECEJ, kierownikUR, mozeKpi,
     opisNaprawy, bledyZakonczenia, daneZakonczenia, kodZeSkanu, sprawdzMaszyne, mechanicy, komunikatKonfliktu, powiadomienie, historiaAwarii,
     kpi, OKRESY, okresKpi,
-    statusPrzegladu, kartaDla, kartyDlaMaszyny, wierszPrzegladu, listaPrzegladow, wynikPomiaru, zakres, danePunktu, postepPrzegladu,
+    statusPrzegladu, dniPoTerminie, etykietaListy, pulpit, kartaDla, kartyDlaMaszyny, wierszPrzegladu, listaPrzegladow, wynikPomiaru, zakres, danePunktu, postepPrzegladu,
     wykonaniePlanu, bledyPlanowania, kluczPrzegladu,
     INTERWALY, opisInterwalu, kartaZFormularza, harmonogramZFormularza, listaHarmonogramu, przykladowyPlan, WZORY_KART,
     listaLicznikow, bledyLicznika, bladOdczytuPrzegladu, harmonogramPrzegladu, swieze, adresPowiadomienia, ekranZAdresu, pytaniePrzejecia, SWIEZE_MS,

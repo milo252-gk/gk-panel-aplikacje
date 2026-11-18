@@ -397,12 +397,16 @@
       const postep = postepZlecenia(d);
       const odbior = H().odbiorPozycji(d);
       const koncowka = H().koniecOdbioru(d, H().karencjaOdbioru(stale));
+      const prawoOdbioru = H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true;
       const koniecOdbioru = DO_ZAMKNIECIA.has(z.status) && koncowka !== null && (teraz === undefined ? Date.now() : teraz) >= koncowka;
       return {
         id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
         tytul: d.tytul || '', opis: d.opis || '',
         dzial: d.dzial, dzialNazwa: dzialy.get(d.dzial) || d.dzial || '—',
         liniaNazwa: d.linia ? liniaWidoczna(slowniki, d.linia) || null : null,
+        // Kody do filtrów „Linia” i „Maszyna” (liniaNazwa jest pusta przy jednej linii, a maszyna to napis).
+        liniaKod: d.linia || null,
+        maszynyKody: Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny.map(String) : d.maszyna ? [String(d.maszyna)] : [],
         maszyna: (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
           .map(m => (maszyny[m] || {}).nazwa || m).join(', ') || null,
         postep, czynnosc: d.czynnosc || null,
@@ -457,7 +461,7 @@
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
         // R2 (2026-11-09, D82): kierownik UR/KJ przyjmuje, zamyka i zwraca tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
-        moznaOdebrac: (H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true) && !koniecOdbioru,
+        prawoOdbioru, moznaOdebrac: prawoOdbioru && !koniecOdbioru,
         // D88: zlecenie zmianowe po końcu zmiany + karencji — tylko do wglądu (serwer zatwierdza je sam i odrzuca odbiór/zwrot).
         odbiorZakonczony: koniecOdbioru, odbiorDo: koncowka === null ? null : godzina(koncowka),
         zatwierdzoneAuto: d.zatwierdzone_automatycznie || null,
@@ -1474,6 +1478,15 @@
       .sort((a, b) => (b.zablokowany - a.zablokowany) || (b.aktywny !== false) - (a.aktywny !== false) || a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
 
+  /* Administracja → Maszyny (ocena UX 2026-11-17, poz. 10): lista maszyn z polem „Szukaj” — po nazwie, kodzie i typie (pisownia bez
+     znaczenia, wszystkie słowa muszą pasować). Wynik [kod, maszyna] w kolejności nazw; puste pole = wszystkie. */
+  function maszynyAdmin(slowniki, szukaj) {
+    const s = loginZNazwy(szukaj), slowa = s ? s.split(' ') : [];
+    return Object.entries((slowniki && slowniki.maszyny) || {})
+      .filter(([kod, m]) => { const t = loginZNazwy([kod, (m || {}).nazwa, (m || {}).typ].filter(Boolean).join(' ')); return slowa.every(x => t.includes(x)); })
+      .sort(([ka, a], [kb, b]) => String((a || {}).nazwa || ka).localeCompare(String((b || {}).nazwa || kb), 'pl', { numeric: true }));
+  }
+
   // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona 4–8 razy i proste ciągi. Od D46 tylko dla
   // konta samego ekranu — PIN osoby (4 cyfry) może być dowolny, także 1234 i 0000 (właściciel 2026-10-08).
   const OCZYWISTE_PINY = new Set(['1234', '4321', '1122', '2580', '123456', '654321', '12345678', '87654321']);
@@ -2302,14 +2315,167 @@
 
   /* Filtry list zleceń („Dodaj filtry do wykonanych zleceń”): dział, osoba (zlecona, przyjęła, zrobiła albo odmówiła)
      i „tylko spóźnione” (po terminie, wykonane po terminie, przepadłe). Puste pole = bez filtra. */
-  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione, rodzaj, mojeDzialy, ja } = {}) {
+  function filtrujZlecenia(wiersze, { dzial, osoba, spoznione, rodzaj, mojeDzialy, ja, status, linia, maszyna, od, doDnia } = {}) {
+    // Filtry z 2026-11-17: status, linia, maszyna i zakres dat. Wiersze innych rodzajów (zgłoszenie, narzędzia, BHP) nie mają
+    // statusu zlecenia, linii ani maszyny — przy takim filtrze ich nie pokazujemy (to nie zlecenia tej linii/maszyny).
+    const zakres = zakresDat(od, doDnia);
     // D76: dzial === MOJE_DZIALY — kierownik UR/KJ: zlecenia jego działu(ów) i to, co sam zlecił albo robi (domyślny filtr,
     // nie blokada — „wszystkie” pokazuje resztę zakładu jak dotąd).
     const moje = z => (mojeDzialy || []).includes(z.dzial) || (!!ja && (z.zlecilId === ja || (z.osoby || []).includes(ja)));
     return (wiersze || []).filter(z => (!dzial || (dzial === MOJE_DZIALY ? moje(z) : z.dzial === dzial)) && (!osoba || (z.osoby || []).includes(osoba))
-      && (!spoznione || z.spoznione) && (!rodzaj || z.rodzaj === rodzaj));
+      && (!spoznione || z.spoznione) && (!rodzaj || z.rodzaj === rodzaj)
+      && (!status || z.status === status) && (!linia || z.liniaKod === linia) && (!maszyna || (z.maszynyKody || []).includes(maszyna))
+      && (!zakres || wDniach(z, zakres)));
   }
   const MOJE_DZIALY = 'moje';
+
+  // ================================================================ D4 (właściciel 2026-11-17): jedno globalne „Szukaj”
+
+  /* Globalne wyszukiwanie w nagłówku Panelu: numer zlecenia (ZL-…), tytuł i opis, osoba, maszyna, linia, dział. Czysta funkcja —
+     dostaje wiersze zleceń (W.zlecenia z filtrem 'wszystkie' — także zamknięte z okna danych, które klient już ma) i słowniki;
+     nic nie czyta z huba ani z pamięci. Wynik: lista pozycji { rodzaj: zlecenie|osoba|maszyna|linia|dzial, id, tytul, opis,
+     znacznik, liczba, nawigacja } — nawigacja mówi Panelowi, dokąd przejść: { filtr: otwarte|do-zamkniecia|zamkniete, dzial,
+     osoba, maszyna, linia, zlecenie }. Pisownia bez znaczenia: wielkość liter, polskie znaki, kropki i myślniki (loginZNazwy);
+     wszystkie słowa frazy muszą pasować (w dowolnym polu tej samej pozycji).
+     Role (R2): kierownik UR/KJ (Hala.dzialyKierownika ≠ null) widzi zlecenia swojego działu i te, które sam zlecił albo robi,
+     oraz osoby swojego działu — jak filtr „Mój dział i moje”; przejście ustawia ten sam filtr (nawigacja.dzial = MOJE_DZIALY).
+     Konto ekranu nie szuka (monitor bez klawiatury) — zwraca []. */
+  const MIN_ZNAKOW_SZUKANIA = 2;
+  function szukaj({ fraza, zlecenia: wiersze, slowniki, pracownicy, stale, ja, limit }) {
+    const f = loginZNazwy(fraza);
+    if (f.length < MIN_ZNAKOW_SZUKANIA) return [];
+    const role = (ja && ja.role) || [];
+    if (role.includes('ekran')) return [];
+    const slowa = f.split(' ');
+    const pasuje = (...pola) => { const s = loginZNazwy(pola.filter(x => x !== null && x !== undefined).join(' ')); return slowa.every(x => s.includes(x)); };
+    const dz = (stale && stale.dzialy) || [];
+    const zakres = H().dzialyKierownika ? H().dzialyKierownika(role, dz) : null;
+    const wZakresie = zakres && zakres.length ? zakres : null;
+    const dzialNav = wZakresie ? MOJE_DZIALY : '';
+    const mojeId = ja && ja.id;
+    const widoczne = z => !wZakresie || wZakresie.includes(z.dzial) || (!!mojeId && (z.zlecilId === mojeId || (z.osoby || []).includes(mojeId)));
+    const chip = lista => (!lista.length || lista.some(z => z.otwarte || z.zaplanowane) ? 'otwarte' : lista.some(z => z.doZamkniecia) ? 'do-zamkniecia' : 'zamkniete');
+    const widocznaLista = (wiersze || []).filter(Boolean).filter(widoczne);
+    const max = limit || 40;
+    const wynik = [];
+
+    // Zlecenia: numer dokładny > numer zawiera > tytuł > reszta; w grupie najnowsze pierwsze.
+    const frazaNumeru = f;
+    const ocena = z => (loginZNazwy(z.numer) === frazaNumeru ? 4 : loginZNazwy(z.numer).includes(frazaNumeru) ? 3 : loginZNazwy(z.tytul).includes(frazaNumeru) ? 2 : 1);
+    const trafione = widocznaLista.filter(z => pasuje(z.numer, z.tytul, z.opis, z.dzialNazwa, z.liniaNazwa, z.maszyna, z.kto, z.wykonawca, z.zlecil, z.staleNazwa, z.naZmiane))
+      .sort((a, b) => (ocena(b) - ocena(a)) || String(b.czas).localeCompare(String(a.czas)));
+    for (const z of trafione.slice(0, 25)) {
+      wynik.push({ rodzaj: 'zlecenie', id: z.id, tytul: `${z.numer} · ${z.tytul || '(bez tytułu)'}`,
+        opis: [z.dzialNazwa, z.liniaNazwa, z.maszyna, z.kto || z.zlecil].filter(Boolean).join(' · '), znacznik: z.etykieta,
+        liczba: 1, nawigacja: { filtr: chip([z]), dzial: dzialNav, zlecenie: z.id } });
+    }
+
+    // Osoby: tylko te, po których da się filtrować Zlecenia (mają rolę jakiegoś działu) — w swoim zakresie dla kierownika UR/KJ.
+    const rolyZakresu = wZakresie ? dz.filter(x => wZakresie.includes(x.kod)).flatMap(x => x.role || []) : null;
+    const rolyDzialow = new Set(dz.flatMap(x => x.role || []));
+    for (const p of (pracownicy || [])) {
+      if (!p || p.aktywny === false || !(p.role || []).some(r => rolyDzialow.has(r))) continue;
+      if (rolyZakresu && !(p.role || []).some(r => rolyZakresu.includes(r))) continue;
+      if (!pasuje(p.nazwa, p.id)) continue;
+      const jego = widocznaLista.filter(z => (z.osoby || []).includes(p.id));
+      wynik.push({ rodzaj: 'osoba', id: p.id, tytul: p.nazwa, opis: (p.role || []).map(r => ((stale && stale.role) || {})[r] || r).join(', '),
+        znacznik: '', liczba: jego.length, nawigacja: { filtr: chip(jego), dzial: dzialNav, osoba: p.id } });
+    }
+
+    // Maszyny, linie (przy kilku), działy.
+    const sl = slowniki || {};
+    for (const [kod, m] of Object.entries(sl.maszyny || {})) {
+      const mm = m || {};
+      if (mm.aktywny === false || !pasuje(mm.nazwa, kod)) continue;
+      const jej = widocznaLista.filter(z => (z.maszynyKody || []).includes(kod));
+      wynik.push({ rodzaj: 'maszyna', id: kod, tytul: mm.nazwa || kod, opis: [kod, liniaWidoczna(sl, mm.linia)].filter(Boolean).join(' · '),
+        znacznik: '', liczba: jej.length, nawigacja: { filtr: chip(jej), dzial: dzialNav, maszyna: kod } });
+    }
+    if (wieleLinii(sl)) for (const [kod, l] of Object.entries(sl.linie || {})) {
+      if (!pasuje((l || {}).nazwa, kod)) continue;
+      const jej = widocznaLista.filter(z => z.liniaKod === kod);
+      wynik.push({ rodzaj: 'linia', id: kod, tytul: (l || {}).nazwa || kod, opis: 'linia', znacznik: '', liczba: jej.length,
+        nawigacja: { filtr: chip(jej), dzial: dzialNav, linia: kod } });
+    }
+    for (const x of dz) {
+      if (wZakresie && !wZakresie.includes(x.kod)) continue;
+      if (!pasuje(x.nazwa, x.kod)) continue;
+      const jego = widocznaLista.filter(z => z.dzial === x.kod);
+      wynik.push({ rodzaj: 'dzial', id: x.kod, tytul: x.nazwa || x.kod, opis: 'dział', znacznik: '', liczba: jego.length,
+        nawigacja: { filtr: chip(jego), dzial: x.kod } });
+    }
+    return wynik.slice(0, max);
+  }
+  const NAZWY_WYNIKOW = { zlecenie: 'Zlecenia', osoba: 'Osoby', maszyna: 'Maszyny', linia: 'Linie', dzial: 'Działy' };
+
+  /* Zakres dat „od … do …” (pola type=date, 'RRRR-MM-DD', dni czasu zakładu, oba końce włącznie). Data wiersza to z.czas =
+     kiedy zlecono (czas_zlecenia; zaplanowane — kiedy zaplanowano; inaczej ostatnia zmiana) — to ta data, którą kierownik
+     widzi na karcie („zlecono …”), więc zakres zgadza się z tym, co czyta. Dla innych rodzajów (zgłoszenie, BHP, narzędzia)
+     z.czas to ich czas zgłoszenia. Puste pole = bez ograniczenia z tej strony. */
+  function zakresDat(od, doDnia) {
+    const dzien = t => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t || ''); return m ? [+m[1], +m[2], +m[3]] : null; };
+    const a = dzien(od), b = dzien(doDnia);
+    if (!a && !b) return null;
+    return { odMs: a ? H().zLokalnego(a[0], a[1], a[2], 0, 0) : null, doMs: b ? H().zLokalnego(b[0], b[1], b[2] + 1, 0, 0) : null };
+  }
+  function wDniach(z, zakres) {
+    const t = Date.parse(z.czas);
+    if (isNaN(t)) return false;                       // bez daty nie wiemy, czy mieści się w zakresie — przy filtrze dat nie pokazujemy
+    return (zakres.odMs === null || t >= zakres.odMs) && (zakres.doMs === null || t < zakres.doMs);
+  }
+
+  /* Kolejność wybrana przez użytkownika: 'najnowsze' (od najnowszych) albo 'najstarsze' po dacie wiersza (z.czas, jak zakres
+     dat). Inna wartość ('' = domyślna) zostawia kolejność bez zmian — spóźnione na górze, zaplanowane na dole (W.zlecenia,
+     W.polaczZadania). Sortowanie stabilne: równe daty zostają jak były, wiersze bez daty na końcu. */
+  function sortujWgDaty(wiersze, kierunek) {
+    const lista = (wiersze || []).slice();
+    if (kierunek !== 'najnowsze' && kierunek !== 'najstarsze') return lista;
+    const ms = z => { const t = Date.parse(z.czas); return isNaN(t) ? null : t; };
+    const znak = kierunek === 'najnowsze' ? -1 : 1;
+    return lista.map((z, i) => [z, i, ms(z)]).sort((a, b) =>
+      ((a[2] === null) - (b[2] === null)) || (a[2] !== null ? znak * (a[2] - b[2]) : 0) || a[1] - b[1]).map(x => x[0]);
+  }
+
+  /* Filtry listy Zleceń pamiętane osobno dla każdej osoby w tej przeglądarce (klucz hala.panel.filtry.<id osoby>) — wspólny
+     telefon czy komputer nie miesza ustawień ludzi. Wszystko, co nie pasuje (stary zapis, ręczna edycja), wraca do wartości
+     pustej, żeby jeden zły zapis nie ukrył listy. */
+  const KLUCZ_FILTROW = 'hala.panel.filtry.';
+  const SORTOWANIA = [['', 'domyślna (spóźnione na górze)'], ['najnowsze', 'najnowsze → najstarsze'], ['najstarsze', 'najstarsze → najnowsze']];
+  const OKRESY_DNI = [2, 7, 30, 90];
+  const kluczFiltrow = idOsoby => KLUCZ_FILTROW + String(idOsoby || '');
+  function filtryZPamieci(tekst) {
+    let x;
+    try { x = JSON.parse(tekst); } catch (e) { return null; }
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+    const t = k => (typeof x[k] === 'string' ? x[k].slice(0, 80) : '');
+    const data = k => (/^\d{4}-\d{2}-\d{2}$/.test(t(k)) ? t(k) : '');
+    const kolejnosc = k => (['najnowsze', 'najstarsze'].includes(x[k]) ? x[k] : '');
+    return { dzial: t('dzial'), osoba: t('osoba'), rodzaj: t('rodzaj'), status: t('status'), linia: t('linia'), maszyna: t('maszyna'),
+             od: data('od'), doDnia: data('doDnia'), spoznione: x.spoznione === true, sort: kolejnosc('sort'),
+             okres: OKRESY_DNI.includes(+x.okres) ? +x.okres : 2, pulpitSort: kolejnosc('pulpitSort') };
+  }
+  const filtryDoPamieci = f => JSON.stringify(filtryZPamieci(JSON.stringify(f || {})));
+  /* Aktywne pola filtra po ludzku do podsumowania pod „Filtry”. nazwy = { dzial, osoba, rodzaj, status, linia, maszyna } —
+     słowniki kod → napis; brak napisu = kod. */
+  function opisFiltrow(f, nazwy) {
+    const x = f || {}, n = nazwy || {};
+    const nazwa = (pole, k) => (n[pole] && n[pole][k]) || k;
+    const wynik = [];
+    if (x.dzial) wynik.push(`dział: ${x.dzial === MOJE_DZIALY ? 'mój dział i moje' : nazwa('dzial', x.dzial)}`);
+    if (x.osoba) wynik.push(`osoba: ${nazwa('osoba', x.osoba)}`);
+    if (x.rodzaj) wynik.push(`rodzaj: ${nazwa('rodzaj', x.rodzaj)}`);
+    if (x.status) wynik.push(`status: ${nazwa('status', x.status)}`);
+    if (x.linia) wynik.push(`linia: ${nazwa('linia', x.linia)}`);
+    if (x.maszyna) wynik.push(`maszyna: ${nazwa('maszyna', x.maszyna)}`);
+    if (x.od || x.doDnia) wynik.push(`daty: ${[x.od ? `od ${x.od}` : '', x.doDnia ? `do ${x.doDnia}` : ''].filter(Boolean).join(' ')}`);
+    if (x.spoznione) wynik.push('tylko spóźnione');
+    if (x.sort) wynik.push(`kolejność: ${(SORTOWANIA.find(([k]) => k === x.sort) || [0, x.sort])[1]}`);
+    return wynik;
+  }
+  /* Czy filtry różnią się od stanu wyjściowego (u kierownika UR/KJ wyjściowy dział to „mój dział i moje”). Okres to nie
+     filtr — mówi tylko, ile Zamkniętych dociągnąć z serwera. */
+  const filtryAktywne = (f, domyslnyDzial) => { const x = f || {};
+    return (x.dzial || '') !== (domyslnyDzial || '') || !!(x.osoba || x.rodzaj || x.status || x.linia || x.maszyna || x.od || x.doDnia || x.spoznione || x.sort); };
 
   /* D76: działy, którym ta osoba zleca (okno „Nowe zlecenie”, zapisane): kierownik zakładu i admin — wszystkie, kierownik
      UR/KJ — tylko swój (hub i tak odrzuca resztę, 403). [{kod, nazwa, …}] w kolejności kontraktu. */
@@ -2776,11 +2942,46 @@
       automat: !!(wpis && wpis.dowod && !znany),
     };
   }
-  /* D87 (właściciel 2026-11-17): pulpit łączy podgląd załączników z odbiorem. Wiersze „do odbioru” dla zalogowanej osoby: te same,
-     które widzi w Zlecenia → „Do odbioru” (W.zlecenia), tylko zlecenia, które ta osoba może odebrać (kierownik UR/KJ — własny
-     dział, R2/D82). Kolejność jak na liście zleceń: po terminie, pilne, najstarsze. */
-  function odbiorPulpitu(args) {
-    return zlecenia(Object.assign({}, args, { filtr: 'do-zamkniecia' })).filter(z => z.moznaOdebrac && !z.czesc);
+  /* D87 (właściciel 2026-11-17, doprecyzowanie tego samego dnia): odbiór checklisty jest W KARCIE obchodu na Pulpicie („Checklista
+     mistrza”, „Checklista lidera”/linia), nie w osobnej sekcji. Wiersze „do odbioru” tej karty: zlecenia-checklisty (z pozycjami)
+     danego działu i linii, przypisane do bieżącej zmiany (tak samo jak H().checklistaZmiany — w tym „Nie mogę”, których karta nie
+     liczy do postępu), które ta osoba może odebrać (kierownik UR/KJ — własny dział, R2/D82) albo które są już tylko do wglądu
+     (D88: po końcu zmiany + karencji — bez przycisków, z napisem). dzial 'mistrz' = jedna kopia listy „każda linia osobno”
+     (bezKopiiLiniiMistrza), linia pomijana; dzial 'produkcja' (lider) — linia karty. Te same wiersze co w Zlecenia → Do odbioru
+     (zlecenia() z filtrem 'do-zamkniecia'), więc te same dowody i przyciski. Zmiana zlecenia jak H().zlecenieZmiany (wazne_do
+     = koniec zmiany; bez niego — czas zlecenia w oknie zmiany). */
+  function odbiorObchodu({ zlecenia: lista, zmiana, linia, dzial, slowniki, pracownicy, stale, teraz, ja }) {
+    if (!zmiana) return [];
+    const dz = dzial || 'produkcja';
+    const start = Date.parse(zmiana.od), koniec = Date.parse(zmiana.do);
+    const naZmianie = d => {
+      const wd = Date.parse(d.wazne_do), czas = Date.parse(d.czas_zlecenia);
+      return !isNaN(wd) ? Math.abs(wd - koniec) < 60000 : (!isNaN(czas) && czas >= start && czas < koniec);
+    };
+    const baza = dz === 'mistrz' ? bezKopiiLiniiMistrza(lista) : (lista || []);
+    const pasujace = baza.filter(z => {
+      const d = (z && z.dane) || {};
+      return d.dzial === dz && Array.isArray(d.pozycje) && d.pozycje.length > 0 && DO_ZAMKNIECIA.has(z.status)
+        && !(d.linia && linia && d.linia !== linia) && naZmianie(d);
+    });
+    return zlecenia({ zlecenia: pasujace, slowniki, pracownicy, stale, teraz, filtr: 'do-zamkniecia', ja })
+      .filter(z => !z.czesc && z.prawoOdbioru && (z.moznaOdebrac || z.odbiorZakonczony));
+  }
+
+  /* Karencja na Pulpicie (właściciel 2026-11-17): przez karencję D88 (15 min po końcu zmiany) obok kart bieżącej zmiany stoją karty
+     POPRZEDNIEJ zmiany z odbiorem — po karencji znikają (serwer odrzuca odbiór i zatwierdza sam). Zwraca { zmiana (poprzednia),
+     koniecMs (koniec zmiany + karencja), minut (ile jeszcze, zaokrąglone w górę), napis } albo null, gdy karencja minęła / nie ma
+     poprzedniej zmiany. Poprzednia = zmiana, która kończy się o początku bieżącej (H().zmianaDla minutę wcześniej). */
+  function zmianaWKarencji({ zmiana, slowniki, stale, teraz }) {
+    if (!zmiana) return null;
+    const start = Date.parse(zmiana.od), now = teraz === undefined ? Date.now() : teraz;
+    if (isNaN(start)) return null;
+    const koniecMs = start + H().karencjaOdbioru(stale) * 60000;
+    if (now >= koniecMs) return null;
+    const poprz = H().zmianaDla(start - 60000, zmianySl(slowniki));
+    if (!poprz || poprz.id === zmiana.id) return null;
+    const minut = Math.max(1, Math.ceil((koniecMs - now) / MIN));
+    return { zmiana: poprz, koniecMs, minut, napis: `${poprz.nazwa || 'Zmiana ' + poprz.nr} — jeszcze ${minut} min na odbiór` };
   }
 
   /* D87: czy po odebraniu pozycji zlecenie ma się zamknąć samo — wszystkie pozycje odebrane, zlecenie nadal „wykonane”.
@@ -2826,16 +3027,16 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
-                       zlecenia, odbiorPulpitu, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
+                       zlecenia, odbiorObchodu, zmianaWKarencji, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
-                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };
+                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, szukaj, NAZWY_WYNIKOW, maszynyAdmin, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

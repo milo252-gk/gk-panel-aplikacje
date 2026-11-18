@@ -66,19 +66,6 @@
 /* UI etap 3: „1 do odbioru” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
 .kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
-.odbior { grid-area: odbior; }
-/* D87: sekcja „Do odbioru” na Pulpicie (jest tylko, gdy coś czeka na odbiór — panel.js: rysujOdbior ustawia .ma-odbior). */
-.na-zywo.ma-odbior { grid-template-areas: "liczby liczby" "odbior odbior" "obchody obchody" "awarie jakosc"; grid-template-rows: auto auto auto minmax(0, 1fr); }
-@media (min-width: 901px) {
-  .na-zywo.ma-odbior.bez-jakosci { grid-template-areas: "liczby" "odbior" "obchody" "jakosc" "awarie"; grid-template-rows: auto auto auto auto minmax(0, 1fr); }
-}
-@media (max-width: 900px) {
-  .na-zywo.ma-odbior { grid-template-areas: "liczby" "odbior" "obchody" "awarie" "jakosc"; grid-template-rows: auto; }
-}
-/* Na dużym ekranie strona się nie przewija — karty odbioru przewijają się w sekcji, żeby Awarie zostały na widoku. */
-@media (min-width: 1100px) and (min-height: 600px) { .odbior #lista-odbioru { max-height: 40vh; } }
-.odbior h2 .licznik { font-weight: 700; }
-.odbior .pokaz-wszystkie { align-self: flex-start; }
 .awarie { grid-area: awarie; }
 .jakosc { grid-area: jakosc; }
 section { background: var(--karta); box-shadow: var(--obrys-gorny), var(--cien); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
@@ -116,8 +103,15 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 }
 /* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
 @media (max-width: 600px) {
-  .naglowek .kto span { display: none; }
+  .naglowek .kto > span { display: none; }
+  .naglowek .szukaj-napis { display: none; }
   .naglowek .zegar { font-size: 18px; }
+  /* Ocena UX 2026-11-17, poz. 11: „Zmiana II 14:00–22:00…” był ucięty — tytuł w dwóch wierszach (nazwa nad godzinami). */
+  .hala-uklad > .naglowek .zmiana { white-space: normal; overflow: visible; line-height: 1.2; font-size: 16px; }
+  .hala-uklad > .naglowek .zmiana > b { display: block; }
+  .hala-uklad > .naglowek .zmiana :is(span, .slaby) { font-size: 12px; }
+  .naglowek .dz-napis { font-size: 12px; }
+  .hala-uklad > .naglowek .zmiana .slaby { display: none; }   /* „zostało …” zostaje na komputerze; na telefonie tytuł ma się zmieścić w dwóch wierszach */
   .na-zywo { padding: 8px; gap: 8px; }
   .kafelki-liczb { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .kafelki-liczb b { font-size: 22px; }
@@ -144,6 +138,14 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .kafelek .liczby { margin-top: 6px; font-size: .9em; display: flex; gap: 8px; align-items: baseline; }
 .kafelek .liczby b { font-size: 1.3em; font-variant-numeric: tabular-nums; }
 .kafelek .liczby span { color: var(--tekst-slaby); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D87 (właściciel 2026-11-17): „Do odbioru” w karcie obchodu — rozwinięta karta zajmuje cały rząd kafelków (pozycje z dowodami i
+   przyciskami potrzebują szerokości); kolor i obrys karty bez zmian. Na dużym ekranie strona się nie przewija, więc kafelki
+   przewijają się w sekcji, żeby Awarie zostały na widoku. */
+.kafelek.odbior-otwarty { grid-column: 1 / -1; }
+.kafelek-odbior { margin-top: 8px; border-top: 1px solid var(--ramka); padding-top: 4px; }
+.kafelek-odbior > summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; gap: 8px; }
+.kafelek-odbior > .lista { margin-top: 6px; overflow: visible; }
+@media (min-width: 1100px) and (min-height: 600px) { .obchody #kafelki { max-height: 55vh; overflow: auto; } }
 .opoznione { margin: 6px 0 0; padding: 0; list-style: none; font-size: .85em; color: var(--czerwony); font-weight: 600; }
 
 /* ---------------------------------------------------------------- awarie */
@@ -484,6 +486,17 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
   .chipy { gap: 6px; }
   .chip { padding: 0 12px; font-size: 14px; }
 }
+/* Filtry i sortowanie (2026-11-17): zwijany blok pod Działem/Osobą/Rodzajem + wiersz „N z M · aktywne · Wyczyść filtry”. */
+.filtry-wiecej { flex: 1 1 100%; grid-column: 1 / -1; }   /* grid-column: na telefonie formularz jest siatką 2 kolumn */
+.filtry-wiecej > summary { cursor: pointer; font-weight: 700; color: var(--tekst-slaby); min-height: var(--dotyk); display: flex; align-items: center; }
+.filtry-wiecej-pola { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; padding-bottom: 4px; }
+.filtry-wiecej-pola input[type="date"] { min-width: 150px; }
+.filtry-stan { flex: 1 1 100%; grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.filtry-stan .licznik { font-weight: 700; }
+@media (max-width: 600px) {
+  .filtry-wiecej-pola { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .filtry-wiecej-pola select, .filtry-wiecej-pola input[type="date"] { min-width: 0; width: 100%; }
+}
 .wskazniki-osoby { margin-top: 18px; }
 .tabela-przewijana { overflow-x: auto; }
 .tabela-osob { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
@@ -723,3 +736,16 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 /* Ikony liniowe zamiast emoji (poprawki po audycie 10.11): ikona sama w przycisku/wierszu nie potrzebuje odstępu od napisu. */
 #dzwiek .ik, .pozycja-glowna .ikony .ik { margin-right: 2px; }
 #dzwiek { display: inline-flex; align-items: center; gap: 4px; }
+
+/* D4: okno „Szukaj” (przycisk w nagłówku) — pole, wyniki pogrupowane, zlecenie znalezione na liście dostaje ramkę. */
+.naglowek #szukaj .szukaj-napis { font-size: 14px; }
+.okno-szukaj { width: min(560px, 94vw); }
+.okno-szukaj input[type="search"] { width: 100%; box-sizing: border-box; min-height: 48px; font-size: 17px; }
+.szukaj-wyniki { margin-top: 10px; max-height: 55vh; overflow-y: auto; display: grid; gap: 6px; align-content: start; }
+.szukaj-grupa { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--tekst-slaby); }
+.szukaj-wynik { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px;
+  text-align: left; background: var(--karta); color: var(--tekst); border: 1px solid var(--ramka); border-radius: var(--promien, 10px); font-weight: 400; }
+.szukaj-tekst { display: grid; gap: 2px; min-width: 0; }
+.szukaj-tekst b { overflow-wrap: anywhere; }
+.szukaj-wynik .znacznik { flex: none; }
+.zlecenie.znalezione { outline: 3px solid var(--pomarancz); outline-offset: 2px; }

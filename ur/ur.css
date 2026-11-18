@@ -276,3 +276,9 @@ button.karta { width: 100%; text-align: left; font-weight: 400; min-height: var(
 .filtry { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .filtry-listy { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .podglad-zdjecia { max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; }
+
+/* D5: Pulpit — kafelki liczb (klikalne, jak w Panelu); same zera → jedno spokojne zdanie. Mechanik w rękawicy: kafelek min. 88 px. */
+.ekran-pulpit .pulpit-kafelki { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.ekran-pulpit .pulpit-kafelki > a { display: block; min-height: 88px; box-sizing: border-box; text-decoration: none; color: inherit; cursor: pointer; }
+.ekran-pulpit .pulpit-kafelki > a:focus-visible { outline: 3px solid var(--tekst); outline-offset: 2px; }
+.ekran-pulpit .spokoj { margin: 16px 0; font-weight: 700; }

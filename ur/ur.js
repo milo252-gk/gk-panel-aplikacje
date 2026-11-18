@@ -311,6 +311,17 @@
   UR.ekran = (nazwa, def) => { UR.ekrany[nazwa] = def; };
   // Zlecenia od kierownika (Panel → dział „ur”): wspólny ekran z wspolne/zlecenia.js.
   UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur', komunikat: t => UR.komunikat(t, 'ok') }) });
+  // D5 (właściciel 2026-11-17): Pulpit = ekran startowy (pusty adres) — kafelki liczb jak w Panelu, tylko niezerowe, klik → lista.
+  // Dotychczasowe ekrany i adresy (#awarie, #przeglady, #awaria/<id> z powiadomień) działają bez zmian.
+  UR.ekran('pulpit', {
+    rysuj(el) {
+      const k = UR.kontekst();
+      const p = W.pulpit({ przeglady: hala.obiekty('przeglad'), awarie: hala.obiekty('awaria'), zlecenia: global.HalaZlecenia.doZrobienia(hala, { dzial: 'ur' }),
+                           slowniki: hala.slowniki, pracownicy: hala.pracownicy, teraz: k.teraz, ja: k.ja });
+      el.innerHTML = `<h1>Pulpit</h1>` + (p.spokoj ? '<p class="spokoj pusto ok">✓ Wszystko w porządku — nic nie czeka</p>'
+        : `<div class="hala-kafelki pulpit-kafelki">${p.kafelki.map(x => `<a class="${esc(x.klasa)}" href="${esc(x.adres)}" data-kafel="${esc(x.kod)}"><span class="etykieta">${esc(x.etykieta)}</span><b>${x.liczba}</b></a>`).join('')}</div>`);
+    },
+  });
   // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'ur' }), otworzZlecenia: () => UR.idz('zlecenia'),
                                                                         komunikat: t => UR.komunikat(t, 'ok') });
@@ -549,6 +560,7 @@
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu">
           <a class="przycisk" href="#liczniki">Liczniki maszyn (motogodziny, cykle)</a>
+          ${UR.mozeKpi() ? '<a class="przycisk" href="#kpi">KPI: wskaźniki UR</a>' : ''}
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>

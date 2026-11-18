@@ -224,7 +224,7 @@
       <ul class="lista-odrzuconych">${lista.map(o => `<li><b>${esc(nazwaTypu(o.zd.typ))}</b> <span class="slaby">${esc(W.dataKrotka(o.zd.czas))} ${esc(W.godzina(o.zd.czas))}</span>
         <div class="blad">${esc(o.powod)}</div>
         ${HalaKolejkaUI.przyciskPonow(o.id)} <button type="button" class="maly" data-usun-odrzucone="${esc(o.id)}">Usuń z listy</button></li>`).join('')}</ul>` : '')
-      + HalaKolejkaUI.zdjeciaHtml(zdjecia) || '<p class="slaby">Brak.</p>';
+      + HalaKolejkaUI.zdjeciaHtml(zdjecia) || '<p class="pusto">Brak niewysłanych zapisów. Wszystko dotarło.</p>';
   }
   HalaKolejkaUI.podlacz($('lista-odrzuconych'), hala, { odswiez: () => rysujOdrzucone(), komunikat });
   async function pokazOdrzucone() {
@@ -337,6 +337,15 @@
     $('zegar').textContent = W.godzina(d.teraz);
   }
 
+  // Czy rozwinięte „Do odbioru” w karcie obchodu (klucz karty → false = zwinięte); domyślnie rozwinięte, wybór przeżywa przerysowania.
+  const odbiorKarty = new Map();
+  $('kafelki').addEventListener('toggle', ev => {
+    const det = ev.target.closest && ev.target.closest('details.kafelek-odbior');
+    if (!det) return;
+    odbiorKarty.set(det.dataset.klucz, det.open);
+    det.closest('.kafelek').classList.toggle('odbior-otwarty', det.open);
+  }, true);
+  $('kafelki').addEventListener('click', obsluzKlikZlecenia);
   function rysujKafelki(d, awarie) {
     const kafelki = W.obchody({
       slowniki: d.slowniki, pracownicy: d.pracownicy, zmiana: d.zmiana, teraz: d.teraz, stale: d.stale,
@@ -347,20 +356,53 @@
     const mistrz = W.obchodyMistrza({
       pracownicy: d.pracownicy, zmiana: d.zmiana, teraz: d.teraz, prog: hala.ustawienie('prog_zolty_min', 30), zlecenia: hala.obiekty('zlecenie'),
     });
+    // D87: odbiór checklisty bieżącej zmiany jest w karcie obchodu (nie w osobnej sekcji Pulpitu). Roli bez prawa odbioru
+    // (konto ekranu, lider…) karta wygląda jak dotąd.
+    const mozeOdbierac = mozeWyslac('zlecenie.zamkniete');
+    const odbiory = new Map();
+    for (const k of mistrz.concat(kafelki)) {
+      const w = mozeOdbierac ? W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.linia === null ? 'mistrz' : 'produkcja',
+                                                slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik }) : [];
+      if (w.length) odbiory.set(k.klucz, w);
+    }
+    // Karencja D88 (właściciel 2026-11-17): przez 15 min po końcu zmiany obok kart bieżącej stoją karty POPRZEDNIEJ zmiany z odbiorem
+    // („Zmiana II — jeszcze 7 min na odbiór”); po karencji znikają, a serwer zatwierdza zlecenia sam. Karta tylko, gdy coś czeka.
+    const karencja = mozeOdbierac ? W.zmianaWKarencji({ zmiana: d.zmiana, slowniki: d.slowniki, stale: d.stale, teraz: d.teraz }) : null;
+    const kartyKarencji = [];
+    if (karencja) {
+      for (const k of [{ linia: null, naglowek: 'Checklista mistrza', klucz: 'mistrz' }].concat(kafelki)) {
+        const w = W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: karencja.zmiana, linia: k.linia, dzial: k.linia === null ? 'mistrz' : 'produkcja',
+                                    slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik });
+        if (w.length) kartyKarencji.push({ klucz: `karencja/${karencja.zmiana.id}/${k.klucz}`, naglowek: k.naglowek, napis: karencja.napis, wiersze: w });
+      }
+    }
+    zlecBufor = new Map([].concat(...odbiory.values(), ...kartyKarencji.map(k => k.wiersze)).map(z => [z.id, z]));        // okno szczegółów pozycji czyta stąd
+    if (okPoz.open) rysujPozycje();
+    const kartaKarencji = k => `<article class="kafelek kolor-zolty ma-odbior karencja${odbiorKarty.get(k.klucz) !== false ? ' odbior-otwarty' : ''}" data-klucz="${esc(k.klucz)}">
+        <header><h3>${esc(k.naglowek)}</h3><span class="znacznik uwaga">Poprzednia zmiana</span></header>
+        <div class="stan-zmiany">${esc(k.napis)}</div>
+        <details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbiorKarty.get(k.klucz) !== false ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${k.wiersze.length}</span></summary>
+          <div class="lista">${k.wiersze.map(wierszZlecenia).join('')}</div></details>
+      </article>`;
     $('kafelki').innerHTML = mistrz.concat(kafelki).map(k => {
       const proc = k.wszystkie ? Math.round(k.zrobione * 100 / k.wszystkie) : 0;
       const stan = k.zamknieta ? 'Raport wysłany' : k.przyjecie && k.przyjecie.tekst ? k.przyjecie.tekst : k.wirtualna ? 'Nie otwarta' : (k.lider || 'Otwarta');
       const opoz = k.opoznione.slice(0, 3).map(p => `<li>${esc(p.godz)} ${esc(p.nazwa)}</li>`).join('')
         + (k.opoznione.length > 3 ? `<li>+${k.opoznione.length - 3} więcej</li>` : '');
       // UI etap 4: zatrzymana maszyna na „zielonym” (obchód na czas) kafelku myliła — kafelek dostaje czerwony obrys (.stoi).
-      return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}">
+      const odb = odbiory.get(k.klucz) || [], odbOtwarty = odb.length && odbiorKarty.get(k.klucz) !== false;
+      return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}${odb.length ? ' ma-odbior' : ''}${odbOtwarty ? ' odbior-otwarty' : ''}" data-klucz="${esc(k.klucz)}">
         <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">⛔ Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
         <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${k.wszystkie}" aria-valuenow="${k.zrobione}"><span style="width:${proc}%"></span></div>
         <div class="liczby"><b>${k.zrobione}/${k.wszystkie}</b>${k.najblizsza ? ` <span>Następne ${esc(k.najblizsza.godz)} · ${esc(k.najblizsza.nazwa)}</span>` : k.wszystkie ? ' <span>Wszystko zrobione</span>' : ' <span>Brak planu</span>'}</div>
         ${k.opoznione.length ? `<ul class="opoznione" aria-label="Opóźnione">${opoz}</ul>` : ''}
+        ${odb.length ? `<details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbOtwarty ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${odb.length}</span></summary>
+          <div class="lista">${odb.map(wierszZlecenia).join('')}</div></details>` : ''}
       </article>`;
-    }).join('') || `<p class="pusto">${esc(W.pustyObchod(d.slowniki, d.zmiana))}</p>`;
+    }).concat(kartyKarencji.map(kartaKarencji)).join('') || `<p class="pusto">${esc(W.pustyObchod(d.slowniki, d.zmiana))}</p>`;
+    for (const e of $('kafelki').querySelectorAll('img[data-plik]'))
+      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
     // Kafelek mistrza liczy się do „Opóźnione obchody” na Pulpicie tak samo jak kafelek linii (czerwony = po terminie).
     return mistrz.concat(kafelki);
   }
@@ -524,7 +566,6 @@
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
         rysujJakosc(jakosc, bhpOtwarte);
-        rysujOdbior(d, zlecenia);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
                                 slowniki: d.slowniki, bhp: bhpOtwarte.length, urzadzenia }));
         pokazJeszcze();
@@ -549,26 +590,6 @@
     $('kafelki-liczb').innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie stoi, nic nie czeka</p>' : w.kafelki.map(k => `
       <button type="button" class="${esc(k.klasa)}" data-kafel="${esc(k.kod)}"><span class="etykieta">${esc(k.etykieta)}</span><b>${k.liczba}</b>${k.dopisek ? `<span class="dopisek">${esc(k.dopisek)}</span>` : ''}</button>`).join('');
   }
-  /* D87: sekcja „Do odbioru” na Pulpicie — te same wiersze co w Zlecenia → „Do odbioru” (wierszZlecenia), więc te same dowody i
-     przyciski (Odbierz / Zwróć, także pozycja po pozycji). Najwyżej kilka kart naraz, reszta w Zleceniach; kierownik UR/KJ widzi
-     tylko swój dział (W.odbiorPulpitu → moznaOdebrac), konto ekranu nic (nie ma prawa odbioru). */
-  const MAKS_ODBIOR_NA_PULPICIE = 4;
-  function rysujOdbior(d, lista) {
-    const wiersze = mozeWyslac('zlecenie.zamkniete')
-      ? W.odbiorPulpitu({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik }) : [];
-    $('pulpit-odbior').hidden = !wiersze.length;
-    $('na-zywo').classList.toggle('ma-odbior', wiersze.length > 0);
-    if (!wiersze.length) { $('lista-odbioru').innerHTML = ''; return; }
-    zlecBufor = new Map(wiersze.map(z => [z.id, z]));        // okno szczegółów pozycji czyta stąd
-    if (okPoz.open) rysujPozycje();
-    $('licznik-odbioru').textContent = wiersze.length;
-    $('lista-odbioru').innerHTML = wiersze.slice(0, MAKS_ODBIOR_NA_PULPICIE).map(wierszZlecenia).join('')
-      + (wiersze.length > MAKS_ODBIOR_NA_PULPICIE
-        ? `<button type="button" class="pokaz-wszystkie" data-akcja="odbior-wszystkie">Wszystkie do odbioru w Zleceniach (${wiersze.length})</button>` : '');
-    for (const e of $('lista-odbioru').querySelectorAll('img[data-plik]'))
-      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
-  }
-
   // Kafelki zleceń prowadzą do zleceń — „po terminie” do „W toku”, gdzie spóźnione stoją na górze z ⏰ (UI etap 2:
   // osobnego filtra „Po terminie” już nie ma). Reszta jest na tym samym ekranie.
   $('kafelki-liczb').addEventListener('click', ev => {
@@ -657,6 +678,91 @@
     if (b) { trybZlecen = b.dataset.tryb; narysuj(); }
   });
 
+  // ------------------------------------------------------------ D4: jedno globalne „Szukaj” (przycisk w nagłówku)
+
+  /* Okno „Szukaj”: pole + lista wyników z W.szukaj (czysta funkcja w widok.js). Przeszukuje to, co Panel już ma: zlecenia z
+     bieżących dwóch dób, zamknięte dociągnięte z serwera przez filtr Okres (starsze.lista) i słowniki — nic nowego z serwera.
+     Dotknięcie wyniku otwiera Zlecenia z odpowiednim filtrem (osoba, maszyna, linia, dział) albo z zaznaczonym zleceniem. Filtry
+     ustawione przy przejściu NIE są zapisywane do pamięci (to skrót, nie wybór — jak kafelek „BHP”), więc po odświeżeniu wracają
+     te, które osoba sobie zapamiętała. */
+  let szukajWyniki = [];
+  let zaznaczZlecenie = null;
+  function wierszeDoSzukania() {
+    const d = dane();
+    const jest = new Set();
+    const wszystkie = [];
+    for (const z of hala.obiekty('zlecenie').concat(starsze.lista || [])) if (z && !jest.has(z.id)) { jest.add(z.id); wszystkie.push(z); }
+    return { d, wiersze: W.zlecenia({ zlecenia: wszystkie, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: 'wszystkie', ja: hala.pracownik }) };
+  }
+  const zaKrotkaFraza = fraza => String(fraza || '').trim().length < 2;
+  function rysujWynikiSzukania() {
+    const pole = $('szukaj-pole'), lista = $('szukaj-wyniki');
+    const fraza = pole.value;
+    const { d, wiersze } = wierszeDoSzukania();
+    szukajWyniki = W.szukaj({ fraza, zlecenia: wiersze, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, ja: hala.pracownik });
+    if (!fraza.trim()) { lista.innerHTML = '<p class="slaby">Wpisz numer zlecenia (ZL-…), tytuł, osobę, maszynę, linię albo dział.</p>'; return; }
+    if (!szukajWyniki.length) { lista.innerHTML = `<p class="pusto">${zaKrotkaFraza(fraza) ? 'Wpisz co najmniej 2 znaki.' : 'Nic nie znaleziono. Sprawdź pisownię albo wpisz numer zlecenia.'}</p>`; return; }
+    let rodzaj = '';
+    lista.innerHTML = szukajWyniki.map((w, i) => {
+      const naglowek = w.rodzaj !== rodzaj ? `<h3 class="szukaj-grupa">${esc(W.NAZWY_WYNIKOW[w.rodzaj])}</h3>` : '';
+      rodzaj = w.rodzaj;
+      const znacznik = w.rodzaj !== 'zlecenie' ? `<span class="znacznik neutral">${w.liczba} ${w.liczba === 1 ? 'zlecenie' : 'zleceń'}</span>` : (w.znacznik ? `<span class="znacznik neutral">${esc(w.znacznik)}</span>` : '');
+      return `${naglowek}<button type="button" class="szukaj-wynik" data-n="${i}"><span class="szukaj-tekst"><b>${esc(w.tytul)}</b>${w.opis ? `<span class="slaby">${esc(w.opis)}</span>` : ''}</span>${znacznik}</button>`;
+    }).join('');
+  }
+  function otworzSzukanie() {
+    if (!hala.zalogowany() || document.body.classList.contains('tryb-ekran')) return;
+    let o = document.getElementById('okno-szukaj');
+    if (!o) {
+      o = document.createElement('dialog');
+      o.id = 'okno-szukaj';
+      o.className = 'hala-okno okno-szukaj';
+      o.setAttribute('aria-label', 'Szukaj');
+      o.innerHTML = `<form method="dialog"><h2>Szukaj</h2>
+        <input id="szukaj-pole" type="search" autocomplete="off" enterkeyhint="search" aria-label="Szukaj: zlecenie, osoba, maszyna, linia, dział" placeholder="ZL-…, tytuł, osoba, maszyna, dział">
+        <div id="szukaj-wyniki" class="szukaj-wyniki" aria-live="polite"></div>
+        <div class="hala-okno-przyciski"><button type="submit">Zamknij</button></div></form>`;
+      document.body.appendChild(o);
+      $('szukaj-pole').addEventListener('input', rysujWynikiSzukania);
+      $('szukaj-pole').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const p = document.querySelector('#szukaj-wyniki .szukaj-wynik'); if (p) p.click(); } });
+      $('szukaj-wyniki').addEventListener('click', ev => {
+        const b = ev.target.closest('.szukaj-wynik');
+        if (b) przejdzDoWyniku(szukajWyniki[+b.dataset.n]);
+      });
+    }
+    $('szukaj-pole').value = '';
+    rysujWynikiSzukania();
+    if (!o.open) o.showModal();
+    $('szukaj-pole').focus();
+  }
+  function przejdzDoWyniku(w) {
+    if (!w) return;
+    const n = w.nawigacja || {};
+    const o = document.getElementById('okno-szukaj');
+    if (o && o.open) o.close();
+    // Skrót: czyste filtry (osoba / maszyna / linia / dział z wyniku), bez zapisu do pamięci — patrz komentarz wyżej.
+    Object.assign(filtry, { dzial: n.dzial || '', osoba: n.osoba || '', rodzaj: '', status: '', linia: n.linia || '', maszyna: n.maszyna || '',
+                            od: '', doDnia: '', spoznione: false });
+    if (n.filtr === 'zamkniete' && filtry.okres < 7) filtry.okres = 7;
+    zaznaczZlecenie = n.zlecenie || null;
+    Panel.pokazZlecenia(n.filtr || 'otwarte', 'biezace', '');
+    if (n.filtr === 'zamkniete' && okresDni() > 2) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
+  }
+  /* Po narysowaniu listy Zleceń: zlecenie wybrane w „Szukaj” dostaje ramkę i przewija się na ekran (raz). */
+  function zaznaczZnalezione() {
+    if (!zaznaczZlecenie) return;
+    const el = $('lista-zlecen').querySelector(`[data-id="${CSS.escape(zaznaczZlecenie)}"]`);
+    if (!el) return;
+    zaznaczZlecenie = null;
+    el.classList.add('znalezione');
+    el.scrollIntoView({ block: 'center' });
+    setTimeout(() => el.classList.remove('znalezione'), 6000);
+  }
+  $('szukaj').addEventListener('click', otworzSzukanie);
+  document.addEventListener('keydown', ev => {
+    if (ev.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target || {}).tagName || '') && !document.querySelector('dialog[open]')) { ev.preventDefault(); otworzSzukanie(); }
+  });
+
   function klasaZlecenia(status) {
     return { nowe: 'info', przyjete: 'info', wykonane: 'ok', odrzucone: 'uwaga', zamkniete: 'neutral', anulowane: 'neutral',
              przepadlo: 'alarm', zaplanowane: 'neutral' }[status] || 'neutral';
@@ -675,8 +781,31 @@
 
   /* D55: filtry listy zleceń. Okres dłuższy niż 2 dni (Zamknięte) — dociągamy zlecenia z serwera (GET /stan/zlecenie?od=),
      telefon/Panel trzyma w pamięci tylko dwie doby. */
-  const filtry = { dzial: '', osoba: '', okres: 2, spoznione: false, rodzaj: '' };
+  const filtry = { dzial: '', osoba: '', okres: 2, spoznione: false, rodzaj: '', status: '', linia: '', maszyna: '', od: '', doDnia: '', sort: '', pulpitSort: '' };
   let starsze = { od: null, lista: [], wczytuje: false };
+  /* Filtry i sortowanie pamiętane osobno dla każdej osoby w tej przeglądarce (2026-11-17): klucz hala.panel.filtry.<id osoby>.
+     Wczytujemy raz po zalogowaniu osoby (zmiana osoby = jej własne ustawienia, nie poprzedniej), zapisujemy przy każdej zmianie
+     przez użytkownika — nie przy wejściu z kafelka (np. „BHP”), bo to chwilowy skrót, nie wybór. Brak pamięci albo zły zapis
+     = ustawienia domyślne; nic nie zmienia istniejących kluczy ani kolejki zapisów. */
+  const dzialDomyslny = () => (mojeDzialy() ? W.MOJE_DZIALY : '');
+  function zadbajOFiltry() {
+    const ja = hala.pracownik && hala.pracownik.id;
+    if (!ja || filtry.dlaOsoby === ja) return;
+    filtry.dlaOsoby = ja;
+    // Klucz jako literał „hala.panel.filtry.” + id (to samo co W.KLUCZ_FILTROW): test t_dostep pilnuje przedrostka „hala.” w kodzie.
+    const zapis = W.filtryZPamieci(pamiec.czytaj('hala.panel.filtry.' + ja));
+    Object.assign(filtry, { dzial: dzialDomyslny(), osoba: '', rodzaj: '', status: '', linia: '', maszyna: '', od: '', doDnia: '', spoznione: false,
+                            sort: '', okres: 2, pulpitSort: '' }, zapis || {});
+    if (zapis && !zapis.dzial) filtry.dzial = '';                         // zapisane „wszystkie” zostaje „wszystkie”
+    if (filtry.dzial === W.MOJE_DZIALY && !mojeDzialy()) filtry.dzial = '';
+  }
+  const zapiszFiltry = () => { const ja = hala.pracownik && hala.pracownik.id; if (ja) pamiec.zapisz('hala.panel.filtry.' + ja, W.filtryDoPamieci(filtry)); };
+  /* Ile dni wstecz dociągnąć Zamknięte: Okres, a przy „Od dnia” — tyle, ile trzeba, żeby ta data była w pamięci. */
+  function okresDni() {
+    const z = filtry.od ? W.zakresDat(filtry.od, '') : null;
+    return z && z.odMs !== null ? Math.max(2, Math.ceil((hala.teraz() - z.odMs) / 86400000)) : filtry.okres;
+  }
+  let probaStarszych = 0;
   async function wczytajStarsze(dni) {
     const od = new Date(hala.teraz() - dni * 86400000).toISOString();
     if (starsze.wczytuje || (starsze.od && starsze.od <= od)) return;
@@ -691,8 +820,8 @@
   }
   Panel.zleceniaOkresu = async dni => { await wczytajStarsze(dni); return starsze.lista; };
   function listaZOkresem(lista) {
-    if (filtrZlecen !== 'zamkniete' || filtry.okres <= 2 || !starsze.od) return lista;
-    const od = hala.teraz() - filtry.okres * 86400000;
+    if (filtrZlecen !== 'zamkniete' || okresDni() <= 2 || !starsze.od) return lista;
+    const od = hala.teraz() - okresDni() * 86400000;
     const jest = new Set(lista.map(z => z.id));
     return lista.concat(starsze.lista.filter(z => !jest.has(z.id) && Date.parse(z.zmieniono || (z.dane || {}).czas_zlecenia) >= od));
   }
@@ -703,7 +832,7 @@
     const f = $('filtry-zlecen');
     const dz = (d.stale && d.stale.dzialy) || [];
     const moje = mojeDzialy(), ja = hala.pracownik && hala.pracownik.id;
-    if (filtry.dlaOsoby !== ja) { filtry.dlaOsoby = ja; filtry.dzial = moje ? W.MOJE_DZIALY : ''; }
+    zadbajOFiltry();                    // domyślny dział raz na osobę (D76) albo to, co ta osoba zapamiętała (2026-11-17)
     const nowe = (moje ? `<option value="${W.MOJE_DZIALY}">mój dział i moje</option>` : '') + '<option value="">wszystkie</option>'
       + dz.map(x => `<option value="${esc(x.kod)}">${esc(x.nazwa)}</option>`).join('');
     if (f.dzial.dataset.html !== nowe) { f.dzial.innerHTML = nowe; f.dzial.dataset.html = nowe; }
@@ -714,25 +843,85 @@
       .filter(p => (p.role || []).some(r => dz.some(x => (x.role || []).includes(r))));
     const noweO = '<option value="">wszyscy</option>' + osoby.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('');
     if (f.osoba.dataset.html !== noweO) { f.osoba.innerHTML = noweO; f.osoba.dataset.html = noweO; f.osoba.value = filtry.osoba; if (f.osoba.value !== filtry.osoba) filtry.osoba = ''; }
+    // Osoba ustawiona z zewnątrz (wynik „Szukaj”) — pole ma pokazać to samo, co filtruje; nieznana na liście wraca do „wszyscy”.
+    if (f.osoba.value !== filtry.osoba) { f.osoba.value = filtry.osoba; if (f.osoba.value !== filtry.osoba) filtry.osoba = ''; }
     $('filtr-okres').hidden = filtrZlecen !== 'zamkniete';
     const noweR = '<option value="">wszystkie</option>' + W.RODZAJE_ZADAN.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join('');
     if (f.rodzaj.dataset.html !== noweR) { f.rodzaj.innerHTML = noweR; f.rodzaj.dataset.html = noweR; }
     f.rodzaj.value = filtry.rodzaj;
+    f.spoznione.checked = filtry.spoznione;
+    f.okres.value = String(filtry.okres);
+  }
+  /* Pola z 2026-11-17 (status, linia, maszyna, daty, kolejność). Listy budujemy z wierszy tej zakładki (status — tylko te,
+     które tam są; wybrana wartość zostaje na liście, żeby zapamiętany filtr nie był niewidocznym ukrywaniem listy). Linia —
+     tylko przy kilku liniach (W.wieleLinii, jak wszędzie); maszyna zawężona do wybranej linii. */
+  function rysujFiltryDodatkowe(d, zlecenia) {
+    const f = $('filtry-zlecen');
+    const sl = d.slowniki || {};
+    const nazwyStatusow = (((hala.kontrakt || {}).obiekty || {}).zlecenie || {}).statusy || {};
+    const kody = [...new Set(zlecenia.map(z => z.status).concat(filtry.status ? [filtry.status] : []))];
+    const nS = '<option value="">wszystkie</option>' + kody.map(k => `<option value="${esc(k)}">${esc(nazwyStatusow[k] || k)}</option>`).join('');
+    if (f.status.dataset.html !== nS) { f.status.innerHTML = nS; f.status.dataset.html = nS; }
+    f.status.value = filtry.status;
+    const wiele = W.wieleLinii(sl);
+    $('filtr-linia').hidden = !wiele;
+    if (!wiele && filtry.linia) filtry.linia = '';            // jedna linia = pole schowane, więc nie może też cicho filtrować
+    const linie = Object.entries(sl.linie || {}).sort((a, b) => ((a[1] || {}).kolejnosc || 0) - ((b[1] || {}).kolejnosc || 0));
+    const nL = '<option value="">wszystkie</option>' + linie.map(([k, l]) => `<option value="${esc(k)}">${esc((l || {}).nazwa || k)}</option>`).join('');
+    if (f.linia.dataset.html !== nL) { f.linia.innerHTML = nL; f.linia.dataset.html = nL; }
+    f.linia.value = filtry.linia;
+    const maszyny = Object.entries(sl.maszyny || {}).filter(([k, m]) => !filtry.linia || (m || {}).linia === filtry.linia || k === filtry.maszyna)
+      .sort((a, b) => String((a[1] || {}).nazwa || a[0]).localeCompare(String((b[1] || {}).nazwa || b[0]), 'pl'));
+    $('filtr-maszyna').hidden = !maszyny.length;
+    const nM = '<option value="">wszystkie</option>' + maszyny.map(([k, m]) => `<option value="${esc(k)}">${esc((m || {}).nazwa || k)}</option>`).join('');
+    if (f.maszyna.dataset.html !== nM) { f.maszyna.innerHTML = nM; f.maszyna.dataset.html = nM; }
+    f.maszyna.value = filtry.maszyna;
+    const nK = W.SORTOWANIA.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join('');
+    if (f.sort.dataset.html !== nK) { f.sort.innerHTML = nK; f.sort.dataset.html = nK; }
+    f.sort.value = filtry.sort;
+    if (f.od.value !== filtry.od) f.od.value = filtry.od;
+    if (f.doDnia.value !== filtry.doDnia) f.doDnia.value = filtry.doDnia;
+    // Blok „Więcej filtrów” sam się rozwija, gdy jest w nim coś ustawionego — żeby nikt nie szukał, czemu lista jest krótsza.
+    if (filtry.status || filtry.linia || filtry.maszyna || filtry.od || filtry.doDnia || filtry.sort) $('filtry-wiecej').open = true;
+    return { dzial: Object.fromEntries(((d.stale && d.stale.dzialy) || []).map(x => [x.kod, x.nazwa])),
+             osoba: Object.fromEntries((d.pracownicy || []).map(p => [p.id, p.nazwa])),
+             rodzaj: Object.fromEntries(W.RODZAJE_ZADAN), status: nazwyStatusow,
+             linia: Object.fromEntries(linie.map(([k, l]) => [k, (l || {}).nazwa || k])),
+             maszyna: Object.fromEntries(Object.entries(sl.maszyny || {}).map(([k, m]) => [k, (m || {}).nazwa || k])) };
+  }
+  /* „N z M”, co jest aktywne i „Wyczyść filtry” — N po filtrach, M wszystkich w tej zakładce (przed filtrami wybieranymi przez osobę). */
+  function rysujStanFiltrow(nazwy, n, m) {
+    const aktywne = W.filtryAktywne(filtry, dzialDomyslny());
+    $('filtry-licznik').textContent = `${n} z ${m}`;
+    const opis = W.opisFiltrow(filtry, nazwy);
+    $('filtry-opis').textContent = opis.length ? `Aktywne: ${opis.join(' · ')}` : '';
+    $('filtry-czysc').hidden = !aktywne;
   }
   $('filtry-zlecen').addEventListener('change', ev => {
     const f = $('filtry-zlecen');
     Object.assign(filtry, { dzial: f.dzial.value, osoba: f.osoba.value, okres: +f.okres.value || 2, spoznione: f.spoznione.checked,
-                            rodzaj: f.rodzaj.value });
-    if (ev.target === f.okres && filtry.okres > 2) wczytajStarsze(filtry.okres);
+                            rodzaj: f.rodzaj.value, status: f.status.value, linia: f.linia.value, maszyna: f.maszyna.value,
+                            od: f.od.value, doDnia: f.doDnia.value, sort: f.sort.value });
+    // Zmiana linii zdejmuje maszynę z innej linii (lista maszyn jest zawężona do wybranej linii).
+    if (ev.target === f.linia && filtry.linia && filtry.maszyna && ((hala.slowniki.maszyny || {})[filtry.maszyna] || {}).linia !== filtry.linia) filtry.maszyna = '';
+    zapiszFiltry();
+    if (filtrZlecen === 'zamkniete' && okresDni() > 2) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
     narysuj();
   });
   $('filtry-zlecen').addEventListener('submit', ev => ev.preventDefault());
+  // „Wyczyść filtry” wraca do stanu wyjściowego (dział kierownika UR/KJ — „mój dział i moje”, jak po pierwszym zalogowaniu); kolejność
+  // Pulpitu to osobny wybór i zostaje.
+  $('filtry-czysc').addEventListener('click', () => {
+    Object.assign(filtry, { dzial: dzialDomyslny(), osoba: '', rodzaj: '', status: '', linia: '', maszyna: '', od: '', doDnia: '', spoznione: false, sort: '', okres: 2 });
+    zapiszFiltry();
+    narysuj();
+  });
 
   $('zlecenia-czysc').addEventListener('click', () => { if (Panel.widoki.czyszczenie) Panel.widoki.czyszczenie.otworz(); });
 
   /* Pusta lista „W toku” mówi też, co dalej (audyt 2026-11-09): kto może zlecać, dostaje wskazówkę o przycisku u góry. */
   function pustaListaZlecenTekst(chipy) {
-    const filtryAktywne = !!(filtry.dzial || filtry.osoba || filtry.rodzaj || filtry.spoznione);
+    const filtryAktywne = !!(filtry.dzial || filtry.osoba || filtry.rodzaj || filtry.spoznione || filtry.status || filtry.linia || filtry.maszyna || filtry.od || filtry.doDnia);
     const tekst = W.pustaListaZlecen(filtrZlecen, chipy, filtryAktywne);
     return filtrZlecen === 'otwarte' && !filtryAktywne && !/Czeka na odbiór/.test(tekst) && mozeWyslac('zlecenie.utworzone')
       ? `${tekst}. Dodasz je przyciskiem „Nowe zlecenie”.` : tekst;
@@ -764,7 +953,12 @@
                                   teraz: d.teraz, filtr: filtrZlecen, ja: hala.pracownik }).map(z => Object.assign(z, { html: wierszZlecenia(z) }));
     const inne = ZG ? ZG.wiersze(d, filtrZlecen) : [];
     const fm = Object.assign({}, filtry, { mojeDzialy: mojeDzialy() || [], ja: hala.pracownik && hala.pracownik.id });
-    const wiersze = W.polaczZadania(W.filtrujZlecenia(zlecenia, fm), W.filtrujZlecenia(inne, fm));
+    // „Więcej filtrów”: sortowanie wybrane przez osobę zastępuje kolejność domyślną całej listy; M = wszystko w tej zakładce.
+    const nazwyFiltrow = rysujFiltryDodatkowe(d, zlecenia);
+    const wiersze = W.sortujWgDaty(W.polaczZadania(W.filtrujZlecenia(zlecenia, fm), W.filtrujZlecenia(inne, fm)), filtry.sort);
+    rysujStanFiltrow(nazwyFiltrow, wiersze.length, zlecenia.length + inne.length);
+    // Zamknięte starsze niż 2 dni (Okres albo „Od dnia”) — dociągamy raz; po błędzie nie ponawiamy w pętli rysowania.
+    if (filtrZlecen === 'zamkniete' && okresDni() > 2 && okresDni() > probaStarszych) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
     // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego (także
     // zgłoszenia, narzędzia i BHP). Po terminie, przepadłe (D35) i pilne BHP — chip na czerwono.
     const chipy = W.chipyZlecen(lista, d.teraz, ZG ? ZG.liczby() : null);
@@ -781,6 +975,7 @@
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
     for (const e of $('lista-zlecen').querySelectorAll('img[data-plik]'))
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+    zaznaczZnalezione();
   }
 
   // Zlecenia z ostatniego rysowania listy — okno szczegółów pozycji czyta stąd (i odświeża się razem z listą).
@@ -1006,13 +1201,12 @@
       komunikat('Awaria odwołana', 'ok');
     } catch (e) { komunikat(komunikatBledu(e), 'blad'); }
   });
-  /* D87: te same wiersze zleceń stoją na liście Zleceń i w sekcji „Do odbioru” na Pulpicie — jeden obsługiwacz kliknięć. */
+  /* D87: te same wiersze zleceń stoją na liście Zleceń i w kartach obchodów na Pulpicie („Do odbioru”) — jeden obsługiwacz kliknięć. */
   async function obsluzKlikZlecenia(ev) {
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) { pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis); return; }
     const b = ev.target.closest('[data-akcja]');
     if (!b) return;
-    if (b.dataset.akcja === 'odbior-wszystkie') { Panel.pokazZlecenia('do-zamkniecia', 'biezace'); return; }
     const wiersz = b.closest('[data-id]');
     if (!wiersz) return;
     const id = wiersz.dataset.id;
@@ -1022,7 +1216,6 @@
     await akcjaZlecenia(b, id);
   }
   $('lista-zlecen').addEventListener('click', obsluzKlikZlecenia);
-  $('lista-odbioru').addEventListener('click', obsluzKlikZlecenia);
 
   /* Odbiór jednej pozycji checklisty (D87). Po ostatniej odebranej zlecenie zamyka się samo — z paskiem „Cofnij”, jak „Odbierz całą”;
      hub ma siatkę bezpieczeństwa (porzadkuj_odebrane) na wypadek, gdyby to zamknięcie się nie wysłało. */
@@ -1555,9 +1748,9 @@
     const b = $('dzwiek');
     const wl = dzwiekWlaczony();
     const czeka = wl && !dzwiekGotowy();
-    b.innerHTML = wl ? (czeka ? ik('alerty', 18) + 'Kliknij' : ik('alerty', 18)) : ik('dzwonek-wyl', 18);
+    b.innerHTML = wl ? (czeka ? ik('alerty', 18) + '<span class="dz-napis">Włącz dźwięk</span>' : ik('alerty', 18)) : ik('dzwonek-wyl', 18);
     const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
-    b.title = wl ? (czeka ? 'Kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zleceniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
+    b.title = wl ? (czeka ? 'Włącz dźwięk — kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zleceniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
     b.setAttribute('aria-label', b.title);
     b.setAttribute('aria-pressed', String(wl));
     b.classList.toggle('czeka', czeka);
