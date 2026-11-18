@@ -439,6 +439,12 @@
         // na karcie kierownik widział „Od działu:” bez słowa. Teraz kroki + notatka z „Zrobione”, zdjęcia też z kroków.
         notatka: [...(postep ? postep.notatki : []), d.uwagi_wykonania].filter(Boolean).join(' · ') || null,
         uwagiZwrotu: d.uwagi_zwrotu || null,
+        // Dowody zwykłego zlecenia (bez pozycji) do odczytu w Zamknięte / Do odbioru / Szukaj (właściciel 2026-11-18): kto i kiedy zrobił i
+        // odebrał, kiedy wróciło do poprawy. Notatka i zdjęcia są wyżej (notatka, zdjecia); tu tylko to, czego brakowało.
+        wykonanoPrzez: d.wykonal ? nazwaPracownika(pracownicy, d.wykonal) : null,
+        wykonanoKiedy: d.czas_wykonania ? `${dataKrotka(d.czas_wykonania)} ${godzina(d.czas_wykonania)}` : null,
+        odebranoKiedy: d.czas_zamkniecia ? `${dataKrotka(d.czas_zamkniecia)} ${godzina(d.czas_zamkniecia)}` : null,
+        zwrotKiedy: d.czas_zwrotu ? `${dataKrotka(d.czas_zwrotu)} ${godzina(d.czas_zwrotu)}` : null,
         wymagajZdjecia: d.wymagaj_zdjecia === true, wymagajNotatki: d.wymagaj_notatki === true,
         wymagajSkanu: d.wymagaj_skanu === true, zeskanowano: !!d.skan_maszyny,
         // D55: filtry (dział, osoba) i „tylko spóźnione”; zmiana, na którą zlecono.
@@ -450,6 +456,7 @@
         maszynyPostep: maszynyPostepZlecenia(d), okno: d.od ? `od ${godzina(d.od)}` : null,
         moznaEdytowac: (z.status === 'nowe' || z.status === 'przyjete') && !d.nadrzedne,
         pozycje: Array.isArray(d.pozycje) ? d.pozycje.map(p => ({ nazwa: p.nazwa || '', opis: p.opis || '', godz: p.termin ? godzina(p.termin) : '',
+          terminMs: p.termin && !isNaN(Date.parse(p.termin)) ? Date.parse(p.termin) : null,
           od: p.od ? godzina(p.od) : '', maszynyPostep: maszynyPostepPozycji(d, p),
           stan: (d.wykonane || {})[p.id] ? 'wykonana' : (d.pominiete || {})[p.id] ? 'pominieta' : 'czeka',
           powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '',
@@ -2981,6 +2988,42 @@
       .filter(z => !z.czesc && z.prawoOdbioru && (z.moznaOdebrac || z.odbiorZakonczony));
   }
 
+  /* Podgląd WSZYSTKICH pozycji checklisty w karcie obchodu PRZED oddaniem (właściciel 2026-11-18, zrzut z produkcji: karta pokazywała
+     tylko postęp i „+N więcej”, a notatek i zdjęć zrobionych pozycji nie dało się obejrzeć, dopóki lider nie oddał listy). Te same
+     wiersze co odbiorObchodu (zlecenie → pozycje z `szczegoly`: kto, kiedy, notatka, zdjęcia, powód pominięcia), ale checklisty
+     jeszcze OTWARTE (nowe/przyjęte/rozdzielone) bieżącej zmiany; oddane są w „Do odbioru”. Pozycja czekająca po swoim terminie ma
+     `spozniona`. Uprawnienia jak wgląd w dowody (prawoOdbioru: kierownik zakładu, admin, kierownik UR/KJ swój dział). Tylko odczyt. */
+  /* Filtr pozycji w rozwiniętej karcie obchodu (właściciel 2026-11-18): Wszystkie / Do zrobienia (czeka, jeszcze w terminie) / Spóźnione
+     (czeka po terminie) / Zrobione / Pominięte. Czysta funkcja — p to pozycja z W.pozycjeObchodu. */
+  const FILTRY_POZYCJI = [['wszystkie', 'Wszystkie'], ['do-zrobienia', 'Do zrobienia'], ['spoznione', 'Spóźnione'], ['zrobione', 'Zrobione'], ['pominiete', 'Pominięte']];
+  function pozycjaPasujeDoFiltru(p, kod) {
+    switch (kod) {
+      case 'do-zrobienia': return p.stan === 'czeka' && !p.spozniona;
+      case 'spoznione': return p.stan === 'czeka' && !!p.spozniona;
+      case 'zrobione': return p.stan === 'wykonana';
+      case 'pominiete': return p.stan === 'pominieta';
+      default: return true;
+    }
+  }
+  function pozycjeObchodu({ zlecenia: lista, zmiana, linia, dzial, slowniki, pracownicy, stale, teraz, ja }) {
+    if (!zmiana) return [];
+    const dz = dzial || 'produkcja';
+    const start = Date.parse(zmiana.od), koniec = Date.parse(zmiana.do), nowMs = teraz === undefined ? Date.now() : teraz;
+    const naZmianie = d => {
+      const wd = Date.parse(d.wazne_do), czas = Date.parse(d.czas_zlecenia);
+      return !isNaN(wd) ? Math.abs(wd - koniec) < 60000 : (!isNaN(czas) && czas >= start && czas < koniec);
+    };
+    const baza = dz === 'mistrz' ? bezKopiiLiniiMistrza(lista) : (lista || []);
+    const pasujace = baza.filter(z => {
+      const d = (z && z.dane) || {};
+      return d.dzial === dz && Array.isArray(d.pozycje) && d.pozycje.length > 0 && OTWARTE.has(z.status)
+        && !(d.linia && linia && d.linia !== linia) && naZmianie(d);
+    });
+    return zlecenia({ zlecenia: pasujace, slowniki, pracownicy, stale, teraz, filtr: 'wszystkie', ja })
+      .filter(z => !z.czesc && z.prawoOdbioru && z.pozycje.length)
+      .map(z => Object.assign({}, z, { pozycje: z.pozycje.map(p => Object.assign({}, p, { spozniona: p.stan === 'czeka' && p.terminMs !== null && p.terminMs < nowMs })) }));
+  }
+
   /* Karencja na Pulpicie (właściciel 2026-11-17): przez karencję D88 (15 min po końcu zmiany) obok kart bieżącej zmiany stoją karty
      POPRZEDNIEJ zmiany z odbiorem — po karencji znikają (serwer odrzuca odbiór i zatwierdza sam). Zwraca { zmiana (poprzednia),
      koniecMs (koniec zmiany + karencja), minut (ile jeszcze, zaokrąglone w górę), napis } albo null, gdy karencja minęła / nie ma
@@ -3045,7 +3088,7 @@
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
-                       zlecenia, odbiorObchodu, zmianaWKarencji, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
+                       zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,

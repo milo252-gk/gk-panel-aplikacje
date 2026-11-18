@@ -44,6 +44,12 @@
 </main>
 
 <div id="aplikacja" class="aplikacja hala-uklad" hidden>
+  <!-- D1 z oceny UX (właściciel 2026-11-18): gdy dźwięk jest wyłączony (🔕) albo przeglądarka go blokuje („Włącz dźwięk”), na górze stoi wyraźny
+       pasek z jednym przyciskiem — kierownik nie przegapi awarii przez ciszę. Rysuje go panel.js (rysujDzwiek); konto ekranu (monitor) bez paska. -->
+  <div id="pasek-dzwieku" class="pasek-dzwieku" role="status" hidden>
+    <span id="pasek-dzwieku-tekst"></span>
+    <button type="button" id="pasek-dzwieku-wlacz" class="maly">Włącz dźwięk</button>
+  </div>
   <!-- Menu jak w GK Trasy i GK Flota: po lewej na komputerze i tablecie, dolny pasek na telefonie. -->
   <nav class="hala-menu zakladki" aria-label="Menu" role="tablist">
     <div class="hala-menu-naglowek">

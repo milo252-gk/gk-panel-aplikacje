@@ -141,7 +141,26 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 /* D87 (właściciel 2026-11-17): „Do odbioru” w karcie obchodu — rozwinięta karta zajmuje cały rząd kafelków (pozycje z dowodami i
    przyciskami potrzebują szerokości); kolor i obrys karty bez zmian. Na dużym ekranie strona się nie przewija, więc kafelki
    przewijają się w sekcji, żeby Awarie zostały na widoku. */
-.kafelek.odbior-otwarty { grid-column: 1 / -1; }
+.kafelek.odbior-otwarty, .kafelek.pozycje-otwarte { grid-column: 1 / -1; }
+/* Podgląd wszystkich pozycji w karcie obchodu (2026-11-18): klik w kartę / „Wszystkie pozycje” / „+N więcej”; tylko odczyt. */
+/* Pasek „Dźwięk wyłączony — włącz” (D1, 2026-11-18): pomarańczowy, na całą szerokość nad nagłówkiem. */
+.pasek-dzwieku { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px; background: var(--pomarancz); color: var(--marka-tlo); font-weight: 600; font-size: 14px; text-align: center; }
+.pasek-dzwieku[hidden] { display: none; }
+.pasek-dzwieku button { background: var(--marka-tlo); border-color: var(--marka-tlo); color: var(--na-marce); }
+.kafelek.ma-podglad { cursor: pointer; }
+.kafelek.ma-podglad .karta-pozycje, .kafelek.ma-podglad .kafelek-odbior { cursor: auto; }
+.karta-pozycje-przycisk { margin-top: 8px; }
+.opoznione .link-wiecej { background: none; border: 0; padding: 0; min-height: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+/* Filtry pozycji w rozwiniętej karcie: zwarte chipy, na telefonie jeden przewijany rząd. */
+.karta-chipy { margin: 4px 0 8px; }
+.karta-chipy .chip { min-height: 36px; padding: 0 10px; font-size: 13px; }
+@media (max-width: 600px) { .karta-chipy { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .karta-chipy .chip { flex: none; } }
+.karta-pozycje { margin-top: 8px; border-top: 1px solid var(--ramka); padding-top: 6px; }
+.karta-pozycje ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.karta-pozycje li { font-size: .95em; }
+.karta-pozycje li.stan-wykonana > .poz-wiersz > span:first-child { color: var(--zielony); font-weight: 700; }
+.karta-pozycje li.spozniona .poz-wiersz { color: var(--czerwony); font-weight: 600; }
+.karta-pozycje li.stan-czeka:not(.spozniona) .poz-wiersz { color: var(--tekst-slaby); }
 .kafelek-odbior { margin-top: 8px; border-top: 1px solid var(--ramka); padding-top: 4px; }
 .kafelek-odbior > summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; gap: 8px; }
 .kafelek-odbior > .lista { margin-top: 6px; overflow: visible; }
