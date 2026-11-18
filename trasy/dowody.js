@@ -190,7 +190,7 @@ async function oknoHistoriiKlienta(klientId, nazwa) {
 
 /* ------------------------------------------------- szukanie dostawy */
 
-function oknoSzukania() {
+function oknoSzukania(poczatkowa) {
   okno({
     tytul: 'Szukaj dostawy',
     szerokie: true,
@@ -206,6 +206,7 @@ function oknoSzukania() {
       const wyniki = pole.querySelector('#sz-wyniki');
       let zegar = null;
       wejscie.focus();
+      if (poczatkowa) { wejscie.value = poczatkowa; setTimeout(() => wejscie.oninput(), 0); }
       wejscie.oninput = () => {
         clearTimeout(zegar);
         const fraza = wejscie.value.trim();
@@ -249,4 +250,98 @@ function oknoSzukania() {
       };
     },
   });
+}
+
+
+/* ------------------------------------------- jedno pole „Szukaj” w nagłówku
+   Ocena UX 2026-11-17 (D4): biuro szuka w jednym miejscu — po kliencie, numerze dokumentu (np. „ZO 0188/11/26”),
+   kierowcy, nazwie trasy i dostawie — i od razu przechodzi do trasy / klienta. Rozszerza dotychczasowe „Szukaj dostawy”
+   (okno z dowodami i wydrukiem zostaje: przycisk „Pełna lista…” otwiera je z wpisaną frazą). Serwer: GET
+   /api/szukaj-globalne (dopisany; /api/szukaj bez zmian). Konto „podgląd” też szuka (czysty odczyt planu). */
+const STATUS_DOSTAWY_SZUKAJ = { dostarczone: '✓ dostarczone', nieudane: '✕ nieudana', oczekuje: 'czeka', odwolany: 'odwołana' };
+
+function htmlWynikowSzukania(d) {
+  const trasy = d.trasy || [], dostawy = d.dostawy || [], klienci = d.klienci || [];
+  if (!trasy.length && !dostawy.length && !klienci.length) return '<div class="pusto">Nic nie znalazłem.</div>';
+  const wiersz = (atrybut, glowny, reszta) =>
+    `<button type="button" class="wynik-szukania" ${atrybut}><b>${escHtml(glowny)}</b>`
+    + `<span class="male slaby">${reszta}</span></button>`;
+  const czesci = [];
+  if (trasy.length) czesci.push('<div class="wyniki-grupa">Trasy</div>' + trasy.map(t => wiersz(
+    `data-wynik-trasa="${t.id}"`, t.nazwa || ('Trasa ' + polskaData(t.data)),
+    [polskaData(t.data), escHtml(etykietaStatusuTrasy(t.status)), t.kierowca_imie ? escHtml(t.kierowca_imie) : '',
+      t.auto_nazwa ? escHtml(t.auto_nazwa) : '', t.punktow + ' pkt'].filter(Boolean).join(' · '))).join(''));
+  if (dostawy.length) czesci.push('<div class="wyniki-grupa">Dostawy</div>' + dostawy.map(h => wiersz(
+    `data-wynik-trasa="${h.trasa}"`, h.klient_nazwa,
+    [h.dokument ? escHtml(h.dokument) : '', polskaData(h.data), STATUS_DOSTAWY_SZUKAJ[h.status] || escHtml(h.status),
+      h.kierowca_imie ? escHtml(h.kierowca_imie) : '',
+      h.status === 'oczekuje' && h.kolejnosc ? h.kolejnosc + '. z ' + (h.punktow_trasy || '?') : ''].filter(Boolean).join(' · '))).join(''));
+  if (klienci.length) czesci.push('<div class="wyniki-grupa">Klienci</div>' + klienci.map(c => wiersz(
+    `data-wynik-klient="${escHtml(c.nazwa)}"`, c.nazwa, escHtml(c.miasto || ''))).join(''));
+  return czesci.join('');
+}
+
+function podepnijSzukajke() {
+  const forma = document.getElementById('gora-szukaj');
+  const pole = document.getElementById('gora-szukaj-pole');
+  const lista = document.getElementById('gora-szukaj-wyniki');
+  const gora = document.querySelector('.gora');
+  const przycisk = document.getElementById('btn-szukaj');
+  if (!forma || !pole || !lista) return;
+  let zegar = null, numer = 0;
+  const zamknij = (wyczysc) => {
+    clearTimeout(zegar); numer++;
+    lista.hidden = true; lista.innerHTML = '';
+    if (wyczysc) pole.value = '';
+    if (gora) gora.classList.remove('szuka');
+    if (przycisk) przycisk.setAttribute('aria-expanded', 'false');
+  };
+  const szukaj = async () => {
+    const fraza = pole.value.trim();
+    if (fraza.length < 2) { lista.hidden = true; lista.innerHTML = ''; return; }
+    const moj = ++numer;
+    lista.hidden = false;
+    lista.innerHTML = '<div class="pusto">Szukam…</div>';
+    const d = await API.get('/api/szukaj-globalne?q=' + encodeURIComponent(fraza)).catch(() => null);
+    if (moj !== numer) return;          // przyszła nowsza fraza albo zamknięto listę
+    if (!d) { lista.innerHTML = '<div class="pusto">Nie udało się wyszukać — spróbuj za chwilę.</div>'; return; }
+    lista.innerHTML = htmlWynikowSzukania(d)
+      + (kontoBiura() ? '<div class="wyniki-stopka"><button type="button" class="maly" data-wynik-pelna>Pełna lista z dowodami i wydrukiem</button></div>' : '');
+    lista.querySelectorAll('[data-wynik-trasa]').forEach(b => b.onclick = () => {
+      const id = Number(b.dataset.wynikTrasa); zamknij(true); pokazEkran('trasa', { id });
+    });
+    lista.querySelectorAll('[data-wynik-klient]').forEach(b => b.onclick = () => {
+      const nazwa = b.dataset.wynikKlient; zamknij(true); pokazEkran('klienci', { szukaj: nazwa });
+    });
+    const pelna = lista.querySelector('[data-wynik-pelna]');
+    if (pelna) pelna.onclick = () => { zamknij(true); oknoSzukania(fraza); };
+  };
+  pole.oninput = () => { clearTimeout(zegar); zegar = setTimeout(szukaj, 300); };
+  forma.onsubmit = e => {
+    e.preventDefault();
+    clearTimeout(zegar);
+    const pierwszy = lista.querySelector('.wynik-szukania');
+    if (pierwszy && !lista.hidden) pierwszy.click(); else szukaj();
+  };
+  pole.onkeydown = e => {
+    if (e.key === 'Escape') { zamknij(true); pole.blur(); }
+    else if (e.key === 'ArrowDown') { const p = lista.querySelector('.wynik-szukania'); if (p) { e.preventDefault(); p.focus(); } }
+  };
+  lista.onkeydown = e => {
+    const wszystkie = Array.from(lista.querySelectorAll('.wynik-szukania'));
+    const i = wszystkie.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' && wszystkie[i + 1]) { e.preventDefault(); wszystkie[i + 1].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); (wszystkie[i - 1] || pole).focus(); }
+    else if (e.key === 'Escape') { zamknij(true); pole.focus(); }
+  };
+  document.addEventListener('click', e => {
+    if (!forma.contains(e.target) && !(przycisk && przycisk.contains(e.target))) lista.hidden = true;
+  });
+  pole.onfocus = () => { if (lista.innerHTML) lista.hidden = false; };
+  // Telefon: lupa w nagłówku rozwija pole na całą szerokość nagłówka (na komputerze pole jest zawsze widoczne).
+  if (przycisk) przycisk.onclick = () => {
+    const otwarte = !!gora && gora.classList.toggle('szuka');
+    przycisk.setAttribute('aria-expanded', otwarte ? 'true' : 'false');
+    if (otwarte) pole.focus(); else zamknij(true);
+  };
 }

@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-90f4ee37411f';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-5eaa9d402ac4';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -1981,8 +1981,7 @@ function menuDlaRoli() {
   // Osobna klasa (nie 'ukryty'), żeby po wylogowaniu podglądu i wejściu biura nic nie zostało schowane.
   document.querySelectorAll('.menu button[data-ekran]').forEach(b =>
     b.classList.toggle('podglad-ukryte', jestPodgladem() && !EKRANY_PODGLADU.includes(b.dataset.ekran)));
-  const szukajka = document.getElementById('btn-szukaj');
-  if (szukajka) szukajka.classList.toggle('podglad-ukryte', jestPodgladem());
+  // Jedno pole „Szukaj” w nagłówku (D4) widzi też konto podglądu — to czysty odczyt planu (serwer: PODGLAD_ODCZYT).
   // „Moje auto" otwiera GK Flota — ma sens tylko wtedy, gdy programy są połączone.
   const mojeAuto = !biuro && !!(stan.uz && stan.uz.flotex);
   const przyciskAuta = document.getElementById('btn-moje-auto');
@@ -1998,7 +1997,7 @@ function menuDlaRoli() {
        ['zalegle', 'zegar', 'Zaległe'], ['klienci', 'firma', 'Klienci']]
     : [['moja', 'ciezarowka', 'Moja trasa'], ['zaladunek', 'paczka', 'Załadunek'],
        mojeAuto ? ['mojeauto', 'pojazd', 'Moje auto'] : ['klienci', 'firma', 'Klienci'],
-       ['raporty', 'zegar', 'Raport pracy']];
+       ['raporty', 'zegar', 'Raport']];     // krótko: „Raport pracy” zawijało się w dwa wiersze (ocena UX 2026-11-17)
   const pasek = document.getElementById('pasek-dolny');
   pasek.innerHTML = dolne.map(([e, i, n]) =>
     `<button data-ekran="${e}"><span class="i">${GKIkony.html(i, 24)}</span><span>${n}</span></button>`).join('');
@@ -2798,7 +2797,7 @@ async function uruchom() {
   // Podpowiedź w atrybucie title jest na telefonie niewidzialna, a to właśnie
   // kierowca ma się dowiedzieć, że coś nie przeszło. Kropka musi być klikalna.
   document.getElementById('stan-sieci-btn').onclick = oknoKonta;
-  document.getElementById('btn-szukaj').onclick = oknoSzukania;
+  podepnijSzukajke();       // dowody.js: pole „Szukaj” w nagłówku (na telefonie rozwija je lupa)
   document.getElementById('btn-wyloguj').onclick = () => wyloguj();
   document.querySelectorAll('.menu button[data-ekran]').forEach(b =>
     b.onclick = () => pokazEkran(b.dataset.ekran));

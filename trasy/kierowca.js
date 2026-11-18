@@ -196,8 +196,18 @@ EKRANY.moja = {
 
     const wybor = `<div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="data-trasy" value="${data}"></label>
-        <button id="btn-mapa">${ikonka('mapa')}Mapa</button>
+        <button id="dzien-wczoraj">← Poprzedni</button>
+        <button id="dzien-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button>
+        <button id="dzien-jutro">Następny →</button>
+        <button id="btn-mapa"${mojaTrasa ? '' : ' title="Mapa pokaże się, gdy na ten dzień będziesz mieć trasę"'}>${ikonka('mapa')}Mapa</button>
+        ${mojaTrasa ? '' : '<span class="male slaby" id="mapa-powod">Mapa pokaże się, gdy na ten dzień będziesz mieć trasę.</span>'}
       </div>`;
+    const podepnijDni = () => {
+      pole.querySelector('#data-trasy').onchange = e => pokazEkran('moja', { data: e.target.value });
+      pole.querySelector('#dzien-wczoraj').onclick = () => pokazEkran('moja', { data: przesunDate(data, -1) });
+      pole.querySelector('#dzien-dzis').onclick = () => pokazEkran('moja', { data: dzisiaj() });
+      pole.querySelector('#dzien-jutro').onclick = () => pokazEkran('moja', { data: przesunDate(data, 1) });
+    };
 
     if (!mojaTrasa) {
       pole.innerHTML = wybor + `<div class="karta"><div class="pusto">
@@ -205,7 +215,7 @@ EKRANY.moja = {
           Na ten dzień nie masz zaplanowanej trasy.
           <div class="male" style="margin-top:8px">Biuro układa trasy rano — odśwież za chwilę.</div>
         </div></div>`;
-      pole.querySelector('#data-trasy').onchange = e => pokazEkran('moja', { data: e.target.value });
+      podepnijDni();
       pole.querySelector('#btn-mapa').disabled = true;
       return;
     }
@@ -267,7 +277,7 @@ EKRANY.moja = {
       '<div class="karta"><div class="pusto">Trasa jest pusta — biuro jeszcze nie dodało punktów.</div></div>'}
       </div>`;
 
-    pole.querySelector('#data-trasy').onchange = e => pokazEkran('moja', { data: e.target.value });
+    podepnijDni();
     pole.querySelectorAll('[data-przystanek]').forEach(b =>
       b.onclick = () => oknoPrzystanku(Number(b.dataset.przystanek)));
 

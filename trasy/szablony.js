@@ -12,9 +12,23 @@ EKRANY.szablony = {
   tylkoBiuro: true,
   async rysuj(pole) {
     const [szablony, kierowcy] = await Promise.all([
-      API.get('/api/szablony'), listaKierowcow(),
+      API.get('/api/szablony'), listaKierowcow(), odswiezLokalizacje(),   // lokalizacje: filtr „Miejsce wyjazdu”
     ]);
     const busy = stan.pojazdy.filter(b => b.aktywny);
+    // Filtry (2026-11-17): pola zapisanej trasy — data zapisania, kierowca, auto, miejsce wyjazdu (baza). Statusu nie ma.
+    const akcesoria = { data: s => String(s.utworzono || '').slice(0, 10), id: s => s.id, status: () => [],
+      kierowca: s => s.kierowca, auto: s => s.pojazd, miejsce: s => s.baza };
+    const miejsca = (stan.lokalizacje || []).map(l => [String(l.id), l.nazwa]);
+    const def = {
+      lista: 'szablony', pola: ['sort', 'od', 'do', 'kierowca', 'auto'].concat(miejsca.length ? ['miejsce'] : []),
+      kierowcy: opcjeFiltra(kierowcy.map(k => ({ id: k.id, nazwa: k.imie })), szablony, s => s.kierowca, s => s.kierowca_imie),
+      auta: opcjeFiltra(busy, szablony, s => s.pojazd, s => s.pojazd_nazwa), miejsca,
+      sortDomyslny: 'Jak dotąd (nazwa A–Z)', etykietaOd: 'Zapisana od dnia', etykietaDo: 'Zapisana do dnia',
+    };
+    const f = czytajFiltry('szablony');
+    const rysujEkran = () => {
+    const widoczne = zastosujFiltry(szablony, f, def.pola, akcesoria);
+    const bezFiltrow = !aktywneFiltry(f, def.pola).length;
 
     pole.innerHTML = `
       <div class="pasek-narzedzi">
@@ -25,7 +39,8 @@ EKRANY.szablony = {
         Z jednej zapisanej trasy robisz dzień jednym kliknięciem — bez przeklikiwania
         tych samych kilkunastu punktów co rano.</p>
 
-      ${szablony.length ? szablony.map(s => `
+      ${szablony.length ? htmlFiltrow(f, def, widoczne.length, szablony.length) : ''}
+      ${widoczne.length ? widoczne.map(s => `
         <div class="karta">
           <div class="karta-gora">
             <div>
@@ -43,6 +58,7 @@ EKRANY.szablony = {
           <div class="male">${s.punkty.map((p, i) =>
             `${i + 1}. ${p.nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}`).join(' &nbsp;·&nbsp; ') || '<i>pusty</i>'}</div>
         </div>`).join('')
+        : szablony.length && !bezFiltrow ? pustoPoFiltrach('Żadna zapisana trasa')
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('zapisane', 38)}</span>
              Nie ma jeszcze żadnej zapisanej trasy.
              <div class="male" style="margin-top:8px">Najprościej: otwórz gotową trasę
@@ -59,6 +75,9 @@ EKRANY.szablony = {
       const w = await sprobuj(() => API.del('/api/szablony/' + b.dataset.usun), 'Usunięto');
       if (w) pokazEkran('szablony');
     });
+    podepnijFiltry(pole, 'szablony', f, def, rysujEkran);
+    };
+    rysujEkran();
   },
 };
 

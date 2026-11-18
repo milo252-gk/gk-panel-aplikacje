@@ -167,17 +167,32 @@ EKRANY.zalegle = {
       return;
     }
     const zaznaczone = new Set(zalegle.map(z => z.id));
+    // Filtry (2026-11-17): dzień trasy, status dostawy, kierowca, auto. Miejsca wyjazdu zaległa dostawa nie niesie.
+    const akcesoria = { data: z => z.data, id: z => z.id,
+      status: z => [z.status].concat(z.do_przyjecia ? ['do_zatwierdzenia'] : []),
+      kierowca: z => z.kierowca, auto: z => z.pojazd, miejsce: () => null };
+    const def = {
+      lista: 'zalegle', pola: ['sort', 'od', 'do', 'status', 'kierowca', 'auto'], statusy: FILTRY_STATUSY.zalegle,
+      kierowcy: opcjeFiltra((stan.kierowcy || []).map(k => ({ id: k.id, nazwa: k.imie })), zalegle, z => z.kierowca, z => z.kierowca_imie),
+      auta: opcjeFiltra((stan.pojazdy || []).filter(b => b.aktywny), zalegle, z => z.pojazd, z => z.pojazd_nazwa),
+      sortDomyslny: 'Jak dotąd (najstarsze pierwsze)', etykietaOd: 'Dzień trasy od', etykietaDo: 'Dzień trasy do',
+    };
+    const f = czytajFiltry('zalegle');
 
     const rysuj = () => {
+      const widoczne = zastosujFiltry(zalegle, f, def.pola, akcesoria);
+      const ukryteZaznaczone = zaznaczone.size - widoczne.filter(z => zaznaczone.has(z.id)).length;
       pole.innerHTML = `
         <div class="karta scisla">
           <div class="karta-gora"><h2 style="margin:0">Do nadrobienia</h2>
-            <span class="plakietka p-nieudane">${zalegle.length}</span></div>
+            <span class="plakietka p-nieudane">${widoczne.length}</span></div>
           <p class="male slaby" style="margin-top:8px">Punkty z ostatnich ${wynik.dni} dni,
             których nie udało się dowieźć. Zaznacz je i wskaż dzień — program przeniesie
             je na trasę i zapamięta, z którego dnia zalegają.</p>
         </div>
-        ${zalegle.map(z => `
+        ${htmlFiltrow(f, def, widoczne.length, zalegle.length)}
+        ${widoczne.length ? '' : pustoPoFiltrach('Żadna zaległa dostawa')}
+        ${widoczne.map(z => `
           <label class="przystanek s-nieudane" style="cursor:pointer">
             <input type="checkbox" data-zal="${z.id}" ${zaznaczone.has(z.id) ? 'checked' : ''}
                    style="width:22px;height:22px;flex:none;margin-right:4px">
@@ -204,6 +219,8 @@ EKRANY.zalegle = {
             </select></label>
           </div>
           <button class="glowny duzy" id="z-przenies">Przenieś zaznaczone</button>
+          ${ukryteZaznaczone ? `<p class="male slaby" style="margin-top:8px">Zaznaczone, ale ukryte filtrami
+            (${ukryteZaznaczone}), nie zostaną przeniesione.</p>` : ''}
           <p class="male slaby" style="margin-top:8px">Jeśli tego dnia jest już trasa tego
             kierowcy, punkty dopiszą się do niej. Jeśli nie — program założy nową.</p>
         </div>`;
@@ -212,8 +229,9 @@ EKRANY.zalegle = {
         const id = Number(c.dataset.zal);
         c.checked ? zaznaczone.add(id) : zaznaczone.delete(id);
       });
+      podepnijFiltry(pole, 'zalegle', f, def, rysuj);
       pole.querySelector('#z-przenies').onclick = async () => {
-        const punkty = Array.from(zaznaczone);
+        const punkty = widoczne.filter(z => zaznaczone.has(z.id)).map(z => z.id);     // tylko widoczne i zaznaczone — ukryte filtrem zostają
         if (!punkty.length) return komunikat('Zaznacz choć jeden punkt', 'blad');
         const data = pole.querySelector('#z-data').value;
         const kierowca = pole.querySelector('#z-kierowca').value;

@@ -16,32 +16,39 @@ EKRANY.pulpit = {
       ile: s.ile + t.ile, ok: s.ok + t.ile_ok, nie: s.nie + t.ile_nie,
     }), { ile: 0, ok: 0, nie: 0 });
 
-    // Nowa wizyta na pulpicie zaczyna od pustej listy „Do zrobienia” — stare
-    // pozycje z poprzedniego wejścia nie mogą mignąć przed odpowiedziami serwera.
-    pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null };
+    // Nowa wizyta na pulpicie zaczyna od pustych kafelków spraw — stare liczby z poprzedniego wejścia nie mogą
+    // mignąć przed odpowiedziami serwera. „oczekiwane” = skąd jeszcze czekamy na odpowiedź (do chwili, gdy wszystkie
+    // wrócą, nie piszemy „Wszystko w porządku”, bo to mogłoby być nieprawdą).
+    const podglad = jestPodgladem();
+    pulpitSprawy = {
+      alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null,
+      punkty: razem.ile, dostarczone: razem.ok, nieudane: razem.nie,
+      // Lista „Do zatwierdzenia” obejmuje dostawy ze wszystkich dni, więc kafelek bierze liczbę z niej (niżej, po jej
+      // wczytaniu). Konto „podgląd” tej listy nie dostaje — ma liczbę dnia z pulpitu.
+      doPrzyjecia: podglad ? p.trasy.reduce((s, t) => s + (t.ile_do_przyjecia || 0), 0) : 0,
+      dzisiaj: data === dzisiaj(), podglad,
+      // konto „podgląd” nie ma dostępu do zaległych, odrzuconych i braków (serwer odpowiada 403) — nie pytamy
+      oczekiwane: new Set(['zywo'].concat(podglad ? [] : ['przyjecie', 'zalegle', 'odrzucone', 'braki'],
+        jestAdministratorem() ? ['alarmy'] : [])),
+    };
 
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="p-data" value="${data}"></label>
         <button id="p-wczoraj">← Poprzedni</button>
+        <button id="p-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button>
         <button id="p-jutro">Następny →</button>
-        <button class="glowny" id="p-planuj">${ikonka('mapa')}Planuj trasy</button>
+        <button class="glowny" id="p-planuj">${ikonka('mapa')}Zaplanuj trasę</button>
       </div>
 
-      <div id="p-do-zrobienia"></div>
-
-      <div class="trzy kafle-pulpitu">
-        ${kafelek(data === dzisiaj() ? 'Punkty na dziś' : 'Punkty tego dnia', razem.ile, '')}
-        ${kafelek('Dostarczone', razem.ok, 'var(--zielony)')}
-        ${kafelek('Nieudane', razem.nie, razem.nie ? 'var(--czerwony)' : '')}
-      </div>
+      <div id="p-kafelki" class="kafelki-liczb" aria-label="Najważniejsze liczby dnia"></div>
 
       <div id="p-do-przyjecia"></div>
 
       <div id="p-zywo"></div>
 
       ${p.nieudane.length ? `
-        <h2 style="margin-top:20px">Nieudane dostawy — do decyzji</h2>
+        <h2 style="margin-top:20px" id="p-nieudane">Nieudane dostawy — do decyzji</h2>
         <div class="karta">
           ${p.nieudane.map(n => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
               <b>${escHtml(n.klient_nazwa)}</b>
@@ -54,43 +61,53 @@ EKRANY.pulpit = {
         <span class="male slaby" style="font-weight:400">
           ${p.ostatnie_pozycje.length ? '' : '— żaden kierowca nie udostępnia teraz położenia'}</span>
       </h2>
-      <div class="mapa" id="p-mapa"></div>`;
+      ${p.ostatnie_pozycje.length ? '' : `<div class="male slaby mapa-podpowiedz">Auta pojawią się na mapie, gdy kierowca włączy
+        udostępnianie położenia w „Mojej trasie”. Do tego czasu mapa jest zmniejszona.
+        <button type="button" class="maly" id="p-mapa-rozmiar" aria-expanded="false">Powiększ mapę</button></div>`}
+      <div class="mapa${p.ostatnie_pozycje.length ? '' : ' zwinieta'}" id="p-mapa"></div>`;
 
     pole.querySelector('#p-data').onchange = e => pokazEkran('pulpit', { data: e.target.value });
     pole.querySelector('#p-wczoraj').onclick = () => pokazEkran('pulpit', { data: przesunDate(data, -1) });
     pole.querySelector('#p-jutro').onclick = () => pokazEkran('pulpit', { data: przesunDate(data, 1) });
+    pole.querySelector('#p-dzis').onclick = () => pokazEkran('pulpit', { data: dzisiaj() });
     pole.querySelector('#p-planuj').onclick = () => pokazEkran('trasy', { data });
-    await rysujDoPrzyjecia(pole.querySelector('#p-do-przyjecia'), () => pokazEkran('pulpit', { data }));
+    rysujKafelkiPulpitu();
+    const ileDoPrzyjecia = await rysujDoPrzyjecia(pole.querySelector('#p-do-przyjecia'), () => pokazEkran('pulpit', { data }));
+    if (!podglad) { pulpitSprawy.doPrzyjecia = ileDoPrzyjecia; pulpitSprawy.oczekiwane.delete('przyjecie'); rysujKafelkiPulpitu(); }
     await rysujZywo(pole.querySelector('#p-zywo'), data);
     odswiezajZywo(data);
 
     // Alarmy (kopie, adres na Pages, tunel, dysk) — tylko administrator
     // może coś z nimi zrobić, więc tylko on je widzi.
+    const gotowe = klucz => { pulpitSprawy.oczekiwane.delete(klucz); rysujKafelkiPulpitu(); };
     if (jestAdministratorem()) API.get('/api/alarmy').then(w => {
       pulpitSprawy.alarmy = w.alarmy || [];
-      rysujDoZrobienia();
-    }).catch(() => {});
+    }).catch(() => {}).then(() => gotowe('alarmy'));
 
     // Zaległości są pierwszą rzeczą, o którą pyta klient przez telefon
     // („mieliście przywieźć wczoraj"), więc widać je od razu na pulpicie.
-    API.get('/api/zalegle').then(w => {
+    if (!podglad) API.get('/api/zalegle').then(w => {
       pulpitSprawy.zalegle = w.zalegle.length ? w.zalegle : null;
-      rysujDoZrobienia();
-    }).catch(() => {});
+    }).catch(() => {}).then(() => gotowe('zalegle'));
 
     // Dowody, których serwer nie przyjął — podpis odbiorcy czeka na decyzję biura.
-    API.get('/api/odrzucone').then(w => {
+    if (!podglad) API.get('/api/odrzucone').then(w => {
       pulpitSprawy.odrzucone = (w.odrzucone || []).length;
-      rysujDoZrobienia();
-    }).catch(() => {});
+    }).catch(() => {}).then(() => gotowe('odrzucone'));
 
     // krótka zajawka listy braków — pełna jest przy raportach
-    API.get('/api/braki').then(w => {
+    if (!podglad) API.get('/api/braki').then(w => {
       pulpitSprawy.braki = w.braki.length ? w : null;
-      rysujDoZrobienia();
-    }).catch(() => {});
+    }).catch(() => {}).then(() => gotowe('braki'));
 
     const mapa = Mapa.zaloz(pole.querySelector('#p-mapa'));
+    const przyciskRozmiaru = pole.querySelector('#p-mapa-rozmiar');
+    if (przyciskRozmiaru) przyciskRozmiaru.onclick = () => {
+      const mala = pole.querySelector('#p-mapa').classList.toggle('zwinieta');
+      przyciskRozmiaru.textContent = mala ? 'Powiększ mapę' : 'Zmniejsz mapę';
+      przyciskRozmiaru.setAttribute('aria-expanded', mala ? 'false' : 'true');
+      if (mapa && mapa.invalidateSize) mapa.invalidateSize();
+    };
     const punkty = [];
     // Najpierw NASZE miejsca (ciemne kwadraty), potem busy (zwykle pinezki).
     // Rozróżnienie jest po to, żeby na jednej mapie było widać, co jest
@@ -116,74 +133,89 @@ EKRANY.pulpit = {
   },
 };
 
-/* Pulpit: jedna sekcja „Do zrobienia" zamiast pięciu osobnych wstęg uwagi
-   (alarmy, sprawy do decyzji, zaległe dostawy, odrzucone zapisy, braki).
-   Te same sprawy, te same warunki pokazywania i te same przejścia — zmienił
-   się tylko układ: lista pozycji z licznikami. Każda odpowiedź serwera
-   uzupełnia swoją pozycję i przerysowuje całą listę, więc kolejność jest
-   stała bez względu na to, która odpowiedź przyjdzie pierwsza.          */
-let pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null };
+/* Pulpit: rząd kafelków liczb zamiast listy „Do zrobienia” (właściciel 2026-11-17: „upodobnij pulpity Tras i Panelu
+   Kierownika”). Jak w Panelu: pokazujemy tylko kafelki z liczbą większą od zera, kolor mówi o wadze (czerwony =
+   problem, żółty = czeka na decyzję, zielony = dobrze, zwykły = stan), a gdy nic nie czeka — jedno spokojne zdanie.
+   Te same sprawy, te same warunki pokazywania i te same przejścia co dawna lista (alarmy tylko dla administratora);
+   dopisane są liczby dnia (punkty, dostarczone, nieudane) i „do zatwierdzenia”. Każda odpowiedź serwera uzupełnia
+   swoją część stanu i przerysowuje cały rząd, więc kolejność jest stała bez względu na to, która przyjdzie pierwsza. */
+let pulpitSprawy = { alarmy: [], pilne: 0, zalegle: null, odrzucone: 0, braki: null, oczekiwane: new Set() };
 
-function rysujDoZrobienia() {
-  const el = document.getElementById('p-do-zrobienia');
-  if (!el) return;
-  const s = pulpitSprawy;
-  const poz = [];
+/* Czysta funkcja (testowana w przeglądarce bez okna): ze stanu pulpitu robi listę kafelków, w kolejności
+   wagi — najpierw sprawy, potem liczby dnia. Nic nie dotyka strony. */
+function kafelkiPulpitu(s) {
+  const lista = [];
   // Raport pracy tworzy się sam z tras — brak ręcznego raportu kierowcy nie jest już sprawą do sprawdzenia.
-  if (s.braki && Array.isArray(s.braki.braki)) {
-    s.braki = { ...s.braki, braki: s.braki.braki.filter(b => b.rodzaj !== 'brak_raportu') };
-    if (!s.braki.braki.length && !(s.braki.spalanie || []).length) s.braki = null;
+  let braki = s.braki;
+  if (braki && Array.isArray(braki.braki)) {
+    braki = { ...braki, braki: braki.braki.filter(b => b.rodzaj !== 'brak_raportu') };
+    if (!braki.braki.length && !(braki.spalanie || []).length) braki = null;
   }
-  (s.alarmy || []).forEach(a => poz.push({
-    ton: a.poziom === 'blad' ? 'blad' : 'uwaga', ikona: '⚠',
-    tytul: a.tytul, opis: a.tresc, doUstawien: a.kod || '',
+  (s.alarmy || []).forEach(a => lista.push({
+    kod: 'alarm', etykieta: a.tytul, opis: a.tresc || '', liczba: 1, klasa: a.poziom === 'blad' ? 'pilne' : 'uwaga',
+    doUstawien: a.kod || '',
   }));
-  if (s.pilne) poz.push({
-    ton: 'uwaga', licznik: s.pilne, tytul: 'Sprawy do decyzji na trasach',
-    opis: 'Szczegóły w sekcji „Na żywo” niżej.', idzie: 'zywo',
+  if (s.zalegle && s.zalegle.length) lista.push({
+    kod: 'zalegle', etykieta: 'Zaległe dostawy', liczba: s.zalegle.length, klasa: 'pilne', idzie: 'zalegle',
+    opis: s.zalegle.slice(0, 3).map(z => z.klient_nazwa).join(', ') + (s.zalegle.length > 3 ? '…' : '') + ' — wyznacz nadrobienie',
   });
-  if (s.zalegle) poz.push({
-    ton: 'blad', licznik: s.zalegle.length, tytul: 'Zaległe dostawy',
-    opis: s.zalegle.slice(0, 3).map(z => z.klient_nazwa).join(', ')
-      + (s.zalegle.length > 3 ? '…' : '') + ' — wyznacz nadrobienie',
-    idzie: 'zalegle',
+  if (s.odrzucone) lista.push({
+    kod: 'odrzucone', etykieta: 'Odrzucone zapisy z telefonów', liczba: s.odrzucone, klasa: 'pilne', idzie: 'odrzucone',
+    opis: 'Przyjmij albo pobierz',
   });
-  if (s.odrzucone) poz.push({
-    ton: 'blad', licznik: s.odrzucone, tytul: 'Odrzucone zapisy z telefonów',
-    opis: 'Przyjmij albo pobierz', idzie: 'odrzucone',
+  if (s.pilne) lista.push({
+    kod: 'pilne', etykieta: 'Sprawy do decyzji na trasach', liczba: s.pilne, klasa: 'uwaga', idzie: 'zywo',
+    opis: 'Szczegóły w sekcji „Trasy w toku” niżej.',
   });
-  if (s.braki) poz.push({
-    ton: s.braki.braki.some(b => b.rodzaj === 'brak_raportu' || b.rodzaj === 'licznik') ? 'uwaga' : 'info',
-    licznik: s.braki.braki.length, tytul: 'Do sprawdzenia',
-    opis: s.braki.braki.slice(0, 2).map(b => b.opis).join('; ')
-      + (s.braki.braki.length > 2 ? '…' : '') + ' — zobacz wszystko',
-    idzie: 'braki',
+  if (s.nieudane) lista.push({
+    kod: 'nieudane', etykieta: 'Nieudane', liczba: s.nieudane, klasa: 'uwaga', idzie: 'nieudane',
+    opis: 'Dostawy, których nie udało się zrobić — do decyzji niżej.',
   });
-  if (!poz.length) { el.innerHTML = ''; return; }
+  if (s.doPrzyjecia) lista.push({
+    kod: 'do-zatwierdzenia', etykieta: 'Do zatwierdzenia', liczba: s.doPrzyjecia, klasa: 'uwaga',
+    idzie: s.podglad ? null : 'przyjecie', opis: 'Dostawy zamknięte przez kierowców czekają na Twoją decyzję.',
+  });
+  if (braki) lista.push({
+    kod: 'braki', etykieta: 'Do sprawdzenia', liczba: braki.braki.length,
+    klasa: braki.braki.some(b => b.rodzaj === 'brak_raportu' || b.rodzaj === 'licznik') ? 'uwaga' : 'neutralne', idzie: 'braki',
+    opis: braki.braki.slice(0, 2).map(b => b.opis).join('; ') + (braki.braki.length > 2 ? '…' : '') + ' — zobacz wszystko',
+    od: braki.od, do: braki.do,
+  });
+  lista.push({ kod: 'punkty', etykieta: s.dzisiaj ? 'Punkty na dziś' : 'Punkty tego dnia', liczba: s.punkty || 0, klasa: 'neutralne' });
+  lista.push({ kod: 'dostarczone', etykieta: 'Dostarczone', liczba: s.dostarczone || 0, klasa: 'dobrze' });
+  // Tak jak W.kafelkiDoPokazania w Panelu: zera to szum, w którym ginie jedyna ważna liczba.
+  const widoczne = lista.filter(k => k.liczba > 0);
+  // „Wszystko w porządku” dopiero, gdy wrócą wszystkie odpowiedzi — przed tym to byłoby zgadywanie.
+  return { kafelki: widoczne, spokoj: !widoczne.length && !(s.oczekiwane && s.oczekiwane.size) };
+}
 
-  el.innerHTML = `<h2 style="margin-top:20px">Do zrobienia</h2>
-    <div class="karta do-zrobienia">${poz.map((x, i) => `
-      <button class="poz ${x.ton}" data-poz="${i}"${
-        x.doUstawien !== undefined ? ` data-do-ustawien="${escHtml(x.doUstawien)}"` : ''}>
-        <span class="znak">${x.licznik != null ? x.licznik : x.ikona}</span>
-        <span class="tekst"><b>${escHtml(x.tytul)}</b>
-          <span class="male slaby">${escHtml(x.opis || '')}</span></span>
-        <span class="strzalka" aria-hidden="true">›</span>
-      </button>`).join('')}</div>`;
+function rysujKafelkiPulpitu() {
+  const el = document.getElementById('p-kafelki');
+  if (!el) return;
+  const w = kafelkiPulpitu(pulpitSprawy);
+  const klik = k => k.doUstawien !== undefined || !!k.idzie;
+  el.innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie czeka na decyzję</p>' : w.kafelki.map((k, i) => {
+    const wnetrze = `<span class="etykieta">${escHtml(k.etykieta)}</span><b>${k.kod === 'alarm' ? '⚠' : k.liczba}</b>`;
+    const tytul = k.opis ? ` title="${escHtml(k.opis)}"` : '';
+    return klik(k)
+      ? `<button type="button" class="${k.klasa}" data-kafel="${i}"${tytul}>${wnetrze}</button>`
+      : `<div class="${k.klasa}"${tytul}>${wnetrze}</div>`;
+  }).join('');
 
-  el.querySelectorAll('[data-poz]').forEach(b => {
-    const x = poz[Number(b.dataset.poz)];
+  el.querySelectorAll('[data-kafel]').forEach(b => {
+    const k = w.kafelki[Number(b.dataset.kafel)];
     b.onclick = () => {
-      if (x.doUstawien !== undefined) {
+      const przewin = id => { const c = document.getElementById(id); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+      if (k.doUstawien !== undefined) {
         // Prosto do sekcji, która alarm naprawia — leży pod zwiniętym „Zaawansowane”.
-        pokazEkran('ustawienia', { sekcja: SEKCJA_ALARMU[b.dataset.doUstawien] });
-      } else if (x.idzie === 'zywo') {
-        const zywo = document.getElementById('p-zywo');
-        if (zywo) zywo.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else if (x.idzie === 'zalegle') pokazEkran('zalegle');
-      else if (x.idzie === 'odrzucone') pokazEkran('odrzucone');
+        pokazEkran('ustawienia', { sekcja: SEKCJA_ALARMU[k.doUstawien] });
+      } else if (k.idzie === 'zywo') przewin('p-zywo');
+      else if (k.idzie === 'nieudane') przewin('p-nieudane');
+      else if (k.idzie === 'przyjecie') przewin('p-do-przyjecia');
+      else if (k.idzie === 'zalegle') pokazEkran('zalegle');
+      else if (k.idzie === 'odrzucone') pokazEkran('odrzucone');
       // ten sam zakres, żeby liczba z pulpitu zgadzała się z listą po kliknięciu
-      else if (x.idzie === 'braki') pokazEkran('raporty', { od: s.braki.od, do: s.braki.do });
+      else if (k.idzie === 'braki') pokazEkran('raporty', { od: k.od, do: k.do });
     };
   });
 }
@@ -239,34 +271,40 @@ EKRANY.trasy = {
     // ZAWSZE świeżo — inaczej po skasowaniu magazynu zostaje on na liście wyboru.
     await odswiezLokalizacje();
     // Widok „Tydzień” (właściciel 2026-11-16): pn–nd pod sobą; wybór pamiętany na tym urządzeniu.
-    const widok = param.widok || (Pamiec.czytaj('widok_tras') === 'tydzien' ? 'tydzien' : 'dzien');
+    const zapisanyWidok = Pamiec.czytaj('widok_tras');
+    const widok = param.widok || (zapisanyWidok === 'tydzien' || zapisanyWidok === 'lista' ? zapisanyWidok : 'dzien');
     if (widok === 'tydzien') { await rysujTydzienTras(pole, data, kierowcy); return; }
+    if (widok === 'lista') { await rysujListeTras(pole, data, kierowcy); return; }
     const filtr = await filtrAutaTras(trasy);
-    const widoczne = filtr.zastosuj(trasy);
+    const f = czytajFiltry('trasy');
+    const def = defFiltrowTras('dzien', trasy, kierowcy, filtr);
+    const widoczne = odwolaneNaKoniec(zastosujFiltry(trasy, f, def.pola, AKCESORIA_TRAS));
+    const bezFiltrow = !aktywneFiltry(f, def.pola).length;
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         ${przelacznikWidokuTras('dzien')}
-        ${filtr.html}
         <label>Dzień<input type="date" id="t-data" value="${data}"></label>
-        <button id="t-wczoraj">← Poprzedni</button><button id="t-jutro">Następny →</button>
+        <button id="t-wczoraj">← Poprzedni</button><button id="t-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button><button id="t-jutro">Następny →</button>
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
         <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
       </div>
+      ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
           Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Konta' : 'Ustawieniach → Konta kierowców'}.</div>`}
       ${widoczne.length ? kartyTrasWgAuta(widoczne)
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
-             ${filtr.wybrane && trasy.length ? `Na ${polskaData(data)} ${filtr.wybrane === '-' ? 'nie ma tras bez auta' : `auto „${escHtml(filtr.nazwa)}” nie ma tras`}.
-               <div style="margin-top:8px"><button type="button" class="maly" data-filtr-wszystkie>Pokaż wszystkie auta</button></div>`
+             ${!bezFiltrow && trasy.length ? `Na ${polskaData(data)} żadna trasa nie pasuje do wybranych filtrów.
+               <div style="margin-top:8px"><button type="button" class="maly" data-filtr-wyczysc>Wyczyść filtry</button></div>`
                : `Na ${polskaData(data)} nie ma jeszcze trasy.`}
              <div class="male${jestPodgladem() ? ' ukryty' : ''}" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
                Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (menu → Zapisane trasy).</div></div></div>`}`;
 
     podepnijPrzelacznikWidokuTras(pole, data);
-    filtr.podepnij(pole, () => pokazEkran('trasy', { data, widok: 'dzien' }));
+    podepnijFiltry(pole, 'trasy', f, def, () => pokazEkran('trasy', { data, widok: 'dzien' }));
     pole.querySelector('#t-data').onchange = e => pokazEkran('trasy', { data: e.target.value });
     pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(data, -1) });
     pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(data, 1) });
+    pole.querySelector('#t-dzis').onclick = () => pokazEkran('trasy', { data: dzisiaj() });
     pole.querySelector('#t-nowa').onclick = () => oknoNowejTrasy(data, kierowcy);
     pole.querySelector('#t-import').onclick = () => pokazEkran('import');
     pole.querySelectorAll('[data-trasa]').forEach(b =>
@@ -288,12 +326,14 @@ function przelacznikWidokuTras(aktywny) {
   return `<span class="przelacznik-widoku" role="group" aria-label="Widok tras">
       <button type="button" id="t-widok-dzien" ${aktywny === 'dzien' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Dzień</button>
       <button type="button" id="t-widok-tydzien" ${aktywny === 'tydzien' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Tydzień</button>
+      <button type="button" id="t-widok-lista" ${aktywny === 'lista' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Lista</button>
     </span>`;
 }
 
 function podepnijPrzelacznikWidokuTras(pole, data) {
   pole.querySelector('#t-widok-dzien').onclick = () => { Pamiec.zapisz('widok_tras', 'dzien'); pokazEkran('trasy', { data, widok: 'dzien' }); };
   pole.querySelector('#t-widok-tydzien').onclick = () => { Pamiec.zapisz('widok_tras', 'tydzien'); pokazEkran('trasy', { data, widok: 'tydzien' }); };
+  pole.querySelector('#t-widok-lista').onclick = () => { Pamiec.zapisz('widok_tras', 'lista'); pokazEkran('trasy', { data, widok: 'lista' }); };
 }
 
 /* Filtr „Auto” w widoku dnia i tygodnia (właściciel 2026-11-17: zobaczyć i filtrować zlecenia, które realizowało dane auto).
@@ -316,6 +356,7 @@ async function filtrAutaTras(trasy) {
     return m(a[1]) - m(b[1]) || a[1].localeCompare(b[1], 'pl');
   });
   return {
+    opcje,
     wybrane,
     nazwa: wybrane === '-' ? 'bez auta' : (mapa.get(wybrane) || ''),
     html: opcje.length ? `<label${wybrane ? ' class="filtr-aktywny"' : ''}>Auto<select id="t-filtr-auta">
@@ -332,6 +373,254 @@ async function filtrAutaTras(trasy) {
         b.onclick = () => { Pamiec.zapisz('filtr_auta', ''); odswiez(); });
     },
   };
+}
+
+/* ---------------------------------------------------------------- filtry list
+   (właściciel 2026-11-17: więcej filtrowania i sortowania na listach tras, Zapisanych tras i Zaległych dostaw)
+
+   Jeden zwijany blok „Filtry” nad listą: sortowanie (jak dotąd / najnowsze → najstarsze / najstarsze → najnowsze),
+   zakres dat od–do, status, kierowca, auto, miejsce wyjazdu, „Wyczyść filtry” i licznik „N z M”. Filtruje po stronie
+   przeglądarki to, co już pobrano — endpointy się nie zmieniają.
+
+   Wybór pamiętany OSOBNO DLA KAŻDEJ OSOBY na tym urządzeniu: Pamiec z przedrostkiem gk-trasy., NOWE klucze
+   „filtry-<lista>-<id osoby>” (lista: trasy, szablony, zalegle), wartość = JSON z samymi tekstami. Stary klucz
+   „filtr_auta” zostaje nietknięty (jego wybór tylko podpowiada auto, dopóki osoba nie ma własnego zapisu). */
+const FILTRY_POLA = ['sort', 'od', 'do', 'status', 'kierowca', 'auto', 'miejsce'];
+const FILTRY_STATUSY = {
+  trasy: [['planowana', 'planowana'], ['w_toku', 'w toku'], ['zakonczona', 'zakończona'], ['odwolana', 'odwołana'],
+          ['do_zatwierdzenia', 'z dostawami do zatwierdzenia']],
+  zalegle: [['oczekuje', 'oczekuje (nie zamknięta)'], ['nieudane', 'nieudana'], ['do_zatwierdzenia', 'do zatwierdzenia']],
+};
+const FILTRY_ETYKIETY = { sort: 'Sortowanie', od: 'Od', do: 'Do', status: 'Status', kierowca: 'Kierowca', auto: 'Auto',
+  miejsce: 'Miejsce wyjazdu' };
+const FILTRY_SORTOWANIA = { nowe: 'Najnowsze → najstarsze', stare: 'Najstarsze → najnowsze' };
+
+function kluczFiltrow(lista) {
+  return 'filtry-' + lista + '-' + (stan.uz && stan.uz.id != null ? stan.uz.id : 'x');
+}
+
+/* Zapisany stan filtrów tej osoby; uszkodzony albo obcy zapis = pusty (nic się nie psuje). */
+function czytajFiltry(lista) {
+  const f = { sort: '', od: '', do: '', status: '', kierowca: '', auto: '', miejsce: '', otwarte: '' };
+  const surowy = Pamiec.czytaj(kluczFiltrow(lista));
+  try {
+    const z = JSON.parse(surowy || '{}');
+    if (z && typeof z === 'object') {
+      Object.keys(f).forEach(k => { if (typeof z[k] === 'string') f[k] = z[k]; });
+    }
+  } catch (e) { /* uszkodzony zapis — jak pusty */ }
+  ['od', 'do'].forEach(k => { if (!/^\d{4}-\d{2}-\d{2}$/.test(f[k])) f[k] = ''; });
+  if (f.sort !== 'nowe' && f.sort !== 'stare') f.sort = '';
+  if (f.otwarte !== '1' && f.otwarte !== '0') f.otwarte = '';
+  // Osoba bez własnego zapisu dostaje auto z dawnego wyboru urządzenia (klucz „filtr_auta”, tylko do odczytu).
+  if (lista === 'trasy' && !surowy) f.auto = String(Pamiec.czytaj('filtr_auta') || '');
+  return f;
+}
+
+function zapiszFiltry(lista, f) {
+  const z = { v: 1 };
+  FILTRY_POLA.concat(['otwarte']).forEach(k => { if (f[k]) z[k] = f[k]; });
+  Pamiec.zapisz(kluczFiltrow(lista), JSON.stringify(z));   // zawsze zapis (nawet pusty), bo brak klucza = „nowa osoba”
+}
+
+/* Które z pól filtra są włączone na tej liście (pola, których lista nie ma, są ignorowane, choćby były zapisane). */
+function aktywneFiltry(f, pola) {
+  return pola.filter(k => f[k]);
+}
+
+/* Czyste filtrowanie i sortowanie. `a` mówi, jak z elementu listy wziąć pola:
+   data(x) → „RRRR-MM-DD”, status(x) → tablica kluczy, kierowca(x), auto(x), miejsce(x) → id albo null, id(x). */
+function zastosujFiltry(lista, f, pola, a) {
+  const ma = k => pola.indexOf(k) >= 0 && f[k];
+  const rowne = (wybor, wartosc) => wybor === '-'
+    ? (wartosc == null || wartosc === '') : String(wartosc == null ? '' : wartosc) === wybor;
+  let wynik = lista.filter(x => {
+    if (ma('od') || ma('do')) {
+      const d = String(a.data(x) || '').slice(0, 10);
+      if (ma('od') && (!d || d < f.od)) return false;
+      if (ma('do') && (!d || d > f.do)) return false;
+    }
+    if (ma('status') && (a.status(x) || []).indexOf(f.status) < 0) return false;
+    if (ma('kierowca') && !rowne(f.kierowca, a.kierowca(x))) return false;
+    if (ma('auto') && !rowne(f.auto, a.auto(x))) return false;
+    if (ma('miejsce') && !rowne(f.miejsce, a.miejsce(x))) return false;
+    return true;
+  });
+  if (ma('sort')) {
+    const kierunek = f.sort === 'nowe' ? -1 : 1;
+    const klucz = x => [String(a.data(x) || '').slice(0, 10), Number(a.id(x)) || 0];
+    wynik = wynik.map((x, i) => [x, i]).sort((p, q) => {
+      const [d1, i1] = klucz(p[0]), [d2, i2] = klucz(q[0]);
+      return (d1 < d2 ? -1 : d1 > d2 ? 1 : 0) * kierunek || (i1 - i2) * kierunek || (p[1] - q[1]);
+    }).map(p => p[0]);
+  }
+  return wynik;
+}
+
+/* Opcje list wyboru: [[id, nazwa]]; osoby i auta, które są na liście, a nie ma ich w wykazie (np. wyłączone konto), też. */
+function opcjeFiltra(wykaz, elementy, idDe, nazwaDe) {
+  const mapa = new Map();
+  (wykaz || []).forEach(o => { if (o && o.id != null) mapa.set(String(o.id), o.nazwa || o.imie || ('Nr ' + o.id)); });
+  (elementy || []).forEach(x => {
+    const id = idDe(x);
+    if (id != null && id !== '' && !mapa.has(String(id))) mapa.set(String(id), nazwaDe(x) || ('Nr ' + id));
+  });
+  return [...mapa.entries()].sort((p, q) => String(p[1]).localeCompare(String(q[1]), 'pl'));
+}
+
+/* Zwijany blok „Filtry”: w nagłówku licznik „N z M” i krótkie podsumowanie tego, co włączone.
+   def: { lista, pola, statusy, kierowcy, auta, miejsca, sortDomyslny (opis „jak dotąd”), otwarteDomyslnie }. */
+function htmlFiltrow(f, def, ile, razem) {
+  const aktywne = aktywneFiltry(f, def.pola);
+  const nazwaOpcji = (opcje, id) => { const o = (opcje || []).find(p => String(p[0]) === String(id)); return o ? o[1] : String(id); };
+  const opis = k => {
+    if (k === 'sort') return FILTRY_SORTOWANIA[f.sort].toLowerCase();
+    if (k === 'od' || k === 'do') return polskaData(f[k]);
+    if (k === 'status') return nazwaOpcji(def.statusy, f.status);
+    if (k === 'kierowca') return f.kierowca === '-' ? 'bez kierowcy' : nazwaOpcji(def.kierowcy, f.kierowca);
+    if (k === 'auto') return f.auto === '-' ? 'bez auta' : nazwaOpcji(def.auta, f.auto);
+    return f.miejsce === '-' ? 'baza domyślna' : nazwaOpcji(def.miejsca, f.miejsce);
+  };
+  const podsumowanie = aktywne.length
+    ? aktywne.map(k => `${FILTRY_ETYKIETY[k]}: ${escHtml(opis(k))}`).join(' · ') : 'bez filtrów';
+  const wybor = (k, opcje, wszystkie, specjalna) => def.pola.indexOf(k) < 0 ? '' :
+    `<label${f[k] ? ' class="filtr-aktywny"' : ''}>${FILTRY_ETYKIETY[k]}<select data-filtr="${k}">
+        <option value="">${escHtml(wszystkie)}</option>
+        ${opcje.map(([id, nazwa]) => `<option value="${escHtml(id)}"${String(id) === f[k] ? ' selected' : ''}>${escHtml(nazwa)}</option>`).join('')}
+        ${specjalna ? `<option value="-"${f[k] === '-' ? ' selected' : ''}>${escHtml(specjalna)}</option>` : ''}
+      </select></label>`;
+  const otwarte = f.otwarte === '1' || (f.otwarte === '' && !!def.otwarteDomyslnie);
+  return `<details class="filtry-listy${aktywne.length ? ' aktywne' : ''}" data-filtry-lista="${def.lista}"${otwarte ? ' open' : ''}>
+      <summary><span class="znak-zwiniecia">▸</span> Filtry
+        <span class="filtry-licznik" title="Tyle pozycji pasuje do filtrów">${ile} z ${razem}</span>
+        <span class="slaby filtry-podsumowanie">${podsumowanie}</span></summary>
+      <div class="filtry-siatka">
+        <label${f.sort ? ' class="filtr-aktywny"' : ''}>${FILTRY_ETYKIETY.sort}<select data-filtr="sort">
+          <option value="">${escHtml(def.sortDomyslny || 'Jak dotąd')}</option>
+          <option value="nowe"${f.sort === 'nowe' ? ' selected' : ''}>${FILTRY_SORTOWANIA.nowe}</option>
+          <option value="stare"${f.sort === 'stare' ? ' selected' : ''}>${FILTRY_SORTOWANIA.stare}</option>
+        </select></label>
+        ${def.pola.indexOf('od') < 0 ? '' : `<label${f.od ? ' class="filtr-aktywny"' : ''}>${def.etykietaOd || 'Od'}<input type="date" data-filtr="od" value="${escHtml(f.od)}"></label>
+        <label${f.do ? ' class="filtr-aktywny"' : ''}>${def.etykietaDo || 'Do'}<input type="date" data-filtr="do" value="${escHtml(f.do)}"></label>`}
+        ${wybor('status', def.statusy || [], 'Wszystkie')}
+        ${wybor('kierowca', def.kierowcy || [], 'Wszyscy', 'Bez kierowcy')}
+        ${wybor('auto', def.auta || [], 'Wszystkie auta', 'Bez auta')}
+        ${wybor('miejsce', def.miejsca || [], 'Wszystkie miejsca', 'Baza domyślna')}
+      </div>
+      <div class="filtry-dol">
+        ${def.uwaga ? `<span class="male slaby">${escHtml(def.uwaga)}</span>` : ''}
+        <button type="button" class="maly" data-filtr-wyczysc${aktywne.length ? '' : ' disabled'}>Wyczyść filtry</button>
+      </div>
+    </details>`;
+}
+
+/* Podpięcie bloku: zmiana pola zapisuje wybór tej osoby i woła `przerysuj` (ekran rysuje listę od nowa).
+   „Wyczyść filtry” zeruje tylko pola, które ta lista ma; rozwinięcie bloku też jest pamiętane. */
+function podepnijFiltry(pole, lista, f, def, przerysuj) {
+  const blok = pole.querySelector('details.filtry-listy');
+  if (blok) {
+    blok.addEventListener('toggle', () => {
+      const nowe = blok.open ? '1' : '0';
+      if (f.otwarte === nowe || (f.otwarte === '' && blok.open === !!def.otwarteDomyslnie)) return;
+      f.otwarte = nowe; zapiszFiltry(lista, f);
+    });
+    blok.querySelectorAll('[data-filtr]').forEach(el => el.onchange = () => {
+      f[el.dataset.filtr] = el.value;
+      if ((el.dataset.filtr === 'od' || el.dataset.filtr === 'do') && f.od && f.do && f.od > f.do) {
+        // Zakres od–do nie może się odwrócić: drugi koniec przesuwa się do właśnie wybranego dnia.
+        if (el.dataset.filtr === 'od') f.do = f.od; else f.od = f.do;
+      }
+      zapiszFiltry(lista, f); przerysuj();
+    });
+  }
+  pole.querySelectorAll('[data-filtr-wyczysc]').forEach(b => b.onclick = () => {
+    def.pola.forEach(k => { f[k] = ''; });
+    zapiszFiltry(lista, f); przerysuj();
+  });
+}
+
+/* „Nic nie pasuje” z przyciskiem — wspólne dla trzech list. */
+function pustoPoFiltrach(co) {
+  return `<div class="karta"><div class="pusto">${co} nie pasuje do wybranych filtrów.
+      <div style="margin-top:8px"><button type="button" class="maly" data-filtr-wyczysc>Wyczyść filtry</button></div></div></div>`;
+}
+
+/* Filtry listy tras (widoki Dzień, Tydzień i Lista). Pola trasy w tej liście: data, status (+ „z dostawami do
+   zatwierdzenia”), kierowca (id), auto (pojazd), miejsce wyjazdu (baza = id miejsca, puste = baza domyślna). */
+const AKCESORIA_TRAS = {
+  data: t => t.data, id: t => t.id,
+  status: t => [t.status].concat(t.ile_do_przyjecia > 0 ? ['do_zatwierdzenia'] : []),
+  kierowca: t => t.kierowca, auto: t => t.pojazd, miejsce: t => t.baza,
+};
+
+/* Odwołane trasy zostają na końcu (wyszarzone, jak dotąd) — także po zmianie sortowania. */
+function odwolaneNaKoniec(lista) {
+  return lista.filter(t => t.status !== 'odwolana').concat(lista.filter(t => t.status === 'odwolana'));
+}
+
+function defFiltrowTras(widok, trasy, kierowcy, filtrAuta) {
+  const miejsca = (stan.lokalizacje || []).map(l => [String(l.id), l.nazwa]);
+  const pola = ['sort', 'status', 'kierowca', 'auto'];
+  if (widok === 'lista') pola.push('od', 'do');
+  if (miejsca.length) pola.push('miejsce');
+  return {
+    lista: 'trasy', pola, statusy: FILTRY_STATUSY.trasy,
+    kierowcy: opcjeFiltra((kierowcy || []).map(k => ({ id: k.id, nazwa: k.imie })), trasy, t => t.kierowca, t => t.kierowca_imie),
+    auta: filtrAuta.opcje, miejsca,
+    etykietaOd: 'Od dnia', etykietaDo: 'Do dnia',
+    uwaga: widok === 'lista' ? 'Bez dat: 30 dni wstecz i 14 dni do przodu (najwyżej 366 dni).' : '',
+    otwarteDomyslnie: widok === 'lista',
+  };
+}
+
+/* Widok „Lista”: trasy z zakresu dat jedna pod drugą, z dniami jako nagłówkami (domyślnie najnowszy dzień na górze). */
+async function rysujListeTras(pole, data, kierowcy) {
+  const f = czytajFiltry('trasy');
+  const dzis = dzisiaj();
+  let od = f.od || przesunDate(dzis, -30);
+  let doDnia = f.do || przesunDate(dzis, 14);
+  if (od > doDnia) { if (f.od) doDnia = od; else od = przesunDate(doDnia, -30); }
+  const MAKS_DNI = 366;
+  const dni = Math.round((new Date(doDnia + 'T12:00:00') - new Date(od + 'T12:00:00')) / 86400000);
+  if (dni > MAKS_DNI) od = przesunDate(doDnia, -MAKS_DNI);
+  // Odwołane też (jak w widoku dnia); zakres dat po stronie serwera, reszta filtrów w przeglądarce.
+  const trasy = await API.get(`/api/trasy?odwolane=1&od=${od}&do=${doDnia}`);
+  const filtr = await filtrAutaTras(trasy);
+  const def = defFiltrowTras('lista', trasy, kierowcy, filtr);
+  const widoczne = zastosujFiltry(trasy, f, def.pola, AKCESORIA_TRAS);
+  const wg = {};
+  widoczne.forEach(t => { (wg[t.data] = wg[t.data] || []).push(t); });
+  const dniZTrasami = Object.keys(wg).sort();
+  if (f.sort !== 'stare') dniZTrasami.reverse();                 // domyślnie i „najnowsze”: od najnowszego dnia
+  const bezFiltrow = !aktywneFiltry(f, def.pola).length;
+  pole.innerHTML = `
+    <div class="pasek-narzedzi">
+      ${przelacznikWidokuTras('lista')}
+      <button class="glowny" id="t-nowa">+ Nowa trasa</button>
+      <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
+    </div>
+    ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
+    <div class="male slaby" style="margin-bottom:10px">Trasy od ${polskaData(od)} do ${polskaData(doDnia)}</div>
+    ${dniZTrasami.length ? dniZTrasami.map(dz => {
+      const lista = odwolaneNaKoniec(wg[dz]);
+      const nr = (new Date(dz + 'T12:00:00').getDay() + 6) % 7;
+      return `<section class="dzien-tygodnia${dz === dzis ? ' dzisiaj' : ''}" aria-label="${DNI_TYGODNIA[nr]} ${polskaData(dz)}">
+          <div class="dzien-tygodnia-gora">
+            <span class="dzien-tygodnia-nazwa"><b>${DNI_TYGODNIA[nr]}</b> ${polskaData(dz)}${dz === dzis ? ' <span class="plakietka p-w_toku">dziś</span>' : ''}</span>
+            <span class="male slaby dzien-tygodnia-podsumowanie">${podsumowanieDnia(lista)}</span>
+          </div>
+          ${kartyTrasWgAuta(lista)}
+        </section>`;
+    }).join('')
+      : (!bezFiltrow && trasy.length ? pustoPoFiltrach('Żadna trasa')
+        : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
+             W tym okresie nie ma tras.</div></div>`)}`;
+  podepnijPrzelacznikWidokuTras(pole, data);
+  podepnijFiltry(pole, 'trasy', f, def, () => pokazEkran('trasy', { data, widok: 'lista' }));
+  pole.querySelector('#t-nowa').onclick = () => oknoNowejTrasy(data, kierowcy);
+  pole.querySelector('#t-import').onclick = () => pokazEkran('import');
+  pole.querySelectorAll('[data-trasa]').forEach(b =>
+    b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasa) }));
 }
 
 /* Podsumowanie dnia: ile tras, ile punktów dostarczonych z wszystkich i ile czeka na zatwierdzenie. */
@@ -352,19 +641,23 @@ async function rysujTydzienTras(pole, data, kierowcy) {
   const trasy = await API.get(`/api/trasy?odwolane=1&od=${pon}&do=${niedz}`);
   trasy.sort((a, b) => (a.status === 'odwolana') - (b.status === 'odwolana') || a.id - b.id);
   const filtr = await filtrAutaTras(trasy);
+  const f = czytajFiltry('trasy');
+  const def = defFiltrowTras('tydzien', trasy, kierowcy, filtr);
+  const widoczne = zastosujFiltry(trasy, f, def.pola, AKCESORIA_TRAS);
   const wg = {};
-  filtr.zastosuj(trasy).forEach(t => { (wg[t.data] = wg[t.data] || []).push(t); });
+  widoczne.forEach(t => { (wg[t.data] = wg[t.data] || []).push(t); });
+  Object.keys(wg).forEach(d => { wg[d] = odwolaneNaKoniec(wg[d]); });
   const dzis = dzisiaj();
   const dni = Array.from({ length: 7 }, (_, i) => przesunDate(pon, i));
   pole.innerHTML = `
     <div class="pasek-narzedzi">
       ${przelacznikWidokuTras('tydzien')}
-      ${filtr.html}
       <label>Dzień w tygodniu<input type="date" id="t-data" value="${data}"></label>
       <button id="t-wczoraj">← Poprzedni tydzień</button><button id="t-jutro">Następny tydzień →</button>
       <button id="t-ten-tydzien">Ten tydzień</button>
       <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
     </div>
+    ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
     <div class="male slaby" style="margin-bottom:10px">Tydzień ${polskaData(pon)} – ${polskaData(niedz)}</div>
     ${dni.map((dz, i) => {
       const lista = wg[dz] || [];
@@ -378,7 +671,7 @@ async function rysujTydzienTras(pole, data, kierowcy) {
         </section>`;
     }).join('')}`;
   podepnijPrzelacznikWidokuTras(pole, data);
-  filtr.podepnij(pole, () => pokazEkran('trasy', { data, widok: 'tydzien' }));
+  podepnijFiltry(pole, 'trasy', f, def, () => pokazEkran('trasy', { data, widok: 'tydzien' }));
   pole.querySelector('#t-data').onchange = e => e.target.value && pokazEkran('trasy', { data: e.target.value, widok: 'tydzien' });
   pole.querySelector('#t-wczoraj').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, -7), widok: 'tydzien' });
   pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, 7), widok: 'tydzien' });
@@ -553,15 +846,17 @@ function htmlDowodow(x, token, bezOdebralNotatki) {
 }
 
 async function rysujDoPrzyjecia(el, poZmianie) {
-  if (!el || jestPodgladem()) return;      // zatwierdzanie dostaw jest tylko dla biura
+  if (!el || jestPodgladem()) return 0;    // zatwierdzanie dostaw jest tylko dla biura
   let lista = [];
-  try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return; }
-  if (!lista.length) { el.innerHTML = ''; return; }
+  try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return 0; }
+  if (!lista.length) { el.innerHTML = ''; return 0; }
   // Bez tokenu (np. serwer nie odpowiada na plikach) lista działa jak dotąd: liczba załączników zamiast miniatur.
   let token = '';
   try { token = await tokenDoPlikow(); } catch (e) { token = ''; }
   el.innerHTML = `<h2 style="margin-top:20px">Do zatwierdzenia
       <span class="plakietka p-oczekuje" style="margin-left:6px">${lista.length}</span></h2>
+    <p class="male slaby" style="margin:0 0 6px">Dostawy zatwierdzają się same 15 minut po zamknięciu całej trasy
+      — do tego czasu możesz zwrócić kierowcy to, co trzeba poprawić.</p>
     <div class="karta">${grupyDoPrzyjecia(lista).map(g => `${g.pozycje.length > 1 ? `
       <div class="przyciski" style="justify-content:space-between;align-items:center;padding:8px 0 2px;border-bottom:2px solid var(--ramka)">
         <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa', 'dostawy', 'dostaw')} czeka</span></b>
@@ -590,6 +885,7 @@ async function rysujDoPrzyjecia(el, poZmianie) {
   });
   el.querySelectorAll('[data-do-trasy]').forEach(bt => bt.onclick = () => pokazEkran('trasa', { id: Number(bt.dataset.doTrasy) }));
   el.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
+  return lista.length;                     // pulpit pokazuje tę liczbę jako kafelek „Do zatwierdzenia”
 }
 
 /* Plan podzielony na auta (właściciel 2026-11-16: „zamiast samochód duży/mały nazwa auta — mały to IVECO, duży to DAF”).
@@ -1736,6 +2032,7 @@ function kartaNaZywo(t) {
   const l = t.licznik || {};
   const zrobione = (l.dostarczone || 0) + (l.nieudane || 0);
   const proc = l.wszystkie ? Math.round(zrobione / l.wszystkie * 100) : 0;
+  const zostalo = (l.wszystkie || 0) - zrobione;
   const b = t.biezacy;
   const kolor = { pilne: 'var(--czerwony)', uwaga: 'var(--zolty)', info: 'var(--tekst-slaby)' };
 
@@ -1792,7 +2089,8 @@ function kartaNaZywo(t) {
     </div>
     <div class="male"><b>${zrobione}</b> z <b>${l.wszystkie || 0}</b>
       ${odmiana(l.wszystkie || 0, 'punktu', 'punktów', 'punktów')}${
-      l.nieudane ? ` · <span style="color:var(--czerwony)">${l.nieudane} nieudane</span>` : ''}</div>
+      l.nieudane ? ` · <span style="color:var(--czerwony)">${l.nieudane} nieudane</span>` : ''}${
+      zostalo > 0 && t.status !== 'zakonczona' ? ` · <b>zostało ${zostalo}</b>` : ''}</div>
     <div class="postep"><i class="ok" style="width:${proc}%"></i></div>
     ${dokad}
     <div class="male slaby" style="margin-top:8px">${slady.join(' &nbsp;·&nbsp; ')}</div>
@@ -1815,7 +2113,7 @@ async function rysujZywo(cel, data) {
   const pilne = dane.trasy.reduce((s, t) =>
     s + (t.alerty || []).filter(a => a.waga === 'pilne').length, 0);
   cel.innerHTML = `
-    <h2 style="margin-top:20px">Na żywo
+    <h2 style="margin-top:20px">Trasy w toku
       <span class="male slaby" style="font-weight:400">— stan na ${escHtml(dane.teraz)},
         odświeża się co 30 s</span></h2>
     ${dane.trasy.length ? dane.trasy.map(kartaNaZywo).join('')
@@ -1824,9 +2122,10 @@ async function rysujZywo(cel, data) {
            <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">Zaplanuj trasę</button></div>
          </div></div>`}`;
 
-  // Liczba spraw do decyzji jest pozycją listy „Do zrobienia", nie wstęgą w tej sekcji.
+  // Liczba spraw do decyzji jest kafelkiem nad tą sekcją, nie wstęgą w niej.
   pulpitSprawy.pilne = pilne;
-  rysujDoZrobienia();
+  pulpitSprawy.oczekiwane.delete('zywo');
+  rysujKafelkiPulpitu();
 
   cel.querySelectorAll('[data-trasa-zywo]').forEach(b =>
     b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasaZywo) }));

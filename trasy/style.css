@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-90f4ee37411f';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-5eaa9d402ac4';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -172,7 +172,7 @@ body{
 .podglad-ukryte{display:none !important}
 body.rola-podglad #p-planuj, body.rola-podglad #p-planuj-2, body.rola-podglad #t-nowa, body.rola-podglad #t-import,
 body.rola-podglad #tr-przebieg, body.rola-podglad #sp-dowod, body.rola-podglad #sp-druk, body.rola-podglad #sp-historia,
-body.rola-podglad #p-do-zrobienia, body.rola-podglad [data-nowa-na]{display:none !important}
+body.rola-podglad [data-nowa-na]{display:none !important}
 body.rola-podglad .etykieta-podgladu{display:inline-block}
 .etykieta-podgladu{display:none; margin-right:8px; padding:3px 9px; border-radius:10px; font-size:12px; font-weight:700;
   background:rgba(255,255,255,.22); color:#fff; align-self:center; white-space:nowrap}
@@ -286,6 +286,41 @@ button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line
 }
 .gora .ikona-btn{color:var(--na-marce)}
 .tytul{font-weight:700; font-size:17px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+/* Jedno pole „Szukaj” w nagłówku biura (ocena UX 2026-11-17, D4). Komputer: pole stale widoczne obok tytułu, lupa ukryta.
+   Telefon: lupa rozwija pole na cały nagłówek (klasa .szuka). Wyniki: lista pod polem, grupy Trasy / Dostawy / Klienci. */
+.gora-szukaj{position:relative; flex:0 1 380px; min-width:0; margin:0}
+.gora-szukaj input{width:100%; min-height:38px; padding:6px 12px; border-radius:19px; font-size:14px}
+.gora-szukaj-wyniki{position:absolute; left:0; right:0; top:calc(100% + 6px); max-height:70vh; overflow-y:auto;
+  background:var(--tlo-podniesione); color:var(--tekst); border:1px solid var(--ramka); border-radius:12px;
+  box-shadow:0 8px 28px rgba(0,0,0,.35); padding:6px; z-index:1050; min-width:min(520px,92vw)}
+.gora-szukaj-wyniki[hidden]{display:none}
+.wyniki-grupa{font-size:12px; text-transform:uppercase; letter-spacing:.4px; font-weight:700; color:var(--tekst-slaby); padding:8px 10px 2px}
+.wynik-szukania{display:flex; flex-direction:column; align-items:flex-start; gap:1px; width:100%; text-align:left;
+  border:0; background:none; color:var(--tekst); min-height:44px; padding:7px 10px; border-radius:8px; font-weight:400}
+.wynik-szukania:hover,.wynik-szukania:focus-visible{background:var(--tlo)}
+.wynik-szukania b{font-weight:700}
+.wyniki-stopka{padding:6px 10px 4px; border-top:1px solid var(--ramka); margin-top:6px}
+@media (min-width:821px){ #btn-szukaj{display:none !important} }
+@media (max-width:820px){
+  .gora-szukaj{display:none}
+  .gora.szuka .gora-szukaj{display:block; position:absolute; left:0; right:0; top:env(safe-area-inset-top); bottom:0;
+    flex:none; padding:7px 56px 7px 12px; background:var(--marka-tlo); z-index:2}
+  .gora.szuka .gora-szukaj input{min-height:44px; font-size:16px}
+  .gora.szuka #btn-szukaj{position:absolute; right:6px; top:env(safe-area-inset-top); z-index:3; height:var(--gora-wys)}
+  .gora-szukaj-wyniki{position:fixed; left:8px; right:8px; top:calc(var(--gora-wys) + env(safe-area-inset-top) + 4px); min-width:0}
+}
+/* Pulpit: mapa bez znaczników (nikt nie udostępnia położenia) nie zajmuje ekranu — zmniejszona, z podpowiedzią i przyciskiem. */
+.mapa.zwinieta{height:140px}
+.mapa-podpowiedz{margin:0 0 8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+/* Cele dotyku na telefonie (ocena UX 2026-11-17, poz. 9): linki w tabelach i przyciski tekstowe co najmniej 44 px. */
+@media (max-width:820px){
+  main td a, main .link-dotyk{display:inline-flex; align-items:center; min-height:44px; padding:0 8px}
+  main button.tekstowy{min-height:44px}
+  main button[data-gora], main button[data-dol]{min-width:44px; min-height:44px}
+  main button.maly{min-width:44px}
+  .leaflet-touch .leaflet-bar a{width:44px; height:44px; line-height:44px}
+}
 .gora-prawo{display:flex; align-items:center; gap:6px}
 .stan-sieci-btn{padding:0 6px}
 .stan-sieci{width:11px; height:11px; border-radius:50%; background:var(--stan-ok); flex:none; display:block}
@@ -684,21 +719,25 @@ body.okno-otwarte .mapa{visibility:hidden}
 .wstega.blad{background:var(--czerwony-tlo); color:var(--czerwony)}
 .wstega.ok{background:var(--zielony-tlo); color:var(--zielony)}
 
-/* Pulpit biura: sekcja „Do zrobienia" — jedna lista zamiast kilku wstęg uwagi.
-   Licznik po lewej ma barwę wagi sprawy, tak jak dawniej wstęga. */
-.do-zrobienia{padding:2px 14px}
-.do-zrobienia .poz{display:flex; align-items:center; gap:12px; width:100%; margin:0; padding:10px 0;
-  text-align:left; font-weight:400; background:none; border:0; border-radius:0;
-  border-bottom:1px solid var(--ramka); min-height:auto}
-.do-zrobienia .poz:last-child{border-bottom:0}
-.do-zrobienia .znak{flex:none; min-width:34px; padding:4px 8px; border-radius:999px; text-align:center;
-  font-weight:800; font-size:14px}
-.do-zrobienia .poz.blad .znak{background:var(--czerwony-tlo); color:var(--czerwony)}
-.do-zrobienia .poz.uwaga .znak{background:var(--zolty-tlo); color:var(--zolty)}
-.do-zrobienia .poz.info .znak{background:var(--info-tlo); color:var(--granat-jasny)}
-.do-zrobienia .tekst{flex:1; min-width:0}
-.do-zrobienia .tekst .male{display:block; margin-top:2px}
-.do-zrobienia .strzalka{flex:none; font-size:22px; line-height:1; color:var(--tekst-slaby)}
+/* Pulpit biura: rząd kafelków liczb — wygląd jak na pulpicie GK Panel Kierownika (hala.css .hala-kafelki): jedna karta,
+   w niej szare pola z liczbą; kolor liczby mówi o wadze. Tylko kafelki z liczbą > 0 (kafelkiPulpitu w biuro.js). */
+.kafelki-liczb{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); margin:0 0 16px;
+  background:var(--karta); border:1px solid var(--ramka); border-radius:var(--promien);
+  box-shadow:var(--obrys-gorny), var(--cien); padding:12px}
+.kafelki-liczb:empty{display:none}
+.kafelki-liczb>*{background:var(--tlo); border:0; border-radius:10px; padding:10px 8px; text-align:center;
+  box-shadow:none; color:inherit; font:inherit; min-height:var(--dotyk); margin:0; width:auto}
+.kafelki-liczb>button{cursor:pointer}
+.kafelki-liczb>button:hover{filter:none; background:var(--tlo-neutralne)}
+.kafelki-liczb .etykieta{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+  color:var(--tekst-slaby); margin-bottom:3px; font-weight:600}
+.kafelki-liczb b{display:block; font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1}
+.kafelki-liczb .pilne b{color:var(--czerwony)}
+.kafelki-liczb .uwaga b{color:var(--zolty)}
+.kafelki-liczb .dobrze b{color:var(--zielony)}
+/* Nic nie czeka — jedno spokojne zdanie zamiast kafelków (jak w Panelu). */
+.kafelki-liczb>.spokoj{grid-column:1 / -1; margin:0; background:none; padding:4px 8px; text-align:left;
+  color:var(--zielony); font-weight:600; min-height:0}
 /* Dwie kolumny, ktore na telefonie skladaja sie w jedna. .dwie robi to samo,
    ale bez zwijania — przy formularzach w oknie modalnym jest za ciasno. */
 .dwie-kolumny{display:grid; gap:12px; grid-template-columns:1fr 1fr}
@@ -715,10 +754,8 @@ body.okno-otwarte .mapa{visibility:hidden}
   input,select,textarea{font-size:16px}
   /* Liczby na pulpicie: trzy pelne karty jedna pod druga zajmowaly caly
      pierwszy ekran telefonu. Zwarta siatka jak na pulpicie GK Flota. */
-  .trzy.kafle-pulpitu{grid-template-columns:repeat(2,1fr); gap:10px}
-  .kafle-pulpitu>:first-child{grid-column:1 / -1}
-  .kafle-pulpitu>.karta{padding:10px 12px; margin-bottom:0}
-  .kafle-pulpitu .liczba-kafelka{font-size:24px !important}
+  .kafelki-liczb{grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:10px}
+  .kafelki-liczb b{font-size:24px}
   /* Male przyciski na ekranach kierowcy (Moje zlecenie): 34 px to za malo
      dla palca w busie. Na telefonie co najmniej 44 px, jak reszta przyciskow. */
   /* D65: na telefonie każdy przycisk ≥ --dotyk (52 px) — biuro i kierowca, jak w hali. */
@@ -793,6 +830,22 @@ body.okno-otwarte .mapa{visibility:hidden}
    tylko mniejszy: siedzi w karcie, nad listą punktów, i nie może jej spychać. */
 .pasek-narzedzi label.filtr-aktywny select{border-color:var(--akcent); box-shadow:0 0 0 2px var(--pomarancz-tlo)}
 .zaawansowane.wiecej-trasy{margin-top:12px}
+/* Filtry list (2026-11-17): zwijany blok nad listą tras, zapisanych tras i zaległych dostaw. */
+.filtry-listy{background:var(--karta); border:1px solid var(--ramka); border-radius:var(--promien); margin:0 0 12px; padding:0 12px}
+.filtry-listy.aktywne{border-color:var(--akcent)}
+.filtry-listy>summary{list-style:none; cursor:pointer; display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px;
+  min-height:var(--dotyk); padding:8px 0; font-weight:700; user-select:none}
+.filtry-listy>summary::-webkit-details-marker{display:none}
+.filtry-listy .znak-zwiniecia{display:inline-block; transition:transform .15s; color:var(--tekst-slaby)}
+.filtry-listy[open] .znak-zwiniecia{transform:rotate(90deg)}
+.filtry-licznik{font-weight:700; font-size:14px; padding:1px 8px; border-radius:999px; border:1px solid var(--ramka-mocna)}
+.filtry-podsumowanie{font-weight:400; font-size:13px; flex:1 1 200px; min-width:0}
+.filtry-siatka{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; padding:4px 0 10px}
+.filtry-siatka label{margin:0}
+.filtry-siatka input,.filtry-siatka select{width:100%; min-width:0; display:block}
+.filtry-siatka label.filtr-aktywny select,.filtry-siatka label.filtr-aktywny input{border-color:var(--akcent); box-shadow:0 0 0 2px var(--pomarancz-tlo)}
+.filtry-dol{display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; justify-content:space-between; padding:0 0 12px}
+
 .zaawansowane.wiecej-trasy>summary{font-size:15px; padding:8px 2px}
 .zaawansowane.wiecej-trasy[open]>summary{margin-bottom:10px}
 
