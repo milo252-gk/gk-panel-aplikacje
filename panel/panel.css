@@ -482,13 +482,23 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 @media (max-width: 600px) {
   .filtry-zlecen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
   .filtry-zlecen select { min-width: 0; width: 100%; }
-  .filtry-zlecen label.zaznacz { grid-column: 1 / -1; min-height: var(--dotyk); }
+  .filtry-zlecen label.zaznacz { min-height: var(--dotyk); }   /* obok Rodzaju, nie w osobnym wierszu — lista startuje wyżej (audyt 2026-11-18) */
   .chipy { gap: 6px; }
+  /* Administracja ma 8–12 chipów: w pięciu wierszach zasłaniały treść. Jeden rząd, przewijany palcem. */
+  #admin-chipy { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  #admin-chipy::-webkit-scrollbar { display: none; }
+  #admin-chipy .chip { flex: none; }
   .chip { padding: 0 12px; font-size: 14px; }
 }
 /* Filtry i sortowanie (2026-11-17): zwijany blok pod Działem/Osobą/Rodzajem + wiersz „N z M · aktywne · Wyczyść filtry”. */
 .filtry-wiecej { flex: 1 1 100%; grid-column: 1 / -1; }   /* grid-column: na telefonie formularz jest siatką 2 kolumn */
-.filtry-wiecej > summary { cursor: pointer; font-weight: 700; color: var(--tekst-slaby); min-height: var(--dotyk); display: flex; align-items: center; }
+.filtry-wiecej > summary { cursor: pointer; font-weight: 700; color: var(--tekst-slaby); min-height: var(--dotyk); display: flex; align-items: center; gap: 8px; list-style: none; }
+/* display:flex zjada systemowy trójkąt — bez niego napis wyglądał na wyłączony; trójkąt jak przy „Więcej opcji”. */
+.filtry-wiecej > summary::-webkit-details-marker { display: none; }
+.filtry-wiecej > summary::before { content: "▸"; font-size: 12px; transition: transform .12s; }
+.filtry-wiecej[open] > summary::before { transform: rotate(90deg); }
+/* Numer zlecenia nie łamie się w środku („ZL-2026-/0001”). */
+.hala-zlecenie-gora > .slaby { white-space: nowrap; }
 .filtry-wiecej-pola { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; padding-bottom: 4px; }
 .filtry-wiecej-pola input[type="date"] { min-width: 150px; }
 .filtry-stan { flex: 1 1 100%; grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
@@ -741,7 +751,9 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 .naglowek #szukaj .szukaj-napis { font-size: 14px; }
 .okno-szukaj { width: min(560px, 94vw); }
 .okno-szukaj input[type="search"] { width: 100%; box-sizing: border-box; min-height: 48px; font-size: 17px; }
-.szukaj-wyniki { margin-top: 10px; max-height: 55vh; overflow-y: auto; display: grid; gap: 6px; align-content: start; }
+/* Flex zamiast siatki: w siatce z max-height wiersze się ściskały i wyniki nachodziły na siebie (audyt 2026-11-18, telefon). */
+.szukaj-wyniki { margin-top: 10px; max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.szukaj-wyniki > * { flex: none; }
 .szukaj-grupa { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--tekst-slaby); }
 .szukaj-wynik { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px;
   text-align: left; background: var(--karta); color: var(--tekst); border: 1px solid var(--ramka); border-radius: var(--promien, 10px); font-weight: 400; }

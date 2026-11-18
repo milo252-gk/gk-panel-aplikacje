@@ -114,6 +114,8 @@
     for (const b of document.querySelectorAll('#administracja .chip')) {
       b.hidden = !dostepne.includes(b.dataset.czesc);
       b.setAttribute('aria-pressed', String(b.dataset.czesc === czesc));
+      // Telefon: chipy w jednym przewijanym rzędzie (panel.css) — wybrany ma być widać, nie schowany za krawędzią.
+      if (b.dataset.czesc === czesc && b.scrollIntoView) { try { b.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) { /* stara przeglądarka */ } }
     }
     if (!admin) { alarmy = []; rysujAlarmy(); }
     else if (Date.now() - alarmyCzas > 60000) wczytajAlarmy(); else rysujAlarmy();

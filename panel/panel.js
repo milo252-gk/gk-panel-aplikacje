@@ -337,7 +337,7 @@
     $('zegar').textContent = W.godzina(d.teraz);
   }
 
-  // Czy rozwinięte „Do odbioru” w karcie obchodu (klucz karty → false = zwinięte); domyślnie rozwinięte, wybór przeżywa przerysowania.
+  // Czy rozwinięte „Do odbioru” w karcie obchodu (klucz karty → true = rozwinięte); domyślnie ZWINIĘTE (właściciel 2026-11-18: Awarie i Jakość nie spadają pod ekran), wybór przeżywa przerysowania.
   const odbiorKarty = new Map();
   $('kafelki').addEventListener('toggle', ev => {
     const det = ev.target.closest && ev.target.closest('details.kafelek-odbior');
@@ -378,10 +378,10 @@
     }
     zlecBufor = new Map([].concat(...odbiory.values(), ...kartyKarencji.map(k => k.wiersze)).map(z => [z.id, z]));        // okno szczegółów pozycji czyta stąd
     if (okPoz.open) rysujPozycje();
-    const kartaKarencji = k => `<article class="kafelek kolor-zolty ma-odbior karencja${odbiorKarty.get(k.klucz) !== false ? ' odbior-otwarty' : ''}" data-klucz="${esc(k.klucz)}">
+    const kartaKarencji = k => `<article class="kafelek kolor-zolty ma-odbior karencja${odbiorKarty.get(k.klucz) === true ? ' odbior-otwarty' : ''}" data-klucz="${esc(k.klucz)}">
         <header><h3>${esc(k.naglowek)}</h3><span class="znacznik uwaga">Poprzednia zmiana</span></header>
         <div class="stan-zmiany">${esc(k.napis)}</div>
-        <details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbiorKarty.get(k.klucz) !== false ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${k.wiersze.length}</span></summary>
+        <details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbiorKarty.get(k.klucz) === true ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${k.wiersze.length}</span></summary>
           <div class="lista">${k.wiersze.map(wierszZlecenia).join('')}</div></details>
       </article>`;
     $('kafelki').innerHTML = mistrz.concat(kafelki).map(k => {
@@ -390,7 +390,7 @@
       const opoz = k.opoznione.slice(0, 3).map(p => `<li>${esc(p.godz)} ${esc(p.nazwa)}</li>`).join('')
         + (k.opoznione.length > 3 ? `<li>+${k.opoznione.length - 3} więcej</li>` : '');
       // UI etap 4: zatrzymana maszyna na „zielonym” (obchód na czas) kafelku myliła — kafelek dostaje czerwony obrys (.stoi).
-      const odb = odbiory.get(k.klucz) || [], odbOtwarty = odb.length && odbiorKarty.get(k.klucz) !== false;
+      const odb = odbiory.get(k.klucz) || [], odbOtwarty = odb.length && odbiorKarty.get(k.klucz) === true;
       return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}${odb.length ? ' ma-odbior' : ''}${odbOtwarty ? ' odbior-otwarty' : ''}" data-klucz="${esc(k.klucz)}">
         <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">⛔ Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
         <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
