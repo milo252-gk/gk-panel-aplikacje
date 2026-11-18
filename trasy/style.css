@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-5eaa9d402ac4';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-548df7ddbdfa';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -721,7 +721,7 @@ body.okno-otwarte .mapa{visibility:hidden}
 
 /* Pulpit biura: rząd kafelków liczb — wygląd jak na pulpicie GK Panel Kierownika (hala.css .hala-kafelki): jedna karta,
    w niej szare pola z liczbą; kolor liczby mówi o wadze. Tylko kafelki z liczbą > 0 (kafelkiPulpitu w biuro.js). */
-.kafelki-liczb{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); margin:0 0 16px;
+.kafelki-liczb{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); margin:0 0 16px;
   background:var(--karta); border:1px solid var(--ramka); border-radius:var(--promien);
   box-shadow:var(--obrys-gorny), var(--cien); padding:12px}
 .kafelki-liczb:empty{display:none}

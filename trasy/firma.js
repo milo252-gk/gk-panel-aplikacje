@@ -199,8 +199,8 @@ EKRANY.zalegle = {
             <span class="srodek">
               <span class="nazwa">${escHtml(z.klient_nazwa)}</span>
               <span class="adres">${escHtml(adresJednymCiagiem(z)) || 'brak adresu'}</span>
-              <span class="dopisek">${escHtml(z.data)} · ${escHtml(z.kierowca_imie || 'bez kierowcy')}
-                · ${z.ile_dni} ${odmiana(z.ile_dni, 'dzień', 'dni', 'dni')} temu</span>
+              <span class="dopisek">${polskaData(z.data)} · ${escHtml(z.kierowca_imie || 'bez kierowcy')}
+                · ${z.ile_dni ? `${z.ile_dni} ${odmiana(z.ile_dni, 'dzień', 'dni', 'dni')} temu` : 'dziś'}</span>
               ${z.status === 'nieudane' && z.powod
                 ? `<span class="dopisek">✕ ${escHtml(z.powod)}</span>`
                 : '<span class="dopisek">nie zamknięte do końca dnia</span>'}
@@ -238,7 +238,7 @@ EKRANY.zalegle = {
         if (!data) return komunikat('Wskaż dzień', 'blad');
         if (!await potwierdz('Przenieść na nowy dzień?',
           `${punkty.length} ${odmiana(punkty.length, 'punkt', 'punkty', 'punktów')} trafi na `
-          + `trasę ${data}.`)) return;
+          + `trasę ${polskaData(data)}.`)) return;
         const w = await zRyzykiemKolejki(
           { punkty, data, kierowca: kierowca ? Number(kierowca) : null },
           d => API.post('/api/zalegle/przenies', d));

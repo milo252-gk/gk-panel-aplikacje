@@ -271,7 +271,7 @@ function rysujKrokMapowania() {
         </label>
         <label>Skąd odbieramy towar
           <select id="im-baza">
-            <option value="">${miejscaOdbioru.length ? '— wybierz, skąd odbieramy —' : '— brak miejsc w Ustawieniach —'}</option>
+            <option value="">${miejscaOdbioru.length ? '— wybierz, skąd odbieramy —' : '— najpierw dodaj miejsce w „Nasze lokalizacje” —'}</option>
             ${miejscaOdbioru.map(l => `<option value="${l.id}" ${l.id === domyslneMiejsce ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
           </select>
           <span class="male slaby">plik tego nie mówi — potwierdź miejsce; stąd wyjeżdżają wszystkie trasy z pliku</span>
@@ -298,6 +298,12 @@ function rysujKrokMapowania() {
     if (stanImportu.baza) Pamiec.zapisz('import-baza-' + (stan.uz ? stan.uz.id : 0), String(stanImportu.baza));
   };
   pojemnik.querySelector('#im-podglad').onclick = () => pokazPodgladImportu();
+}
+
+/* Kierowca wybrany w kroku 4 („Przypisz trasy kierowcy”) — do podglądu, gdy plik nie podaje kierowcy. */
+function nazwaKierowcyZFormularza() {
+  const s = document.getElementById('im-kierowca');
+  return s && s.value ? (s.options[s.selectedIndex] || {}).text || '' : '';
 }
 
 function parametryImportu() {
@@ -350,7 +356,7 @@ async function pokazSugestie() {
       Zamówienia zostają w swoich dniach.</div>`).join('')}
     ${w.propozycje.length ? `<button class="glowny" id="im-zastosuj">Zastosuj zaznaczone i pokaż podgląd</button>` : ''}`
   : `<div class="wstega info">Nic do łączenia: zamówienia z jednej okolicy jadą już tego samego dnia
-      (sprawdziłem ${w.grup} ${odmiana(w.grup, 'grupę', 'grupy', 'grup')}).</div>`;
+      (sprawdzono ${w.grup} ${odmiana(w.grup, 'grupę', 'grupy', 'grup')}).</div>`;
   const zastosuj = document.getElementById('im-zastosuj');
   if (zastosuj) zastosuj.onclick = () => {
     stanImportu.przesuniecia = {};
@@ -424,10 +430,10 @@ async function pokazPodgladImportu(zachowajPrzesuniecia) {
       ${plan.trasy.length ? `
         <h3 style="margin-top:18px">Co powstanie</h3>
         <div class="tabela-przewijana" style="max-height:340px;overflow-y:auto">
-          <table><thead><tr><th>Dzień</th><th>Nazwa trasy</th><th>Punkty</th></tr></thead>
+          <table><thead><tr><th>Dzień</th><th>Kierowca</th><th>Punkty</th></tr></thead>
           <tbody>${plan.trasy.slice(0, 60).map(t => `<tr>
             <td>${polskaData(t.data)}</td>
-            <td>${escHtml(t.kierowca_tekst || '—')}</td>
+            <td>${escHtml(t.kierowca_tekst || nazwaKierowcyZFormularza() || 'do przydzielenia')}</td>
             <td class="male">${t.przystanki.map(x => x.duplikat
               ? `<span class="slaby" style="text-decoration:line-through">${escHtml(x.klient.nazwa)}</span>
                  <span class="slaby">— ${escHtml(x.duplikat)}</span>`

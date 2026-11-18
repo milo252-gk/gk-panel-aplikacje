@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-5eaa9d402ac4';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-548df7ddbdfa';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -2081,7 +2081,8 @@ async function wczytajSlowniki() {
     // wiec brak uprawnien traktujemy jak pusta liste, a nie jak awarie.
     const [klienci, pojazdy, ustawienia, lokalizacje] = await Promise.all([
       API.get('/api/klienci'), API.get('/api/pojazdy'), API.get('/api/ustawienia'),
-      API.get('/api/lokalizacje').catch(() => []),
+      // Kierowca i podgląd nie pytają wcale (403 w konsoli przy każdym wejściu było tylko szumem).
+      kontoBiura() ? API.get('/api/lokalizacje').catch(() => []) : Promise.resolve([]),
     ]);
     stan.klienci = klienci; stan.pojazdy = pojazdy; stan.ustawienia = ustawienia;
     stan.lokalizacje = lokalizacje;

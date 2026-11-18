@@ -148,7 +148,8 @@ function kafelkiPulpitu(s) {
   // Raport pracy tworzy się sam z tras — brak ręcznego raportu kierowcy nie jest już sprawą do sprawdzenia.
   let braki = s.braki;
   if (braki && Array.isArray(braki.braki)) {
-    braki = { ...braki, braki: braki.braki.filter(b => b.rodzaj !== 'brak_raportu') };
+    // „niezamkniety” = punkt z minionej trasy — to samo, co liczy kafelek „Zaległe dostawy” (decyzja właściciela 2026-11-18).
+    braki = { ...braki, braki: braki.braki.filter(b => b.rodzaj !== 'brak_raportu' && b.rodzaj !== 'niezamkniety') };
     if (!braki.braki.length && !(braki.spalanie || []).length) braki = null;
   }
   (s.alarmy || []).forEach(a => lista.push({
@@ -698,7 +699,8 @@ function grupyDoPrzyjecia(lista) {
   lista.forEach(x => {
     if (!wg.has(x.trasa)) wg.set(x.trasa, {
       trasa: x.trasa, pozycje: [], dostarczone: [],
-      nazwa: [x.trasa_nazwa || 'Trasa ' + polskaData(x.data), x.kierowca_imie, polskaData(x.data)].filter(Boolean).join(' · '),
+      // Data raz: bez własnej nazwy trasy zaczynamy od słowa „Trasa” (dawniej „Trasa 18.11.2026 · … · 18.11.2026”).
+      nazwa: [x.trasa_nazwa || 'Trasa', x.kierowca_imie, polskaData(x.data)].filter(Boolean).join(' · '),
     });
     const g = wg.get(x.trasa);
     g.pozycje.push(x);
@@ -859,7 +861,7 @@ async function rysujDoPrzyjecia(el, poZmianie) {
       — do tego czasu możesz zwrócić kierowcy to, co trzeba poprawić.</p>
     <div class="karta">${grupyDoPrzyjecia(lista).map(g => `${g.pozycje.length > 1 ? `
       <div class="przyciski" style="justify-content:space-between;align-items:center;padding:8px 0 2px;border-bottom:2px solid var(--ramka)">
-        <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa', 'dostawy', 'dostaw')} czeka</span></b>
+        <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa czeka', 'dostawy czekają', 'dostaw czeka')}</span></b>
         ${g.dostarczone.length > 1 ? `<button class="maly glowny" data-przyjmij-trase="${g.trasa}">✓ Zatwierdź dostarczone (${g.dostarczone.length})</button>` : ''}
       </div>` : ''}${g.pozycje.map(x => {
       return `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
@@ -923,7 +925,7 @@ function kartaTrasy(t) {
       <span class="numer" title="${t.ile} ${odmiana(t.ile, 'punkt', 'punkty', 'punktów')} na trasie">${t.ile}</span>
       <span class="srodek">
         <span class="nazwa">${escHtml(t.nazwa || 'Trasa ' + polskaData(t.data))}</span>
-        <span class="adres">${polskaData(t.data)} · ${escHtml(t.kierowca_imie || 'bez kierowcy')}
+        <span class="adres">${t.nazwa ? polskaData(t.data) + ' · ' : ''}${escHtml(t.kierowca_imie || 'bez kierowcy')}
           ${t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}</span>
         <span class="dopisek">${t.ile_ok} ${odmiana(t.ile_ok, 'dostarczona', 'dostarczone', 'dostarczonych')}${
           t.ile_nie ? ', ' + t.ile_nie + ' ' + odmiana(t.ile_nie, 'nieudana', 'nieudane', 'nieudanych') : ''}
