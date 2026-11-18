@@ -207,9 +207,10 @@
     const ekran = (hala.pracownik && hala.pracownik.role || []).includes('ekran');
     HalaKonto.mojeKonto(hala, {
       aplikacja: 'panel', komunikat, wyloguj, odrzucone: pokazOdrzucone,
-      dodatki: ekran ? null : el => {
-        el.innerHTML = '<div id="konto-powiadomienia"></div>';
-        HalaKonto.powiadomienia(el.firstChild, hala, { opis: 'Gdy Twoje zlecenie jest po terminie — także przy zamkniętym Panelu.', komunikat });
+      // Instrukcja: krótka strona obok Panelu (instrukcja.html) — telefon z Pages nie ma Instrukcja.pdf z folderu programu. Dla każdej roli, też ekranu.
+      dodatki: el => {
+        el.innerHTML = `${ekran ? '' : '<div id="konto-powiadomienia"></div>'}<a class="przycisk" id="konto-instrukcja" href="instrukcja.html" target="_blank" rel="noopener">Instrukcja</a>`;
+        if (!ekran) HalaKonto.powiadomienia(el.firstChild, hala, { opis: 'Gdy Twoje zlecenie jest po terminie — także przy zamkniętym Panelu.', komunikat });
       },
     });
   }
@@ -881,8 +882,6 @@
     f.sort.value = filtry.sort;
     if (f.od.value !== filtry.od) f.od.value = filtry.od;
     if (f.doDnia.value !== filtry.doDnia) f.doDnia.value = filtry.doDnia;
-    // Blok „Więcej filtrów” sam się rozwija, gdy jest w nim coś ustawionego — żeby nikt nie szukał, czemu lista jest krótsza.
-    if (filtry.status || filtry.linia || filtry.maszyna || filtry.od || filtry.doDnia || filtry.sort) $('filtry-wiecej').open = true;
     return { dzial: Object.fromEntries(((d.stale && d.stale.dzialy) || []).map(x => [x.kod, x.nazwa])),
              osoba: Object.fromEntries((d.pracownicy || []).map(p => [p.id, p.nazwa])),
              rodzaj: Object.fromEntries(W.RODZAJE_ZADAN), status: nazwyStatusow,
@@ -895,6 +894,9 @@
     $('filtry-licznik').textContent = `${n} z ${m}`;
     const opis = W.opisFiltrow(filtry, nazwy);
     $('filtry-opis').textContent = opis.length ? `Aktywne: ${opis.join(' · ')}` : '';
+    // Plakietka na wierzchu (też na telefonie, gdzie rząd pól się przewija): ile filtrów zawęża listę.
+    $('filtry-aktywne').hidden = !aktywne || !opis.length;
+    $('filtry-aktywne').textContent = opis.length === 1 ? '1 filtr' : `Filtry: ${opis.length}`;
     $('filtry-czysc').hidden = !aktywne;
   }
   $('filtry-zlecen').addEventListener('change', ev => {
@@ -973,9 +975,25 @@
     $('lista-zlecen').innerHTML = wiersze.map(w => w.html).join('')
       || `<p class="pusto">${esc(pustaListaZlecenTekst(chipy))}</p>`;
     // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
-    for (const e of $('lista-zlecen').querySelectorAll('img[data-plik]'))
-      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+    ladujZdjeciaLeniwie($('lista-zlecen'));
     zaznaczZnalezione();
+  }
+
+  /* Zdjęcia na liście Zleceń ładują się dopiero, gdy trafią na ekran (IntersectionObserver). Zwinięte „Pozycje” zamkniętej
+     checklisty nie mają układu, więc ich zdjęcia ruszają dopiero po rozwinięciu — długa lista Zamkniętych nie ciągnie setek plików. */
+  const obserwatorZdjec = typeof IntersectionObserver === 'function' ? new IntersectionObserver(wpisy => {
+    for (const w of wpisy) {
+      if (!w.isIntersecting) continue;
+      const e = w.target;
+      obserwatorZdjec.unobserve(e);
+      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+    }
+  }, { rootMargin: '200px' }) : null;
+  function ladujZdjeciaLeniwie(korzen) {
+    for (const e of korzen.querySelectorAll('img[data-plik]')) {
+      if (obserwatorZdjec) obserwatorZdjec.observe(e);
+      else hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+    }
   }
 
   // Zlecenia z ostatniego rysowania listy — okno szczegółów pozycji czyta stąd (i odświeża się razem z listą).
@@ -1004,7 +1022,7 @@
       // D87: checklista oddana pozycja po pozycji — „Odbierz całą” (albo resztę, gdy część już odebrana) i „Zwróć całą”.
       const lista = z.status === 'wykonane' && z.mozeOdbieracPozycje;
       glowne.push(p('zamknij', z.status !== 'wykonane' ? 'Zamknij' : lista ? (z.odbior && z.odbior.odebrane > 0 ? 'Odbierz resztę' : 'Odbierz całą') : 'Odbierz', 'glowny'));
-      obok.push(p('zwroc', lista ? 'Zwróć całą' : 'Zwróć'));
+      if (z.zwrotDozwolony !== false) obok.push(p('zwroc', lista ? 'Zwróć całą' : 'Zwróć'));
     }
     // Audyt ról 2026-11-09 (D80): „Odwołaj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
     // i admin). Kierownik UR/KJ widział przycisk, a hub odpowiadał 403.
@@ -1013,6 +1031,11 @@
       ? p('jako-stale', `${ik('zapisane')}Do zapisanych`, '', 'Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)') : '';
     // Bez czynności głównej (zlecenie czeka na dział) najczęstsze jest poprawienie treści — „Zmień” zostaje na wierzchu.
     const widoczne = glowne.concat(obok);
+    // „Historia” (właściciel 2026-11-18, wzór: „Przebieg” w GK Trasy): oś zdarzeń zlecenia — kto i kiedy zlecił, przyjął, zrobił, odebrał,
+    // zwrócił, pozycje, zatwierdzenie automatyczne, odwołanie. Dla tych, którzy odbierają (kierownik zakładu, admin, kierownik działu swój).
+    // Na zamkniętych i odwołanych — od razu na wierzchu; przy zleceniach z własnymi przyciskami — pod „Więcej”. Okno to samo co klik w tytuł.
+    const historia = kier && z.prawoOdbioru && !z.zaplanowane ? p('historia', 'Historia', '', 'Przebieg zlecenia: kto i kiedy, notatki i zdjęcia') : '';
+    if (historia && !z.otwarte && !z.doZamkniecia) widoczne.push(historia); else reszta.push(historia);
     if (!widoczne.length && edytuj) widoczne.push(edytuj); else reszta.push(edytuj);
     const ukryte = reszta.concat(anuluj, zapisz).filter(Boolean);
     if (ukryte.length === 1 && widoczne.length < 2) return widoczne.concat(ukryte).join('');   // dwa widoczne to komplet — reszta pod „Więcej”
@@ -1039,6 +1062,10 @@
     // Do odbioru każda pozycja jest przyciskiem: okno ze szczegółami (zdjęcie, notatka, kto i kiedy) — kierownik ocenia wykonanie.
     const klik = z.doZamkniecia;
     const poz = kier && z.moznaOdebrac && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
+    // Wgląd w ZAMKNIĘTĄ checklistę (właściciel 2026-11-18): kto i kiedy, notatka, zdjęcia, powód pominięcia — tylko do odczytu, bez
+    // Odbierz/Zwróć. Dla tych, którzy odbierają (kierownik zakładu, admin; kierownik UR/KJ tylko swój dział — prawoOdbioru); ekran nie.
+    const wglad = kier && z.prawoOdbioru && !z.doZamkniecia && z.pozycje.length > 0 && !z.otwarte;
+    const pokazDowody = p => p.stan !== 'czeka' && ((klik && poz) || wglad);
     const dowody = p => {
       const sz = p.szczegoly;
       const kto = sz.kto ? esc(sz.kto) : sz.automat ? 'automatycznie (czynność w aplikacji)' : '';
@@ -1050,10 +1077,10 @@
     };
     const przyciskiPozycji = p => !poz || p.stan === 'czeka' ? ''
       : p.odebrana ? `<span class="znacznik ok poz-odebrana" title="${esc(p.odebranaPrzez ? `Odebrana przez ${p.odebranaPrzez}${p.odebranaGodz ? `, ${p.odebranaGodz}` : ''}` : 'Odebrana')}">Odebrana</span>`
-      : `<span class="poz-przyciski"><button type="button" class="maly glowny" data-akcja="poz-odbierz" data-pozycja="${esc(p.id)}" title="Odbierz tę pozycję">Odbierz</button><button type="button" class="maly" data-akcja="poz-zwroc" data-pozycja="${esc(p.id)}" title="Wróci do działu tylko ta pozycja">Zwróć</button></span>`;
-    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? '✓✓' : ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${klik && poz && p.stan !== 'czeka' ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !(klik && poz && p.stan !== 'czeka') ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
+      : `<span class="poz-przyciski"><button type="button" class="maly glowny" data-akcja="poz-odbierz" data-pozycja="${esc(p.id)}" title="Odbierz tę pozycję" aria-label="Odbierz: ${esc(p.nazwa)}">Odbierz</button>${z.zwrotDozwolony === false ? '' : `<button type="button" class="maly" data-akcja="poz-zwroc" data-pozycja="${esc(p.id)}" title="Wróci do działu tylko ta pozycja" aria-label="Zwróć: ${esc(p.nazwa)}">Zwróć</button>`}</span>`;
+    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? '✓✓' : ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${pokazDowody(p) ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !pokazDowody(p) ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
     const naglowekPozycji = z.odbior && z.doZamkniecia && z.status === 'wykonane'
-      ? `Pozycje (${z.odbior.odebrane}/${z.odbior.wszystkie} odebrane)` : `Pozycje (${z.checklista ? z.checklista.gotowe : 0}/${z.checklista ? z.checklista.wszystkie : 0})`;
+      ? `Pozycje (${z.odbior.odebrane}/${z.odbior.wszystkie} odebrane)` : `Pozycje (${z.checklista ? z.checklista.gotowe : 0}/${z.checklista ? z.checklista.wszystkie : 0})${wglad ? ' — kto, kiedy, notatki i zdjęcia' : ''}`;
     const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>${naglowekPozycji}</summary>
       <ul>${z.pozycje.map(liPozycji).join('')}</ul></details>` : '';
     return `
@@ -1130,9 +1157,9 @@
     const b = (akcja, napis, klasa) => `<button type="button"${klasa ? ` class="${klasa}"` : ''} data-pozycja-akcja="${akcja}">${napis}</button>`;
     const cala = z.status === 'wykonane' && z.mozeOdbieracPozycje;
     $('pozycja-zlecenia-akcje').innerHTML = !kier ? ''
-      : poz ? (p.stan !== 'czeka' && !p.odebrana ? b('poz-zwroc', 'Zwróć pozycję') + b('poz-odbierz', 'Odbierz pozycję', 'glowny') : '')
-          + b('zwroc', 'Zwróć całą') + b('zamknij', z.odbior && z.odbior.odebrane > 0 ? 'Odbierz resztę' : 'Odbierz całą', p.odebrana || p.stan === 'czeka' ? 'glowny' : '')
-      : b('zwroc', cala ? 'Zwróć całą' : 'Zwróć zlecenie') + b('zamknij', z.status === 'wykonane' ? 'Odbierz zlecenie' : 'Zamknij zlecenie', 'glowny');
+      : poz ? (p.stan !== 'czeka' && !p.odebrana ? (z.zwrotDozwolony === false ? '' : b('poz-zwroc', 'Zwróć pozycję')) + b('poz-odbierz', 'Odbierz pozycję', 'glowny') : '')
+          + (z.zwrotDozwolony === false ? '' : b('zwroc', 'Zwróć całą')) + b('zamknij', z.odbior && z.odbior.odebrane > 0 ? 'Odbierz resztę' : 'Odbierz całą', p.odebrana || p.stan === 'czeka' ? 'glowny' : '')
+      : (z.zwrotDozwolony === false ? '' : b('zwroc', cala ? 'Zwróć całą' : 'Zwróć zlecenie')) + b('zamknij', z.status === 'wykonane' ? 'Odbierz zlecenie' : 'Zamknij zlecenie', 'glowny');
     for (const e of $('pozycja-zlecenia-tresc').querySelectorAll('img[data-plik]'))
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
   }

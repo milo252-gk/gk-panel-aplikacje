@@ -478,11 +478,17 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .filtry-zlecen label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .filtry-zlecen label.zaznacz { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 400; color: var(--tekst); min-height: 52px; }
 .filtry-zlecen select { min-width: 150px; }
-/* Telefon: trzy listy i pole wyboru zajmowały pół ekranu, a pierwsze zlecenie było pod kreską. Dwie kolumny — lista startuje wyżej. */
+/* Telefon: filtry i sortowanie NA WIERZCHU w jednym poziomo przewijanym rzędzie (właściciel 2026-11-18) — lista startuje tuż pod
+   nim; „N z M”, plakietka aktywnych i „Wyczyść” w wierszu pod spodem. Pola mają stałą szerokość, żeby dalsze było widać „wystające”. */
 @media (max-width: 600px) {
-  .filtry-zlecen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .filtry-zlecen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }   /* Wskaźniki → Zlecenia na osobę: jak dotąd */
   .filtry-zlecen select { min-width: 0; width: 100%; }
-  .filtry-zlecen label.zaznacz { min-height: var(--dotyk); }   /* obok Rodzaju, nie w osobnym wierszu — lista startuje wyżej (audyt 2026-11-18) */
+  #filtry-zlecen { display: block; }
+  #filtry-pola { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; align-items: end; padding-bottom: 2px; }
+  #filtry-pola::-webkit-scrollbar { display: none; }
+  #filtry-pola > label { flex: none; width: 150px; }
+  #filtry-pola > label.zaznacz { width: auto; padding-right: 6px; white-space: nowrap; }
+  #filtry-pola select, #filtry-pola input[type="date"] { min-width: 0; width: 100%; }
   .chipy { gap: 6px; }
   /* Administracja ma 8–12 chipów: w pięciu wierszach zasłaniały treść. Jeden rząd, przewijany palcem. */
   #admin-chipy { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
@@ -490,23 +496,13 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
   #admin-chipy .chip { flex: none; }
   .chip { padding: 0 12px; font-size: 14px; }
 }
-/* Filtry i sortowanie (2026-11-17): zwijany blok pod Działem/Osobą/Rodzajem + wiersz „N z M · aktywne · Wyczyść filtry”. */
-.filtry-wiecej { flex: 1 1 100%; grid-column: 1 / -1; }   /* grid-column: na telefonie formularz jest siatką 2 kolumn */
-.filtry-wiecej > summary { cursor: pointer; font-weight: 700; color: var(--tekst-slaby); min-height: var(--dotyk); display: flex; align-items: center; gap: 8px; list-style: none; }
-/* display:flex zjada systemowy trójkąt — bez niego napis wyglądał na wyłączony; trójkąt jak przy „Więcej opcji”. */
-.filtry-wiecej > summary::-webkit-details-marker { display: none; }
-.filtry-wiecej > summary::before { content: "▸"; font-size: 12px; transition: transform .12s; }
-.filtry-wiecej[open] > summary::before { transform: rotate(90deg); }
+/* Filtry i sortowanie (2026-11-17; od 2026-11-18 na wierzchu, bez zwijania): pola w jednym zawijanym rzędzie + wiersz „N z M · aktywne · Wyczyść filtry”. */
 /* Numer zlecenia nie łamie się w środku („ZL-2026-/0001”). */
 .hala-zlecenie-gora > .slaby { white-space: nowrap; }
-.filtry-wiecej-pola { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; padding-bottom: 4px; }
-.filtry-wiecej-pola input[type="date"] { min-width: 150px; }
-.filtry-stan { flex: 1 1 100%; grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.filtry-pola { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; width: 100%; }
+.filtry-pola input[type="date"] { min-width: 150px; }
+.filtry-stan { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; width: 100%; margin-top: 6px; }
 .filtry-stan .licznik { font-weight: 700; }
-@media (max-width: 600px) {
-  .filtry-wiecej-pola { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
-  .filtry-wiecej-pola select, .filtry-wiecej-pola input[type="date"] { min-width: 0; width: 100%; }
-}
 .wskazniki-osoby { margin-top: 18px; }
 .tabela-przewijana { overflow-x: auto; }
 .tabela-osob { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
@@ -761,3 +757,6 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 .szukaj-tekst b { overflow-wrap: anywhere; }
 .szukaj-wynik .znacznik { flex: none; }
 .zlecenie.znalezione { outline: 3px solid var(--pomarancz); outline-offset: 2px; }
+
+/* Instrukcja w Moje konto: odnosnik wyglada jak pozostale przyciski okna. */
+#konto-instrukcja { display: flex; align-items: center; justify-content: center; width: 100%; box-sizing: border-box; text-decoration: none; margin-top: 8px; }

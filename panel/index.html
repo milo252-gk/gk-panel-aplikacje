@@ -119,6 +119,7 @@
         </div>
         <!-- D55: filtry — dział, osoba, okres (zamknięte starsze niż 2 dni dociągane z serwera), tylko spóźnione. -->
         <form class="filtry-zlecen" id="filtry-zlecen" autocomplete="off">
+          <div class="filtry-pola" id="filtry-pola">
           <label>Dział<select name="dzial"><option value="">wszystkie</option></select></label>
           <label>Osoba<select name="osoba"><option value="">wszyscy</option></select></label>
           <label>Rodzaj<select name="rodzaj"><option value="">wszystkie</option></select></label>
@@ -126,22 +127,19 @@
             <option value="2">2 dni</option><option value="7">7 dni</option><option value="30">30 dni</option><option value="90">90 dni</option>
           </select></label>
           <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
-          <!-- Filtry i sortowanie (właściciel 2026-11-17): status, linia, maszyna, zakres dat (po dacie zlecenia) i kolejność — w zwijanym
-               bloku, żeby codzienny układ (Dział, Osoba, Rodzaj) został jak był. Pod spodem: co jest aktywne, „N z M”, „Wyczyść filtry”.
-               Ustawienia pamięta przeglądarka osobno dla każdej osoby (hala.panel.filtry.<id>). -->
-          <details class="filtry-wiecej" id="filtry-wiecej">
-            <summary>Więcej filtrów i sortowanie</summary>
-            <div class="filtry-wiecej-pola">
+          <!-- Filtry i sortowanie (właściciel 2026-11-17; 2026-11-18: NA WIERZCHU, bez zwijania): status, linia, maszyna, zakres dat
+               (po dacie zlecenia) i kolejność obok Działu, Osoby i Rodzaju. Na telefonie jeden poziomo przewijany rząd. Pod spodem: „N z M”,
+               plakietka liczby aktywnych, co jest aktywne, „Wyczyść filtry”. Pamięć: hala.panel.filtry.<id> (osobno dla każdej osoby). -->
               <label>Status<select name="status"><option value="">wszystkie</option></select></label>
               <label id="filtr-linia">Linia<select name="linia"><option value="">wszystkie</option></select></label>
               <label id="filtr-maszyna">Maszyna<select name="maszyna"><option value="">wszystkie</option></select></label>
               <label>Od dnia<input type="date" name="od"></label>
               <label>Do dnia<input type="date" name="doDnia"></label>
               <label>Kolejność<select name="sort"></select></label>
-            </div>
-          </details>
+          </div>
           <div class="filtry-stan" id="filtry-stan">
             <span id="filtry-licznik" class="licznik" aria-live="polite"></span>
+            <span id="filtry-aktywne" class="znacznik info" hidden></span>
             <span id="filtry-opis" class="slaby"></span>
             <button type="button" id="filtry-czysc" class="maly" hidden>Wyczyść filtry</button>
           </div>

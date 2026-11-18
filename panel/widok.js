@@ -330,6 +330,15 @@
   // D76: „rozdzielone” — kierownik działu dał części kilku osobom; dla kierownika zakładu to dalej robota w toku.
   const OTWARTE = new Set(['nowe', 'przyjete', 'rozdzielone']);
   const DO_ZAMKNIECIA = new Set(['wykonane', 'odrzucone']);
+  /* Status zlecenia po słowniku GK (właściciel 2026-11-18): czekające na odbiór kierownika = „Do odbioru” (nie „Wykonane”),
+     odebrane = „Odebrane” (nie „Zamknięte”; zatwierdzone automatycznie zostaje przy etykiecie serwera), „Nie mogę” odebrane przez
+     kierownika = „Pominięte — odebrane”. Tylko napis w widoku Panelu — status, kontrakt i etykiety serwera bez zmian (etykieta serwera
+     dalej jest w z.etykieta). Bliźniak: HalaZlecenia.etykietaStatusu (wspolne/klient/zlecenia.js, Lider/UR/KJ). */
+  function etykietaZlecenia(z, d) {
+    if (z.status === 'wykonane') return 'Do odbioru';
+    if (z.status === 'zamkniete' && !(d && d.zatwierdzone_automatycznie)) return d && d.odrzucil && !d.wykonal ? 'Pominięte — odebrane' : 'Odebrane';
+    return z.etykieta || z.status;
+  }
 
   /* D76: część rozdzielonego zlecenia stoi pod całością (osoby i znaki stanu na karcie całości), a nie jako osobny wiersz —
      inaczej jedno zadanie kierownika zakładu liczyłoby się na chipach i kafelkach kilka razy. Wyjątek: część, przy której
@@ -398,9 +407,10 @@
       const odbior = H().odbiorPozycji(d);
       const koncowka = H().koniecOdbioru(d, H().karencjaOdbioru(stale));
       const prawoOdbioru = H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true;
+      const koniecZwrotuMs = H().koniecZwrotu ? H().koniecZwrotu(d) : null;
       const koniecOdbioru = DO_ZAMKNIECIA.has(z.status) && koncowka !== null && (teraz === undefined ? Date.now() : teraz) >= koncowka;
       return {
-        id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
+        id: z.id, numer: z.numer || '—', status: z.status, etykieta: etykietaZlecenia(z, d),
         tytul: d.tytul || '', opis: d.opis || '',
         dzial: d.dzial, dzialNazwa: dzialy.get(d.dzial) || d.dzial || '—',
         liniaNazwa: d.linia ? liniaWidoczna(slowniki, d.linia) || null : null,
@@ -462,6 +472,9 @@
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
         // R2 (2026-11-09, D82): kierownik UR/KJ przyjmuje, zamyka i zwraca tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
         prawoOdbioru, moznaOdebrac: prawoOdbioru && !koniecOdbioru,
+        // D88 (właściciel 2026-11-18): zwrot zlecenia zmianowego (całego i pozycji) tylko do końca zmiany — w karencji tylko Odbierz.
+        // Hub też odrzuci (koniec_zwrotu_zmianowego); panel.js chowa „Zwróć”, gdy z.zwrotDozwolony === false.
+        zwrotDozwolony: prawoOdbioru && !koniecOdbioru && (koniecZwrotuMs === null || (teraz === undefined ? Date.now() : teraz) < koniecZwrotuMs),
         // D88: zlecenie zmianowe po końcu zmiany + karencji — tylko do wglądu (serwer zatwierdza je sam i odrzuca odbiór/zwrot).
         odbiorZakonczony: koniecOdbioru, odbiorDo: koncowka === null ? null : godzina(koncowka),
         zatwierdzoneAuto: d.zatwierdzone_automatycznie || null,
@@ -2440,7 +2453,7 @@
      telefon czy komputer nie miesza ustawień ludzi. Wszystko, co nie pasuje (stary zapis, ręczna edycja), wraca do wartości
      pustej, żeby jeden zły zapis nie ukrył listy. */
   const KLUCZ_FILTROW = 'hala.panel.filtry.';
-  const SORTOWANIA = [['', 'domyślna (spóźnione na górze)'], ['najnowsze', 'najnowsze → najstarsze'], ['najstarsze', 'najstarsze → najnowsze']];
+  const SORTOWANIA = [['', 'Domyślnie (spóźnione na górze)'], ['najnowsze', 'najnowsze → najstarsze'], ['najstarsze', 'najstarsze → najnowsze']];
   const OKRESY_DNI = [2, 7, 30, 90];
   const kluczFiltrow = idOsoby => KLUCZ_FILTROW + String(idOsoby || '');
   function filtryZPamieci(tekst) {

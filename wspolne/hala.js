@@ -35,6 +35,7 @@
      dzialyOsoby         <-> dzialy_osoby (D82: działy osoby); mozeOdebracZlecenie <-> blad_odbioru_zlecenia (R2); mozeUrlopOsoby <-> blad_urlopu_osoby (R5)
      postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia)
      odbiorPozycji       <-> odbior_pozycji    (D87: odbiór checklisty pozycja po pozycji)
+     koniecZwrotu        <-> koniec_zwrotu_zmianowego (D88: zwrot tylko do końca zmiany, bez karencji)
      koniecOdbioru       <-> koniec_odbioru_zmianowego (D88: odbiór zlecenia zmianowego tylko do końca zmiany + karencji) */
 
 (function (global) {
@@ -476,6 +477,13 @@
   function koniecOdbioru(dane, karencjaMin) {
     const w = Date.parse((dane || {}).wazne_do);
     return isNaN(w) ? null : w + (karencjaMin === undefined ? KARENCJA_ODBIORU_MIN : karencjaMin) * 60000;
+  }
+  /* D88 (decyzja właściciela 2026-11-18): ZWROT (całego zlecenia i pozycji) zlecenia zmianowego tylko do końca zmiany (`wazne_do`),
+     bez karencji — w karencji można tylko odbierać. Zwraca ms końca zwrotu albo null (nie zmianowe). Panel: zwrot możliwy, gdy
+     teraz < koniecZwrotu(dane). Bliźniak: hala.py → koniec_zwrotu_zmianowego (wektory zwrot_zmianowych). */
+  function koniecZwrotu(dane) {
+    const w = Date.parse((dane || {}).wazne_do);
+    return isNaN(w) ? null : w;
   }
 
   /* D87 (właściciel 2026-11-17): odbiór oddanej checklisty pozycja po pozycji. Stan zlecenia ma mapy `pozycje_odebrane`
@@ -2748,7 +2756,7 @@
 
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
-    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, koniecOdbioru, karencjaOdbioru, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
+    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, koniecOdbioru, koniecZwrotu, karencjaOdbioru, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,

@@ -69,6 +69,16 @@
      linie = lista linii (mistrz z liniami zaznaczonymi w Panelu, D34 2026-10-07): zlecenia bez linii albo z jedną z nich.
      D47: zlecenie ZAPLANOWANE przez kierownika zakładu na później (status „zaplanowane”) dział widzi dopiero, gdy hub je
      zleci (zlecenie.aktywowane → „nowe”) — wcześniej nie ma go ani na liście, ani na plakietce, ani w zaległych. */
+  /* Status zlecenia po słowniku GK (właściciel 2026-11-18, bliźniak W.etykietaZlecenia w panel/web/widok.js — oba pilnowane testem):
+     czeka na odbiór = „Do odbioru”, odebrane = „Odebrane”; „Nie mogę” odebrane przez kierownika to osobno „Pominięte — odebrane”
+     (nie wygląda jak wykonane); zatwierdzone automatycznie i reszta — etykieta serwera. Tylko napis: status, kontrakt i dane bez zmian. */
+  function etykietaStatusu(z, d) {
+    d = d || {};
+    if (z.status === 'wykonane') return 'Do odbioru';
+    if (z.status === 'zamkniete' && !d.zatwierdzone_automatycznie) return d.odrzucil && !d.wykonal ? 'Pominięte — odebrane' : 'Odebrane';
+    return z.etykieta || z.status;
+  }
+
   function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien, tylko,
                             pracownik, dzialyKontraktu }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
@@ -100,7 +110,7 @@
         const odMs = Date.parse(d.od);
         const przedZl = doZrobienia && !isNaN(odMs) && odMs > teraz;
         return {
-          id: z.id, numer: z.numer || '—', status: z.status, etykieta: z.etykieta || z.status,
+          id: z.id, numer: z.numer || '—', status: z.status, etykieta: etykietaStatusu(z, d),
           tytul: d.tytul || '', opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyna: d.maszyna || null, linia: d.linia || null,
           dlaKogo: nazwa(d.wykonawca), zlecil: nazwa(d.zlecil), kiedy: godz(d.czas_zlecenia), termin: godz(d.termin),
           terminMs: isNaN(termin) ? null : termin, terminOpis: opis ? opis.tekst : null,
@@ -1015,7 +1025,7 @@
     return `Zlecenie wróciło od kierownika: ${tytul}` + (o.uwagi ? ` — ${o.uwagi}` : '');
   }
 
-  const HalaZlecenia = { maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
+  const HalaZlecenia = { etykietaStatusu, maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
                          brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
                          pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia, akcjeKarty };
   global.HalaZlecenia = HalaZlecenia;
