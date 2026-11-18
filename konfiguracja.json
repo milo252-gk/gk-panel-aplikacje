@@ -1,6 +1,6 @@
 {
   "hub": "https://transcription-numbers-sent-discovery.trycloudflare.com",
-  "zmieniono": "2026-11-18T11:29:05.898Z",
+  "zmieniono": "2026-11-18T11:30:00.413Z",
   "wersje": {
     "wspolne": "wspolne-e78dfde7557b",
     "panel": "panel-7d9825f85cdd",
@@ -9,6 +9,7 @@
     "kj": "kj-4ca8a3778168"
   },
   "programy": {
-    "szkolenia": "https://hour-notebooks-manor-implies.trycloudflare.com"
+    "szkolenia": "https://hour-notebooks-manor-implies.trycloudflare.com",
+    "wycena": "https://gone-genius-combination-justice.trycloudflare.com"
   }
 }
