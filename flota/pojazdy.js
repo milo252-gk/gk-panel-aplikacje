@@ -271,7 +271,7 @@ EKRANY.pojazdy = {
         <span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
         ${f.szukaj || f.rodzaj ? 'Nic nie pasuje do tych warunków.'
           : (biuro ? 'Nie ma jeszcze żadnego auta — dodaj pierwsze.'
-                   : 'Nie masz przypisanego żadnego auta. Zgłoś to biuru.')}</div>`}
+                   : 'Nie masz przypisanego żadnego auta. Zgłoś to biuru.' + kontaktBiura())}</div>`}
     `;
 
     const szukaj = pole.querySelector('#p-szukaj');
@@ -305,8 +305,31 @@ async function oknoSzukania() {
   if (pole) { pole.focus(); pole.select(); }
 }
 
+/* D2 (2026-11-17): na telefonie lista aut to KARTY, nie tabela — w tabeli
+   Przebieg i „Najbliższy termin” lądowały poza ekranem. Oba widoki są w tym
+   samym HTML-u i przełącza je CSS (.flota-tabela / .flota-karty, granica
+   820 px jak wszędzie); dane i kliknięcie (data-pojazd) są te same.        */
+function kartyFloty(lista, biuro) {
+  return `<div class="flota-karty">${lista.map(p => `
+    <button type="button" class="auto-karta${p.aktywny ? '' : ' slaby'}" data-pojazd="${p.id}">
+      <span class="auto-karta-gora">
+        <b class="rejestracja">${escHtml(p.rejestracja)}</b>
+        <span class="auto-karta-status">${plakietkaTerminu(p.terminy)}</span>
+      </span>
+      <span class="auto-karta-opis">${escHtml(nazwaPojazdu(p))}${p.aktywny ? ''
+        : ' <span class="plakietka">wycofane</span>'}
+        <span class="slaby male">${escHtml(NAZWY_RODZAJU[p.rodzaj] || p.rodzaj || '')}${
+          p.rok ? ', ' + p.rok : ''}</span></span>
+      <span class="auto-karta-dol">
+        <span>Przebieg: <b>${p.przebieg != null ? escHtml(kilometry(p.przebieg)) : '—'}</b></span>
+        ${biuro ? `<span>Kierowca: <b>${p.kierowca_imie ? escHtml(p.kierowca_imie)
+          : '<span class="slaby">nikt</span>'}</b></span>` : ''}
+      </span>
+    </button>`).join('')}</div>`;
+}
+
 function tabelaFloty(lista, biuro) {
-  return `<div class="karta scisla"><div class="tabela-przewijana"><table>
+  return kartyFloty(lista, biuro) + `<div class="karta scisla flota-tabela"><div class="tabela-przewijana"><table>
     <thead><tr>
       <th>Rejestracja</th><th>Auto</th>${biuro ? '<th>Kierowca</th>' : ''}
       <th class="liczba">Przebieg</th><th>Najbliższy termin</th>

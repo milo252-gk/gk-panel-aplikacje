@@ -36,6 +36,11 @@ EKRANY.ustawienia = {
         <label class="pole">Nazwa firmy
           <input id="u-firma" maxlength="120" value="${escHtml(u.firma || '')}"
                  placeholder="wchodzi w temat wiadomości i nagłówek pulpitu"></label>
+        <label class="pole">Telefon do biura
+          <input id="u-telefon-biura" type="tel" inputmode="tel" maxlength="40"
+                 value="${escHtml(u.telefon_biura || '')}" placeholder="np. 600 100 200">
+          <span class="slaby male">Kierowca widzi go na ekranach bez auta i w „Moje konto”
+            (przycisk „Zadzwoń do biura”). Puste = nic nie pokazujemy.</span></label>
       </div>
 
       <div class="karta">
@@ -693,6 +698,7 @@ async function zapiszUstawienia() {
   const we = id => document.getElementById(id);
   const dane = {
     firma: we('u-firma').value.trim(),
+    telefon_biura: we('u-telefon-biura').value.trim(),
     poczta_wlaczona: we('u-poczta-wlaczona').checked ? '1' : '0',
     poranne_przypomnienia: we('u-poranne').checked ? '1' : '0',
     mail_biura: we('u-mail-biura').value.trim(),

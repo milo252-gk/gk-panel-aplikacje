@@ -28,7 +28,7 @@ EKRANY.moj = {
       pole.innerHTML = `${przyciskPowrotu()}<div class="pusto"><span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
         Nie masz przypisanego auta.<br>
         <span class="male">Zgłoś to biuru — bez przypisanego auta nie da się
-        oddać przeglądu ani zgłosić usterki.</span></div>`;
+        oddać przeglądu ani zgłosić usterki.</span>${kontaktBiura()}</div>`;
       podepnijPowrot(pole);
       return;
     }
@@ -143,7 +143,7 @@ EKRANY.przeglad = {
     const d = await sprobuj(() => API.get('/api/moj-pojazd'));
     if (!d || !(d.pojazdy || []).length) {
       pole.innerHTML = `<div class="pusto"><span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
-        Nie masz przypisanego auta.</div>`;
+        Nie masz przypisanego auta.<br><span class="male">Zgłoś to biuru.</span>${kontaktBiura()}</div>`;
       return;
     }
     const auta = d.pojazdy;
@@ -431,7 +431,7 @@ async function formularzUsterkiNaEkranie(kontener) {
   if (!auta.length) {
     kontener.innerHTML = `<div class="pusto"><span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
       Nie masz przypisanego auta.<br><span class="male">Zgłoś to biuru — bez
-      przypisanego auta nie da się zgłosić usterki.</span></div>`;
+      przypisanego auta nie da się zgłosić usterki.</span>${kontaktBiura()}</div>`;
     return;
   }
   const zdjecia = [];
@@ -444,4 +444,22 @@ async function formularzUsterkiNaEkranie(kontener) {
   kontener.querySelector('#u-wyslij').onclick = async () => {
     if (await wyslijZgloszenieUsterki(kontener, auta, zdjecia)) odswiezEkran();
   };
+}
+
+/* D6 (2026-11-17): telefon do biura. Wpisuje go administrator w Ustawieniach
+   (klucz telefon_biura); kierowca widzi go na pustych ekranach („Nie masz
+   przypisanego auta”) i w „Moje konto”. Przycisk „Zadzwoń do biura” to zwykły
+   odnośnik tel: — tylko wygoda; numer stoi też jako tekst, bo komputer bez
+   telefonu go nie wybierze. Bez numeru w ustawieniach nic się nie pokazuje.  */
+function telefonBiura() {
+  return String((stan.ustawienia || {}).telefon_biura || '').trim();
+}
+
+function kontaktBiura() {
+  const numer = telefonBiura();
+  if (!numer) return '';
+  const doWybrania = numer.replace(/[^0-9+]/g, '');
+  return `<span class="kontakt-biura"><a class="przycisk-tel" href="tel:${escHtml(doWybrania)}">${
+    GKIkony.html('telefon', 18)} Zadzwoń do biura</a>
+    <span class="male">Numer do biura: <b>${escHtml(numer)}</b></span></span>`;
 }

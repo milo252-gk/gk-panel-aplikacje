@@ -62,6 +62,19 @@ EKRANY.przeglady = {
     // Filtr miesiąca nie może schować zaległej roboty: przegląd z zeszłego
     // miesiąca, którego nikt nie sprawdził, dalej czeka. Liczymy go osobno
     // i pokazujemy wstęgę z jednym kliknięciem do „wszystkie miesiące”.
+    // P1 (ocena UX 2026-11-17): pusta kolejka „do sprawdzenia” nie znaczy, że
+    // wszystko jest rozpatrzone — przeglądy mogą nie być założone albo czekać
+    // na kierowców (tak liczy to Pulpit). Sprawdzamy, jak naprawdę jest.
+    let stanMiesiaca = null;
+    if (biuro && f.status === 'wykonany' && !lista.length) {
+      const wm = await API.get('/api/przeglady' + (f.okres ? '?okres=' + encodeURIComponent(f.okres) : '?ile=500'))
+        .catch(() => null);
+      if (wm) {
+        const czeka = wm.filter(g => g.status === 'oczekuje' || g.status === 'odrzucony'
+                                     || g.status === 'zalegly').length;
+        stanMiesiaca = { razem: wm.length, czeka };
+      }
+    }
     let zInnych = 0;
     if (biuro && f.okres && f.status === 'wykonany') {
       const wszystkie = await API.get('/api/przeglady?status=wykonany').catch(() => []);
@@ -76,7 +89,7 @@ EKRANY.przeglady = {
             data-status="${s}">${s ? escHtml(OPIS_STATUSU[s] || s) : 'wszystkie'}</button>`).join('')}
         </div>
         <label>Miesiąc<select id="pr-okres">${opcjeMiesiecy(f.okres)}</select></label>
-        <button id="pr-zaloz">Załóż przeglądy na ten miesiąc</button>
+        <button id="pr-zaloz"${stanMiesiaca && !stanMiesiaca.razem && f.okres ? ' class="glowny"' : ''}>Załóż przeglądy na ten miesiąc</button>
       </div>` : ''}
       ${zInnych ? `<div class="wstega uwaga">Z innych miesięcy na sprawdzenie czeka jeszcze
         ${zInnych} ${odmiana(zInnych, 'przegląd', 'przeglądy', 'przeglądów')}.
@@ -84,7 +97,7 @@ EKRANY.przeglady = {
       ${lista.length ? lista.map(g => pozycjaProtokolu(g, biuro)).join('') : `
         <div class="pusto"><span class="duza-ikona">🧾</span>
         ${biuro ? (f.status === 'wykonany'
-            ? 'Nic nie czeka na sprawdzenie. Wszystkie przeglądy są rozpatrzone.'
+            ? opisPustejKolejki(f, stanMiesiaca)
             : 'Nie ma przeglądów spełniających te warunki.')
           : 'Nie masz jeszcze żadnego przeglądu.'}</div>`}`;
 
@@ -102,6 +115,24 @@ EKRANY.przeglady = {
     });
   },
 };
+
+/* Tekst pustej kolejki „do sprawdzenia” (P1): nie obiecuje porządku, którego nie ma.
+   stanMiesiaca = {razem, czeka} dla wybranego miesiąca (albo null, gdy nie
+   udało się sprawdzić — wtedy mówimy tylko to, co wiemy na pewno).            */
+function opisPustejKolejki(f, stanMiesiaca) {
+  const miesiac = f.okres ? miesiacSlownie(f.okres) : '';
+  if (!stanMiesiaca) return 'Nic nie czeka na sprawdzenie.';
+  if (!stanMiesiaca.razem) {
+    return f.okres
+      ? `Przeglądy za ${escHtml(miesiac)} nie są jeszcze założone — użyj „Załóż przeglądy na ten miesiąc” u góry.`
+      : 'Nie ma jeszcze żadnych przeglądów.';
+  }
+  if (stanMiesiaca.czeka) {
+    return `Nic nie czeka na sprawdzenie, ale są przeglądy nieoddane: ${stanMiesiaca.czeka}
+      (czekają na kierowców, zwrócone albo zaległe). Zobaczysz je w filtrach powyżej.`;
+  }
+  return `Nic nie czeka na sprawdzenie. Wszystkie przeglądy${miesiac ? ' za ' + escHtml(miesiac) : ''} są rozpatrzone.`;
+}
 
 /* Bieżący miesiąc „RRRR-MM” w czasie telefonu/komputera (nie UTC — inaczej
    w nocy z 31 na 1 pokazywałby jeszcze stary miesiąc). */

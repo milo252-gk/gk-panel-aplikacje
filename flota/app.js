@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-1241735254c5';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-3f21c25464d7';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -1957,11 +1957,11 @@ const PASEK_BIURA = [['pulpit', 'pulpit', 'Pulpit'], ['pojazdy', 'pojazd', 'Flot
 /* U kierowcy „W razie awarii" zajmuje jedno z czterech miejsc kciuka — i to
    nie jest hojność, tylko jedyny ekran, którego szuka się w pośpiechu, w nocy
    i jedną ręką. Menu boczne kierowcy to te same cztery pozycje (etap 2
-   poprawek UI); instrukcja awaryjna to zakładka „Awaria”, a historia
+   poprawek UI); instrukcja awaryjna to zakładka „Pomoc w drodze” (do 2026-11-17 „Awaria” — myliła się z „Usterką”), a historia
    własnych przeglądów to odnośnik na dole ekranu „Przegląd” — do historii
    zagląda się raz na miesiąc, na spokojnie.                                 */
 const PASEK_KIEROWCY = [['moj', 'pojazd', 'Moje auto'], ['przeglad', 'aparat', 'Przegląd'],
-                        ['usterki', 'awaria', 'Usterka'], ['awaria', 'ratunek', 'Awaria']];
+                        ['usterki', 'awaria', 'Usterka'], ['awaria', 'ratunek', 'Pomoc w drodze']];
 
 function menuDlaRoli() {
   const biuro = jestBiuro();
@@ -2540,6 +2540,8 @@ function oknoKonta() {
         <div class="wybor-wygladu" role="group" aria-label="Wygląd">${wyborWygladu()}</div>
         <p class="konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
       </fieldset>
+      ${!jestBiuro() && telefonBiura() ? `<fieldset><legend>Biuro</legend>
+        <p class="konto-drobne">${kontaktBiura()}</p></fieldset>` : ''}
       ${stan.uz.zrodlo === 'trasex'
         ? `<p class="konto-drobne">Twoje konto prowadzi GK Trasy — tam zmieniasz PIN.
              Nowy zadziała tutaj sam po kilku minutach.</p>`
