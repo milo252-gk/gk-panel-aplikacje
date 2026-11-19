@@ -62,7 +62,7 @@ function rysujAwarie(pole, lista, biuro) {
     </div>` : ''}
 
     ${widoczne.length ? widoczne.map(p => punktAwarii(p, biuro)).join('') : `
-      <div class="pusto"><span class="duza-ikona">🆘</span>
+      <div class="pusto"><span class="duza-ikona">${GKIkony.html('ratunek', 38)}</span>
       Nie ma jeszcze żadnego punktu instrukcji.</div>`}`;
 
   if (biuro) {
@@ -89,11 +89,11 @@ function punktAwarii(p, biuro) {
   return `
     <details class="karta karta-zwijana${p.pilna ? ' nie' : ''}"${p.pilna ? ' open' : ''}>
       <summary>
-        <span style="flex:1">${p.pilna ? '🚨 ' : ''}${escHtml(p.tytul)}</span>
+        <span style="flex:1">${p.pilna ? ikonka('awaria') : ''}${escHtml(p.tytul)}</span>
         ${pusty ? '<span class="plakietka p-zalegly">puste</span>' : ''}
         ${p.aktywna ? '' : '<span class="plakietka">ukryty</span>'}
         ${biuro ? `<span class="uchwyty">
-          <button data-edytuj="${p.id}">Zmień</button>
+          <button data-edytuj="${p.id}">${ikonka('edytuj')}Zmień</button>
           <button data-skasuj="${p.id}">Usuń</button></span>` : ''}
       </summary>
       <div class="zwijana-tresc">
@@ -114,7 +114,7 @@ function numeryPunktu(surowe) {
   return `<div class="chipy">${numery.map(n => {
     // tel: nie znosi spacji ani myślników — do wybrania idą same cyfry i „+”.
     const doWybrania = n.replace(/[^\d+]/g, '');
-    return `<a class="chip glowny" href="tel:${escHtml(doWybrania)}">📞 ${escHtml(n)}</a>`;
+    return `<a class="chip glowny" href="tel:${escHtml(doWybrania)}">${ikonka('telefon-sluchawka')}${escHtml(n)}</a>`;
   }).join('')}</div>`;
 }
 

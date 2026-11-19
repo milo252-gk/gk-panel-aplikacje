@@ -141,11 +141,11 @@ function kafelekNaStart(kaf) {
     <h2 style="margin-top:0">Na start</h2>
     <ol class="na-start">
       <li><b>Dodaj auta</b> — sam numer rejestracyjny wystarczy, resztę dopiszesz później.</li>
-      <li><b>Wpisz terminy</b> (badanie techniczne, OC) w menu <b>📅 Terminy</b> — program
+      <li><b>Wpisz terminy</b> (badanie techniczne, OC) w menu <b>${ikonka('kalendarz')}Terminy</b> — program
         przypomni, zanim miną.</li>
-      <li><b>Zaproś kierowców</b> — <b>📲 Zaproś kierowcę</b> (kod QR do telefonu), potem
+      <li><b>Zaproś kierowców</b> — <b>${ikonka('zaproszenie')}Zaproś kierowcę</b> (kod QR do telefonu), potem
         w karcie auta „Przypisz” kierowcę.</li>
-      <li><b>Uzupełnij 🆘 Instrukcję w razie awarii</b> — kierowca otworzy ją także bez zasięgu.</li>
+      <li><b>Uzupełnij ${ikonka('ratunek')}Instrukcję w razie awarii</b> — kierowca otworzy ją także bez zasięgu.</li>
     </ol>
     <button class="glowny" id="p-start-auto">+ Dodaj pierwsze auto</button>
   </div>`;
@@ -201,7 +201,7 @@ function listaAlarmow(alarmy) {
 
 function listaZaleglych(zalegle) {
   if (!zalegle.length) {
-    return `<div class="pusto"><span class="duza-ikona">✅</span>
+    return `<div class="pusto"><span class="duza-ikona">${GKIkony.html('ok-kolo', 38)}</span>
             Wszystkie przeglądy za ten miesiąc są już oddane.</div>`;
   }
   return zalegle.map(z => `
@@ -429,7 +429,7 @@ EKRANY.pojazd = {
                 escHtml(polskaData(u.utworzono))}</span></span></div>`).join('')
           : '<p class="slaby">Nic nie wisi na tym aucie.</p>'}</div></details>
 
-      <div class="przyciski"><button id="p-wroc">← Wróć do floty</button>
+      <div class="przyciski"><button id="p-wroc">${ikonka('strzalka-lewo')}Wróć do floty</button>
         ${jestAdministratorem() && p.aktywny
           ? '<button class="niszczacy" id="p-wycofaj">Wycofaj z floty</button>' : ''}
       </div>`;

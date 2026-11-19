@@ -137,7 +137,7 @@ EKRANY.konta = {
             <td>${u.ostatnio ? escHtml(polskaData(u.ostatnio))
               : '<span class="slaby">nigdy</span>'}</td>
             <td><button data-konto="${u.id}">${tylkoDoOdczytu(u) && !zmianaPrzezPanel(u)
-              ? 'Pokaż' : 'Zmień'}</button></td>
+              ? 'Pokaż' : (ikonka('edytuj') + 'Zmień')}</button></td>
           </tr>`).join('')}
         </tbody></table></div></div>`;
 
@@ -192,7 +192,7 @@ EKRANY.kierowcy = {
             <td>${escHtml(u.login)}</td>
             <td>${u.pojazdy ? escHtml(u.pojazdy) : '<span class="slaby">—</span>'}</td>
             <td>${u.ostatnio ? escHtml(polskaData(u.ostatnio)) : '<span class="slaby">nigdy</span>'}</td>
-            <td><button data-kierowca="${u.id}">${u.mozna_zmienic ? 'Zmień' : 'Pokaż'}</button></td>
+            <td><button data-kierowca="${u.id}">${u.mozna_zmienic ? (ikonka('edytuj') + 'Zmień') : 'Pokaż'}</button></td>
           </tr>`).join('') : '<tr><td colspan="5" class="slaby">Nie ma jeszcze kont kierowców.</td></tr>'}
         </tbody></table></div></div>`;
     const nowy = pole.querySelector('#kk-nowy');

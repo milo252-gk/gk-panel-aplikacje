@@ -47,8 +47,48 @@ EKRANY.moj = {
     pole.querySelectorAll('[data-protokol-pojazd]').forEach(b => {
       b.onclick = () => pokazEkran('przeglad', { pojazd: Number(b.dataset.protokolPojazd) });
     });
+    reakcjeKierowcy(auta);
   },
 };
+
+/* Reakcje kierowcy na przegląd miesięczny (STYL-GK §6b, gk-reakcje.js). Tylko konto kierowcy (biuro bez nakładek),
+   tylko NOWE zdarzenia: pierwsze otwarcie tej osoby w tym urządzeniu zapisuje stan zastany bez pokazywania (nikt nie dostaje
+   „Brawo” za przegląd sprzed aktualizacji). Raz na zdarzenie — pamięć gk-flota.reakcje (app.js).
+     odrzucony                                  → dopracuj
+     oddany po miesiącu, którego dotyczy        → wkoncu (zaległy przegląd wreszcie wypełniony; raz)
+     zatwierdzony, bez otwartych usterek        → brawo   (na czas i bez uwag)
+     zatwierdzony z otwartymi usterkami         → dobra
+   Inne zdarzenia floty (terminy, usterki, „czeka na biuro”) — bez reakcji. */
+function reakcjaPrzegladu(auto) {
+  const pr = (auto && auto.protokol) || {};
+  if (!pr.id || !pr.status) return null;
+  const wyk = String(pr.wykonano_o || '').slice(0, 7);          // „RRRR-MM” miesiąca oddania
+  const spozniony = !!wyk && !!pr.okres && wyk > pr.okres && (pr.status === 'wykonany' || pr.status === 'zatwierdzony');
+  if (pr.status === 'odrzucony') return { klucz: `${pr.id}|odrzucony|${pr.wykonano_o || ''}`, rodzaj: 'dopracuj' };
+  if (spozniony) return { klucz: `${pr.id}|spozniony`, rodzaj: 'wkoncu' };
+  if (pr.status === 'zatwierdzony') {
+    return { klucz: `${pr.id}|zatwierdzony`, rodzaj: (auto.usterki || []).length ? 'dobra' : 'brawo' };
+  }
+  return null;
+}
+const WAGA_REAKCJI = { dopracuj: 4, wkoncu: 3, brawo: 2, dobra: 1 };
+
+function reakcjeKierowcy(auta) {
+  try {
+    const R = window.HalaReakcje;
+    if (!R || !stan.uz || jestBiuro()) return;
+    const ja = String(stan.uz.id);
+    const hala = { aplikacja: 'flota' };
+    const pierwszy = !(JSON.parse(przypomnijSobie('reakcje') || '{}') || {})[ja];
+    const widziane = new Set(R.stanOsoby(hala, ja, Date.now()).widziane);
+    const nowe = (auta || []).map(reakcjaPrzegladu).filter(z => z && !widziane.has(z.klucz));
+    if (!nowe.length) return;
+    if (pierwszy) { R.oznacz(hala, ja, nowe.map(z => z.klucz)); return; }
+    const wybrane = nowe.reduce((a, b) => (WAGA_REAKCJI[b.rodzaj] > WAGA_REAKCJI[a.rodzaj] ? b : a));
+    // „Raz” liczy się dopiero, gdy buzia naprawdę się pokazała (karta w tle — zdarzenie zostaje na później).
+    if (R.pokaz(wybrane.rodzaj)) R.oznacz(hala, ja, nowe.map(z => z.klucz));
+  } catch (e) { /* reakcja to ozdoba — nigdy nie psuje ekranu */ }
+}
 
 /* Przeglądy czekające w kolejce telefonu na wysłanie (Kolejka.dlaPojazdu),
    tylko własne — po jednej liście na każde auto kierowcy.                   */
@@ -335,9 +375,9 @@ function trescZgloszeniaUsterki(auta) {
       <label class="pole">Zdjęcie (opcjonalnie)</label>
       <div class="miniatury" id="u-miniatury"></div>
       <div class="chipy">
-        <label class="chip">📷 Zrób zdjęcie
+        <label class="chip">${ikonka('aparat')}Zrób zdjęcie
           <input type="file" class="ukryty" accept="image/*" capture="environment" id="u-aparat"></label>
-        <label class="chip">🖼️ Z galerii
+        <label class="chip">${ikonka('galeria')}Z galerii
           <input type="file" class="ukryty" accept="image/*" multiple id="u-galeria"></label>
       </div>`;
 }

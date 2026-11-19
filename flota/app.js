@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-9d56d50edb93';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-31e13d602305';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -277,6 +277,22 @@ const Dzwiek = {
 };
 if (window.GKDzwieki) window.GKDzwieki.wlaczony(() => Dzwiek.wlaczony());
 
+/* Reakcje (STYL-GK §6b): pamięć „raz na zdarzenie” na NOWYM kluczu gk-flota.reakcje (przedrostek dokłada pamietaj),
+   obiekt { _od, <id osoby>: { widziane: [...] } }. Zdarzenia i reguły: kierowca.js → reakcjaPrzegladu. */
+if (window.HalaReakcje) window.HalaReakcje.ustawPamiec({
+  czytaj() { try { return JSON.parse(przypomnijSobie('reakcje') || '{}') || {}; } catch (e) { return {}; } },
+  zapisz(o) { pamietaj('reakcje', JSON.stringify(o)); },
+});
+
+/* Pasek „Dźwięk wyłączony — włącz” pod nagłówkiem: tylko przy wyłączonym dźwięku tego urządzenia i tylko po zalogowaniu.
+   Dotknięcie włącza dźwięk (ten sam klucz co przełącznik w Moim koncie) i pasek znika. */
+function odswiezBanerDzwieku() {
+  const el = document.getElementById('baner-dzwieku');
+  if (!el) return;
+  el.hidden = !stan.uz || Dzwiek.wlaczony();
+  if (!el.onclick) el.onclick = () => { Dzwiek.ustaw(true); odswiezBanerDzwieku(); Dzwiek.zagraj('info'); };
+}
+
 /* LICZNIK, nie flaga. Wysyłka zdjęć i odświeżenie listy potrafią chodzić
    równolegle; przy fladze ta, która skończy pierwsza, gasi kółko drugiej
    i kierowca myśli, że program stanął.                                      */
@@ -409,7 +425,7 @@ function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto }) {
   stopka.innerHTML = '';
   (przyciski || []).forEach(p => {
     const b = document.createElement('button');
-    b.textContent = p.napis;
+    if (p.ikona) b.innerHTML = ikonka(p.ikona) + escHtml(p.napis); else b.textContent = p.napis;
     b.className = p.klasa || '';
     b.onclick = () => p.klik(zamknijOkno);      // akcja sama decyduje, czy zamknąć
     stopka.appendChild(b);
@@ -1335,7 +1351,7 @@ async function odswiezStanSieci() {
   kropka.title = tytulKropkiSieci({ online: stan.online, wKolejce: stan.wKolejce, odrzucone: stan.odrzucone,
     bezPamieci: stan.bezPamieci, komputer: naKomputerze(), zdjecia: stan.zdjecWKolejce });
   const znacznik = document.getElementById('znacznik-kolejki');
-  if (znacznik) znacznik.textContent = stan.wKolejce ? `⏳ ${stan.wKolejce}` : '';
+  if (znacznik) znacznik.innerHTML = stan.wKolejce ? `${ikonka('klepsydra', 14)}${stan.wKolejce}` : '';
   if (znacznik) znacznik.title = stan.zdjecWKolejce ? opisZdjecWKolejce(stan.zdjecWKolejce) : '';
   odswiezPasekPolaczenia();
 }
@@ -1683,7 +1699,8 @@ async function wejdzKodem(kod) {
    i ekran „Moje auto". Adres sprawdzamy także tutaj, choć sprawdził go
    serwer: w pamięci przeglądarki może leżeć cokolwiek, a „javascript:"
    pod przyciskiem wykonałby cudzy kod w aplikacji floty. */
-const NAPIS_POWROTU = '← GK Trasy';
+const NAPIS_POWROTU = 'GK Trasy';          // przed napisem stoi ikona strzalka-lewo (htmlPowrotu)
+const htmlPowrotu = () => ikonka('strzalka-lewo') + escHtml(NAPIS_POWROTU);
 
 function adresPowrotu() {
   if (!stan.uz || stan.uz.rola !== 'kierowca') return '';
@@ -1694,7 +1711,7 @@ function adresPowrotu() {
 function przyciskPowrotu() {
   return adresPowrotu()
     ? `<div class="przyciski"><button data-powrot style="width:100%">${
-        escHtml(NAPIS_POWROTU)}</button></div>` : '';
+        htmlPowrotu()}</button></div>` : '';
 }
 
 function podepnijPowrot(pole) {
@@ -1987,7 +2004,7 @@ function menuDlaRoli() {
   // Powrót do GK Trasy — tylko kierowca, który przyszedł stamtąd linkiem.
   const powrot = document.getElementById('menu-powrot');
   if (powrot) {
-    powrot.textContent = NAPIS_POWROTU;
+    powrot.innerHTML = htmlPowrotu();
     powrot.classList.toggle('ukryty', !adresPowrotu());
     powrot.onclick = () => { const adres = adresPowrotu(); if (adres) location.href = adres; };
   }
@@ -2355,7 +2372,7 @@ function naKomputerze() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(min-width:821px)').matches;
 }
 function napisKodowQR() {
-  return naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon — kody QR';
+  return naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon — kody QR';
 }
 function maKodyQR() { return !!stan.uz && stan.uz.zrodlo === 'gk'; }
 
@@ -2404,7 +2421,7 @@ function drukujArkuszQR(html) {
 function oknoKodowAplikacji() {
   let lista = [];
   okno({
-    tytul: naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon',
+    tytul: naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon',
     konto: true,
     tresc: `<p class="konto-drobne">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu
         głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN);
@@ -2414,7 +2431,7 @@ function oknoKodowAplikacji() {
     // główne działanie (grafit) po prawej — „Zamknij” nigdy nie jest wypełnione.
     przyciski: [
       { napis: 'Zamknij', klik: z => z() },
-      { napis: '🖨 Drukuj wszystkie', klasa: 'glowny ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
+      { napis: 'Drukuj wszystkie', ikona: 'drukuj', klasa: 'glowny ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
     ],
     poOtwarciu: async pole => {
       const el = pole.querySelector('#kody-aplikacji');
@@ -2427,7 +2444,7 @@ function oknoKodowAplikacji() {
       if (!el.isConnected) return;               // okno zamknięte w trakcie
       el.innerHTML = lista.map((a, i) => `<figure class="kod-aplikacji">
           ${a.qr ? `<div class="kod-aplikacji-qr">${a.qr}</div>`
-                 : `<div class="kod-aplikacji-qr brak">${a.komputer ? '💻' : '—'}</div>`}
+                 : `<div class="kod-aplikacji-qr brak">${a.komputer ? GKIkony.html('komputer', 36) : '—'}</div>`}
           <figcaption><b>${escHtml(a.nazwa)}</b>
             ${a.adres || a.siec ? `<a href="${escHtml(a.adres || a.siec)}" target="_blank" rel="noopener">${escHtml(a.adres || a.siec)}</a>` : ''}
             ${!a.adres && a.siec ? '<span class="konto-drobne">Tylko w firmowym wifi.</span>' : ''}
@@ -2437,7 +2454,7 @@ function oknoKodowAplikacji() {
       el.querySelectorAll('[data-drukuj]').forEach(b =>
         b.onclick = () => drukujArkuszQR(arkuszKodowQR([lista[+b.dataset.drukuj]])));
       const wszystkie = [...document.querySelectorAll('#okno-stopka button')]
-        .find(b => b.textContent === '🖨 Drukuj wszystkie');
+        .find(b => b.textContent === 'Drukuj wszystkie');
       if (wszystkie && lista.some(a => a.qr)) wszystkie.classList.remove('ukryty');
     },
   });
@@ -2520,6 +2537,7 @@ function odswiezPasekPolaczenia() {
   el.className = 'pasek-polaczenia ' + p.klasa;
   el.textContent = p.tekst;
   el.hidden = !p.tekst;
+  odswiezBanerDzwieku();
 }
 
 /* „Moje konto” w układzie okna konta aplikacji hali (konto.js → HalaKonto.mojeKonto),
@@ -2563,7 +2581,7 @@ function oknoKonta() {
           <button type="button" class="glowny" id="btn-zmien-pin">${zmien}</button>
         </div>
       </fieldset>`}
-      ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${napisKodowQR()}</button>` : ''}
+      ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${ikonka('telefon')}${napisKodowQR()}</button>` : ''}
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${escHtml(opisPowiadomien())}</p>
         <div id="push-konto" class="konto-push"><p class="konto-drobne">Sprawdzam…</p></div>
@@ -2593,7 +2611,7 @@ function oknoKonta() {
       pokazKolejkeWKoncie(pole);
       if (stan.obceWKolejce) {
         pole.querySelector('#obce-w-kolejce').innerHTML =
-          `⚠️ Dodatkowo <b>${stan.obceWKolejce}</b> ${odmiana(stan.obceWKolejce,
+          `${ikonka('ostrzezenie')}Dodatkowo <b>${stan.obceWKolejce}</b> ${odmiana(stan.obceWKolejce,
             'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na inną osobę,
            która pracowała na tym urządzeniu. Wyślą się, gdy ta osoba się tu zaloguje —
            nie kasuj danych aplikacji, bo przepadną.`;
@@ -2651,11 +2669,12 @@ function poleDzwieku() {
   return `<p class="konto-drobne">Przy otwartej aplikacji nowa sprawa daje dźwięk — w tym urządzeniu.</p>
     <div class="przyciski-konta">
       <button type="button" id="btn-dzwiek" aria-pressed="${Dzwiek.wlaczony()}">${napisDzwieku()}</button>
-      <button type="button" id="btn-sprawdz-dzwieki">Sprawdź dźwięki</button>
+      <button type="button" id="btn-sprawdz-dzwieki">${ikonka('glos')}Sprawdź dźwięki</button>
     </div>`;
 }
 function napisDzwieku() {
-  return Dzwiek.wlaczony() ? '🔔 Dźwięk powiadomień: włączony' : '🔕 Dźwięk powiadomień: wyłączony';
+  return Dzwiek.wlaczony() ? ikonka('alerty') + 'Dźwięk powiadomień: włączony'
+    : ikonka('dzwonek-wyl') + 'Dźwięk powiadomień: wyłączony';
 }
 const PROBA_DZWIEKOW = [['info', 0], ['pilne', 1100], ['awaria', 3200]];
 function podepnijDzwiek(pole) {
@@ -2663,8 +2682,9 @@ function podepnijDzwiek(pole) {
   const sprawdz = pole.querySelector('#btn-sprawdz-dzwieki');
   if (przelacz) przelacz.onclick = () => {
     Dzwiek.ustaw(!Dzwiek.wlaczony());
-    przelacz.textContent = napisDzwieku();
+    przelacz.innerHTML = napisDzwieku();
     przelacz.setAttribute('aria-pressed', String(Dzwiek.wlaczony()));
+    odswiezBanerDzwieku();
     if (Dzwiek.wlaczony()) Dzwiek.zagraj('info');
   };
   if (sprawdz) sprawdz.onclick = () => {
@@ -3216,6 +3236,7 @@ async function wejdzDoAplikacji() {
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
   menuDlaRoli();
+  odswiezBanerDzwieku();
   // Zanim cokolwiek narysujemy: czy przeglądarka na pewno ma komplet plików
   // z jednej wersji. Gdy nie — funkcja sama przeładuje aplikację.
   await sprawdzSpojnoscWersji();
@@ -3282,7 +3303,7 @@ document.addEventListener('DOMContentLoaded', uruchom);
       t- terminy, u- ustawienia, us- usterki, k- konta.
 
    2. Dopisz pozycję w menu bocznym w index.html:
-        <button data-ekran="terminy" class="tylko-biuro">📅 <span>Terminy</span></button>
+        <button data-ekran="terminy" class="tylko-biuro"><span class="ikona-menu" data-ikona="plan"></span> <span>Terminy</span></button>
       Klasa tylko-biuro / tylko-kierowca / tylko-administrator albo żadna.
       Menu nie potrzebuje kodu — uchwyty podpina uruchom().
 

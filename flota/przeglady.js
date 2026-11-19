@@ -95,7 +95,7 @@ EKRANY.przeglady = {
         ${zInnych} ${odmiana(zInnych, 'przegląd', 'przeglądy', 'przeglądów')}.
         <button class="tekstowy" id="pr-wszystkie">Pokaż wszystkie miesiące</button></div>` : ''}
       ${lista.length ? lista.map(g => pozycjaProtokolu(g, biuro)).join('') : `
-        <div class="pusto"><span class="duza-ikona">🧾</span>
+        <div class="pusto"><span class="duza-ikona">${GKIkony.html('raporty', 38)}</span>
         ${biuro ? (f.status === 'wykonany'
             ? opisPustejKolejki(f, stanMiesiaca)
             : 'Nie ma przeglądów spełniających te warunki.')
@@ -287,7 +287,7 @@ EKRANY.protokol = {
             escHtml(opisKodu(OPIS_USTERKI, u.status))}</span></span></div>`).join('')}</div>` : ''}
 
       <div class="przyciski rozstaw">
-        <button id="pr-wroc">← Wróć</button>
+        <button id="pr-wroc">${ikonka('strzalka-lewo')}Wróć</button>
         <span class="przyciski">
           ${biuro && (g.status === 'wykonany' || g.status === 'zatwierdzony')
             ? '<button class="niszczacy" id="pr-odrzuc">Zwróć kierowcy</button>' : ''}

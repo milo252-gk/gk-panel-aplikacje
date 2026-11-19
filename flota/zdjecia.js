@@ -21,24 +21,24 @@
    testy/t_zgodnosc.py.                                                       */
 const UJECIA = [
   { kod: 'przod',   etykieta: 'Przód',           obowiazkowe: true,  wPrzeglądzie: true,
-    ikona: '🚘', podpowiedz: 'Całe auto z przodu, tablica rejestracyjna w kadrze' },
+    ikona: 'pojazd', podpowiedz: 'Całe auto z przodu, tablica rejestracyjna w kadrze' },
   { kod: 'tyl',     etykieta: 'Tył',             obowiazkowe: true,  wPrzeglądzie: true,
-    ikona: '🚙', podpowiedz: 'Całe auto z tyłu, razem z tablicą' },
+    ikona: 'pojazd', podpowiedz: 'Całe auto z tyłu, razem z tablicą' },
   { kod: 'lewy',    etykieta: 'Lewy bok',        obowiazkowe: true,  wPrzeglądzie: true,
-    ikona: '⬅️', podpowiedz: 'Cały bok od drzwi kierowcy' },
+    ikona: 'strzalka-lewo', podpowiedz: 'Cały bok od drzwi kierowcy' },
   { kod: 'prawy',   etykieta: 'Prawy bok',       obowiazkowe: true,  wPrzeglądzie: true,
-    ikona: '➡️', podpowiedz: 'Cały bok od strony pasażera' },
+    ikona: 'strzalka-prawo', podpowiedz: 'Cały bok od strony pasażera' },
   { kod: 'licznik', etykieta: 'Licznik',         obowiazkowe: true,  wPrzeglądzie: true,
-    ikona: '🔢', podpowiedz: 'Licznik przy włączonym zapłonie — cyfry mają być czytelne' },
+    ikona: 'licznik', podpowiedz: 'Licznik przy włączonym zapłonie — cyfry mają być czytelne' },
   // Poniższe są nieobowiązkowe z rozmysłem. Wymuszanie wnętrza przy aucie,
   // które stoi w warsztacie, kończy się ostrzeżeniem widocznym co miesiąc
   // przy każdym pojeździe — a ostrzeżenie, które jest zawsze, nie znaczy nic.
   { kod: 'wnetrze', etykieta: 'Wnętrze',         obowiazkowe: false, wPrzeglądzie: true,
-    ikona: '🪑', podpowiedz: 'Kabina i przestrzeń ładunkowa — nieobowiązkowe' },
+    ikona: 'kabina', podpowiedz: 'Kabina i przestrzeń ładunkowa — nieobowiązkowe' },
   { kod: 'usterka', etykieta: 'Usterka',         obowiazkowe: false, wPrzeglądzie: false,
-    ikona: '🔧', podpowiedz: 'Zdjęcie dowodowe do zgłoszenia usterki' },
+    ikona: 'przeglady', podpowiedz: 'Zdjęcie dowodowe do zgłoszenia usterki' },
   { kod: 'podpis',  etykieta: 'Podpis kierowcy', obowiazkowe: false, wPrzeglądzie: false,
-    ikona: '✍️', podpowiedz: 'Podpis pod przeglądem, rysowany palcem' },
+    ikona: 'podpis', podpowiedz: 'Podpis pod przeglądem, rysowany palcem' },
 ];
 
 const UJECIA_OBOWIAZKOWE = UJECIA.filter(u => u.obowiazkowe).map(u => u.kod);
@@ -154,7 +154,7 @@ const Zdjecia = (() => {
       <div class="miniatura">
         <img src="${z}" alt="Zdjęcie ${i + 1}" data-podejrzyj="${i}">
         ${opcje.tylkoPodglad ? '' : `<button type="button" data-usun="${i}"
-          aria-label="Usuń zdjęcie ${i + 1}">✕</button>`}
+          aria-label="Usuń zdjęcie ${i + 1}">${ikonka('zamknij', 14)}</button>`}
       </div>`).join('');
 
     pojemnik.querySelectorAll('[data-podejrzyj]').forEach(o => o.onclick =
@@ -289,16 +289,16 @@ const Zdjecia = (() => {
       return `
       <div class="karta scisla" data-kadr="${u.kod}"${sa.has(u.kod) ? ' data-w-biurze="1"' : ''}>
         <div class="karta-gora">
-          <b>${u.ikona} ${escHtml(u.etykieta)}</b>
+          <b>${ikonka(u.ikona)}${escHtml(u.etykieta)}</b>
           ${plakietkaKadru(u, zbior.length, sa.has(u.kod))}
         </div>
         <div class="male slaby">${escHtml(u.podpowiedz)}</div>
         <div class="miniatury" id="${prefiks}-miniatury-${u.kod}"></div>
         <div class="chipy">
-          <label class="chip">📷 Zrób zdjęcie
+          <label class="chip">${ikonka('aparat')}Zrób zdjęcie
             <input type="file" class="ukryty" accept="image/*" capture="environment"
                    id="${prefiks}-aparat-${u.kod}" data-aparat="${u.kod}"></label>
-          <label class="chip">🖼️ Z galerii
+          <label class="chip">${ikonka('galeria')}Z galerii
             <input type="file" class="ukryty" accept="image/*" multiple
                    id="${prefiks}-galeria-${u.kod}" data-galeria="${u.kod}"></label>
         </div>

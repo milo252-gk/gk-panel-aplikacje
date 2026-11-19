@@ -53,7 +53,7 @@ function kartaKodowQRAdmina() {
     <p class="male slaby">Kody do zeskanowania aparatem telefonu: aplikacje hali, GK Trasy i GK Flota, z drukiem arkusza A4.
       To samo okno co w „Moje konto” — tu jest na wierzchu.</p>
     ${maKodyQR()
-      ? `<div class="przyciski"><button class="glowny" id="a-kody-qr">${napisKodowQR()}</button></div>`
+      ? `<div class="przyciski"><button class="glowny" id="a-kody-qr">${ikonka('telefon')}${napisKodowQR()}</button></div>`
       : `<div class="wstega info">Kody QR są dla kont z Panelu Kierownika. Zalogowano kontem awaryjnym tego programu —
           zaloguj się swoim kontem z Panelu (imię i nazwisko), żeby je zobaczyć.</div>`}
   </div>`;
