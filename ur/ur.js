@@ -18,7 +18,8 @@
   // 30 dni: KPI z telefonu (instrukcja §5) i „zrealizowane ostatnio” w przeglądach.
   const hala = global.Hala.utworz({ aplikacja: 'ur', typy: ['awaria', 'przeglad', 'licznik_maszyny', 'zlecenie', 'zgloszenie'], dni: 30 });
 
-  const UR = global.UR = { hala, W, $, esc, ekrany: {}, biezacy: null };
+  const UR = global.UR = { hala, W, $, esc, ekrany: {}, biezacy: null,
+    ik: (nazwa, rozmiar) => (global.GKIkony && global.GKIkony.html(nazwa, rozmiar) ? `<span class="ik">${global.GKIkony.html(nazwa, rozmiar)}</span>` : '') };   // ikona liniowa z gk-ikony.js w <span class="ik">
 
   // ------------------------------------------------------------ kto i co może
 
@@ -147,7 +148,7 @@
 
   UR.miniatury = (ids, usuwalne) => (ids || []).map(id =>
     `<figure class="miniatura"><img data-plik="${esc(id)}" alt="Zdjęcie">${usuwalne
-      ? `<button type="button" class="usun-zdjecie" data-usun-zdjecie="${esc(id)}" aria-label="Usuń zdjęcie">×</button>` : ''}</figure>`).join('');
+      ? `<button type="button" class="usun-zdjecie" data-usun-zdjecie="${esc(id)}" aria-label="Usuń zdjęcie">${UR.ik('zamknij', 18)}</button>` : ''}</figure>`).join('');
   UR.wypelnijZdjecia = async kontener => {
     for (const img of (kontener || document).querySelectorAll('img[data-plik]:not([src])')) {
       try { img.src = await hala.adresPliku(img.dataset.plik); } catch (e) { /* bez podglądu */ }
@@ -171,7 +172,7 @@
     }
     const ukryte = pole.querySelector('input[type=hidden]');
     let ids = []; try { ids = JSON.parse(ukryte.value || '[]'); } catch (e) { ids = []; }
-    if (usun) { ids = ids.filter(x => x !== usun.dataset.usunZdjecie); hala.usunPlik(usun.dataset.usunZdjecie).catch(() => {}); }   // etap 3: ✕ naprawdę usuwa plik z telefonu
+    if (usun) { ids = ids.filter(x => x !== usun.dataset.usunZdjecie); hala.usunPlik(usun.dataset.usunZdjecie).catch(() => {}); }   // etap 3: usunięcie zdjęcia naprawdę usuwa plik z telefonu
     if (dodaj) {
       if (ids.length >= W.MAKS_ZDJEC) { UR.komunikat(`Najwyżej ${W.MAKS_ZDJEC} zdjęć.`, 'uwaga'); return; }
       const id = await UR.zrobZdjecie();
@@ -229,7 +230,7 @@
     if (GD()) GD().odblokuj();
     setTimeout(pokazDzwonek, 300);
   }
-  /* UI etap 3: duży pasek 🔇 nad treścią (przyklejony pod nagłówkiem), aż do dotknięcia — mechanik bez dźwięku nie
+  /* UI etap 3: duży pasek z ikoną glos-wyl nad treścią (przyklejony pod nagłówkiem), aż do dotknięcia — mechanik bez dźwięku nie
      usłyszy awarii. UI etap 4: tylko pasek; drugi znacznik w nagłówku dublował go i ucinał godziny zmiany na telefonie.
      Sprawdzamy też po powrocie z tła (iPhone usypia dźwięk). */
   function pokazDzwonek() {
@@ -318,11 +319,11 @@
       const k = UR.kontekst();
       const p = W.pulpit({ przeglady: hala.obiekty('przeglad'), awarie: hala.obiekty('awaria'), zlecenia: global.HalaZlecenia.doZrobienia(hala, { dzial: 'ur' }),
                            slowniki: hala.slowniki, pracownicy: hala.pracownicy, teraz: k.teraz, ja: k.ja });
-      el.innerHTML = `<h1>Pulpit</h1>` + (p.spokoj ? '<p class="spokoj pusto ok">✓ Wszystko w porządku — nic nie czeka</p>'
+      el.innerHTML = `<h1>Pulpit</h1>` + (p.spokoj ? `<p class="spokoj pusto ok">${UR.ik('haczyk', 18)}Wszystko w porządku — nic nie czeka</p>`
         : `<div class="hala-kafelki pulpit-kafelki">${p.kafelki.map(x => `<a class="${esc(x.klasa)}" href="${esc(x.adres)}" data-kafel="${esc(x.kod)}"><span class="etykieta">${esc(x.etykieta)}</span><b>${x.liczba}</b></a>`).join('')}</div>`);
     },
   });
-  // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  // D56: „Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'ur' }), otworzZlecenia: () => UR.idz('zlecenia'),
                                                                         komunikat: t => UR.komunikat(t, 'ok') });
   // Awarie UR gra samo (brzęczyk z paczką powiadomień) — wspólny moduł tylko gong pilnych zleceń (D55).

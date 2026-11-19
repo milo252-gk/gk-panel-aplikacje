@@ -170,9 +170,9 @@
         </div>
       </div>
       <div class="przesun">
-        <button type="button" data-ruch="-1" aria-label="W górę" ${i === 0 ? 'disabled' : ''}>↑</button>
-        <button type="button" data-ruch="1" aria-label="W dół" ${i === stan.punkty.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" data-usun aria-label="Usuń punkt">×</button>
+        <button type="button" data-ruch="-1" aria-label="W górę" ${i === 0 ? 'disabled' : ''}>${UR.ik('strzalka-gora', 20)}</button>
+        <button type="button" data-ruch="1" aria-label="W dół" ${i === stan.punkty.length - 1 ? 'disabled' : ''}>${UR.ik('strzalka-dol', 20)}</button>
+        <button type="button" data-usun aria-label="Usuń punkt">${UR.ik('zamknij', 20)}</button>
       </div></div>`).join('') || '<p class="pusto">Dodaj pierwszy punkt kontrolny.</p>';
   }
 

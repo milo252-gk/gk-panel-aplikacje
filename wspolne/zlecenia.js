@@ -309,7 +309,7 @@
       <span class="hala-zalegle-naglowek">${ikona('awaria', 16)}${lista.length > 1 ? 'Zaległe zlecenia' : 'Zaległe zlecenie'} — zrób najpierw</span>
       <span class="hala-zalegle-pozycja"><span class="hala-zlecenie-nr" aria-hidden="true">1</span><b>${esc(z.tytul)}</b></span>
       <span class="hala-zalegle-opis">${esc(z.zalegleOpis)}${z.wymagajZdjecia ? ' · zdjęcie' : ''}${z.wymagajNotatki ? ' · notatka' : ''}${z.wymagajSkanu ? ' · QR' : ''}</span>
-      ${lista.length > 1 ? `<span class="hala-zalegle-wiecej">+${lista.length - 1} więcej ›</span>` : '<span class="hala-zalegle-wiecej">Otwórz ›</span>'}
+      ${lista.length > 1 ? `<span class="hala-zalegle-wiecej">+${lista.length - 1} więcej${ikona('szewron-prawo', 14, 'po')}</span>` : `<span class="hala-zalegle-wiecej">Otwórz${ikona('szewron-prawo', 14, 'po')}</span>`}
     </button>`;
     el.firstElementChild.onclick = () => { if (otworz) otworz(z); };
     return lista.length;
@@ -344,8 +344,12 @@
   const KLASA_STATUSU = { nowe: 'info', przyjete: 'uwaga', wykonane: 'ok', odrzucone: 'alarm', przepadlo: 'alarm', zamkniete: 'ok' };
 
   /* Ikona liniowa z gk-ikony.js (STYL-GK §8) zamiast emoji; bez załadowanego pliku — nic (napis obok mówi to samo). */
-  const ikona = (nazwa, rozmiar) => (global.GKIkony && global.GKIkony.html(nazwa, rozmiar || 18)
-    ? `<span class="hala-ikona">${global.GKIkony.html(nazwa, rozmiar || 18)}</span>` : '');
+  const ikona = (nazwa, rozmiar, klasa) => (global.GKIkony && global.GKIkony.html(nazwa, rozmiar || 18)
+    ? `<span class="hala-ikona${klasa ? ' ' + klasa : ''}">${global.GKIkony.html(nazwa, rozmiar || 18)}</span>` : '');
+  // Znaki statusu zostają w danych (✓ ✗ ▶ ⏳ — testy i reduktor je porównują), a na ekranie są ikonami liniowymi;
+  // ○ i – to kropka/kreska statusu, zostają tekstem.
+  const ZNAK_NA_IKONE = { '✓': 'haczyk', '✗': 'zamknij', '▶': 'odtworz', '⏳': 'klepsydra' };
+  const znakHtml = (z, rozmiar) => (ZNAK_NA_IKONE[z] ? (ikona(ZNAK_NA_IKONE[z], rozmiar || 14) || esc(z)) : esc(z));
 
   const miniatury = ids => ids.map(id => `<img class="hala-zlecenie-foto" data-plik="${esc(id)}" alt="Zdjęcie" loading="lazy">`).join('');
 
@@ -362,11 +366,11 @@
     const doSkanu = (w.maszyny || []).filter(m => !zeskanowane.has(m));
     return `<div class="hala-zlecenie-formularz">
       ${zrobione && w.wymagajSkanu ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(!!doSkanu.length, 'Skan QR maszyny')}</span>
-        <p class="hala-zlecenie-skan">${(w.maszyny || []).map(m => `<span class="hala-krok-wymogu ${zeskanowane.has(m) ? 'ok' : ''}">${zeskanowane.has(m) ? '✓' : '○'} ${esc((w.nazwy || {})[m] || m)}</span>`).join(' ')}</p>
-        ${doSkanu.length ? `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="skanuj">▣ Zeskanuj QR: ${esc(doSkanu.map(m => (w.nazwy || {})[m] || m).join(', '))}</button>` : ''}</div>` : ''}
+        <p class="hala-zlecenie-skan">${(w.maszyny || []).map(m => `<span class="hala-krok-wymogu ${zeskanowane.has(m) ? 'ok' : ''}">${zeskanowane.has(m) ? znakHtml('✓') : '○'} ${esc((w.nazwy || {})[m] || m)}</span>`).join(' ')}</p>
+        ${doSkanu.length ? `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="skanuj">${ikona('skan', 16)}Zeskanuj QR: ${esc(doSkanu.map(m => (w.nazwy || {})[m] || m).join(', '))}</button>` : ''}</div>` : ''}
       ${zrobione ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !juz.zdjecia, 'Zdjęcie')}${juz.zdjecia ? ` <span class="slaby">— już ${juz.zdjecia} w postępie</span>` : ''}</span>
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}">
-            <button type="button" data-akcja="usun-zdjecie" data-nr="${i}" aria-label="Usuń zdjęcie ${i + 1}">✕</button></span>`).join('')}
+            <button type="button" data-akcja="usun-zdjecie" data-nr="${i}" aria-label="Usuń zdjęcie ${i + 1}">${ikona('zamknij', 16)}</button></span>`).join('')}
           ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length && !juz.zdjecia ? 'brak' : ''}">${ikona('aparat')}${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
             <input type="file" accept="image/*" capture="environment" multiple data-zdjecie hidden></label>` : ''}</div></div>` : ''}
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${zrobione ? pole(w.wymagajNotatki && !juz.notatka, 'Notatka') : 'Dlaczego nie da się tego zrobić?'}</span>
@@ -424,7 +428,7 @@
           <div class="hala-zlecenie-akcje"><button type="button" data-akcja="postep-notatka-anuluj">Anuluj</button>
             <button type="button" class="glowny" data-akcja="postep-notatka-zapisz">Zapisz notatkę</button></div></div>` : ''}
         <div class="hala-zlecenie-akcje">${widoczne.join('')}
-          <button type="button" class="hala-wiecej" data-akcja="wiecej" aria-expanded="${otwarte}">Więcej ${otwarte ? '▴' : '▾'}</button></div>
+          <button type="button" class="hala-wiecej" data-akcja="wiecej" aria-expanded="${otwarte}">Więcej${ikona(otwarte ? 'szewron-gora' : 'szewron-dol', 14, 'po')}</button></div>
         ${otwarte ? `<div class="hala-zlecenie-wiecej-menu">${ukryte.join('')}</div>` : ''}`;
   }
 
@@ -456,13 +460,13 @@
         ${z.uwagiZwrotu && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Kierownik: ${esc(z.uwagiZwrotu)}</p>` : ''}
         ${z.uwagiPrzekazania && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Od kierownika: ${esc(z.uwagiPrzekazania)}</p>` : ''}
         ${z.rozdzial ? `<p class="hala-zlecenie-skan" aria-label="Postęp części"><b>${esc(z.rozdzial.tekst)}</b> ${z.rozdzial.osoby.map(o =>
-          `<span class="hala-krok-wymogu ${o.znak === '✓' ? 'ok' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(' ')}</p>` : ''}
+          `<span class="hala-krok-wymogu ${o.znak === '✓' ? 'ok' : ''}">${znakHtml(o.znak)} ${esc(o.kto)}</span>`).join(' ')}</p>` : ''}
         ${z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="hala-zlecenie-czesci"><summary>Części — szczegóły</summary><ul>${z.rozdzial.czesci.map(c =>
-          `<li><b>${esc(c.znak)} ${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? `<p class="hala-zlecenie-zwrot">Nie może: ${esc(c.powod)}</p>` : ''}${c.notatka ? `<p class="hala-zlecenie-opis">📝 ${esc(c.notatka)}</p>` : ''}${c.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(c.zdjecia)}</div>` : ''}</li>`).join('')}</ul></details>` : ''}
+          `<li><b>${znakHtml(c.znak)} ${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? `<p class="hala-zlecenie-zwrot">Nie może: ${esc(c.powod)}</p>` : ''}${c.notatka ? `<p class="hala-zlecenie-opis">${ikona('notatka', 14)}${esc(c.notatka)}</p>` : ''}${c.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(c.zdjecia)}</div>` : ''}</li>`).join('')}</ul></details>` : ''}
         ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">${ikona('zegar', 16)}${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
-        ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">⏳ Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
+        ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">${ikona('klepsydra', 16)}Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
         : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
@@ -703,13 +707,13 @@
   function wymogiNaZywo(z, maszyny, s) {
     const nazwa = m => (maszyny[m] || {}).nazwa || m;
     const skany = new Set(z.juz.skany || []);
-    const krok = (ok, tekst) => `<span class="hala-krok-wymogu ${ok ? 'ok' : ''}">${ok ? '✓' : '○'} ${tekst}</span>`;
+    const krok = (ok, tekst) => `<span class="hala-krok-wymogu ${ok ? 'ok' : ''}">${ok ? znakHtml('✓') : '○'} ${tekst}</span>`;
     const wymogi = [];
-    if (z.wymagajSkanu) for (const m of z.maszyny) wymogi.push(krok(skany.has(m), `▣ ${esc(nazwa(m))}`));
+    if (z.wymagajSkanu) for (const m of z.maszyny) wymogi.push(krok(skany.has(m), `${ikona('skan', 14)}${esc(nazwa(m))}`));
     if (z.wymagajZdjecia) wymogi.push(krok(z.juz.zdjecia > 0, `zdjęcie${z.juz.zdjecia > 1 ? ` (${z.juz.zdjecia})` : ''}`));
     if (z.wymagajNotatki) wymogi.push(krok(z.juz.notatka, 'notatka'));
     const CZYNNOSCI = { proba: ikona('proba', 16) + 'Zaliczy się samo, gdy zapiszesz próbę jakościową', przeglad: ikona('przeglady', 16) + 'Zaliczy się samo po przeglądzie UR' };
-    const ostatnie = z.postep.slice(-3).map(e => `${esc(godzinaLok(e.czas))} ${e.skan ? `▣ ${esc(nazwa(e.skan))}` : ''}${[].concat(e.zdjecia || []).length ? ' ' + ikona('aparat', 14) : ''}${e.uwagi ? ` ${ikona('notatka', 14)}${esc(String(e.uwagi).slice(0, 60))}` : ''}`);
+    const ostatnie = z.postep.slice(-3).map(e => `${esc(godzinaLok(e.czas))} ${e.skan ? `${ikona('skan', 14)}${esc(nazwa(e.skan))}` : ''}${[].concat(e.zdjecia || []).length ? ' ' + ikona('aparat', 14) : ''}${e.uwagi ? ` ${ikona('notatka', 14)}${esc(String(e.uwagi).slice(0, 60))}` : ''}`);
     return `${wymogi.length ? `<div class="hala-zlecenie-wymogi" aria-label="Wymagania">${wymogi.join('')}</div>` : ''}
       ${z.czynnosc ? `<p class="hala-zlecenie-czynnosc">${CZYNNOSCI[z.czynnosc] || ''}${z.maszyny.length ? ` na: ${esc(z.maszyny.map(nazwa).join(', '))}` : ''}</p>` : ''}
       ${ostatnie.length ? `<p class="hala-zlecenie-postep slaby">Zrobione dotąd: ${ostatnie.join(' · ')}${z.postep.length > 3 ? ` (+${z.postep.length - 3})` : ''}</p>` : ''}`;
@@ -723,7 +727,7 @@
      formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Lider); próba i przegląd
      odhaczają się też same (hub). Ostatnia pozycja wysyła „Zrobione” sama (odhaczPozycje → zakonczJesliGotowe). */
   const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', 'po-terminie': '○', czeka: '○', przed: '⏳' };
-  const OPIS_CZYNNOSCI = { obsada: 'Raport obsady', obchod: '▣ Obchód — skan QR', proba: 'Próba jakościowa',
+  const OPIS_CZYNNOSCI = { obsada: 'Raport obsady', obchod: 'Obchód — skan QR', proba: 'Próba jakościowa',
                            bhp: 'Audyt BHP', przekazanie: 'Przekazanie zmiany', przeglad: 'Przegląd UR' };
   // Ikona czynności pozycji (liniowa, gk-ikony.js); obchód to ▣ — znak skanu QR jak na naklejkach.
   const IKONA_CZYNNOSCI = { obsada: 'konta', proba: 'proba', bhp: 'ratunek', przekazanie: 'zlecenia', przeglad: 'przeglady' };
@@ -738,14 +742,14 @@
     const dluga = z.pozycje.length > 3 && !(opcje && opcje.tylko);
     const rozwinieta = !dluga || s.rozw.has(z.id) || !!otwarta;
     return `<div class="hala-checklista" aria-label="Checklista">
-      ${dluga ? `<button type="button" class="hala-checklista-naglowek hala-checklista-przelacz" data-akcja="checklista-przelacz" aria-expanded="${rozwinieta}">☑ Checklista: <b>${p.gotowe} z ${p.wszystkie}</b> ${rozwinieta ? '▴' : '▾'}</button>`
-        : `<div class="hala-checklista-naglowek">☑ Checklista: <b>${p.gotowe} z ${p.wszystkie}</b></div>`}
+      ${dluga ? `<button type="button" class="hala-checklista-naglowek hala-checklista-przelacz" data-akcja="checklista-przelacz" aria-expanded="${rozwinieta}">${ikona('lista', 16)}Checklista: <b>${p.gotowe} z ${p.wszystkie}</b>${ikona(rozwinieta ? 'szewron-gora' : 'szewron-dol', 14, 'po')}</button>`
+        : `<div class="hala-checklista-naglowek">${ikona('lista', 16)}Checklista: <b>${p.gotowe} z ${p.wszystkie}</b></div>`}
       ${!rozwinieta ? '' : z.pozycje.map(q => `<button type="button" class="hala-pozycja stan-${esc(q.stan)}" data-akcja="pozycja" data-pozycja="${esc(q.id)}" aria-expanded="${!!(otwarta && otwarta.pozycja === q.id)}" ${z.doZrobienia && !z.przed && q.stan !== 'przed' ? '' : 'disabled'}>
-          <span class="hala-pozycja-znak" aria-hidden="true">${ZNAK_POZYCJI[q.stan]}</span>
+          <span class="hala-pozycja-znak" aria-hidden="true">${znakHtml(ZNAK_POZYCJI[q.stan], 16)}</span>
           ${q.odGodz || q.godz ? `<span class="hala-pozycja-godz">${esc(q.odGodz ? (q.godz ? `${q.odGodz}–${q.godz}` : `od ${q.odGodz}`) : q.godz)}</span>` : ''}
           <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.zwrot ? `<span class="hala-pozycja-zwrot">${ikona('powtarzaj', 14)} Wróciła od kierownika${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</span>` : ''}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
-            : q.maszyny.length > 1 ? ` <span class="slaby">· ${q.maszyny.length} maszyn${q.wymagajSkanu ? ` · ▣ ${q.maszyny.filter(m => q.skany.includes(m)).length}/${q.maszyny.length}` : ''}</span>` : ''}</span>
-          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? (IKONA_CZYNNOSCI[q.czynnosc] ? ikona(IKONA_CZYNNOSCI[q.czynnosc], 16) : '▣') : ''}${q.wymagajZdjecia ? ikona('aparat', 16) : ''}${q.wymagajNotatki ? ikona('notatka', 16) : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? '▣' : ''}</span>
+            : q.maszyny.length > 1 ? ` <span class="slaby">· ${q.maszyny.length} maszyn${q.wymagajSkanu ? ` · ${ikona('skan', 12)}${q.maszyny.filter(m => q.skany.includes(m)).length}/${q.maszyny.length}` : ''}</span>` : ''}</span>
+          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? (IKONA_CZYNNOSCI[q.czynnosc] ? ikona(IKONA_CZYNNOSCI[q.czynnosc], 16) : ikona('skan', 16)) : ''}${q.wymagajZdjecia ? ikona('aparat', 16) : ''}${q.wymagajNotatki ? ikona('notatka', 16) : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? ikona('skan', 16) : ''}</span>
         </button>${otwarta && otwarta.pozycja === q.id ? formularzPozycji(z, q, otwarta, opcje, nazwaM) : ''}`).join('')}
     </div>`;
   }
@@ -762,7 +766,7 @@
     const kto = q.wpis && q.wpis.autor ? (((global.Hala && f.pracownicy) || []).find(x => x.id === q.wpis.autor) || {}).nazwa || q.wpis.autor : '';
     if (q.stan === 'wykonana') {
       return `<div class="hala-pozycja-panel"><p class="ok-tekst">Zrobione ${esc(godzinaLok(q.wpis.czas))}${kto ? ` · ${esc(kto)}` : ''}</p>
-        ${q.wpis.uwagi ? `<p>${esc(q.wpis.uwagi)}</p>` : ''}${q.wpis.skan ? `<p class="slaby">▣ ${esc(nazwaM(q.wpis.skan))}</p>` : ''}
+        ${q.wpis.uwagi ? `<p>${esc(q.wpis.uwagi)}</p>` : ''}${q.wpis.skan ? `<p class="slaby">${ikona('skan', 14)}${esc(nazwaM(q.wpis.skan))}</p>` : ''}
         ${[].concat(q.wpis.zdjecia || []).length ? `<div class="hala-zlecenie-zdjecia">${miniatury([].concat(q.wpis.zdjecia))}</div>` : ''}
         <div class="hala-zlecenie-akcje"><button type="button" data-akcja="pozycja-zamknij">Zamknij</button>
           <button type="button" data-akcja="pozycja-cofnij">Cofnij odhaczenie</button></div></div>`;
@@ -780,16 +784,16 @@
       ${opisPozycji}
       ${q.zwrot ? `<p class="hala-pozycja-zwrot-opis">Kierownik zwrócił tę pozycję do poprawy${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</p>` : ''}
       ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
-      ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">▶ ${esc(cz)}</button>` : samo}
+      ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">${ikona('odtworz', 16)}${esc(cz)}</button>` : samo}
       ${w.wymagajSkanu && wielo ? (() => {
         const brakM = q.maszyny.filter(m => !zesk.has(m));
         return `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(brakM.length > 0, q.maszyny.length > 1 ? 'Skan QR maszyn' : 'Skan QR maszyny')}</span>
-        <p class="hala-zlecenie-skan">${q.maszyny.map(m => `<span class="hala-krok-wymogu ${zesk.has(m) ? 'ok' : ''}">${zesk.has(m) ? '✓' : '○'} ${esc(nazwaM(m))}</span>`).join(' ')}</p>
-        ${brakM.length ? `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">▣ Zeskanuj QR: ${esc(brakM.map(nazwaM).join(', '))}</button>`
+        <p class="hala-zlecenie-skan">${q.maszyny.map(m => `<span class="hala-krok-wymogu ${zesk.has(m) ? 'ok' : ''}">${zesk.has(m) ? znakHtml('✓') : '○'} ${esc(nazwaM(m))}</span>`).join(' ')}</p>
+        ${brakM.length ? `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">${ikona('skan', 16)}Zeskanuj QR: ${esc(brakM.map(nazwaM).join(', '))}</button>`
           : `<p class="slaby">Wszystkie zeskanowane${q.wymagajZdjecia || q.wymagajNotatki ? '.' : ' — pozycja odhaczy się sama (do minuty).'}</p>`}</div>`; })()
       : w.wymagajSkanu ? `<div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(!f.skan, q.czynnosc === 'obchod' && !q.maszyna ? 'Skan QR maszyny na linii' : 'Skan QR maszyny')}</span>
-        ${f.skan ? `<p class="hala-zlecenie-skan"><span class="hala-krok-wymogu ok">✓ ${esc(nazwaM(f.skan))}</span></p>`
-                 : `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">▣ Zeskanuj QR${q.maszyna ? `: ${esc(nazwaM(q.maszyna))}` : ''}</button>`}</div>` : ''}
+        ${f.skan ? `<p class="hala-zlecenie-skan"><span class="hala-krok-wymogu ok">${znakHtml('✓')} ${esc(nazwaM(f.skan))}</span></p>`
+                 : `<button type="button" class="hala-zlecenie-zdjecie brak" data-akcja="pozycja-skan">${ikona('skan', 16)}Zeskanuj QR${q.maszyna ? `: ${esc(nazwaM(q.maszyna))}` : ''}</button>`}</div>` : ''}
       <div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !f.pliki.length, 'Zdjęcie')}</span>
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}"></span>`).join('')}
           ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length ? 'brak' : ''}">${ikona('aparat')}${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
@@ -801,7 +805,7 @@
       <div class="hala-zlecenie-akcje">
         <button type="button" data-akcja="pozycja-zamknij">Anuluj</button>
         ${q.stan === 'pominieta' ? '' : '<button type="button" data-akcja="pozycja-pomin">Pomiń</button>'}
-        <button type="button" class="zielony" data-akcja="pozycja-odhacz" ${brak.length || f.wysyla ? 'disabled' : ''}>✓ Odhacz</button>
+        <button type="button" class="zielony" data-akcja="pozycja-odhacz" ${brak.length || f.wysyla ? 'disabled' : ''}>${ikona('haczyk', 16)}Odhacz</button>
       </div></div>`;
   }
 

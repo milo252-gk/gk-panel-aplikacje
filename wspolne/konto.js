@@ -399,7 +399,7 @@
      Właściciel: „kierownik ma mieć każdy QR do zalogowania do każdej z aplikacji; pracownicy — do swoich i do aplikacji
      na użytek każdego (GK Szkolenia, GK Czytnik)”. Lista z huba (GET /api/v1/aplikacje — według ról osoby), kod QR
      rysowany tu z koderem ZXing (skaner-zxing.js obok, jak etykiety maszyn w Panelu). Telefon skanuje aparatem i otwiera
-     adres — logowanie tym samym kontem GK. GK Czytnik i GK Foto są tylko na komputerze (bez kodu). */
+     adres — logowanie tym samym kontem GK. GK Czytnik jest tylko na komputerze (bez kodu). */
   function wczytajZXing() {
     if (global.ZXing) return Promise.resolve(global.ZXing);
     return new Promise((ok, zle) => {
@@ -464,7 +464,7 @@
     </style></head><body><div class="arkusz">${karty}</div>${stopka ? `<div class="stopka">${stopka}</div>` : ''}</body></html>`;
   }
 
-  /* Aplikacje bez kodu QR (czysta funkcja — testy: reduktor-testy.js): komputer — GK Czytnik, GK Foto; niedziala — program
+  /* Aplikacje bez kodu QR (czysta funkcja — testy: reduktor-testy.js): komputer — GK Czytnik; niedziala — program
      w biurze (GK Szkolenia, GK Wycena) wyłączony albo aplikacji jeszcze nie ma na GitHub Pages. */
   function bezKodu(wiersze) {
     const lista = (wiersze || []).filter(a => a && !a.adres);

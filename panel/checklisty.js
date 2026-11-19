@@ -45,19 +45,19 @@
           <input class="nazwa" value="${esc(p.nazwa || '')}" maxlength="200" placeholder="Co zrobić (np. Obchód BHP)" aria-label="Co zrobić" list="podpowiedzi-czynnosci">
           <span class="ikony" aria-hidden="true"></span>
           <button type="button" class="maly" data-szczegoly aria-expanded="false" title="Opis, godzina „od”, maszyny, zdjęcie, notatka, skan">⋯</button>
-          <button type="button" class="maly" data-ruch="-1" aria-label="W górę">↑</button>
-          <button type="button" class="maly" data-ruch="1" aria-label="W dół">↓</button>
-          <button type="button" class="maly" data-usun aria-label="Usuń pozycję">✕</button>
+          <button type="button" class="maly" data-ruch="-1" aria-label="W górę">${P.ik('strzalka-gora')}</button>
+          <button type="button" class="maly" data-ruch="1" aria-label="W dół">${P.ik('strzalka-dol')}</button>
+          <button type="button" class="maly" data-usun aria-label="Usuń pozycję">${P.ik('zamknij')}</button>
         </div>
         ${/* Opis zawsze na wierzchu (właściciel 2026-10-27: „nie da się edytować opisów zadań”) — jedna linia, rośnie z tekstem. */ ''}
         <textarea class="opis" rows="1" maxlength="2000" aria-label="Opis — co dokładnie zrobić" placeholder="Opis — co dokładnie zrobić (opcjonalnie)">${esc(p.opis || '')}</textarea>
         <div class="pozycja-szczegoly" hidden>${/* zwinięte — w wierszu widać ikony (▣ ⚙ 📷 📝 ⏳) */ ''}
-          <label class="pozycja-od" title="Przed tą godziną pozycji nie da się odhaczyć (okno od–do)">⏳ Od godziny (po starcie zmiany)
+          <label class="pozycja-od" title="Przed tą godziną pozycji nie da się odhaczyć (okno od–do)">${P.ik('klepsydra')}Od godziny (po starcie zmiany)
             <input class="od" value="${esc(p.od || '')}" placeholder="0:15" inputmode="numeric" aria-label="Pozycja do zrobienia od godziny po starcie zmiany (g:mm)"></label>
           ${maszynyPozycjiHtml(p, maszyny)}
           <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> ${P.ik('aparat')}zdjęcie</label>
           <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> ${P.ik('notatka')}notatka</label>
-          <label class="zaznacz" title="Pozycja odhaczy się sama po zeskanowaniu naklejek QR wszystkich wybranych maszyn"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ▣ skan QR wszystkich wybranych maszyn</label>
+          <label class="zaznacz" title="Pozycja odhaczy się sama po zeskanowaniu naklejek QR wszystkich wybranych maszyn"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ${P.ik('skan')}skan QR wszystkich wybranych maszyn</label>
         </div>
       </div>`;
     }
@@ -84,9 +84,9 @@
           : instancja && w.dataset.terminIso ? W.godzina(Date.parse(w.dataset.terminIso)) : '';
         const cz = w.dataset.czynnosc;
         const ile = w.querySelectorAll('.maszyna-wybor:checked').length;
-        w.querySelector('.ikony').innerHTML = [cz ? (IKONA_CZYNNOSCI[cz] ? P.ik(IKONA_CZYNNOSCI[cz]) : '▣') : '',
-          w.querySelector('.zdjecie').checked ? P.ik('aparat') : '', w.querySelector('.notatka').checked ? P.ik('notatka') : '', w.querySelector('.skan').checked ? '▣' : '',
-          ile ? `⚙${ile}` : '', w.querySelector('.od').value.trim() || w.dataset.odIso ? '⏳' : '', w.querySelector('.opis').value.trim() ? '✎' : ''].join('');
+        w.querySelector('.ikony').innerHTML = [cz ? (IKONA_CZYNNOSCI[cz] ? P.ik(IKONA_CZYNNOSCI[cz]) : P.ik('skan')) : '',
+          w.querySelector('.zdjecie').checked ? P.ik('aparat') : '', w.querySelector('.notatka').checked ? P.ik('notatka') : '', w.querySelector('.skan').checked ? P.ik('skan') : '',
+          ile ? `${P.ik('ustawienia')}${ile}` : '', w.querySelector('.od').value.trim() || w.dataset.odIso ? P.ik('klepsydra') : '', w.querySelector('.opis').value.trim() ? P.ik('edytuj') : ''].join('');
         const licznik = w.querySelector('[data-liczba-maszyn]');
         if (licznik) licznik.textContent = ile ? `(zaznaczone: ${ile})` : '';
       }

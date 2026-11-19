@@ -28,7 +28,8 @@
   }
 
   function kartaListy(w) {
-    return `<a class="karta awaria ${klasaPriorytetu(w)} ${w.moja ? 'moja' : ''} ${esc(w.status)}" href="#awaria/${encodeURIComponent(w.id)}">
+    return `<a class="karta awaria ${klasaPriorytetu(w)} ${w.moja ? 'moja' : ''} ${esc(w.status)}" href="#awaria/${encodeURIComponent(w.id)}"
+      aria-label="Awaria ${esc(w.numer)}: ${esc(w.maszynaNazwa)}, ${esc(w.etykieta)}${w.aktywny ? '' : ' (zamknięta)'}">
       <div class="przestoj">${licznik(w)}<small>${w.aktywny ? 'przestój' : esc(w.etykieta)}</small></div>
       <div class="maszyna"><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)}${W.wieleLinii(hala.slowniki) ? ` · ${esc(w.liniaNazwa)}` : ''}</span></div>
       <div class="znaczniki">
@@ -121,7 +122,7 @@
     }
     const k = UR.kontekst();
     const w = W.wierszAwarii(a, k);
-    // UI etap 2: jeden duży przycisk następnego kroku na wierzchu, rzadkie rzeczy pod „Więcej ▾” (W.ukladAkcji).
+    // UI etap 2: jeden duży przycisk następnego kroku na wierzchu, rzadkie rzeczy pod „Więcej” (W.ukladAkcji).
     const uklad = W.ukladAkcji(W.akcjeAwarii(a, k));
     const przycisk = x => `<button type="button" data-krok="${esc(x.typ)}" class="${x.glowny ? 'glowny' : ''} ${x.alarm ? 'alarm' : ''}${x.typ === 'awaria.naprawa_rozpoczeta' ? ' wlasny-skan' : ''}">${esc(x.tekst)}</button>`;
     const d = a.dane || {};
@@ -187,7 +188,7 @@
       ostatniPodpis = teraz;
       const byla = el.querySelector('#historia');
       const otwarta = byla && byla.open;
-      // „Więcej ▾” rozwinięte zostaje rozwinięte — zmiana z huba nie może zwinąć mechanikowi menu spod palca.
+      // „Więcej” rozwinięte zostaje rozwinięte — zmiana z huba nie może zwinąć mechanikowi menu spod palca.
       const wiecej = el.querySelector('#wiecej-akcji');
       const wiecejOtwarte = wiecej && wiecej.open;
       const y = global.scrollY;

@@ -155,7 +155,7 @@
      stanowisk, których w zakładzie nie ma.
      aplikacje — wiersze HalaKonto.wierszeAplikacji z huba (GET /api/v1/aplikacje; null = jeszcze wczytuje, kategoria jest
      zawsze — wszystkie aplikacje GK, D57): element z adresem ma `aplikacja` (kod do druku karty), bez adresu — sam opis
-     (GK Czytnik i GK Foto są tylko na komputerze). */
+     (GK Czytnik jest tylko na komputerze). */
   function kategorie({ slowniki, pracownicy, kontrakt, aplikacje, bladAplikacji }) {
     const sl = slowniki || {};
     const wiele = Object.keys(sl.linie || {}).length > 1;

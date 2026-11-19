@@ -698,7 +698,7 @@
      nie mówi kontrolerowi, a zabiera miejsce w wierszu. */
   const pokazKody = slowniki => linie(slowniki).length > 1;
 
-  /* „▸ Więcej” w próbie (zlecenie, przewodnik, wyrób) zwinięte, chyba że coś już w nim wpisano — inaczej kontroler
+  /* „Więcej” w próbie (zlecenie, przewodnik, wyrób) zwinięte, chyba że coś już w nim wpisano — inaczej kontroler
      nie zobaczyłby, że brudnopis ma zlecenie. */
   const wiecejProbyOtwarte = f => !!(f && (String(f.zlecenie || '').trim() || f.wyrob || f.zdjecie_zlecenia));
 

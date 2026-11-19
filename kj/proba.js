@@ -48,14 +48,14 @@
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Plan próbkowania</h1><span class="licznik-planu ${plan.zrobione >= plan.plan && plan.plan ? 'tekst-ok' : ''}">${plan.zrobione}/${plan.plan}</span></div>
         <div class="postep ${W.stanPaskaPlanu(plan, zmiana, hala.teraz())}"><span style="width:${proc}%"></span></div>
-        ${KJ.mozna('proba.zarejestrowana') ? `<button type="button" class="glowny szeroki duzy wlasny-skan" id="skanuj-stanowisko">▣ ${esc(W.napisSkanu(hala.slowniki))}</button>` : ''}
+        ${KJ.mozna('proba.zarejestrowana') ? `<button type="button" class="glowny szeroki duzy wlasny-skan" id="skanuj-stanowisko">${KJ.ik('skan', 22)}${esc(W.napisSkanu(hala.slowniki))}</button>` : ''}
         ${plan.linie.map(g => `
           <section class="grupa">
             <h2>${esc(g.nazwa)} <span class="slaby">${g.zrobione}/${g.plan}</span></h2>
             ${g.stanowiska.map(s => `
               <a class="stanowisko ${s.gotowe ? 'gotowe' : 'czeka'}" href="${s.calaLinia ? '#proba' : `#proba/${encodeURIComponent(s.kod)}`}">
                 <span class="nazwa">${esc(s.nazwa)}${s.calaLinia || !kody ? '' : ` <span class="slaby">${esc(s.kod)}</span>`}</span>
-                <span class="stan">${s.gotowe ? '✓ ' : ''}${s.zrobione}/${s.plan}</span>
+                <span class="stan">${s.gotowe ? KJ.ik('haczyk', 14) : ''}${s.zrobione}/${s.plan}</span>
               </a>`).join('')}
           </section>`).join('') || '<p class="pusto">Brak planu próbkowania. Kierownik KJ ustawia go w „Więcej → Katalog, wyroby, plan → Plan próbkowania”.</p>'}
         ${plan.pozaPlanem ? `<p class="slaby">Poza planem na tej zmianie: ${plan.pozaPlanem}</p>` : ''}
@@ -165,7 +165,7 @@
           <details class="grupa wiecej-proby" ${W.wiecejProbyOtwarte(f) ? 'open' : ''}><summary>Więcej <span class="slaby">(zlecenie, wyrób — opcjonalnie)</span></summary>
             <label for="p-zlecenie">Zlecenie / partia</label>
             <div class="z-przyciskiem"><input id="p-zlecenie" name="zlecenie" value="${esc(f.zlecenie)}" placeholder="Numer z przewodnika" aria-label="Numer zlecenia">
-              <button type="button" id="skanuj-zlecenie">Skanuj</button></div>
+              <button type="button" id="skanuj-zlecenie" aria-label="Skanuj numer zlecenia">Skanuj</button></div>
             <div id="p-zdjecie-zlecenia"></div>
             <label>Wyrób<select name="wyrob" id="p-wyrob"></select></label>
           </details>
@@ -212,7 +212,7 @@
         ${opcje.map(o => `<option value="${esc(o.wartosc)}">${esc(o.opis)}</option>`).join('')}</select></details>` : '';
     if (!f.linia) {
       box.innerHTML = `<h2>Miejsce kontroli</h2>
-        <button type="button" class="glowny szeroki duzy wlasny-skan" data-akcja="skanuj-stanowisko">▣ ${esc(W.napisSkanu(sl))}</button>
+        <button type="button" class="glowny szeroki duzy wlasny-skan" data-akcja="skanuj-stanowisko">${KJ.ik('skan', 22)}${esc(W.napisSkanu(sl))}</button>
         ${lista || '<p class="pusto">Brak linii w systemie — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'}`;
       return;
     }
@@ -220,10 +220,10 @@
     box.innerHTML = `<h2>Miejsce kontroli</h2>
       <div class="wybrane-stanowisko">
         <div><b>${esc(miejsce)}</b>${miejsce === linia ? '' : ` <span class="slaby">${esc(linia)}</span>`}</div>
-        <div class="slaby">${f.czas_rozpoczecia ? `Start ${esc(W.kiedy(f.czas_rozpoczecia, hala.teraz()))} · ` : ''}${f.qr ? '✓ zeskanowano' : '<span class="tekst-uwaga">bez skanu</span>'}</div>
+        <div class="slaby">${f.czas_rozpoczecia ? `Start ${esc(W.kiedy(f.czas_rozpoczecia, hala.teraz()))} · ` : ''}${f.qr ? KJ.ik('haczyk', 14) + 'zeskanowano' : '<span class="tekst-uwaga">bez skanu</span>'}</div>
         ${W.skanZInnejZmiany(f.czas_rozpoczecia, hala.zmianaTeraz()) ? '<div class="tekst-uwaga">Skan z innej zmiany — jeśli kontrola jest teraz, zeskanuj ponownie.</div>' : ''}
       </div>
-      <button type="button" class="wlasny-skan" data-akcja="skanuj-stanowisko">${f.qr ? 'Zmień' : `▣ ${esc(W.napisSkanu(sl))}`}</button>
+      <button type="button" class="wlasny-skan" data-akcja="skanuj-stanowisko">${f.qr ? 'Zmień' : `${KJ.ik('skan', 18)}${esc(W.napisSkanu(sl))}`}</button>
       ${lista}`;
   }
 
@@ -330,7 +330,7 @@
     const usun = ev.target.closest('[data-usun-zdjecie]');
     if (usun) {
       const id = usun.dataset.usunZdjecie;
-      hala.usunPlik(id).catch(() => {});          // etap 3: ✕ naprawdę usuwa plik z telefonu (zdjęcie ze zlecenia, jeśli jest tylko tu, też)
+      hala.usunPlik(id).catch(() => {});          // etap 3: usunięcie zdjęcia naprawdę usuwa plik z telefonu (zdjęcie ze zlecenia, jeśli jest tylko tu, też)
       if (usun.closest('[data-zdjecie-zlecenia]')) { f.zdjecie_zlecenia = null; rysujZdjecieZlecenia(el); }
       else { f.zdjecia = f.zdjecia.filter(x => x !== id); rysujZdjecia(el); }
       zapiszBrudnopis();
@@ -528,7 +528,7 @@
           <dt>Wady</dt><dd>${(d.wady || []).map(w => `${esc(W.nazwaWady(hala.slowniki, w.kod))} ${esc(w.ilosc)}`).join(', ') || 'brak'}</dd>
           ${d.wnioski ? `<dt>Wnioski</dt><dd>${esc(d.wnioski)}</dd>` : ''}
           ${d.dzialania ? `<dt>Działania</dt><dd>${esc(d.dzialania)}</dd>` : ''}
-          <dt>Skan</dt><dd>${d.qr ? '✓ ' + esc(d.qr) : 'bez skanu'}</dd>
+          <dt>Skan</dt><dd>${d.qr ? KJ.ik('haczyk', 14) + esc(d.qr) : 'bez skanu'}</dd>
           ${d.czas_korekty ? `<dt>Korekta</dt><dd>${esc(W.kiedy(d.czas_korekty, hala.teraz()))}</dd>` : ''}
           ${partia ? `<dt>Partia</dt><dd><a href="#partia/${encodeURIComponent(partia.id)}">${esc(W.numer(partia))} · ${esc(partia.etykieta)}</a></dd>` : ''}
         </dl>

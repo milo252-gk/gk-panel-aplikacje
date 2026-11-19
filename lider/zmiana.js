@@ -11,11 +11,11 @@
   const L = window.Lider, hala = L.hala, W = L.W, esc = L.esc;
   const prog = () => hala.ustawienie('prog_zolty_min', 30);
 
-  // ▣ = skan QR, 🔬 = próba — te same znaki co w Zleceniach (STYL-GK §2 D64), żeby ta sama pozycja nie miała dwóch ikon.
-  // Ikony typów pozycji: liniowe z gk-ikony.js (obchód to ▣ — znak skanu QR, zlecenie zwykłe ✓); bez pliku ikon — znaki zastępcze.
+  // Ikony skan i proba — te same co w Zleceniach (STYL-GK §2 D64), żeby ta sama pozycja nie miała dwóch ikon.
+  // Ikony typów pozycji: liniowe z gk-ikony.js (obchód to ikona skan, zlecenie zwykłe haczyk); bez pliku ikon — bez ikony.
   const IKONY_NAZWY = { proba: 'proba', bhp: 'ratunek', obsada: 'konta', przekazanie: 'zlecenia' };
-  const IKONY = { obchod: '▣', zadanie: '✓' };
-  const ikonaTypu = typ => (IKONY_NAZWY[typ] && window.GKIkony ? window.GKIkony.html(IKONY_NAZWY[typ], 20) : IKONY[typ] || '✓');
+  const IKONY = { obchod: 'skan', zadanie: 'haczyk' };
+  const ikonaTypu = typ => (window.GKIkony ? window.GKIkony.html(IKONY_NAZWY[typ] || IKONY[typ] || 'haczyk', 20) : '');
   const OPIS_STANU = { wykonana: 'Zrobione', pominieta: 'Pominięte', opozniona: 'Po terminie', bliska: 'Wkrótce', czeka: '', przed: 'Później' };
 
   // ------------------------------------------------------------ zapisy checklisty
@@ -125,7 +125,7 @@
   async function wykonaj(p, k) {
     // D67: pozycja z wymaganym zdjęciem albo notatką (bez formularza czynności) — karta checklisty w Zleceniach, gdzie
     // jest aparat i pole notatki; ta sama pozycja otwarta od razu.
-    // 2026-10-26: pozycja z kilkoma maszynami do zeskanowania — postęp skanów (✓ ○ przy maszynach) jest w karcie zlecenia.
+    // 2026-10-26: pozycja z kilkoma maszynami do zeskanowania — postęp skanów (haczyk i kropka przy maszynach) jest w karcie zlecenia.
     const wielomaszynowa = (p.maszyny || []).length > 1 && p.typ !== 'obchod';
     if ((p.wymagaj_zdjecia || p.wymagaj_notatki || wielomaszynowa) && !['proba', 'bhp', 'obsada', 'przekazanie'].includes(p.typ)) {
       const m = k.lista.mapa[p.id];
@@ -149,7 +149,7 @@
     if (await L.odhacz(p.id, { qr }, L.kontekst(k.zmiana, k.linia))) { L.zamknijOkno(); L.poZapisie(qr ? 'Obecność potwierdzona' : 'Odhaczone'); }
   }
 
-  /* Pozycja z karty zlecenia (Zlecenia → checklista → „▶ Raport obsady” itp.) — ten sam przebieg co na ekranie Zmiana. */
+  /* Pozycja z karty zlecenia (Zlecenia → checklista → „Raport obsady” itp.) — ten sam przebieg co na ekranie Zmiana. */
   L.wykonajPozycje = id => {
     const k = L.kontekst();
     const c = W.checklista(k.lista, hala.teraz(), prog());
@@ -202,14 +202,14 @@
 
   /* Raport zmiany: jedna nazwa w całej aplikacji (właściciel 2026-11-17). Dwa kształty tego samego kroku, nigdy oba naraz:
      — lista niekompletna: wiersz-przypomnienie na końcu listy („Na końcu”; dotknięty za wcześnie pyta „Zakończyć zmianę bez
-       wykonania wszystkich zadań?” — oknoRaportu); po wysłaniu „✔ godz.”;
+       wykonania wszystkich zadań?” — oknoRaportu); po wysłaniu „haczyk i godzina”;
      — lista kompletna, raport niewysłany: jeden główny przycisk pod listą (zamiast wiersza).
      To nie pozycja zlecenia (raport to osobne zdarzenie zmiana.raport, KONTRAKT §6.4). */
   const koniecZmiany = glowny => `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Raport zmiany</button></div>`;
 
   function ostatniKrok(k, wyslany) {
     const d = (k.zl && k.zl.dane) || {};
-    const opis = wyslany ? `✔ ${esc(W.godzina(d.czas_zamkniecia))}` : 'Na końcu';
+    const opis = wyslany ? `${L.ik('haczyk', 14)}${esc(W.godzina(d.czas_zamkniecia))}` : 'Na końcu';
     return `<li class="pozycja ostatni-krok stan-${wyslany ? 'wykonana' : 'czeka'}" data-a="raport" role="button" tabindex="0"
           aria-label="Raport zmiany — ${wyslany ? 'wysłany ' + esc(W.godzina(d.czas_zamkniecia)) : 'na końcu listy, po wykonaniu zadań'}">
           <span class="czas">—</span>
@@ -229,8 +229,8 @@
           <span class="czas">${esc(w.godz)}</span>
           <span class="ikona-typu" aria-hidden="true">${ikonaTypu(w.typ)}</span>
           <span class="tresc">${esc(w.nazwa)}${w.zwrot !== null && w.zwrot !== undefined ? `<span class="pozycja-zwrot">${window.GKIkony ? window.GKIkony.html('powtarzaj', 14) + ' ' : ''}Wróciła od kierownika${w.zwrot ? `: ${esc(w.zwrot)}` : ''}</span>` : ''}${w.wymaga_qr ? ' <span class="slaby">QR</span>' : ''}${
-            w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">▣ ${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
-          <span class="stan">${w.stan === 'wykonana' ? '✔' : w.stan === 'przed' ? `⏳ od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
+            w.maszyny && w.maszyny.length > 1 && w.wymaga_qr ? ` <span class="slaby">${L.ik('skan', 14)}${w.maszyny.filter(m => (w.skany || []).includes(m)).length}/${w.maszyny.length}</span>` : ''}</span>
+          <span class="stan">${w.stan === 'wykonana' ? `${L.ik('haczyk', 18)}<span class="tylko-czytnik">Zrobione</span>` : w.stan === 'przed' ? `${L.ik('klepsydra', 14)}od ${esc(w.odGodz)}` : esc(OPIS_STANU[w.stan])}${w.poTerminie ? ' <span class="slaby">późno</span>' : ''}</span>
         </li>`;
 
   function rysujZmiane(el) {

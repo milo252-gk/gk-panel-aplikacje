@@ -21,8 +21,8 @@
        (tokeny nigdy nie wracają z huba).
      · Połączenia GK (D32): klucze programów GK Trasy i GK Flota, które biorą konta z huba (wspolne/GK-KONTA.md §3).
        Jedno konto osoby we wszystkich aplikacjach GK — role transportu w oknie osoby, w osobnych grupach.
-       GK Foto (od 2026-10-23) i GK Czytnik (od 3.13, D52) działają bez logowania i bez klucza — tu tylko informacja
-       (dawniej, D40, logowały się kontem GK — GK-KONTA.md §6, D79).
+       GK Czytnik (od 3.13, D52) działa bez logowania i bez klucza — tu tylko informacja (dawniej, D40, logował się
+       kontem GK — GK-KONTA.md §6, D79). GK Foto wycofane 2026-11-18.
    - Nad wszystkim czerwona wstęga alarmów huba (GET /api/v1/admin/alarmy): kopia, adres na Pages, token GitHub, miejsce —
      przy alarmie „Pokaż” prowadzi do części, w której się go naprawia (W.alarmyAdmina → gdzie).
    Co pokazać i czy formularz jest dobry, liczy widok.js (testy: panel/testy/widok-testy.js). */
@@ -309,8 +309,8 @@
           <div class="szczegoly">
             ${p.roleNazwy.map(r => `<span class="znacznik neutral">${esc(r)}</span>`).join('')}
             ${p.linieNazwy.map(l => `<span>${esc(l)}</span>`).join('')}
-            ${p.ma_karte ? '<span class="slaby">karta ✓</span>' : ''}${W.stanHasla(p).znacznik ? `<span class="${W.stanHasla(p).klasa}">${esc(W.stanHasla(p).znacznik)}</span>` : ''}
-            ${p.telefon ? `<span class="slaby">☎ ${esc(p.telefon)}</span>` : ''}
+            ${p.ma_karte ? `<span class="slaby">karta ${P.ik('haczyk', 14)}</span>` : ''}${W.stanHasla(p).znacznik ? `<span class="${W.stanHasla(p).klasa}">${esc(W.stanHasla(p).znacznik)}</span>` : ''}
+            ${p.telefon ? `<span class="slaby">${P.ik('telefon-sluchawka', 14)}${esc(p.telefon)}</span>` : ''}
             ${p.aktywny === false ? '<span class="znacznik neutral">Wyłączone</span>' : ''}
             ${p.zablokowany ? `<span class="znacznik alarm">${p.blokada_internet && p.blokada_internet.rodzaj === 'konto'
               ? 'Zablokowane z internetu' : 'Zablokowane po złych PIN-ach'}</span>` : ''}
@@ -643,7 +643,7 @@
       <input name="nazwa" value="${esc((z && z.nazwa) || '')}" placeholder="Nazwa" aria-label="Nazwa zmiany">
       <input name="od" value="${esc((z && z.od) || '')}" placeholder="06:00" aria-label="Od">
       <input name="do" value="${esc((z && z.do) || '')}" placeholder="14:00" aria-label="Do">
-      <button type="button" class="maly" data-usun-zmiane aria-label="Usuń zmianę">✕</button></div>`;
+      <button type="button" class="maly" data-usun-zmiane aria-label="Usuń zmianę">${P.ik('zamknij')}</button></div>`;
     const zm = (hala.slowniki && hala.slowniki.zmiany) || {};
     $('wiersze-zmian').innerHTML = Object.entries(zm).map(([nr, z]) => wierszZmiany(nr, z)).join('');
     $('dodaj-zmiane').addEventListener('click', () => $('wiersze-zmian').insertAdjacentHTML('beforeend', wierszZmiany('', null)));
@@ -1072,8 +1072,8 @@
             <button type="button" class="maly" data-akcja="kopiuj-klucz">Kopiuj</button></div>` : ''}
         </section>`;
       }).join('')}
-      <p class="slaby">GK Foto i GK Czytnik działają bez logowania — nie potrzebują ani klucza, ani konta GK. Rola „Marketing”
-        na liście Pracowników zostaje tylko dla starszych instalacji tych aplikacji.</p>
+      <p class="slaby">GK Czytnik działa bez logowania — nie potrzebuje ani klucza, ani konta GK. Rola „Marketing”
+        na liście Pracowników zostaje tylko dla starszych instalacji tej aplikacji.</p>
       <div class="admin-pasek"><button type="button" data-akcja="odswiez-polaczenia">Odśwież stan</button></div>`;
   }
 

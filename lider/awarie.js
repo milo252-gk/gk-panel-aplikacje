@@ -30,7 +30,7 @@
 
   const pusteZgloszenie = () => ({ maszyna: '', priorytet: '', opis: '', zdjecia: [] });
 
-  /* Jeden formularz zgłoszenia w dwóch miejscach (UI etap 2, „jedna AWARIA”): na górze ekranu ⚠️ Awaria — od razu, bez
+  /* Jeden formularz zgłoszenia w dwóch miejscach (UI etap 2, „jedna AWARIA”): na górze ekranu Awaria — od razu, bez
      otwierania okna — i w oknie z zasłony alertu jakości (zasłona przykrywa ekrany, a maszyna nie czeka). Oba miejsca
      piszą w ten sam brudnopis (klucz ze zmianą), więc zaczęte w jednym da się dokończyć w drugim.
      o = { kontener, f, linia, wOknie, poWyslaniu(tekst) }. Zwraca odswiez() — pytanie o duplikat po nowym zdarzeniu
@@ -44,7 +44,7 @@
         <div class="siatka-wyboru" data-grupa="maszyna">
           ${maszyny.map(m => { const k = W.kafelekMaszyny(m);   // nazwa duża, kod mały (UI etap 3)
             return `<button type="button" data-wartosc="${esc(m.kod)}"><b>${esc(k.duzy)}</b>${k.maly ? `<span>${esc(k.maly)}</span>` : ''}</button>`; }).join('')}
-          <button type="button" class="skan wlasny-skan" data-skanuj>▣ Skanuj QR maszyny</button>
+          <button type="button" class="skan wlasny-skan" data-skanuj>${window.Lider.ik('skan', 18)}Skanuj QR maszyny</button>
         </div>
         <div class="wybrana-inna slaby" hidden></div>
         <div class="ostrzezenie duplikat" hidden><p></p>
@@ -157,7 +157,7 @@
   /* Okno zgłoszenia — z zasłony alertu jakości (jakosc.js) i po przeładowaniu karty z otwartym oknem (L.oknaPoStarcie). */
   async function zglos(parametry) {
     const linia = L.linia();
-    // Brudnopis na tę zmianę (audyt 2026-10-12): okno zamknięte ✕ zostawia brudnopis, a z kluczem samej linii AWARIA
+    // Brudnopis na tę zmianę (audyt 2026-10-12): okno zamknięte przyciskiem zamknij zostawia brudnopis, a z kluczem samej linii AWARIA
     // otwierała się po dniach z dawną maszyną, priorytetem i notatką. Zmiana zapamiętana w parametrach okna — po
     // przeładowaniu karty tuż po 14:00 brudnopis zmiany I dalej się znajdzie.
     const p = Object.assign({}, parametry || {});
@@ -171,14 +171,14 @@
         if (tekst) L.poZapisie(tekst);
         L.pokazEkran('awarie');
       } }),
-      // Ten sam brudnopis ma formularz na ekranie ⚠️ Awaria — po oknie budujemy go od nowa z tego, co zostało.
+      // Ten sam brudnopis ma formularz na ekranie Awaria — po oknie budujemy go od nowa z tego, co zostało.
       przyZamknieciu: () => { naEkranie = null; L.narysuj(); },
     });
   }
   L.zglosAwarie = zglos;
   L.oknaPoStarcie.awaria = zglos;
 
-  /* Formularz na ekranie ⚠️ Awaria. Ekran przerysowuje się co 20 s i po każdym zdarzeniu — formularz budujemy od nowa
+  /* Formularz na ekranie Awaria. Ekran przerysowuje się co 20 s i po każdym zdarzeniu — formularz budujemy od nowa
      tylko wtedy, gdy każe W.przebudowacZgloszenie (pierwszy raz, inna linia, nowa zmiana przy pustym formularzu);
      inaczej tylko odświeżamy pytanie o duplikat. naEkranie = { linia, zmianaId, dane, odswiez, miejsce }. */
   let naEkranie = null, budowa = 0;
@@ -288,7 +288,7 @@
     </article>`;
   }
 
-  /* Ekran ⚠️ Awaria (UI etap 2, „jedna AWARIA”): dawny czerwony przycisk AWARIA i zakładka „Awarie” to teraz jedna
+  /* Ekran Awaria (UI etap 2, „jedna AWARIA”): dawny czerwony przycisk AWARIA i zakładka „Awarie” to teraz jedna
      zakładka. Na górze od razu formularz zgłoszenia (maszyna → priorytet → Wyślij, bez otwierania okna), pod nim awarie
      linii z „Czy maszyna ruszyła?”. Szkielet ekranu powstaje raz — kolejne rysowania zmieniają tylko listę, żeby
      przerysowanie co 20 s nie kasowało tego, co lider właśnie wybiera. */
@@ -333,7 +333,7 @@
     klasa: 'ok', akcja: () => potwierdz(w.id),
     html: `<b>${esc(w.maszyna)} naprawiona</b> — potwierdź, że ${rusza()} ruszyła ›` })));
 
-  // Plakietka na zakładce „⚠️ Awaria”: ile aktywnych na linii.
+  // Plakietka na zakładce „Awaria”: ile aktywnych na linii.
   L.poRysowaniu.push(() => L.plakietka('awarie', wiersze(a => a.aktywny).length));
 
   // Komunikat, gdy UR zmieni status mojej awarii — lider nie musi patrzeć w listę.

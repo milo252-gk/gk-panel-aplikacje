@@ -30,9 +30,9 @@
     $('kal-tytul').textContent = `Najbliższe ${stan.dniAgendy} dni`;
     $('kal-agenda').innerHTML = (dni.map(c => `
       <section class="kal-agenda-dzien${c.swieto ? ' swieto' : ''}">
-        <h3><button type="button" class="kal-dzien-link" data-dzien="${c.data}" title="Szczegóły dnia">${esc(nazwaDnia(c))} ›</button>${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}</h3>
+        <h3><button type="button" class="kal-dzien-link" data-dzien="${c.data}" title="Szczegóły dnia">${esc(nazwaDnia(c))}${P.ik('szewron-prawo', 14).replace('class="ik"', 'class="ik po"')}</button>${c.swieto ? ` <span class="znacznik alarm">${esc(c.swieto)}</span>` : ''}</h3>
         ${c.pozycje.map(p => `<article class="kal-pozycja">
-          <div class="opis"><div><b>${p.checklista ? '☑ ' : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}</div>
+          <div class="opis"><div><b>${p.checklista ? P.ik('lista', 14) : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}</div>
             <div class="slaby">${p.godziny.length ? `${esc(p.godziny.join(', '))} · ` : ''}${esc(p.dla || '')}</div></div></article>`).join('')}
       </section>`).join('') || `<p class="pusto">Nic nie jest zaplanowane na najbliższe ${stan.dniAgendy} dni.</p>`)
       + (stan.dniAgendy < 90 ? '<div class="przyciski"><button type="button" class="maly" data-agenda-wiecej>Pokaż dalej (+14 dni)</button></div>' : '');
@@ -76,7 +76,7 @@
     if (!s) return '';
     const wyst = s.wystapienia.map(x => `<li><b>${esc(x.zmiana || 'Zlecenie')}</b> ${esc(x.start)}${x.termin ? `–${esc(x.termin)}` : ''}${x.od ? ` <span class="slaby">(do zrobienia od ${esc(x.od)})</span>` : ''}${
       x.pozycje.length ? `<ol class="kal-pozycje">${x.pozycje.map(q => `<li><span class="slaby">${esc(q.od ? `${q.od}–${q.godz}` : q.godz)}</span> <b>${esc(q.nazwa)}</b>${
-        q.maszyny.length ? ` <span class="slaby">· ${q.maszyny.length > 3 ? `${q.maszyny.length} maszyn` : esc(q.maszyny.join(', '))}${q.skan ? ' · ▣ skan każdej' : ''}</span>` : ''}${
+        q.maszyny.length ? ` <span class="slaby">· ${q.maszyny.length > 3 ? `${q.maszyny.length} maszyn` : esc(q.maszyny.join(', '))}${q.skan ? ' · ' + P.ik('skan', 14) + 'skan każdej' : ''}</span>` : ''}${
         q.zdjecie ? ' ' + P.ik('aparat') : ''}${q.notatka ? ' ' + P.ik('notatka') : ''}${q.opis ? `<div class="slaby kal-opis">${esc(q.opis)}</div>` : ''}</li>`).join('')}</ol>` : ''}</li>`).join('');
     return `<details class="kal-szczegoly"><summary>Szczegóły</summary>
       ${s.opis ? `<p class="kal-opis">${esc(s.opis)}</p>` : ''}
@@ -94,7 +94,7 @@
     const wiersze = c.pozycje.map(p => `
       <article class="kal-pozycja${p.pominiety ? ' pominieta' : ''}" ${p.kod ? `data-kod="${esc(p.kod)}"` : ''}>
         <div class="opis">
-          <div><b>${p.checklista ? '☑ ' : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}
+          <div><b>${p.checklista ? P.ik('lista', 14) : ''}${esc(p.tytul)}</b> ${p.zaplanowane ? '<span class="znacznik neutral">Zaplanowane</span>' : ''}
             ${p.pominiety ? `<span class="znacznik">${esc(p.pominiety === 'pominięty' ? 'Pominięte' : `Pominięte — ${p.pominiety}`)}</span>` : ''}</div>
           <div class="slaby">${p.godziny.length ? esc(p.godziny.join(', ')) + ' · ' : ''}${esc(p.dla || '')}</div>
           ${szczegolyHtml(p)}
@@ -106,7 +106,7 @@
           <button type="button" class="maly" data-akcja="zmien">Zmień</button></div>` : ''}
       </article>`).join('');
     const zlecone = (c.zlecone || []).map(z => `<li><span class="slaby">${esc(z.godz)}</span> <b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)} · ${esc(z.status)}${
-      z.postep ? ` · ☑ ${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · ' + P.ik('powtarzaj') : ''}</span></li>`).join('');
+      z.postep ? ` · ${P.ik('lista', 14)}${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · ' + P.ik('powtarzaj') : ''}</span></li>`).join('');
     el.innerHTML = `<h3>${c.przeszly ? 'Było zaplanowane' : 'Zaplanowane'}</h3>`
       + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Nowe stałe zlecenie: Zapisane → „+ Nowe zapisane”.' : ''}</p>`)
       + (zlecone ? `<h3>Zlecone tego dnia (${c.zlecone.length})</h3><ul class="kal-zlecone">${zlecone}</ul>` : '');

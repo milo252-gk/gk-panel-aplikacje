@@ -159,7 +159,7 @@
     const wyniki = d.punkty || {};
     const licznik = hala.obiekt('licznik_maszyny', d.maszyna);
     let akcje = '';
-    if (p.status === 'zaplanowany' && UR.mozna('przeglad.rozpoczety')) akcje += '<button type="button" class="glowny szeroki duzy wlasny-skan" id="zacznij">▣ Skanuj maszynę i zacznij</button>';
+    if (p.status === 'zaplanowany' && UR.mozna('przeglad.rozpoczety')) akcje += `<button type="button" class="glowny szeroki duzy wlasny-skan" id="zacznij">${UR.ik('skan', 20)}Skanuj maszynę i zacznij</button>`;
     // Etap 3: „W trakcie” też da się usunąć (kierownik UR) — przegląd porzucony w połowie nie wisi w planie na zawsze;
     // usunięty po terminie liczy się w % planu jako niewykonany (W.wykonaniePlanu).
     if ((p.status === 'zaplanowany' || p.status === 'w_trakcie') && UR.mozna('przeglad.anulowany') && W.dozwolonyZ(hala.kontrakt, 'przeglad.anulowany', p.status))

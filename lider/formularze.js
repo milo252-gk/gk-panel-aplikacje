@@ -69,8 +69,8 @@
       html: `<form class="formularz" novalidate>
         ${zeStanowiskami ? `<label>Stanowisko
           <div class="rzad"><select name="stanowisko">${opcjeStanowisk(linia, d.stanowisko)}</select>
-          <button type="button" data-skan="stanowisko" aria-label="Skanuj stanowisko albo maszynę">▣</button></div></label>`
-          : '<button type="button" data-skan="stanowisko">▣ Skanuj QR maszyny</button>'}
+          <button type="button" data-skan="stanowisko" aria-label="Skanuj stanowisko albo maszynę">${L.ik('skan', 20)}</button></div></label>`
+          : `<button type="button" data-skan="stanowisko">${L.ik('skan', 18)}Skanuj QR maszyny</button>`}
         ${wyroby.length ? `<label>Wyrób<select name="wyrob"><option value="">—</option>${wyroby.map(w => `<option value="${esc(w.kod)}">${esc(w.kod)} ${esc(w.nazwa)}</option>`).join('')}</select></label>` : ''}
         <div class="liczby-proby">
           <label>Sprawdzone<input name="sprawdzone" type="number" inputmode="numeric" min="1" step="1"></label>
@@ -87,7 +87,7 @@
           <fieldset><legend>Zlecenie</legend>
             <div class="pole-zlecenia"></div>
             <div class="rzad"><input name="numer" placeholder="Numer zlecenia (opcjonalnie)" autocapitalize="characters">
-            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">▣</button></div>
+            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">${L.ik('skan', 20)}</button></div>
           </fieldset>
           <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000"></textarea></label>
           <label>Działania korygujące<textarea name="dzialania" rows="2" maxlength="2000"></textarea></label>
@@ -467,7 +467,7 @@
     const lista = k.lista && ((k.lista.dane || {}).pozycje || []).length ? k.lista : k.zl;
     for (const p of ((lista && lista.dane) || {}).pozycje || []) nazwy[p.id] = p.nazwa;
     const n = ids => esc(ids.map(id => nazwy[id] || id).join(', '));
-    // Test właściciela 2026-10-13: „po terminie” mieszało zrobione z opóźnieniem (✔ późno) z niezrobionymi — lider nie
+    // Test właściciela 2026-10-13: „po terminie” mieszało zrobione z opóźnieniem (haczyk, późno) z niezrobionymi — lider nie
     // wiedział, czego naprawdę brakuje. W zdarzeniu zostaje jedna lista opoznione (§6.4); tu dzielimy ją na dwie.
     const wyk = ((lista && lista.dane) || {}).wykonane || {};
     const brak = r.checklista.opoznione.filter(id => !wyk[id]), pozno = r.checklista.opoznione.filter(id => wyk[id]);

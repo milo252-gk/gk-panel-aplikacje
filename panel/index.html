@@ -46,9 +46,10 @@
 <div id="aplikacja" class="aplikacja hala-uklad" hidden>
   <!-- D1 z oceny UX (właściciel 2026-11-18): gdy dźwięk jest wyłączony (🔕) albo przeglądarka go blokuje („Włącz dźwięk”), na górze stoi wyraźny
        pasek z jednym przyciskiem — kierownik nie przegapi awarii przez ciszę. Rysuje go panel.js (rysujDzwiek); konto ekranu (monitor) bez paska. -->
-  <div id="pasek-dzwieku" class="pasek-dzwieku" role="status" hidden>
-    <span id="pasek-dzwieku-tekst"></span>
-    <button type="button" id="pasek-dzwieku-wlacz" class="maly">Włącz dźwięk</button>
+  <div id="pasek-dzwieku" class="baner-dzwieku" role="status" hidden>
+    <span class="ikona" aria-hidden="true"><span class="ik" data-ikona="glos-wyl" data-rozmiar="20"></span></span>
+    <span id="pasek-dzwieku-tekst" class="baner-tekst">Dźwięk wyłączony — włącz</span>
+    <button type="button" id="pasek-dzwieku-wlacz">Włącz</button>
   </div>
   <!-- Menu jak w GK Trasy i GK Flota: po lewej na komputerze i tablecie, dolny pasek na telefonie. -->
   <nav class="hala-menu zakladki" aria-label="Menu" role="tablist">
@@ -81,7 +82,8 @@
       <!-- Właściciel 2026-11-10: to samo okno co „+ Nowe zlecenie” w Zleceniach i pod tym samym warunkiem (kierownik zakładu, admin). -->
       <button type="button" id="pulpit-nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
     </div>
-    <!-- D87 (właściciel 2026-11-17): odbiór checklisty jest w karcie obchodu (panel.js: rysujKafelki → „Do odbioru”), nie w osobnej sekcji. -->
+    <!-- Właściciel 2026-11-18: sekcji „Jakość i BHP” i kafelka jakości już nie ma (BHP i jakość są w checklistach); kolejność Pulpitu: liczby → Obchody → Awarie (zwarty pasek).
+         D87 (właściciel 2026-11-17): odbiór checklisty jest w karcie obchodu (panel.js: rysujKafelki → „Do odbioru”), nie w osobnej sekcji. -->
     <section class="obchody" aria-labelledby="t-obchody">
       <h2 id="t-obchody">Obchody</h2>
       <div id="kafelki" class="kafelki"></div>
@@ -90,12 +92,6 @@
       <h2 id="t-awarie">Awarie <span id="licznik-awarii" class="licznik"></span></h2>
       <div id="lista-awarii" class="lista"></div>
       <p id="jeszcze-awarie" class="jeszcze" hidden></p>
-    </section>
-    <section class="jakosc" aria-labelledby="t-jakosc">
-      <h2 id="t-jakosc">Jakość i BHP — ta zmiana <span id="licznik-jakosci" class="licznik"></span></h2>
-      <div id="lista-jakosci" class="lista"></div>
-      <p id="jeszcze-jakosc" class="jeszcze" hidden></p>
-      <p id="wczesniej" class="wczesniej" hidden></p>
     </section>
   </div>
 
@@ -165,9 +161,9 @@
            zlecą zapisane stałe i zaplanowane na później; dotknięcie dnia — lista z „Pomiń ten dzień” (kalendarz.js). -->
       <div id="zlecenia-kalendarz" class="zlecenia-czesc" hidden>
         <div class="kal-nawigacja">
-          <button type="button" class="maly" data-kal="-1" aria-label="Poprzedni miesiąc">‹</button>
+          <button type="button" class="maly" data-kal="-1" aria-label="Poprzedni miesiąc"><span class="ik" data-ikona="szewron-lewo" data-rozmiar="18"></span></button>
           <h3 id="kal-tytul" aria-live="polite"></h3>
-          <button type="button" class="maly" data-kal="1" aria-label="Następny miesiąc">›</button>
+          <button type="button" class="maly" data-kal="1" aria-label="Następny miesiąc"><span class="ik" data-ikona="szewron-prawo" data-rozmiar="18"></span></button>
           <button type="button" class="maly" data-kal="0">Dziś</button>
           <span class="kal-widok" role="group" aria-label="Widok kalendarza">
             <button type="button" class="chip maly" data-kal-widok="miesiac" aria-pressed="true">Miesiąc</button>
@@ -320,7 +316,7 @@
           <div class="zaznaczenia">
             <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia" checked> <span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Wymagaj zdjęcia</label>
             <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki" checked> <span class="ik" data-ikona="notatka" data-rozmiar="16"></span>Wymagaj notatki</label>
-            <label class="zaznacz" title="Dział zamknie zlecenie dopiero po zeskanowaniu naklejki QR tej maszyny"><input type="checkbox" name="wymagaj_skanu"> ▣ Wymagaj skanu QR maszyny</label>
+            <label class="zaznacz" title="Dział zamknie zlecenie dopiero po zeskanowaniu naklejki QR tej maszyny"><input type="checkbox" name="wymagaj_skanu"> <span class="ik" data-ikona="skan" data-rozmiar="16"></span>Wymagaj skanu QR maszyny</label>
           </div>
           <p class="slaby konto-drobne" data-bez-maszyny>Skan QR — najpierw wybierz maszynę.</p>
         </fieldset>
@@ -426,8 +422,8 @@
       <!-- Podgląd przed zapisem (badanie: inne narzędzia pokazują terminy dopiero po zapisie): miesiąc z dniami zlecenia,
            dotknięcie dnia — pomiń/przywróć, przy „w dni wybrane w kalendarzu” — dodaj/zabierz. -->
       <div class="mini-kalendarz" id="stale-kalendarz">
-        <div class="kal-nawigacja"><button type="button" class="maly" data-mkal="-1" aria-label="Poprzedni miesiąc">‹</button>
-          <b id="stale-kal-tytul"></b><button type="button" class="maly" data-mkal="1" aria-label="Następny miesiąc">›</button></div>
+        <div class="kal-nawigacja"><button type="button" class="maly" data-mkal="-1" aria-label="Poprzedni miesiąc"><span class="ik" data-ikona="szewron-lewo" data-rozmiar="18"></span></button>
+          <b id="stale-kal-tytul"></b><button type="button" class="maly" data-mkal="1" aria-label="Następny miesiąc"><span class="ik" data-ikona="szewron-prawo" data-rozmiar="18"></span></button></div>
         <div class="kal-siatka mala" id="stale-kal-siatka" role="grid" aria-label="Dni zlecenia"></div>
         <p class="slaby konto-drobne" id="stale-kal-opis"></p>
       </div>
@@ -458,7 +454,7 @@
       <div class="zaznaczenia">
         <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia"> <span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Wymagaj zdjęcia</label>
         <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki"> <span class="ik" data-ikona="notatka" data-rozmiar="16"></span>Wymagaj notatki</label>
-        <label class="zaznacz" title="Dział zamknie zlecenie dopiero po zeskanowaniu naklejki QR tej maszyny"><input type="checkbox" name="wymagaj_skanu"> ▣ Wymagaj skanu QR maszyny</label>
+        <label class="zaznacz" title="Dział zamknie zlecenie dopiero po zeskanowaniu naklejki QR tej maszyny"><input type="checkbox" name="wymagaj_skanu"> <span class="ik" data-ikona="skan" data-rozmiar="16"></span>Wymagaj skanu QR maszyny</label>
       </div>
       <p class="slaby konto-drobne" data-bez-maszyny>Skan QR — najpierw wybierz maszynę.</p>
     </fieldset>

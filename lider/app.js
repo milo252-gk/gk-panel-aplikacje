@@ -29,6 +29,7 @@
 
   const Lider = window.Lider = {
     hala, W, $, esc, pamiec,
+    ik: (nazwa, rozmiar) => (window.GKIkony && window.GKIkony.html(nazwa, rozmiar) ? `<span class="ik">${window.GKIkony.html(nazwa, rozmiar)}</span>` : ''),   // ikona liniowa z gk-ikony.js w <span class="ik"> (puste bez pliku ikon)
     ekrany: {},                 // nazwa -> { rysuj() } — wypełniają pliki ekranów
     wezwania: [],               // funkcje -> [{ klasa, html, akcja }] — pasek wezwań nad każdym ekranem
     poRysowaniu: [],            // funkcje wołane po każdym przerysowaniu (np. ekran blokujący alertu)
@@ -135,7 +136,7 @@
   };
 
   /* Pytanie tak/nie w oknie aplikacji (jak UR.potwierdz i KJ.potwierdz) — zamiast confirm() przeglądarki,
-     który na telefonie wygląda obco i podpisuje się adresem strony. Zamknięcie okna (✕, Esc) = „nie”. */
+     który na telefonie wygląda obco i podpisuje się adresem strony. Zamknięcie okna (przycisk zamknij, Esc) = „nie”. */
   Lider.potwierdz = (tytul, tresc, tak, nie) => new Promise(ok => {
     let wynik = false;
     Lider.okno({
@@ -229,7 +230,7 @@
     async function rysuj() {
       const miniatury = await Promise.all(lista.map(async id => `<figure class="miniatura">
         <img src="${esc(await hala.adresPliku(id))}" alt="Zdjęcie">
-        <button type="button" class="usun" data-usun="${esc(id)}" aria-label="Usuń zdjęcie">✕</button></figure>`));
+        <button type="button" class="usun" data-usun="${esc(id)}" aria-label="Usuń zdjęcie">${Lider.ik('zamknij', 18)}</button></figure>`));
       kontener.innerHTML = `<div class="zdjecia">${miniatury.join('')}
         ${lista.length < o.maks ? `<label class="przycisk dodaj-zdjecie">${window.GKIkony ? `<span class="ik">${window.GKIkony.html('aparat', 18)}</span>` : ''}${esc(o.etykieta)}
           <input type="file" accept="image/*" capture="environment" hidden></label>` : ''}</div>`;
@@ -249,7 +250,7 @@
         b.addEventListener('click', () => {
           const i = lista.indexOf(b.dataset.usun);
           if (i >= 0) lista.splice(i, 1);
-          hala.usunPlik(b.dataset.usun).catch(() => {});      // etap 3: ✕ naprawdę usuwa plik z telefonu, nie tylko z listy
+          hala.usunPlik(b.dataset.usun).catch(() => {});      // etap 3: usunięcie zdjęcia naprawdę usuwa plik z telefonu, nie tylko z listy
           naZmiane();
           rysuj();
         });
@@ -559,13 +560,13 @@
 
   function rysujNaglowek() {
     const linia = Lider.stan.linia;
-    // Jedna linia w zakładzie (D51): sama nazwa, bez ▾ i bez okna wyboru z jedną pozycją.
+    // Jedna linia w zakładzie (D51): sama nazwa, bez szewronu i bez okna wyboru z jedną pozycją.
     const wiele = W.wieleLinii(hala.slowniki);
     $('wybor-linii').classList.toggle('jedna', !wiele);
     $('wybor-linii').tabIndex = wiele ? 0 : -1;
     $('wybor-linii').setAttribute('aria-label', wiele ? 'Zmień linię' : 'Linia: ' + W.nazwaLinii(hala.slowniki, linia));
     $('wybor-linii').innerHTML = wiele
-      ? `<b>${esc(linia || '—')}</b> <span>${esc(W.nazwaLinii(hala.slowniki, linia).replace(/^.*?—\s*/, ''))}</span> ▾`
+      ? `<b>${esc(linia || '—')}</b> <span>${esc(W.nazwaLinii(hala.slowniki, linia).replace(/^.*?—\s*/, ''))}</span>${Lider.ik('szewron-dol', 14)}`
       : `<span>${esc(W.nazwaLinii(hala.slowniki, linia))}</span>`;
     const z = hala.zmianaTeraz();
     $('opis-zmiany').innerHTML = z
@@ -619,7 +620,7 @@
   Lider.pokazEkran = (nazwa, opcje) => {
     if (nazwa !== Lider.stan.ekran && !(opcje && opcje.bezHistorii)) wHistorii(nazwa);
     Lider.stan.ekran = nazwa;
-    // Ekrany schowane w „☰ Więcej” (D74) podświetlają w menu „Więcej”.
+    // Ekrany schowane w „Więcej” (D74) podświetlają w menu „Więcej”.
     const wMenu = nazwa === 'koniec' || nazwa === 'moje' ? 'wiecej' : nazwa;
     for (const b of document.querySelectorAll('.dolny [data-ekran]')) {
       if (b.dataset.ekran === wMenu) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -679,7 +680,7 @@
   };
   Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji, najpierwPrzyjmij: Lider.najpierwPrzyjmij }, Lider.dzialZlecen());
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.opcjeZlecen()) };
-  /* D74 „☰ Więcej” — jak w UR i KJ: rzadziej używane rzeczy Lidera; ustawienia, linia i zespół są w Moim koncie. */
+  /* D74 „Więcej” — jak w UR i KJ: rzadziej używane rzeczy Lidera; ustawienia, linia i zespół są w Moim koncie. */
   Lider.ekrany.wiecej = {
     rysuj(el) {
       const k = Lider.stan.kolejka || {};
@@ -703,7 +704,7 @@
   Lider.ekrany.moje = { rysuj: el => HalaDzialania.mojeZgloszenia(el, hala) };
   Lider.poRysowaniu.push(() => Lider.plakietka('wiecej', ((Lider.stan.kolejka || {}).odrzucone || 0) + ((Lider.stan.kolejka || {}).plikiOdrzucone || 0)));
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
-  // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  // D56: „Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (window.HalaDzialania) HalaDzialania.przyciskSkanu(hala, { zlecenia: Lider.dzialZlecen, otworzZlecenia: () => Lider.pokazEkran('zlecenia'),
                                                                komunikat: t => Lider.komunikat(t, 'info') });
   HalaZlecenia.sledz(hala, Lider.dzialZlecen, (z, o) => {

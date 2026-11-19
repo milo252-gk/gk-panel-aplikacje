@@ -266,7 +266,7 @@
 
   /* Karta awarii (UI etap 2, „mniej na karcie”): na wierzchu jeden duży przycisk następnego kroku (Jadę / Na miejscu —
      skanuj / Zakończ naprawę… — główny z akcjeAwarii) i kroki zmieniające stan (Wstrzymaj, przejęcie cudzej awarii);
-     rzadkie rzeczy — przekazanie, notatka, priorytet, fałszywy alarm — pod „Więcej ▾”. Gdy na wierzchu nie byłoby nic
+     rzadkie rzeczy — przekazanie, notatka, priorytet, fałszywy alarm — pod „Więcej”. Gdy na wierzchu nie byłoby nic
      (np. czeka na lidera: zostaje priorytet i notatka), nie chowamy ich za „Więcej” — jedno dotknięcie mniej. */
   const KROKI_WIECEJ = ['awaria.przypisana', 'awaria.komentarz', 'awaria.sklasyfikowana', 'awaria.anulowana'];
   function ukladAkcji(akcje) {

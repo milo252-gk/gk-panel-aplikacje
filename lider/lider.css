@@ -4,6 +4,13 @@
    Układ na telefon (jedna kolumna), na tablecie wyśrodkowany do 720 px.
    Pola dotyku min. var(--dotyk) = 52 px, bo lider bywa w rękawicach.                          */
 
+/* Szewrony rozwijania (zamiast znaków tekstowych w ::before/::after): maska z rysunku gk-ikony.js, kolor = currentColor,
+   cztery kierunki zamiast obracania (STYL-GK §8, MAPOWANIE-IKON). */
+:root { --szew-prawo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E"); --szew-dol: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); --szew-gora: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 15l-6-6-6 6'/%3E%3C/svg%3E"); }
+button[aria-label] > .ik, .usun-zdjecie .ik, .miniatura .usun .ik { margin-right: 0; }   /* przycisk tylko z ikoną: bez odstępu na napis */
+.tylko-czytnik { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#wybor-linii .ik { margin: 0 0 0 4px; }
+.pozycja .stan .ik { margin-right: 0; }
 .slaby { color: var(--tekst-slaby); }
 .maly { font-size: .85em; }
 .blad, .tekst-alarm { color: var(--czerwony); font-weight: 600; }
@@ -26,7 +33,7 @@ body.z-oknem, body.z-blokada { overflow: hidden; }
 
 /* ---------------------------------------------------------------- logowanie (karta GK z hala.css) */
 
-/* Pole identyfikatora z 📷 (.rzad): wspólne w hala.css — ten sam wzór w UR i KJ. */
+/* Pole identyfikatora z ikoną aparatu (.rzad): wspólne w hala.css — ten sam wzór w UR i KJ. */
 .pinpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .pinpad[hidden] { display: none; }   /* D43: przy haśle klawiatura cyfr schowana (pełna klawiatura telefonu) */
 .pinpad button { min-height: 60px; font-size: 1.4em; padding: 0; }
@@ -74,7 +81,7 @@ body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
 
 .lista, .lista-prosta { list-style: none; margin: 0; padding: 0; }
 .lista-prosta li { padding: 10px 0; border-bottom: 1px solid var(--ramka); }
-.lista-prosta pre { white-space: pre-wrap; font-size: .8em; }
+.lista-prosta pre { white-space: pre-wrap; font-size: .85em; }
 .wiersz { display: flex; align-items: center; gap: 10px; min-height: var(--dotyk); padding: 6px 10px; margin: 6px 0;
   background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); cursor: pointer; }
 .wiersz .czas { font-variant-numeric: tabular-nums; color: var(--tekst-slaby); min-width: 3.2em; }
@@ -110,7 +117,7 @@ h3.sekcja-listy { margin: 14px 2px 2px; font-size: 1em; }
 .pozycja .ikona-typu { width: 1.4em; text-align: center; }
 .pozycja .tresc { flex: 1; }
 .pozycja .pozycja-zwrot { display: block; color: var(--czerwony); font-size: .85em; font-weight: 600; }      /* D87: pozycja zwrócona przez kierownika */
-.pozycja .stan { font-size: .85em; font-weight: 600; text-align: right; }
+.pozycja .stan { font-size: 13px; font-weight: 600; text-align: right; }
 .pozycja.stan-wykonana { border-left-color: var(--zielony); opacity: .75; }
 .pozycja.stan-wykonana .stan { color: var(--zielony); font-size: 1.2em; }
 .pozycja.stan-pominieta { border-left-color: var(--szary); opacity: .7; }
@@ -185,14 +192,15 @@ h3.sekcja-listy { margin: 14px 2px 2px; font-size: 1em; }
 .liczba-wyliczona { display: grid; gap: 4px; font-weight: 600; font-size: .95em; }
 .liczba-wyliczona output { min-height: var(--dotyk); display: flex; align-items: center; justify-content: center; font-size: 1.3em;
   border: 1px dashed var(--ramka-mocna); border-radius: var(--promien); background: var(--tlo-neutralne); font-variant-numeric: tabular-nums; }
-/* „▸ Więcej” — rzadziej wypełniane pola zwinięte; strzałka zamiast znacznika przeglądarki (wszędzie ta sama). */
+/* „Więcej” z szewronem — rzadziej wypełniane pola zwinięte; strzałka zamiast znacznika przeglądarki (wszędzie ta sama). */
 details.wiecej > summary { list-style: none; cursor: pointer; font-weight: 600; min-height: var(--dotyk); display: flex; align-items: center; }
 details.wiecej > summary::-webkit-details-marker { display: none; }
-details.wiecej > summary::before { content: '▸'; display: inline-block; width: 1.2em; }
-details.wiecej[open] > summary::before { content: '▾'; }
+details.wiecej > summary::before { content: ''; width: 1.2em; height: 16px; margin-right: 2px; background: currentColor;
+  -webkit-mask: var(--szew-prawo) center / 16px no-repeat; mask: var(--szew-prawo) center / 16px no-repeat; }
+details.wiecej[open] > summary::before { -webkit-mask-image: var(--szew-dol); mask-image: var(--szew-dol); }
 details.wiecej[open] { display: grid; gap: 12px; }
 
-/* Ekran ⚠️ Awaria (UI etap 2): zgłoszenie na górze, od razu do wypełnienia, pod nim awarie linii. */
+/* Ekran Awaria (UI etap 2): zgłoszenie na górze, od razu do wypełnienia, pod nim awarie linii. */
 .karta.zgloszenie-awarii { border-top: 6px solid var(--czerwony); }
 .karta.zgloszenie-awarii > h2 { margin-top: 0; }
 .zgloszenie-awarii .wyczysc { justify-self: center; }
@@ -228,7 +236,7 @@ details.wiecej[open] { display: grid; gap: 12px; }
 .hala-uklad > .dolny > button.awaria[aria-current="page"] { box-shadow: inset 0 -4px 0 var(--na-barwie); }
 .hala-uklad > .dolny > button.awaria .plakietka { background: var(--na-barwie); color: var(--czerwony); }
 .plakietka { position: absolute; top: 6px; right: calc(50% - 26px); min-width: 20px; height: 20px; border-radius: 10px; background: var(--czerwony);
-  color: var(--na-barwie); font-size: .8em; line-height: 20px; padding: 0 5px; box-sizing: border-box; }
+  color: var(--na-barwie); font-size: .85em; line-height: 20px; padding: 0 5px; box-sizing: border-box; }
 
 /* Komputer i tablet poziomo: nawigacja to menu po lewej (hala.css), więc bez miejsca na dolny pasek,
    a ekran może być szerszy niż telefon. */
@@ -265,7 +273,7 @@ details.wiecej[open] { display: grid; gap: 12px; }
 
 /* Wygląd i miejsce dymków (#komunikaty .komunikat) — wspólne w hala.css, jak w GK Trasy. */
 
-/* D74 „☰ Więcej” (jak UR i KJ): przyciski jeden pod drugim, na całą szerokość. */
+/* D74 „Więcej” (jak UR i KJ): przyciski jeden pod drugim, na całą szerokość. */
 .menu-wiecej { display: grid; gap: 10px; margin: 12px 0; }
 .menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }
 .opis-pozycji { margin: 8px 0; white-space: pre-line; }

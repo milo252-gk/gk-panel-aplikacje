@@ -336,7 +336,7 @@
   }
 
   /* Klucz brudnopisu próby jakościowej — z ZMIANĄ (przegląd 2026-10-06). Id pozycji checklisty powtarzają się co zmianę,
-     a „start” i QR to tylko wartości domyślne: brudnopis porzucony wczoraj (okno zamknięte ✕) wstawał dziś przy tej samej
+     a „start” i QR to tylko wartości domyślne: brudnopis porzucony wczoraj (okno zamknięte przyciskiem zamknij) wstawał dziś przy tej samej
      pozycji z wczorajszym czasem rozpoczęcia i wczorajszym skanem — KJ liczyła taką próbę do złej zmiany. */
   function kluczBrudnopisuProby(linia, zmianaId, pozycja) {
     return `proba:${linia}:${zmianaId || '-'}:${pozycja || 'dodatkowa'}`;
@@ -697,7 +697,7 @@
     return { ok: false, powod: 'To kod linii. Zeskanuj naklejkę na maszynie.' };
   }
 
-  /* Klucz brudnopisu formularza — ze ZMIANĄ (jak kluczBrudnopisuProby). Formularz zamknięty ✕ zostawia brudnopis, a bez
+  /* Klucz brudnopisu formularza — ze ZMIANĄ (jak kluczBrudnopisuProby). Formularz zamknięty przyciskiem zamknij zostawia brudnopis, a bez
      zmiany w kluczu wstawał po dniach: AWARIA otwierała się z wczorajszą maszyną, priorytetem i notatką, i jedno dotknięcie
      „Wyślij” szło do UR ze starymi danymi. dopisek — osobny brudnopis, np. zgłoszenie BHP z konkretnego audytu: inaczej
      stary brudnopis „+ Zgłoszenie BHP” przykrywał niezgodności wpisane przez audyt. */
@@ -753,7 +753,7 @@
   /* Czy w zgłoszeniu awarii coś już jest (maszyna, priorytet, notatka, zdjęcie). */
   const zgloszenieZaczete = d => !!d && !!(d.maszyna || d.priorytet || String(d.opis || '').trim() || (d.zdjecia || []).length);
 
-  /* Formularz „Zgłoś awarię” stoi na górze ekranu ⚠️ Awaria, w treści ekranu — a ekran przerysowuje się co 20 s i po każdym
+  /* Formularz „Zgłoś awarię” stoi na górze ekranu Awaria, w treści ekranu — a ekran przerysowuje się co 20 s i po każdym
      zdarzeniu. Budujemy go od nowa tylko, gdy trzeba: pierwszy raz, po zmianie linii albo na nowej zmianie, ale wtedy
      tylko PUSTY. Zaczęte o 13:59 zgłoszenie nie może zniknąć liderowi spod palców o 14:00 — awaria nie należy do zmiany,
      więc wysyła się normalnie. obecny = { linia, zmianaId, dane } albo null. */

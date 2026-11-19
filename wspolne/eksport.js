@@ -81,7 +81,7 @@
           : `<span>${esc(RODZAJE[moje[0]].nazwa)}</span>`}
         <label>od <input type="date" name="od" value="${esc(s.od)}"></label>
         <label>do <input type="date" name="do" value="${esc(s.do)}"></label>
-        <button type="submit" class="glowny">⬇ Pobierz CSV</button>
+        <button type="submit" class="glowny">${global.GKIkony ? `<span class="ik">${global.GKIkony.html('pobierz', 16)}</span>` : ''}Pobierz CSV</button>
         <span class="hala-eksport-uwaga">${hala.polaczenie && hala.polaczenie.online === false ? 'Brak sieci — pobieranie wymaga połączenia z serwerem.' : 'Wymaga połączenia z serwerem.'}</span>
       </form>`;
     const f = el.querySelector('form');

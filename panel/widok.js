@@ -448,7 +448,7 @@
         termin: isNaN(termin) ? null : `${dataKrotka(termin)} ${godzina(termin)}`,
         poTerminie: po,
         // ⏰ — znacznik „po terminie” na wierszu (UI etap 2: osobnego filtra już nie ma).
-        spoznienie: po ? `⏰ spóźnione o ${H().formatCzasu(teraz - termin)}`
+        spoznienie: po ? `spóźnione o ${H().formatCzasu(teraz - termin)}`
           : spoznioneWykonanie ? `wykonane ${H().formatCzasu(wykonano - termin)} po terminie`
           : przepadlo ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})`
             // D78: hub albo tunel nie działał w czasie zadania — telefon mógł go nie dostać; terminowość tego nie liczy.
@@ -547,7 +547,7 @@
     const doOdbioru = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length + ((inne && inne.czeka) || 0);
     const przepadlo = l.filter(z => z.status === 'przepadlo').length;
     return [
-      { filtr: 'otwarte', napis: `W toku${wToku ? ` · ${wToku}` : ''}${po ? ` · ⏰ ${po}` : ''}`, alarm: po > 0 },
+      { filtr: 'otwarte', napis: `W toku${wToku ? ` · ${wToku}` : ''}`, po, alarm: po > 0 },   // po — liczba po terminie; Panel rysuje ją z ikoną zegara
       { filtr: 'do-zamkniecia', napis: `Do odbioru${doOdbioru ? ` · ${doOdbioru}` : ''}`, alarm: !!(inne && inne.alarm) },
       { filtr: 'zamkniete', napis: `Zamknięte${przepadlo ? ` · przepadło ${przepadlo}` : ''}`, alarm: przepadlo > 0 },
     ];
@@ -677,9 +677,7 @@
       { kod: 'stoi', etykieta: naMaszyny ? MASZYNA_STOI : 'Stoi linii', liczba: stoi, klasa: klasa(stoi, 'pilne') },
       { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'pilne') },
       { kod: 'obchody', etykieta: 'Opóźnione obchody', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
-      { kod: 'jakosc', etykieta: 'Jakość — zmiana', liczba: jakosc, klasa: klasa(jakosc, 'pilne') },
-      // D59: otwarte zgłoszenia BHP (każdej zmiany, aż kierownik je zamknie z opisem działań) — klik prowadzi do listy.
-      { kod: 'bhp', etykieta: 'BHP — otwarte', liczba: bhp || 0, klasa: klasa(bhp || 0, 'pilne') },
+      // Właściciel 2026-11-18: BHP i jakości nie ma na Pulpicie (są w checklistach); zgłoszenia BHP są w Zlecenia → rodzaj „BHP”.
       // „do odbioru” — tak samo jak chip w Zleceniach (kierownik odbiera albo zwraca); dwie nazwy jednej listy myliły.
       // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO ODBIORU” łamało się w wąskim kafelku.
       { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do odbioru` : null,
@@ -972,7 +970,7 @@
       opis: s.opis || '', pilne: s.priorytet === 'pilne', dla: dlaKogoPoLudzku(s, stale, pracownicy),
       linia: s.linia === LINIA_KAZDA ? 'każda linia osobno' : s.linia ? nazwaLinii(slowniki, s.linia) : '',
       maszyny: maszynyNazwy(H().maszynyPozycji(s)),
-      wymagania: [s.wymagaj_zdjecia === true ? 'zdjęcie' : '', s.wymagaj_notatki === true ? 'notatka' : '', s.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
+      wymagania: [s.wymagaj_zdjecia === true ? 'zdjęcie' : '', s.wymagaj_notatki === true ? 'notatka' : '', s.wymagaj_skanu === true ? 'skan QR' : ''].filter(Boolean),
       harmonogram: harmonogramPoLudzku(s, slowniki),
       wystapienia: lista.map(w => ({
         zmiana: (zm[String(w.zmiana).split('/')[1]] || {}).nazwa || (String(w.zmiana).split('/')[1] ? `Zmiana ${String(w.zmiana).split('/')[1]}` : ''),
@@ -987,7 +985,7 @@
     const maszyny = (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
       .map(m => (((slowniki && slowniki.maszyny) || {})[m] || {}).nazwa || m);
     return { opis: d.opis || '', pilne: d.priorytet === 'pilne', maszyny,
-             wymagania: [d.wymagaj_zdjecia === true ? 'zdjęcie' : '', d.wymagaj_notatki === true ? 'notatka' : '', d.wymagaj_skanu === true ? '▣ skan QR' : ''].filter(Boolean),
+             wymagania: [d.wymagaj_zdjecia === true ? 'zdjęcie' : '', d.wymagaj_notatki === true ? 'notatka' : '', d.wymagaj_skanu === true ? 'skan QR' : ''].filter(Boolean),
              wystapienia: [{ zmiana: '', start: godzina(start), termin: d.termin ? godzina(Date.parse(d.termin)) : '', od: '', pozycje: [] }] };
   }
 
@@ -1380,7 +1378,7 @@
       if (p.notatka) q.wymagaj_notatki = true;
       if (p.skan) {
         if (wybrane.length) q.wymagaj_skanu = true;
-        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: ▣ skan QR wymaga maszyny — wybierz maszynę (albo kilka) pod „⋯”.`);
+        else if (q.czynnosc !== 'obchod') bledy.push(`Pozycja ${nr}: skan QR wymaga maszyny — wybierz maszynę (albo kilka) pod „⋯”.`);
       }
       pozycje.push(q);
     });
@@ -2351,7 +2349,7 @@
     const formy = rodzaj === 'awarie' ? ['awaria', 'awarie', 'awarii'] : ['incydent', 'incydenty', 'incydentów'];
     const d = n % 10, s = n % 100;
     const forma = n === 1 ? formy[0] : (d >= 2 && d <= 4 && (s < 12 || s > 14)) ? formy[1] : formy[2];
-    return `▼ Przewiń — jeszcze ${n} ${forma}`;
+    return `Przewiń — jeszcze ${n} ${forma}`;
   }
 
 
@@ -2748,7 +2746,7 @@
      (dział, linia, osoba), kiedy (codziennie, w wybrane dni albo ręcznie; zmiany) i pozycje — każda to godzina od startu
      zmiany i co zrobić; czynność, maszyna i wymagania (📷 📝 ▣) tylko, gdy potrzebne. → { bledy, kod, wartosc } do
      slownik.zapisany zlecenia_stale (jeden wpis z pozycjami). Te same zasady sprawdza hub (blad_pozycji). */
-  const CZYNNOSCI_POZYCJI = [['', 'zwykła pozycja'], ['obsada', 'Raport obsady'], ['obchod', '▣ Obchód (skan QR)'],
+  const CZYNNOSCI_POZYCJI = [['', 'zwykła pozycja'], ['obsada', 'Raport obsady'], ['obchod', 'Obchód (skan QR)'],
     ['proba', 'Próba jakościowa'], ['bhp', 'Audyt BHP'], ['przekazanie', 'Przekazanie zmiany'], ['przeglad', 'Przegląd UR']];
   /* D72 (właściciel 2026-10-15: „Takie rzeczy jak raport obsady, obchód bhp itp to wszystko czynności, które zlecam.
      Wszystkie mają mieć jedną kategorię, a ja je opisuję (jeśli chcę inaczej niż jak są zapisane) i wybieram co
@@ -3153,7 +3151,7 @@
     const skany = new Set(p.map(e => e.skan).filter(Boolean));
     const zdjecia = p.reduce((n, e) => n + [].concat(e.zdjecia || []).length, 0);
     const czesci = [`${p.length} ${p.length === 1 ? 'krok' : p.length < 5 ? 'kroki' : 'kroków'}`];
-    if (maszyny.length && skany.size) czesci.push(`▣ ${maszyny.filter(m => skany.has(m)).length}/${maszyny.length}`);
+    if (maszyny.length && skany.size) czesci.push(`skan ${maszyny.filter(m => skany.has(m)).length}/${maszyny.length}`);
     if (zdjecia) czesci.push(`zdjęcia: ${zdjecia}`);
     if (p.some(e => e.uwagi)) czesci.push('notatka');
     const ost = p[p.length - 1];

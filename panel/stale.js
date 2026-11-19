@@ -23,7 +23,7 @@
     if (!ukryte.length) return widoczne.join('');
     if (ukryte.length === 1 && widoczne.length < 2) return widoczne.concat(ukryte).join('');
     const otwarte = wiecejStale.has(s.kod);
-    return widoczne.join('') + p('wiecej', `Więcej ${otwarte ? '▴' : '▾'}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
+    return widoczne.join('') + p('wiecej', `Więcej${P.ik(otwarte ? 'szewron-gora' : 'szewron-dol', 14).replace('class="ik"', 'class="ik po"')}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
       + (otwarte ? ukryte.join('') : '');
   }
 
@@ -42,8 +42,8 @@
     $('lista-stalych').innerHTML = lista.map(s => `
       <article class="staly ${s.aktywny ? '' : 'wstrzymany'}" data-kod="${esc(s.kod)}">
         <div class="opis">
-          ${s.checklista ? `<div class="slaby">☑ Checklista · ${esc(ile(s.pozycji, 'pozycja', 'pozycje', 'pozycji'))}</div>` : ''}
-          <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">' + P.ik('aparat') + '</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">' + P.ik('notatka') + '</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">▣</span>' : ''}</div>
+          ${s.checklista ? `<div class="slaby">${P.ik('lista', 14)}Checklista · ${esc(ile(s.pozycji, 'pozycja', 'pozycje', 'pozycji'))}</div>` : ''}
+          <div><b>${esc(s.tytul)}</b> ${s.wymagajZdjecia ? '<span title="Wymagane zdjęcie">' + P.ik('aparat') + '</span>' : ''}${s.wymagajNotatki ? '<span title="Wymagana notatka">' + P.ik('notatka') + '</span>' : ''}${s.wymagajSkanu ? '<span title="Wymagany skan QR maszyny">' + P.ik('skan') + '</span>' : ''}</div>
           <div class="szczegoly">
             <span class="znacznik ${s.aktywny ? 'ok' : ''}">${!s.aktywny ? 'Wstrzymane' : s.reczny ? (s.checklista ? 'Ręczna' : 'Pojedyncze') : (s.checklista ? 'Stała' : 'Stałe')}</span>
             ${s.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
@@ -53,7 +53,7 @@
           </div>
           <div class="slaby">${esc(s.harmonogram)}</div>
           ${s.nieZleca ? `<div class="ostrzezenie-stalego">Nie zleca — ${esc(s.nieZleca)}, kliknij „Zmień”</div>` : ''}
-          ${s.nieAutomat ? `<div class="ostrzezenie-stalego">⚠ Nie zleca się sama — zlecasz ją przyciskiem „Zleć teraz”.${pisze ? ' <button type="button" class="maly glowny" data-akcja="automat">Włącz automat</button>' : ''}</div>` : ''}
+          ${s.nieAutomat ? `<div class="ostrzezenie-stalego">${P.ik('ostrzezenie', 16)}Nie zleca się sama — zlecasz ją przyciskiem „Zleć teraz”.${pisze ? ' <button type="button" class="maly glowny" data-akcja="automat">Włącz automat</button>' : ''}</div>` : ''}
           ${s.aktywny && !s.reczny ? `<div class="nastepne">${s.nastepne ? `Następne: ${esc(s.nastepne)}` : 'Brak wystąpień w najbliższych dwóch miesiącach'}</div>` : ''}
         </div>
         <div class="akcje">${akcjeStalego(s, { zlecaj, pisze, qr: punkty.get(s.kod) })}</div>

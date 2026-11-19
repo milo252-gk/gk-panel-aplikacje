@@ -195,7 +195,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .znacznik { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font-size: 13px; font-weight: 700;
             line-height: 1.3; color: var(--tekst-slaby); background: var(--tlo-neutralne); }
 .znacznik.ok { background: var(--zielony-tlo); color: var(--zielony); }
-.znacznik.uwaga { background: var(--zolty-tlo); color: var(--zolty); }
+.znacznik.uwaga { background: var(--zolty-tlo); color: color-mix(in srgb, var(--zolty) 88%, black); }   /* 2026-11-19: kontrast 4,47 → 5,5:1 bez zmiany tokenu (parytet z GK Flota) */
 .znacznik.alarm { background: var(--czerwony-tlo); color: var(--czerwony); }
 .znacznik.info { background: var(--info-tlo); color: var(--granat-jasny); }
 .znacznik.neutral { background: var(--tlo-neutralne); color: var(--tekst-slaby); }
@@ -382,7 +382,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
                 box-shadow: var(--obrys-gorny), var(--cien); padding: 12px; box-sizing: border-box; }
 .hala-kafelki > * { background: var(--tlo); border: 0; border-radius: 10px; padding: 10px 8px; text-align: center;
                     box-shadow: none; color: inherit; font: inherit; min-height: 0; }
-.hala-kafelki .etykieta { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); margin-bottom: 3px; }
+.hala-kafelki .etykieta { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); margin-bottom: 3px; }
 .hala-kafelki b { display: block; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .hala-kafelki .pilne b { color: var(--czerwony); }
 .hala-kafelki .uwaga b { color: var(--zolty); }
@@ -410,6 +410,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-zlecenie-akcje .hala-wiecej { flex: 1 1 100%; min-height: var(--dotyk); border-color: transparent; background: transparent; color: var(--tekst-slaby); font-size: 14px; }
 .hala-zlecenie-wiecej-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--ramka-mocna); }
 .hala-ikona { display: inline-flex; vertical-align: -3px; margin-right: 6px; }
+.hala-ikona.po { margin: 0 0 0 4px; }                                  /* ikona za napisem (szewron „Więcej”, „Otwórz”) */
+.hala-krok-wymogu .hala-ikona, .hala-pozycja-znak .hala-ikona, .hala-checklista-naglowek .hala-ikona { margin-right: 4px; }
+.hala-pozycja-znak .hala-ikona { margin-right: 0; }
 .hala-zlecenie-wiecej-menu > * { min-height: var(--dotyk); width: 100%; box-sizing: border-box; }
 .hala-zlecenia-pusto { text-align: center; color: var(--tekst-slaby); margin: 24px 0; }
 .hala-zlecenia-naglowek { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -455,10 +458,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 /* Skan QR maszyny jako dowód (2026-10-13): ten sam przycisk co zdjęcie; po skanie zielone potwierdzenie i „Jeszcze raz”. */
 button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inherit; font-weight: 600; }
 .hala-zlecenie-skan { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; color: var(--ok); font-weight: 700; }
-.hala-zlecenie-miniatura { position: relative; width: 92px; height: 92px; border-radius: 9px; overflow: hidden; border: 1px solid var(--ramka); }
+.hala-zlecenie-miniatura { position: relative; width: 92px; height: 92px; border-radius: 10px; overflow: hidden; border: 1px solid var(--ramka); }
 .hala-zlecenie-miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .hala-zlecenie-miniatura button { position: absolute; top: 0; right: 0; width: 36px; height: 36px; min-height: 36px; padding: 0;
-                                  border-radius: 0 9px 0 9px; background: var(--grafit-ciemny); color: var(--na-barwie); border: 0; font-size: 16px; }
+                                  border-radius: 0 10px 0 10px; background: var(--grafit-ciemny); color: var(--na-barwie); border: 0; font-size: 16px; }
 .hala-zlecenie-brakuje { margin: 0; color: var(--czerwony); font-weight: 700; }
 /* Zaległe zlecenia (2026-10-02, jak „Zaległe dostawy” w GK Trasy): osobna sekcja z numerami 1, 2, 3… i czerwona karta
    na ekranie głównym działu (HalaZlecenia.rysujZalegle). Numer mówi, co zrobić najpierw — sam kolor tego nie mówi. */
@@ -495,7 +498,7 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
   width: auto; height: auto; margin: 0; padding: 0; border: 0; background: none; color: inherit; overflow: visible;
   display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none;
 }
-.komunikat { background: var(--toast-tlo); color: var(--toast-tekst); padding: 12px 17px; border-radius: 11px; font-size: 14px;
+.komunikat { background: var(--toast-tlo); color: var(--toast-tekst); padding: 12px 17px; border-radius: 10px; font-size: 14px;
              box-shadow: var(--cien-mocny); max-width: 480px; box-sizing: border-box; animation: hala-wjazd .18s; transition: opacity .25s; }
 .komunikat.ok { background: var(--zielony); color: var(--na-barwie); }
 .komunikat.blad, .komunikat.alarm { background: var(--czerwony); color: var(--na-barwie); }
@@ -527,8 +530,8 @@ body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: calc(var(--dol-wys) + 9
   display: flex; justify-content: center; pointer-events: none;
 }
 .hala-cofnij-karta { pointer-events: auto; display: flex; align-items: center; gap: 14px; background: var(--toast-tlo); color: var(--toast-tekst);
-                     padding: 6px 8px 6px 17px; border-radius: 11px; font-size: 14px; box-shadow: var(--cien-mocny); max-width: 480px; box-sizing: border-box; animation: hala-wjazd .18s; }
-.hala-cofnij-karta button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 9px; background: var(--pomarancz); color: var(--na-pomarancz); font: inherit; font-weight: 700; cursor: pointer; }
+                     padding: 6px 8px 6px 17px; border-radius: 10px; font-size: 14px; box-shadow: var(--cien-mocny); max-width: 480px; box-sizing: border-box; animation: hala-wjazd .18s; }
+.hala-cofnij-karta button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--pomarancz); color: var(--na-pomarancz); font: inherit; font-weight: 700; cursor: pointer; }
 @media (min-width: 821px) { .hala-cofnij { bottom: 18px; } }
 body.hala-ma-skan .hala-cofnij { bottom: calc(var(--dol-wys) + 84px + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 821px) { body.hala-ma-skan .hala-cofnij { bottom: 90px; } }
@@ -697,13 +700,22 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-aplikacja figcaption a { overflow-wrap: anywhere; font-size: 13px; }
 /* D64: pasek „Dźwięk powiadomień wyłączony — dotknij” (HalaDzwieki.pasek; wzór GK UR) — Lider, UR i KJ jednakowo.
    Przyklejony pod nagłówkiem, nie do przeoczenia, aż ktoś dotknie ekranu. */
-.hala-dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5; display: flex;
-  align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 4px 12px; background: var(--zolty-tlo);
-  color: var(--tekst); border-bottom: 2px solid var(--zolty); text-align: center; font-weight: 700; font-size: .9em; cursor: pointer; }
-.hala-dzwonek .ikona { font-size: 1.1em; line-height: 1; display: inline-flex; }
-.hala-dzwonek .ikona svg { width: 20px; height: 20px; display: block; }
-.hala-dzwonek { box-sizing: border-box; line-height: 1.25; }
-.hala-dzwonek[hidden] { display: none; }
+/* Jeden baner „Dźwięk wyłączony — włącz” w całej rodzinie (STYL-GK §8, 2026-11-19): pasek na pełną szerokość, najwyżej 40 px,
+   ikona glos-wyl, tekst i przycisk „Włącz”, tło ostrzeżenia; znika, gdy dźwięk działa. Klasa .baner-dzwieku to wzór (Panel, Trasy,
+   Flota); .hala-dzwonek (Lider, UR, KJ) wygląda tak samo. */
+.baner-dzwieku, .hala-dzwonek { position: sticky; top: var(--baner-gora, 0px); z-index: 30; display: flex; box-sizing: border-box;
+  align-items: center; justify-content: center; gap: 10px; min-height: 36px; max-height: 40px; padding: 2px 12px; overflow: hidden;
+  background: var(--zolty-tlo); color: var(--tekst); border-bottom: 2px solid var(--zolty); text-align: center; font-weight: 700;
+  font-size: 14px; line-height: 1.2; cursor: pointer; }
+.hala-dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5; }   /* Lider/UR/KJ: pod nagłówkiem (D64) */
+.baner-dzwieku .ikona, .hala-dzwonek .ikona { display: inline-flex; color: var(--zolty); }
+.baner-dzwieku .ikona svg, .hala-dzwonek .ikona svg, .baner-dzwieku .ik svg { width: 20px; height: 20px; display: block; }
+.baner-dzwieku .ik { margin-right: 0; }
+.baner-przycisk, .baner-dzwieku button { display: inline-flex; align-items: center; min-height: 30px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--zolty); background: var(--zolty); color: var(--na-barwie); font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.baner-dzwieku[hidden], .hala-dzwonek[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) { .baner-dzwieku, .hala-dzwonek { animation: baner-wjazd .18s ease-out; } }
+@keyframes baner-wjazd { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 /* D61: druk jednego kodu aplikacji — mały przycisk pod opisem (wszystkie naraz: „🖨 Drukuj wszystkie” na dole okna). */
 .hala-aplikacja-drukuj { justify-self: start; min-height: var(--dotyk-maly); padding: 4px 12px; font-size: 14px; }
@@ -711,9 +723,17 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-skan-fab { position: fixed; right: 16px; bottom: calc(var(--dol-wys) + 14px + env(safe-area-inset-bottom, 0px)); z-index: 45;
   display: inline-flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 22px; border: 0; border-radius: 999px;
   background: var(--pomarancz); color: var(--na-pomarancz); font-size: 17px; font-weight: 800; box-shadow: var(--cien-mocny); cursor: pointer; }
-.hala-skan-fab span { font-size: 22px; line-height: 1; }
+.hala-skan-fab .ik { margin: 0; }
+.hala-skan-fab .ik svg { width: 24px; height: 24px; }
 /* Ikona liniowa (gk-ikony.js) przed napisem na przycisku, chipie albo w nagłówku: <span class="ik" data-ikona="drukuj" data-rozmiar="16">. */
 .ik { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
+.ik.po { margin: 0 0 0 4px; }                       /* ikona za napisem (szewron „Więcej”) */
+.ik.bez-odstepu, button > .ik:only-child { margin: 0; }   /* sama ikona w przycisku — wyśrodkowana */
+/* Szewron rozwijania (summary::before) jako ta sama ikona liniowa co szewron-prawo w gk-ikony.js — bez znaku tekstowego. */
+:root { --szewron-prawo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E"); }
+.szewron-summary::before { content: ''; display: inline-block; flex: none; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: var(--szewron-prawo) center / contain no-repeat; mask: var(--szewron-prawo) center / contain no-repeat; transition: transform .15s; }
+details[open] > .szewron-summary::before { transform: rotate(90deg); }
 .ik svg { display: block; width: 16px; height: 16px; }
 /* Właściciel 2026-11-10: na ekranie, który ma własny przycisk skanu (klasa .wlasny-skan: skan maszyny w zgłoszeniu awarii, „Na miejscu”,
    przegląd, miejsce kontroli KJ), pływający „Skanuj” nie dubluje go. Wszędzie indziej zostaje. */
@@ -775,45 +795,64 @@ body:has(.ekran:not([hidden]) .wlasny-skan) .hala-skan-fab { display: none; }
     padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
 
-/* D77 — reakcje kierownika przy zleceniach (wspolne/klient/reakcje.js, STYL-GK §6b). Nakładka na środku ekranu, która NIE
-   blokuje pracy (pointer-events tylko na rysunku — dotknięcie zamyka), znika sama. Rysunki SVG jak emoji (barwy w SVG,
-   od właściciela). Ruch: 👍 wyskakuje od dołu i odbija się, 👎 wyskakuje i kiwa się, 😠 czerwienieje, para z uszu
-   i trzęsienie, 🙄 przewraca oczami i wydycha. prefers-reduced-motion — bez ruchu, samo pokazanie i zniknięcie. */
+/* GK-REAKCJE-START — reakcje (wspolne/klient/reakcje.js, STYL-GK §6b; D77, nowy wygląd 2026-11-19). Ten blok jest kopiowany 1:1 do
+   style.css GK Trasy i GK Flota (pilnuje .github/spojnosc.py) — zmieniaj go tylko tutaj.
+   Pięć półpłaskich buziek rysowanych linią jak ikony GK; kolory WYŁĄCZNIE z tokenów (--reakcja-*, pochodne tokenów znaczenia —
+   ciemny motyw przełącza się sam). Nakładka na środku ekranu NIE blokuje pracy (pointer-events tylko na rysunku — dotknięcie
+   albo Esc zamyka). Ruch: wejście 320 ms cubic-bezier(.2,.9,.3,1.25), wyjście 240 ms, drżenie ±3 px ×3 przy złych; prefers-reduced-motion —
+   sam zanik 150 ms bez ruchu i migania. */
+:root {
+  --reakcja-brawo-tarcza: var(--zielony-tlo);    --reakcja-brawo-linia: var(--zielony);
+  --reakcja-dobra-tarcza: var(--zielony-tlo);    --reakcja-dobra-linia: var(--zielony);
+  --reakcja-dopracuj-tarcza: var(--zolty-tlo);   --reakcja-dopracuj-linia: var(--zolty);
+  --reakcja-zla-tarcza: var(--czerwony-tlo);     --reakcja-zla-linia: var(--czerwony);
+  --reakcja-wkoncu-tarcza: var(--info-tlo);      --reakcja-wkoncu-linia: var(--niebieski);
+  --reakcja-znaczek-ikona: var(--na-barwie);     /* znak w kółku akcentu: biały w jasnym, ciemny w ciemnym motywie */
+}
+.hala-reakcja-brawo { --reakcja-tarcza: var(--reakcja-brawo-tarcza); --reakcja-linia: var(--reakcja-brawo-linia); }
+.hala-reakcja-dobra { --reakcja-tarcza: var(--reakcja-dobra-tarcza); --reakcja-linia: var(--reakcja-dobra-linia); }
+.hala-reakcja-dopracuj { --reakcja-tarcza: var(--reakcja-dopracuj-tarcza); --reakcja-linia: var(--reakcja-dopracuj-linia); }
+.hala-reakcja-zla { --reakcja-tarcza: var(--reakcja-zla-tarcza); --reakcja-linia: var(--reakcja-zla-linia); }
+.hala-reakcja-wkoncu { --reakcja-tarcza: var(--reakcja-wkoncu-tarcza); --reakcja-linia: var(--reakcja-wkoncu-linia); }
 .hala-reakcja { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; pointer-events: none; }
 .hala-reakcja[popover] { width: auto; height: auto; margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; }
+.hala-reakcja-live { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .hala-reakcja-figura { pointer-events: auto; display: grid; justify-items: center; gap: 10px; min-height: 0; padding: 0;
-  border: 0; background: transparent; box-shadow: none; cursor: pointer; animation: hala-reakcja-znika .4s ease-in 1.45s forwards; }
+  border: 0; background: transparent; box-shadow: none; cursor: pointer;
+  animation: hala-reakcja-wejscie .32s cubic-bezier(.2, .9, .3, 1.25) both, hala-reakcja-wyjscie .24s ease-in 1.45s forwards; }
 .hala-reakcja-figura:hover, .hala-reakcja-figura:active { background: transparent; }
-.hala-reakcja svg { width: 136px; height: 136px; overflow: visible; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .28)); }
-.hala-reakcja svg * { transform-box: fill-box; transform-origin: center; }
-.hala-reakcja .r-dol { transform: rotate(180deg); }
-.hala-reakcja-tekst { font-size: 22px; font-weight: 800; color: var(--tekst); background: var(--karta); padding: 6px 16px;
-  border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 0, 0, .2); animation: hala-reakcja-wjazd .35s ease-out .2s both; }
-.hala-reakcja-dobra svg { animation: hala-reakcja-skok .75s ease-out both; }
-.hala-reakcja-dopracuj svg { animation: hala-reakcja-skok .6s ease-out both, hala-reakcja-kiwa .45s ease-in-out .6s 2; }
-.hala-reakcja-zla svg { animation: hala-reakcja-skok .45s ease-out both, hala-reakcja-trzesie .09s linear .55s 6; }
-.hala-reakcja-zla .r-czerwienieje { animation: hala-reakcja-czerwien .4s ease-in .5s forwards; }
-.hala-reakcja-zla .r-para { opacity: 0; animation: hala-reakcja-para .8s ease-out .6s 2; }
-.hala-reakcja-wkoncu svg { animation: hala-reakcja-skok .5s ease-out both; }
-.hala-reakcja-wkoncu .r-zrenice { animation: hala-reakcja-oczy 1s ease-in-out .3s both; }
-.hala-reakcja-wkoncu .r-wydech { opacity: 0; animation: hala-reakcja-wydech .7s ease-out .9s both; }
-@keyframes hala-reakcja-skok { 0% { transform: translateY(70px) scale(.2); opacity: 0; } 55% { transform: translateY(0) scale(1.18); opacity: 1; }
-  78% { transform: scale(.94); } 100% { transform: scale(1); } }
-@keyframes hala-reakcja-kiwa { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
-@keyframes hala-reakcja-trzesie { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-@keyframes hala-reakcja-czerwien { from { fill: #FFCC4D; } to { fill: #E24B4A; } }
-@keyframes hala-reakcja-para { 0% { opacity: 0; transform: translateY(6px) scale(.6); } 30% { opacity: .9; }
-  100% { opacity: 0; transform: translateY(-22px) scale(1.3); } }
-@keyframes hala-reakcja-oczy { 0%, 100% { transform: translateY(0); } 35%, 65% { transform: translateY(-10px); } }
-@keyframes hala-reakcja-wydech { 0% { opacity: 0; transform: translate(-4px, -2px) scale(.6); } 40% { opacity: 1; }
-  100% { opacity: 0; transform: translate(10px, 6px) scale(1.2); } }
-@keyframes hala-reakcja-wjazd { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes hala-reakcja-znika { to { opacity: 0; transform: scale(.9); } }
+.hala-reakcja svg { width: 96px; height: 96px; overflow: visible; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .22)); }
+.hala-reakcja .r-tarcza { fill: var(--reakcja-tarcza); stroke: var(--reakcja-linia); stroke-width: 4.5; }
+.hala-reakcja .r-rys { fill: none; stroke: var(--reakcja-linia); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.hala-reakcja .r-oko-kontur { fill: none; stroke: var(--reakcja-linia); stroke-width: 3.5; }
+.hala-reakcja .r-kropka { fill: var(--reakcja-linia); stroke: none; }
+.hala-reakcja .r-znaczek { fill: var(--reakcja-linia); stroke: none; }
+.hala-reakcja .r-znaczek-ikona { fill: none; stroke: var(--reakcja-znaczek-ikona); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.hala-reakcja .r-oczy, .hala-reakcja .r-brwi, .hala-reakcja .r-zrenice, .hala-reakcja .r-rumieniec, .hala-reakcja .r-oko { transform-box: fill-box; transform-origin: center; }
+.hala-reakcja-tekst { font-size: 16px; font-weight: 700; color: var(--tekst); background: var(--karta); padding: 6px 16px;
+  border-radius: 999px; border: 1px solid var(--ramka); box-shadow: var(--cien); animation: hala-reakcja-tekst-wejscie .32s ease-out .12s both; }
+@media (min-width: 821px) { .hala-reakcja svg { width: 112px; height: 112px; } }
+.hala-reakcja-brawo .r-oko { animation: hala-reakcja-mrugnij .12s ease-in-out .7s 1; }
+.hala-reakcja-dopracuj .r-brwi { animation: hala-reakcja-brwi-opadaja .25s ease-out .32s both; }
+.hala-reakcja-zla svg { animation: hala-reakcja-drzyj .09s linear .4s 3; }
+.hala-reakcja-zla .r-rumieniec { opacity: 0; animation: hala-reakcja-rumieniec .4s ease-in .3s forwards; }
+.hala-reakcja-wkoncu .r-zrenice { animation: hala-reakcja-oczy .9s ease-in-out .3s both; }
+@keyframes hala-reakcja-wejscie { from { opacity: 0; transform: translateY(16px) scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes hala-reakcja-wyjscie { to { opacity: 0; transform: scale(.92); } }
+@keyframes hala-reakcja-tekst-wejscie { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes hala-reakcja-mrugnij { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.1); } }
+@keyframes hala-reakcja-brwi-opadaja { from { transform: translateY(-4px); } to { transform: none; } }
+@keyframes hala-reakcja-drzyj { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@keyframes hala-reakcja-rumieniec { from { opacity: 0; } to { opacity: .55; } }
+@keyframes hala-reakcja-oczy { 0%, 100% { transform: translateY(0); } 35%, 65% { transform: translateY(-6px); } }
+@keyframes hala-reakcja-zanik-wejscie { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hala-reakcja-zanik-wyjscie { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .hala-reakcja-figura, .hala-reakcja svg, .hala-reakcja svg *, .hala-reakcja-tekst { animation: none !important; }
-  .hala-reakcja-zla .r-czerwienieje { fill: #E24B4A; }
-  .hala-reakcja-zla .r-para, .hala-reakcja-wkoncu .r-wydech { opacity: 0; }
+  .hala-reakcja-figura { animation: hala-reakcja-zanik-wejscie .15s ease-out both, hala-reakcja-zanik-wyjscie .15s ease-in 1.7s forwards; }
+  .hala-reakcja svg, .hala-reakcja svg *, .hala-reakcja-tekst { animation: none !important; }
+  .hala-reakcja-zla .r-rumieniec { opacity: .55; }
 }
+/* GK-REAKCJE-KONIEC */
 .hala-pozycja-opis { margin: 0 0 8px; color: var(--tekst-slaby); font-size: 14px; white-space: pre-line; }
 
 /* Ikony liniowe zamiast emoji (poprawki po audycie 10.11): sama ikona w przycisku skanu i w znaczkach pozycji bez odstępu od napisu. */

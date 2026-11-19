@@ -78,11 +78,18 @@ a.karta:active { background: var(--tlo); }
          box-shadow: var(--obrys-gorny), var(--cien); }
 .grupa h2 { display: flex; gap: 8px; align-items: center; }
 details.grupa { padding: 0 12px; }
+/* Szewrony rozwijania (zamiast znaków tekstowych w ::before/::after): maska z rysunku gk-ikony.js, kolor = currentColor,
+   cztery kierunki zamiast obracania (STYL-GK §8, MAPOWANIE-IKON). */
+:root { --szew-prawo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E"); --szew-dol: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); --szew-gora: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 15l-6-6-6 6'/%3E%3C/svg%3E"); }
+button[aria-label] > .ik, .usun-zdjecie .ik, .miniatura .usun .ik { margin-right: 0; }
+button.glowny.wlasny-skan { background: var(--pomarancz); border-color: var(--pomarancz); color: var(--na-pomarancz); font-weight: 800; }   /* jedyna akcja główna ekranu — ten sam pomarańcz co pływający „Skanuj” (hala.css), który tu się chowa */   /* przycisk tylko z ikoną: bez odstępu na napis */
+.tylko-czytnik { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
-/* Strzałka zwiniętej grupy (jak „▸ Więcej” w Panelu i Liderze) — display:flex chowa znacznik przeglądarki. */
+/* Strzałka zwiniętej grupy (jak „Więcej” w Panelu i Liderze) — display:flex chowa znacznik przeglądarki. */
 details.grupa > summary::-webkit-details-marker { display: none; }
-details.grupa > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
-details.grupa[open] > summary::before { transform: rotate(90deg); }
+details.grupa > summary::before { content: ''; width: 16px; height: 16px; flex: none; background: currentColor;
+  -webkit-mask: var(--szew-prawo) center / 16px no-repeat; mask: var(--szew-prawo) center / 16px no-repeat; }
+details.grupa[open] > summary::before { -webkit-mask-image: var(--szew-dol); mask-image: var(--szew-dol); }
 
 .postep { height: 10px; border-radius: 5px; background: var(--tlo-neutralne); overflow: hidden; margin: 6px 0; }
 /* Pasek w trakcie neutralny (grafit); czerwony tylko „alarm” (koniec zmiany bez planu, alert bez potwierdzeń) — W.stanPaskaPlanu. */
@@ -115,7 +122,7 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .z-przyciskiem { display: flex; gap: 8px; }
 .z-przyciskiem input { flex: 1; min-width: 0; }
 .bez-skanu { margin-top: 10px; }
-.bez-skanu summary { min-height: var(--dotyk); display: flex; align-items: center; color: var(--tekst-slaby); cursor: pointer; }
+.bez-skanu summary { min-height: var(--dotyk); display: flex; align-items: center; color: var(--tekst); text-decoration: underline; cursor: pointer; }   /* kontrast: ciemniejszy niż napis poboczny */
 .wybrane-stanowisko { flex: 1; }
 #p-stanowisko:has(.wybrane-stanowisko) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 #p-stanowisko:has(.wybrane-stanowisko) h2 { width: 100%; }
@@ -156,10 +163,10 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .zdjecia { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .miniatura { position: relative; margin: 0; width: 96px; height: 96px; border-radius: var(--promien); overflow: hidden; background: var(--ramka); }
 .miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
-.usun-zdjecie { position: absolute; top: 2px; right: 2px; min-height: 36px; width: 36px; padding: 0; border-radius: 50%;
-  background: var(--nakladka); color: var(--na-nakladce); border: 0; font-size: 1.3em; line-height: 1; }
+.usun-zdjecie { position: absolute; top: 2px; right: 2px; min-height: 44px; width: 44px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--nakladka); color: var(--na-nakladce); border: 0; line-height: 1; }
 .zrob-zdjecie { width: 96px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  padding: 4px; font-size: .8em; border-style: dashed; }
+  padding: 4px; font-size: 13px; border-style: dashed; }
 .zrob-zdjecie .ikona { font-size: 1.8em; }
 
 /* Wzór vs wada — obok siebie, z kolorowym podpisem (nie sam kolor: jest też tekst). */
@@ -193,7 +200,7 @@ legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .liczby-proby span, .kafle-liczb span { font-size: .85em; color: var(--tekst-slaby); }
 .liczby-proby b, .kafle-liczb b { font-size: 1.6em; font-variant-numeric: tabular-nums; }
 .liczby-proby .alarm b { color: var(--czerwony); }
-pre { white-space: pre-wrap; font-size: .8em; background: var(--tlo); padding: 8px; border-radius: 6px; }
+pre { white-space: pre-wrap; font-size: .85em; background: var(--tlo); padding: 8px; border-radius: 6px; }
 
 /* ---------------------------------------------------------------- plan */
 
@@ -210,7 +217,7 @@ pre { white-space: pre-wrap; font-size: .8em; background: var(--tlo); padding: 8
 .filtry-listy { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .pareto { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 6px 12px; box-shadow: var(--obrys-gorny), var(--cien); }
 .pareto-wiersz { display: grid; grid-template-columns: minmax(6em, 1.2fr) 2fr minmax(6.5em, 1fr); gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--ramka); }
-.pareto-wiersz.naglowek { border-top: 0; font-size: .8em; color: var(--tekst-slaby); padding: 4px 0; }
+.pareto-wiersz.naglowek { border-top: 0; font-size: .85em; color: var(--tekst-slaby); padding: 4px 0; }
 .pareto-wiersz.granica { border-bottom: 2px dashed var(--tekst-slaby); }
 .pareto-wiersz .nazwa { overflow-wrap: anywhere; }
 .pareto-wiersz .slupek { display: flex; align-items: center; gap: 6px; }

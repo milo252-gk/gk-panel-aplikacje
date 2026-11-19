@@ -45,9 +45,10 @@
 
 .na-zywo {
   display: grid; gap: 12px; padding: 12px;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  grid-template-areas: "liczby liczby" "obchody obchody" "awarie jakosc";
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* Właściciel 2026-11-18: liczby → Obchody (zajmują całe wolne miejsce) → Awarie (zwarty pasek); sekcji „Jakość i BHP” już nie ma. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "liczby" "obchody" "awarie";
+  grid-template-rows: auto minmax(0, 1fr) auto;
   flex: 1;
 }
 /* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. Pokazujemy tylko kafelki z liczbą
@@ -67,7 +68,6 @@
 .kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
 .awarie { grid-area: awarie; }
-.jakosc { grid-area: jakosc; }
 section { background: var(--karta); box-shadow: var(--obrys-gorny), var(--cien); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 section h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--tekst); }
 section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform: none; letter-spacing: 0; }
@@ -87,18 +87,8 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
   .aplikacja { height: 100vh; min-height: 0; overflow: hidden; }
   .na-zywo, .raporty, .zlecenia-widok { overflow: hidden; min-height: 0; }
 }
-/* UI etap 4: pusta Jakość (panel.js → .bez-jakosci) — cienki pasek nad Awariami, a Awarie na całą szerokość i w dwóch
-   kolumnach kart. Wcześniej przy 1280×800 mieściło się ~2,5 awarii, a pół ekranu mówiło „Brak incydentów”. */
-@media (min-width: 901px) {
-  .na-zywo.bez-jakosci { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "jakosc" "awarie";
-    grid-template-rows: auto auto auto minmax(0, 1fr); }
-  .na-zywo.bez-jakosci .jakosc { flex-direction: row; align-items: center; gap: 12px; padding: 8px 16px; }
-  .na-zywo.bez-jakosci .jakosc h2 { margin: 0; }
-  .na-zywo.bez-jakosci .jakosc .pusto { margin: 0; font-size: 1em; }
-  .na-zywo.bez-jakosci #lista-awarii { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); align-content: start; }
-}
 @media (max-width: 900px) {
-  .na-zywo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "awarie" "jakosc"; grid-template-rows: auto; }
+  .na-zywo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "awarie"; grid-template-rows: auto; }
   .kafelki-liczb { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 }
 /* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
@@ -115,7 +105,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
   .na-zywo { padding: 8px; gap: 8px; }
   .kafelki-liczb { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .kafelki-liczb b { font-size: 22px; }
-  .kafelki-liczb .etykieta { font-size: 10px; }
+  .kafelki-liczb .etykieta { font-size: 12px; }
   /* Cztery kafelki (typowy pulpit: stoi, awarie, jakość, zlecenia) w układzie 3+1 zostawiały czwarty samotnie — 2 × 2 jest równe. */
   .kafelki-liczb:has(> :nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -143,10 +133,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
    przewijają się w sekcji, żeby Awarie zostały na widoku. */
 .kafelek.odbior-otwarty, .kafelek.pozycje-otwarte { grid-column: 1 / -1; }
 /* Podgląd wszystkich pozycji w karcie obchodu (2026-11-18): klik w kartę / „Wszystkie pozycje” / „+N więcej”; tylko odczyt. */
-/* Pasek „Dźwięk wyłączony — włącz” (D1, 2026-11-18): pomarańczowy, na całą szerokość nad nagłówkiem. */
-.pasek-dzwieku { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px; background: var(--pomarancz); color: var(--marka-tlo); font-weight: 600; font-size: 14px; text-align: center; }
-.pasek-dzwieku[hidden] { display: none; }
-.pasek-dzwieku button { background: var(--marka-tlo); border-color: var(--marka-tlo); color: var(--na-marce); }
+/* Baner „Dźwięk wyłączony — włącz”: wspólny wzór .baner-dzwieku w hala.css (2026-11-19). */
 .kafelek.ma-podglad { cursor: pointer; }
 .kafelek.ma-podglad .karta-pozycje, .kafelek.ma-podglad .kafelek-odbior { cursor: auto; }
 .karta-pozycje-przycisk { margin-top: 8px; }
@@ -267,12 +254,13 @@ dialog.okno .blad { color: var(--czerwony); font-weight: 600; margin: 0; }
 dialog.okno .dwie:has(> .pole-linii[hidden]) { grid-template-columns: 1fr; }
 dialog.okno .dwie:has(> :only-child) { grid-template-columns: 1fr; }   /* sam termin (Od kiedy jest w „Więcej opcji”) — pełna szerokość */
 /* Zwijane części (UI etap 2): „Więcej opcji” w „Nowe zlecenie” i części Administracji → Serwis. Nagłówek wysoki
-   jak pole dotyku (D29), strzałka ▸ / ▾ jednakowa w każdej przeglądarce (bez znacznika systemowego). */
+   jak pole dotyku (D29), szewron (maska z ikony) jednakowy w każdej przeglądarce (bez znacznika systemowego). */
 .wiecej-opcji > summary, .serwis-czesc > summary {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-height: var(--dotyk); cursor: pointer; list-style: none; }
 .wiecej-opcji > summary { font-weight: 700; color: var(--tekst-slaby); }
 :is(.wiecej-opcji, .serwis-czesc) > summary::-webkit-details-marker { display: none; }
-:is(.wiecej-opcji, .serwis-czesc) > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
+:is(.wiecej-opcji, .serwis-czesc) > summary::before { content: ''; display: inline-block; flex: none; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: var(--szewron-prawo) center / contain no-repeat; mask: var(--szewron-prawo) center / contain no-repeat; transition: transform .15s; }
 :is(.wiecej-opcji, .serwis-czesc)[open] > summary::before { transform: rotate(90deg); }
 .wiecej-opcji-tresc { display: grid; gap: 12px; padding-top: 4px; }
 .serwis-czesc { border: 1px solid var(--ramka); border-radius: var(--promien); padding: 0 12px; margin-bottom: 12px; background: var(--karta); }
@@ -302,6 +290,11 @@ body.tryb-ekran section h2 { font-size: 24px; }
 body.tryb-ekran .hala-uklad > .naglowek .zmiana { font-size: 22px; }
 body.tryb-ekran .hala-uklad > .naglowek .zmiana span { font-size: 18px; }
 body.tryb-ekran .licznik-przestoju { font-size: 1.8em; }
+/* Monitor 1920×1080: kafelki liczb zajmują cały rząd i są czytelne z kilku metrów (układ bez zmian — te same kafelki, większe). */
+body.tryb-ekran .pulpit-gora > .kafelki-liczb { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+body.tryb-ekran .kafelki-liczb b { font-size: 48px; }
+body.tryb-ekran .kafelki-liczb .etykieta { font-size: 16px; }
+body.tryb-ekran .kafelki-liczb .dopisek { font-size: 15px; }
 body.tryb-ekran .zakladki button { min-height: 44px; }
 
 /* ---------------------------------------------------------------- administracja (tylko admin) */
@@ -392,7 +385,8 @@ dialog.okno.okno-kodow { width: min(680px, calc(100vw - 24px)); }
 .kody-kategoria > summary { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-weight: 700;
                             min-height: var(--dotyk); list-style: none; }
 .kody-kategoria > summary::-webkit-details-marker { display: none; }
-.kody-kategoria > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
+.kody-kategoria > summary::before { content: ''; display: inline-block; flex: none; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: var(--szewron-prawo) center / contain no-repeat; mask: var(--szewron-prawo) center / contain no-repeat; transition: transform .15s; }
 .kody-kategoria[open] > summary::before { transform: rotate(90deg); }
 .kody-kategoria > summary .kody-nazwa { margin-right: auto; }
 .kody-kategoria > summary .znacznik { font-weight: 400; }
@@ -406,7 +400,7 @@ dialog.okno.okno-kodow { width: min(680px, calc(100vw - 24px)); }
 /* Pola wyboru (role, linie, zmiany, etykiety) — wszędzie w Panelu, nie tylko w oknach: zwykły kwadracik
    z podpisem obok, a nie pole na całą szerokość (reguła input z hala.css). */
 .zaznaczenia { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 12px; }
-label.zaznacz, .admin-ustawienia label.zaznacz { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; color: var(--tekst); }
+label.zaznacz, .admin-ustawienia label.zaznacz { display: flex; align-items: center; gap: 8px; min-height: var(--dotyk); font-weight: 600; font-size: 15px; color: var(--tekst); }
 label.zaznacz input[type="checkbox"] { width: 22px; min-height: 22px; height: 22px; flex: 0 0 auto; margin: 0; }
 fieldset { border: 1px solid var(--ramka); border-radius: 10px; padding: 8px 12px; margin: 0; }
 legend { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); padding: 0 4px; }
@@ -503,7 +497,7 @@ dialog.okno .lista-odrzuconych .blad { margin: 2px 0 6px; }
 .ostrzezenie-stalego { color: var(--czerwony); font-weight: 600; }
 
 /* D55 (2026-10-13): tytuł zlecenia/zgłoszenia = przycisk historii; filtry list; statystyki osób; urlopy. */
-button.tytul-historii { all: unset; cursor: pointer; font-weight: 700; color: var(--tekst); text-decoration: underline dotted; text-underline-offset: 3px; overflow-wrap: anywhere; }
+button.tytul-historii { all: unset; display: inline-block; padding: 12px 0; margin: -12px 0; cursor: pointer; font-weight: 700; color: var(--tekst); text-decoration: underline dotted; text-underline-offset: 3px; overflow-wrap: anywhere; }
 button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-offset: 2px; border-radius: 4px; }
 .zlecenie .hala-kroki { max-width: 520px; }
 .filtry-zlecen { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; margin: 8px 0 12px; }
@@ -518,6 +512,8 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
   #filtry-zlecen { display: block; }
   #filtry-pola { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; align-items: end; padding-bottom: 2px; }
   #filtry-pola::-webkit-scrollbar { display: none; }
+  /* Wskazówka przewijania: prawa krawędź blednie, a odstęp na końcu sprawia, że po przewinięciu ostatnie pole jest w pełni widoczne. */
+  #filtry-pola { padding-right: 28px; -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent); mask-image: linear-gradient(to right, black calc(100% - 36px), transparent); }
   #filtry-pola > label { flex: none; width: 150px; }
   #filtry-pola > label.zaznacz { width: auto; padding-right: 6px; white-space: nowrap; }
   #filtry-pola select, #filtry-pola input[type="date"] { min-width: 0; width: 100%; }
@@ -572,7 +568,7 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .maszyny-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; }
 /* D67: pozycje checklisty w wierszu zadania (kierownik widzi, co odhaczone, co pominięte i dlaczego). */
 .pozycje-zlecenia { margin-top: 6px; }
-.pozycje-zlecenia summary { cursor: pointer; font-weight: 700; }
+.pozycje-zlecenia summary { cursor: pointer; font-weight: 700; min-height: var(--dotyk); display: flex; align-items: center; }   /* pole kliknięcia 44 px (audyt 2026-11-18: 23 px) */
 .pozycje-zlecenia ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
 .pozycje-zlecenia .stan-wykonana > span:first-child, .pozycje-zlecenia .stan-wykonana .poz-wiersz > span:first-child, .pozycje-zlecenia .stan-wykonana .pozycja-otworz > span:first-child { color: var(--zielony); font-weight: 700; }
 .pozycje-zlecenia .stan-pominieta { color: var(--tekst-slaby); }
@@ -747,7 +743,7 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 .wykres { margin: 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 .wykres-kolo .wykres-svg { width: 150px; height: 150px; flex: none; }
 .wykres-srodek { font-size: 24px; font-weight: 700; fill: var(--tekst); font-variant-numeric: tabular-nums; }
-.wykres-podpis { font-size: 11px; fill: var(--tekst-slaby); }
+.wykres-podpis { font-size: 12px; fill: var(--tekst-slaby); }
 .wykres-legenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 14px; min-width: 0; }
 .wykres-legenda li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .wykres-legenda-pozioma { display: flex; flex-wrap: wrap; gap: 4px 14px; flex-basis: 100%; }
@@ -755,8 +751,8 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 .wykres-kolumny { display: block; }
 .wykres-przewijanie { overflow-x: auto; max-width: 100%; }
 .wykres-svg text { font-family: inherit; }
-.wykres-os { font-size: 11px; fill: var(--tekst-slaby); }
-.wykres-wartosc { font-size: 11px; fill: var(--tekst); font-variant-numeric: tabular-nums; font-weight: 600; }
+.wykres-os { font-size: 12px; fill: var(--tekst-slaby); }
+.wykres-wartosc { font-size: 12px; fill: var(--tekst); font-variant-numeric: tabular-nums; font-weight: 600; }
 .wykres-siatka { stroke: var(--ramka); stroke-width: 1; stroke-dasharray: 3 3; }
 .wykres-oska { stroke: var(--ramka-mocna); stroke-width: 1.5; }
 
@@ -792,3 +788,27 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 
 /* Instrukcja w Moje konto: odnosnik wyglada jak pozostale przyciski okna. */
 #konto-instrukcja { display: flex; align-items: center; justify-content: center; width: 100%; box-sizing: border-box; text-decoration: none; margin-top: 8px; }
+
+/* ---------------------------------------------------------------- Awarie: zwarty pasek (właściciel 2026-11-18) */
+.awarie { padding: 10px 14px; }
+.awarie h2 { font-size: 17px; margin: 0 0 6px; }
+/* Bez awarii: jedna cienka linia „Awarie · Brak aktywnych awarii” (wysokość ok. wiersza), bez dużej pustej karty. */
+.awarie.bez-awarii { flex-direction: row; align-items: center; gap: 12px; padding: 6px 14px; }
+.awarie.bez-awarii h2 { margin: 0; font-size: 16px; }
+.awarie.bez-awarii .pusto { margin: 0; font-size: .95em; }
+.awarie #lista-awarii { max-height: 30vh; overflow-y: auto; display: grid; gap: 6px; align-content: start; }
+/* Przy awariach: zwarty wiersz — licznik, maszyna + status + mechanik w jednej linii, miniatura 48 px, numer. */
+.awaria.zwarta { grid-template-columns: auto minmax(0, 1fr) auto auto; padding: 4px 10px; gap: 8px; border-left-width: 6px; }
+.awaria.zwarta .licznik-przestoju { font-size: 1.15em; min-width: 5.6em; }
+.awaria.zwarta .opis { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-width: 0; }
+.awaria.zwarta .maszyna { font-size: 1em; }
+.awaria.zwarta .szczegoly { margin-top: 0; }
+.awaria.zwarta .tekst-opisu { flex-basis: 100%; margin-top: 0; }
+.awaria.zwarta .akcje-awarii { margin-top: 0; }
+.awaria.zwarta .zdjecia { margin-top: 0; }
+.awaria.zwarta .zdjecia img[data-plik] { width: 48px; height: 48px; max-height: 48px; }
+@media (max-width: 600px) {
+  .awaria.zwarta { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "licznik numer numer" "opis opis zdj"; }
+  .awaria.zwarta .zdjecia { grid-area: zdj; }
+  .awarie #lista-awarii { max-height: 40vh; }
+}

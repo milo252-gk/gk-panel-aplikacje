@@ -17,7 +17,8 @@
 
   const hala = global.Hala.utworz({ aplikacja: 'kj', typy: ['proba', 'partia', 'alert', 'reklamacja', 'zlecenie', 'awaria', 'zgloszenie'], dni: 30 });
 
-  const KJ = global.KJ = { hala, W, $, esc, ekrany: {}, biezacy: null };
+  const KJ = global.KJ = { hala, W, $, esc, ekrany: {}, biezacy: null,
+    ik: (nazwa, rozmiar) => (global.GKIkony && global.GKIkony.html(nazwa, rozmiar) ? `<span class="ik">${global.GKIkony.html(nazwa, rozmiar)}</span>` : '') };   // ikona liniowa z gk-ikony.js w <span class="ik">
 
   // ------------------------------------------------------------ uprawnienia i dane
 
@@ -136,7 +137,7 @@
      albo plik z huba) — KJ.wypelnijZdjecia(kontener) po każdym narysowaniu.       */
   KJ.miniatury = (ids, usuwalne) => (ids || []).map(id =>
     `<figure class="miniatura"><img data-plik="${esc(id)}" alt="Zdjęcie">${usuwalne
-      ? `<button type="button" class="usun-zdjecie" data-usun-zdjecie="${esc(id)}" aria-label="Usuń zdjęcie">×</button>` : ''}</figure>`).join('');
+      ? `<button type="button" class="usun-zdjecie" data-usun-zdjecie="${esc(id)}" aria-label="Usuń zdjęcie">${KJ.ik('zamknij', 18)}</button>` : ''}</figure>`).join('');
   KJ.wypelnijZdjecia = async kontener => {
     for (const img of (kontener || document).querySelectorAll('img[data-plik]:not([src])')) {
       try { img.src = await hala.adresPliku(img.dataset.plik); } catch (e) { /* bez podglądu */ }
@@ -181,11 +182,11 @@
   // ------------------------------------------------------------ nawigacja
 
   KJ.ekran = (nazwa, def) => { KJ.ekrany[nazwa] = def; };
-  // Zlecenia od kierownika (Panel → dział „kj”): stała zakładka 📋 Zlecenia (D64, jak Lider i UR); do zrobienia stoją też
+  // Zlecenia od kierownika (Panel → dział „kj”): stała zakładka Zlecenia (D64, jak Lider i UR); do zrobienia stoją też
   // na górze Planu (UI etap 2, proba.js). Adres „#zlecenia” (push z huba) otwiera zakładkę.
   KJ.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'kj', komunikat: t => KJ.komunikat(t, 'ok') }) });
   global.HalaZlecenia.sledz(hala, () => ({ dzial: 'kj' }), (z, o) => KJ.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
-  // D56: „▣ Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  // D56: „Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'kj' }), otworzZlecenia: () => KJ.idz('zlecenia'),
                                                                         komunikat: t => KJ.komunikat(t, 'ok') });
   KJ.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };

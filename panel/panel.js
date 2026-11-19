@@ -19,6 +19,9 @@
   // Wspólne narzędzia dla ekranów w osobnych plikach (administracja.js) — rejestrują się w Panel.widoki.
   // ik('drukuj') — ikona liniowa z gk-ikony.js przed napisem (zamiast emoji); bez załadowanego pliku nic, napis obok mówi to samo.
   const ik = (nazwa, rozmiar) => (window.GKIkony ? `<span class="ik" aria-hidden="true">${window.GKIkony.html(nazwa, rozmiar || 16)}</span>` : '');
+  // Znaki statusu zostają w danych (✓ ✗ ▶ ⏳), na ekranie to ikony liniowe; ○ i – to kropka/kreska statusu — tekstem.
+  const ZNAK_IKONA = { '✓': 'haczyk', '✗': 'zamknij', '▶': 'odtworz', '⏳': 'klepsydra' };
+  const znakIk = (z, r) => (ZNAK_IKONA[z] && window.GKIkony ? ik(ZNAK_IKONA[z], r || 14) : esc(z));
   const Panel = window.Panel = { hala, W, $, esc, ik, widoki: {}, narysuj: () => narysuj(), komunikatBledu: e => komunikatBledu(e) };
 
   // localStorage bywa niedostępny (tryb prywatny) — Panel ma działać i bez niego.
@@ -430,13 +433,13 @@
       // UI etap 4: zatrzymana maszyna na „zielonym” (obchód na czas) kafelku myliła — kafelek dostaje czerwony obrys (.stoi).
       const odb = odbiory.get(k.klucz) || [], odbOtwarty = odb.length && odbiorKarty.get(k.klucz) === true;
       return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}${odb.length ? ' ma-odbior' : ''}${odbOtwarty ? ' odbior-otwarty' : ''}${pod.length ? ' ma-podglad' : ''}${podOtwarty ? ' pozycje-otwarte' : ''}" data-klucz="${esc(k.klucz)}">
-        <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">⛔ Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
+        <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">${ik('stop', 14)}Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
         ${k.podpis ? `<div class="podpis-karty slaby">${esc(k.podpis)}</div>` : ''}
         <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${k.wszystkie}" aria-valuenow="${k.zrobione}"><span style="width:${proc}%"></span></div>
         <div class="liczby"><b>${k.zrobione}/${k.wszystkie}</b>${k.najblizsza ? ` <span>Następne ${esc(k.najblizsza.godz)} · ${esc(k.najblizsza.nazwa)}</span>` : k.wszystkie ? ' <span>Wszystko zrobione</span>' : ' <span>Brak planu</span>'}</div>
         ${k.opoznione.length ? `<ul class="opoznione" aria-label="Opóźnione">${opoz}</ul>` : ''}
-        ${pod.length ? `<button type="button" class="maly karta-pozycje-przycisk" data-karta-pozycje aria-expanded="${podOtwarty}" aria-controls="pk-${esc(k.klucz)}">Wszystkie pozycje · ${podZrobione}/${podWszystkie} <span aria-hidden="true">${podOtwarty ? '▴' : '▾'}</span></button>` : ''}
+        ${pod.length ? `<button type="button" class="maly karta-pozycje-przycisk" data-karta-pozycje aria-expanded="${podOtwarty}" aria-controls="pk-${esc(k.klucz)}">Wszystkie pozycje · ${podZrobione}/${podWszystkie} <span aria-hidden="true">${ik(podOtwarty ? 'szewron-gora' : 'szewron-dol', 14)}</span></button>` : ''}
         ${podOtwarty ? `<div class="karta-pozycje" id="pk-${esc(k.klucz)}">${chipyPozycji(pod, filtrPozycjiKarty.get(k.klucz) || 'wszystkie')}${pod.map(z => podgladPozycji(z, pod.length > 1, filtrPozycjiKarty.get(k.klucz) || 'wszystkie', mozeOdbierac)).join('')}</div>` : ''}
         ${odb.length ? `<details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbOtwarty ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${odb.length}</span></summary>
           <div class="lista">${odb.map(wierszZlecenia).join('')}</div></details>` : ''}
@@ -460,7 +463,7 @@
     if (!widoczne.length) return zTytulem ? '' : '<p class="slaby">Brak pozycji w tym filtrze.</p>';
     const wolno = ODBIOR_POZYCJI_W_KARCIE && !!mozeOdbierac && z.moznaOdebrac && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
     return `<section class="karta-pozycje-lista" data-id="${esc(z.id)}">${zTytulem ? `<div class="slaby">${esc(z.tytul)}</div>` : ''}<ul>${widoczne.map(p => `
-      <li class="stan-${esc(p.stan)}${p.spozniona ? ' spozniona' : ''}"><div class="poz-wiersz"><span aria-hidden="true">${ZN[p.stan]}</span> ${p.godz ? `<span class="slaby">${esc(p.godz)}</span> ` : ''}${esc(p.nazwa)}${
+      <li class="stan-${esc(p.stan)}${p.spozniona ? ' spozniona' : ''}"><div class="poz-wiersz"><span aria-hidden="true">${znakIk(ZN[p.stan])}</span> ${p.godz ? `<span class="slaby">${esc(p.godz)}</span> ` : ''}${esc(p.nazwa)}${
         p.spozniona ? ' <span class="znacznik alarm">po terminie</span>' : p.stan === 'czeka' ? ' <span class="slaby">do zrobienia</span>' : ''}${przyciskiPozycjiHtml(z, p, wolno)}</div>${p.stan !== 'czeka' ? dowodyPozycji(z, p) : ''}</li>`).join('')}</ul></section>`;
   }
 
@@ -468,8 +471,10 @@
     const stoi = wiersze.filter(w => w.zatrzymuje).length;
     $('licznik-awarii').innerHTML = wiersze.length
       ? `${stoi ? `<span class="znacznik alarm">Zatrzymane: ${stoi}</span> ` : ''}<span class="znacznik info">Aktywne: ${wiersze.length}</span>` : '';
+    // Zwarty pasek (właściciel 2026-11-18): bez awarii jedna cienka linia, przy awariach zwarte wiersze (maszyna, licznik, status, mechanik, miniatura).
+    $('lista-awarii').closest('section').classList.toggle('bez-awarii', !wiersze.length);
     $('lista-awarii').innerHTML = wiersze.map(w => `
-      <article class="awaria ${w.zatrzymuje ? 'zatrzymanie' : ''} ${w.czeka && w.czeka.alarm ? 'alarm-potwierdzenia' : ''} ${swieze('awaria|' + w.id) ? 'nowy' : ''}">
+      <article class="awaria zwarta ${w.zatrzymuje ? 'zatrzymanie' : ''} ${w.czeka && w.czeka.alarm ? 'alarm-potwierdzenia' : ''} ${swieze('awaria|' + w.id) ? 'nowy' : ''}">
         <div class="licznik-przestoju" data-od="${esc(Date.parse(w.czasZgloszenia) || '')}">${esc(W.licznik(w.przestojMs))}</div>
         <div class="opis">
           <div class="maszyna"><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)}${w.liniaNazwa ? ` · ${esc(w.liniaNazwa)}` : ''}</span></div>
@@ -480,9 +485,9 @@
             ${w.czeka ? `<span class="${w.czeka.alarm ? 'tekst-alarm' : ''}">${w.czeka.min ? `od ${esc(Hala.formatCzasu(w.czeka.min * 60000))}` : 'przed chwilą'}</span>` : ''}
           </div>
           ${w.opis ? `<div class="slaby tekst-opisu">${esc(w.opis)}</div>` : ''}
-          ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc([w.maszynaNazwa, w.opis].filter(Boolean).join(' · '))}" aria-label="Powiększ zdjęcie awarii"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
           ${w.mozeAnulowac ? `<div class="akcje-awarii"><button type="button" class="maly" data-akcja="anuluj-awarie" data-id="${esc(w.id)}" title="Fałszywy alarm albo zgłoszenie podwójne — awaria znika z listy">Odwołaj awarię</button></div>` : ''}
         </div>
+        ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc([w.maszynaNazwa, w.opis].filter(Boolean).join(' · '))}" aria-label="Powiększ zdjęcie awarii"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
         <div class="numer slaby">${esc(w.numer)}<br> od ${esc(w.godzZgloszenia)}</div>
       </article>`).join('') || '<p class="pusto ok">Brak aktywnych awarii</p>';
     for (const e of $('lista-awarii').querySelectorAll('img[data-plik]'))
@@ -493,37 +498,6 @@
     return { zgloszona: 'alarm', przyjeta: 'uwaga', w_trakcie: 'info', wstrzymana: 'neutral', oczekuje_potwierdzenia: 'ok' }[status] || 'neutral';
   }
 
-  /* D59: otwarte zgłoszenia BHP stoją na górze sekcji „Jakość i BHP” (każdej zmiany, aż kierownik je zamknie) —
-     dotknięcie otwiera listę ⛑ BHP w Zleceniach. */
-  function rysujJakosc(w, bhp) {
-    const ileBhp = (bhp || []).length;
-    $('licznik-jakosci').innerHTML = w.lista.length + ileBhp ? `<span class="znacznik alarm">${w.lista.length + ileBhp}</span>` : '';
-    $('lista-jakosci').innerHTML = (bhp || []).map(b => `
-      <button type="button" class="incydent bhp" data-bhp="${esc(b.id)}">
-        <div class="rodzaj"><span class="znacznik ${b.pilne ? 'alarm' : 'uwaga'}">BHP: ${esc(b.rodzajNazwa)}</span> <span class="slaby">${esc(b.numer)} · ${esc(b.kiedyOpis)}</span></div>
-        <div class="tytul">${[b.liniaNazwa, b.stanowiskoNazwa].filter(Boolean).map(x => `<b>${esc(x)}</b>`).join(' · ')}${b.kto ? ` <span class="slaby">${esc(b.kto)}</span>` : ''}</div>
-        ${b.opis ? `<div class="slaby tekst-opisu">${esc(b.opis)}</div>` : ''}
-      </button>`).join('') + (w.lista.map(i => i.rodzaj === 'alert' ? `
-      <article class="incydent alert ${swieze('alert|' + i.id) ? 'nowy' : ''}">
-        <div class="rodzaj"><span class="znacznik alarm">Alert jakości</span> <span class="slaby">${esc(i.numer)} · ${esc(i.godz)}</span></div>
-        <div class="tytul"><b>${esc(i.tytul)}</b></div>
-        <div class="potwierdzenia ${i.brakuje.length ? '' : 'komplet'}">Potwierdzenia liderów ${i.potwierdzone.length}/${i.linie.length}${i.brakujeNazwy.length ? ` <span class="slaby">— brak: ${esc(i.brakujeNazwy.join(', '))}</span>` : ''}</div>
-      </article>` : `
-      <article class="incydent partia">
-        <div class="rodzaj"><span class="znacznik uwaga">Partia brakowa</span> <span class="slaby">${esc(i.numer)} · ${esc(i.godz)}</span></div>
-        <div class="tytul">${[i.liniaNazwa ? `<b>${esc(i.liniaNazwa)}</b>` : '', i.wyrob ? esc(i.wyrob) : '', i.ilosc !== null ? `${esc(i.ilosc)} szt.` : '']
-          .filter(Boolean).join(' · ')}${i.zlecenie ? ` <span class="slaby">zlec. ${esc(i.zlecenie)}</span>` : ''}</div>
-        ${i.powod ? `<div class="slaby tekst-opisu">${esc(i.powod)}</div>` : ''}
-      </article>`).join('') || (ileBhp ? '' : '<p class="pusto ok">Brak incydentów na tej zmianie</p>'));
-    const wcz = [];
-    if (w.wczesniej.alerty) wcz.push(`alerty: ${w.wczesniej.alerty}`);
-    if (w.wczesniej.partie) wcz.push(`partie brakowe: ${w.wczesniej.partie}`);
-    $('wczesniej').hidden = !wcz.length;
-    $('wczesniej').textContent = wcz.length ? `Nadal aktywne z wcześniejszych zmian — ${wcz.join(', ')}` : '';
-    // UI etap 4: pusta Jakość nie zabiera pół ekranu — staje cienkim paskiem, a Awarie dostają całą szerokość (panel.css).
-    $('na-zywo').classList.toggle('bez-jakosci', !w.lista.length && !wcz.length && !ileBhp);
-  }
-  $('lista-jakosci').addEventListener('click', ev => { if (ev.target.closest('[data-bhp]')) Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp'); });
 
   /* Lista raportów jest przerysowywana przy każdym zdarzeniu i co 20 s — bez tej
      pamięci rozwinięty raport zwijałby się kierownikowi w trakcie czytania.   */
@@ -613,8 +587,6 @@
                                  teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30), ja: hala.pracownik });
       const jakosc = W.incydenty({ partie: hala.obiekty('partia'), alerty: hala.obiekty('alert'), slowniki: d.slowniki, zmiana: d.zmiana, teraz: d.teraz });
       sprawdzAlarmy(wiersze, jakosc.lista);
-      const bhpOtwarte = W.bhpLista({ zgloszenia: hala.obiekty('bhp_zgloszenie', g => g.status === 'otwarte'), slowniki: d.slowniki,
-                                      pracownicy: d.pracownicy, stale: d.stale });
       const zlecenia = hala.obiekty('zlecenie');
       const doZamkniecia = zlecenia.filter(z => z.status === 'wykonane' || z.status === 'odrzucone').length;
       $('plakietka-zlecen').hidden = !doZamkniecia;
@@ -622,9 +594,8 @@
       if (widokAktywny === 'na-zywo') {
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
-        rysujJakosc(jakosc, bhpOtwarte);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
-                                slowniki: d.slowniki, bhp: bhpOtwarte.length, urzadzenia }));
+                                slowniki: d.slowniki, urzadzenia }));
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {
         rysujZlecenia(d, zlecenia);
@@ -644,7 +615,7 @@
   // Tylko kafelki z liczbą > 0 (W.kafelkiDoPokazania); same zera — jedno spokojne zdanie zamiast rzędu szarych „0”.
   function rysujLiczby(lista) {
     const w = W.kafelkiDoPokazania(lista);
-    $('kafelki-liczb').innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie stoi, nic nie czeka</p>' : w.kafelki.map(k => `
+    $('kafelki-liczb').innerHTML = w.spokoj ? '<p class="spokoj">' + ik('haczyk', 18) + 'Wszystko w porządku — nic nie stoi, nic nie czeka</p>' : w.kafelki.map(k => `
       <button type="button" class="${esc(k.klasa)}" data-kafel="${esc(k.kod)}"><span class="etykieta">${esc(k.etykieta)}</span><b>${k.liczba}</b>${k.dopisek ? `<span class="dopisek">${esc(k.dopisek)}</span>` : ''}</button>`).join('');
   }
   // Kafelki zleceń prowadzą do zleceń — „po terminie” do „W toku”, gdzie spóźnione stoją na górze z ⏰ (UI etap 2:
@@ -1023,7 +994,9 @@
     for (const c of chipy) {
       const b = document.querySelector(`#filtr-zlecen [data-filtr="${c.filtr}"]`);
       if (!b) continue;
-      if (b.textContent !== c.napis) b.textContent = c.napis;
+      const tresc = esc(c.napis) + (c.po ? ` · ${ik('zegar', 14).replace('class="ik"', 'class="ik bez-odstepu"')}${c.po}` : '');
+      if (b.dataset.tresc !== tresc) { b.innerHTML = tresc; b.dataset.tresc = tresc; }
+      b.title = c.po ? `${c.po} po terminie` : '';
       b.classList.toggle('spoznione', c.alarm);
     }
     zlecBufor = new Map(zlecenia.map(z => [z.id, z]));
@@ -1067,12 +1040,12 @@
   function akcjeZlecenia(z, { zrob, kier, stale }) {
     const p = (akcja, napis, klasa, title) => `<button type="button" class="maly${klasa ? ` ${klasa}` : ''}" data-akcja="${akcja}"${title ? ` title="${esc(title)}"` : ''}>${napis}</button>`;
     const glowne = [], obok = [], reszta = [];
-    if (zrob) glowne.push(p('wykonaj', '▶ Wykonaj', 'glowny'));
+    if (zrob) glowne.push(p('wykonaj', `${ik('odtworz', 14)}Wykonaj`, 'glowny'));
     const przekaz = z.dzialania.przekaz ? p('przekaz', 'Przekaż', z.doKierownika ? 'glowny' : '') : '';
     const rozdziel = z.dzialania.rozdziel ? p('rozdziel', 'Rozdziel') : '';
     if (z.doKierownika && przekaz) { glowne.push(przekaz); if (rozdziel) obok.push(rozdziel); } else reszta.push(przekaz, rozdziel);
     const edytuj = kier && z.moznaEdytowac && mozeWyslac('zlecenie.edytowane')
-      ? p('edytuj', '✎ Zmień', '', 'Popraw treść, opis, pozycje, godziny — także w zapisanym zleceniu') : '';
+      ? p('edytuj', `${ik('edytuj', 14)}Zmień`, '', 'Popraw treść, opis, pozycje, godziny — także w zapisanym zleceniu') : '';
     if (z.moznaZmienic) { glowne.push(p('zlec-teraz', 'Zleć teraz', 'glowny', 'Zleć od razu — dział dostanie powiadomienie')); reszta.push(p('zmien-plan', 'Zmień')); }
     if (kier && z.doZamkniecia && z.moznaOdebrac) {
       // D87: checklista oddana pozycja po pozycji — „Odbierz całą” (albo resztę, gdy część już odebrana) i „Zwróć całą”.
@@ -1097,7 +1070,7 @@
     if (ukryte.length === 1 && widoczne.length < 2) return widoczne.concat(ukryte).join('');   // dwa widoczne to komplet — reszta pod „Więcej”
     if (!ukryte.length) return widoczne.join('');
     const otwarte = wiecejOtwarte.has(z.id);
-    return widoczne.join('') + p('wiecej', `Więcej ${otwarte ? '▴' : '▾'}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
+    return widoczne.join('') + p('wiecej', `Więcej${ik(otwarte ? 'szewron-gora' : 'szewron-dol', 14).replace('class="ik"', 'class="ik po"')}`, 'wiecej').replace('<button ', `<button aria-expanded="${otwarte}" `)
       + (otwarte ? ukryte.join('') : '');
   }
   /* Przyciski Odbierz / Zwróć przy ZROBIONEJ pozycji (albo znacznik „Odebrana”) — jedno miejsce dla wiersza zlecenia („Do odbioru”) i dla rozwiniętej
@@ -1125,10 +1098,10 @@
     const ja = hala.pracownik && hala.pracownik.id;
     const zrob = z.rodzaj === 'kierownik' && z.otwarte && ((hala.pracownik && hala.pracownik.role) || []).some(r => r === 'kierownik' || r === 'admin')
       && (!z.wykonawcaId || z.wykonawcaId === ja);
-    const rodzajNapis = (z.checklista ? `☑ Checklista ${z.checklista.gotowe}/${z.checklista.wszystkie}` : W.nazwaRodzaju(z.rodzaj));
+    const rodzajNapis = (z.checklista ? `${ik('lista', 14)}Checklista ${z.checklista.gotowe}/${z.checklista.wszystkie}` : W.nazwaRodzaju(z.rodzaj));
     // 2026-10-27: postęp maszyn „▣ 2/7 maszyn” z paskiem — kierownik widzi, ile maszyn jest już sprawdzonych.
     const maszynyPasek = z.maszynyPostep ? `<span class="postep-maszyn${z.maszynyPostep.gotowe === z.maszynyPostep.wszystkie ? ' pelny' : ''}" style="--p:${z.maszynyPostep.proc}%"
-      title="Zeskanowane maszyny">▣ ${z.maszynyPostep.gotowe}/${z.maszynyPostep.wszystkie} maszyn</span>` : '';
+      title="Zeskanowane maszyny">${ik('skan', 14)}${z.maszynyPostep.gotowe}/${z.maszynyPostep.wszystkie} maszyn</span>` : '';
     // D67: pozycje checklisty — kierownik widzi, co odhaczone, co pominięte (z powodem) i co zostało.
     // D87 (właściciel 2026-11-17): przy odbiorze (zlecenie „wykonane” z checklistą) każda pozycja ma na wierszu swoje dowody
     // (kto i kiedy, notatka, zdjęcia, powód pominięcia) i własne przyciski Odbierz / Zwróć — odbiór nie wymaga już wchodzenia w okno.
@@ -1142,7 +1115,7 @@
     const pokazDowody = p => p.stan !== 'czeka' && ((klik && poz) || wglad);
     const dowody = p => dowodyPozycji(z, p);
     const przyciskiPozycji = p => przyciskiPozycjiHtml(z, p, poz);
-    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? '✓✓' : ZNAK[p.stan]}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">▣ ${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">›</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${pokazDowody(p) ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !pokazDowody(p) ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
+    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? ik('ok-kolo', 16) : znakIk(ZNAK[p.stan])}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">${ik('skan', 12)}${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">${ik('szewron-prawo', 14)}</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${pokazDowody(p) ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !pokazDowody(p) ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
     const naglowekPozycji = z.odbior && z.doZamkniecia && z.status === 'wykonane'
       ? `Pozycje (${z.odbior.odebrane}/${z.odbior.wszystkie} odebrane)` : `Pozycje (${z.checklista ? z.checklista.gotowe : 0}/${z.checklista ? z.checklista.wszystkie : 0})${wglad ? ' — kto, kiedy, notatki i zdjęcia' : ''}`;
     const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>${naglowekPozycji}</summary>
@@ -1152,31 +1125,31 @@
         <div class="opis">
           <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia" title="Historia: kto, kiedy, notatki i zdjęcia">${esc(z.tytul)}</button> <span class="slaby">${esc(z.numer)}</span>${z.naZmiane ? ` <span class="znacznik neutral">${esc(z.naZmiane)}</span>` : ''}</div>
           ${window.HalaZlecenia ? window.HalaZlecenia.krokiStatusu(z.status) : ''}
-          ${z.postep && z.otwarte ? `<div class="postep-zlecenia">▶ W toku: ${esc(z.postep.opis)} <span class="slaby">(ostatnio ${esc(z.postep.ostatni)})</span></div>` : ''}
+          ${z.postep && z.otwarte ? `<div class="postep-zlecenia">${ik('odtworz', 14)}W toku: ${esc(z.postep.opis)} <span class="slaby">(ostatnio ${esc(z.postep.ostatni)})</span></div>` : ''}
           ${z.czynnosc && z.otwarte ? `<div class="slaby">${z.czynnosc === 'proba' ? ik('proba') + 'zaliczy się samo po próbie jakościowej' : ik('przeglady') + 'zaliczy się samo po przeglądzie UR'}</div>` : ''}
           <div class="szczegoly">
-            <span class="znacznik rodzaj-zadania">${esc(rodzajNapis)}</span>
-            ${maszynyPasek}${z.okno ? ` <span class="znacznik neutral" title="Wcześniej nie da się go zrobić">⏳ ${esc(z.okno)}</span>` : ''}
+            <span class="znacznik rodzaj-zadania">${z.checklista ? rodzajNapis : esc(rodzajNapis)}</span>
+            ${maszynyPasek}${z.okno ? ` <span class="znacznik neutral" title="Wcześniej nie da się go zrobić">${ik('klepsydra', 14)}${esc(z.okno)}</span>` : ''}
             <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
-            ${z.spoznienie ? `<span class="znacznik alarm">${esc(z.spoznienie)}</span>` : ''}
+            ${z.spoznienie ? `<span class="znacznik alarm">${ik('zegar', 14)}${esc(z.spoznienie)}</span>` : ''}
             <span class="znacznik neutral">${esc(z.dzialNazwa)}</span>
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
             ${z.doKierownika ? '<span class="znacznik uwaga" title="Kierownik działu je przekaże albo rozdzieli">Do rozdzielenia</span>' : ''}
             ${z.zatwierdzoneAuto ? '<span class="znacznik neutral" title="Zmiana się skończyła — serwer zatwierdził zlecenie sam, bez odbioru kierownika">Zatwierdzone automatycznie</span>' : ''}
             ${z.odbiorZakonczony ? `<span class="znacznik neutral" title="Odbiór zleceń zmianowych jest do końca zmiany + ${Hala.karencjaOdbioru(hala.kontrakt && hala.kontrakt.stale)} min">Tylko do wglądu</span>` : ''}
-            ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">${ik('aparat')}${z.zdjecia.length ? '✓' : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">${ik('notatka')}${z.notatka ? '✓' : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">▣${z.zeskanowano ? '✓' : ''}</span>` : ''}
+            ${z.wymagajZdjecia ? `<span title="${z.zdjecia.length ? 'Dział dodał zdjęcie' : 'Dział musi dodać zdjęcie'}">${ik('aparat')}${z.zdjecia.length ? ik('haczyk', 14) : ''}</span>` : ''}${z.wymagajNotatki ? `<span title="${z.notatka ? 'Dział napisał notatkę' : 'Dział musi napisać notatkę'}">${ik('notatka')}${z.notatka ? ik('haczyk', 14) : ''}</span>` : ''}${z.wymagajSkanu ? `<span title="${z.zeskanowano ? 'Dział zeskanował kod QR maszyny' : 'Dział musi zeskanować kod QR maszyny'}">${ik('skan')}${z.zeskanowano ? ik('haczyk', 14) : ''}</span>` : ''}
           </div>
           ${z.opis ? `<div class="slaby tekst-opisu">${esc(z.opis)}</div>` : ''}
           ${pozycje}
           ${/* D76: komu kierownik działu rozdzielił zlecenie i ile już zrobione (✓ zrobione, ▶ w robocie, ✗ nie może, ○ czeka). */
             z.rozdzial ? `<div class="postep-zlecenia">Rozdzielone: <b>${esc(z.rozdzial.tekst)}</b> — ${z.rozdzial.osoby.map(o =>
-              `<span class="${o.znak === '✓' ? 'tekst-ok' : o.znak === '✗' ? 'tekst-alarm' : ''}">${esc(o.znak)} ${esc(o.kto)}</span>`).join(', ')}</div>` : ''}
+              `<span class="${o.znak === '✓' ? 'tekst-ok' : o.znak === '✗' ? 'tekst-alarm' : ''}">${znakIk(o.znak)} ${esc(o.kto)}</span>`).join(', ')}</div>` : ''}
           ${/* D76 (właściciel 2026-10-19): wgląd w postęp dla upoważnionych (W.rozdzialZlecenia → czesci) — każda część: stan,
                kiedy zrobiona, notatka, zdjęcia, powód „Nie mogę”. Zwinięte, rozwinięte przy „Do odbioru”. */
             z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="pozycje-zlecenia czesci-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Części — szczegóły</summary>
-            <ul>${z.rozdzial.czesci.map(c => `<li class="stan-${c.znak === '✓' ? 'wykonana' : 'czeka'}"><span aria-hidden="true">${esc(c.znak)}</span> <b>${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? ` <span class="tekst-alarm">— ${esc(c.powod)}</span>` : ''}${c.notatka ? `<div class="slaby">📝 ${esc(c.notatka)}</div>` : ''}${zdjecia(c.zdjecia, '', [z.tytul, c.kto, c.notatka].filter(Boolean).join(' · '))}</li>`).join('')}</ul></details>` : ''}
+            <ul>${z.rozdzial.czesci.map(c => `<li class="stan-${c.znak === '✓' ? 'wykonana' : 'czeka'}"><span aria-hidden="true">${znakIk(c.znak)}</span> <b>${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? ` <span class="tekst-alarm">— ${esc(c.powod)}</span>` : ''}${c.notatka ? `<div class="slaby">${ik('notatka', 14)}${esc(c.notatka)}</div>` : ''}${zdjecia(c.zdjecia, '', [z.tytul, c.kto, c.notatka].filter(Boolean).join(' · '))}</li>`).join('')}</ul></details>` : ''}
           ${/* Dowody zwykłego zlecenia (bez pozycji) — jak „Do odbioru”, tylko do odczytu: kto i kiedy zrobił i odebrał (notatka i zdjęcia niżej). */
             kier && z.prawoOdbioru && !z.pozycje.length && z.wykonanoPrzez && !z.otwarte
               ? `<div class="slaby poz-dowody">Zrobione przez ${esc(z.wykonanoPrzez)}${z.wykonanoKiedy ? ` ${esc(z.wykonanoKiedy)}` : ''}${z.odebranoKiedy && z.status === 'zamkniete' ? ` · odebrane ${esc(z.odebranoKiedy)}` : ''}</div>` : ''}
@@ -1215,7 +1188,7 @@
     $('t-okno-pozycji-zlecenia').textContent = p.nazwa || 'Pozycja';
     $('pozycja-zlecenia-tresc').innerHTML = `
       <p class="slaby">Zlecenie: ${esc(z.tytul)} · ${esc(z.numer)} · pozycja ${z.pozycje.indexOf(p) + 1} z ${z.pozycje.length}</p>
-      <p class="pozycja-kto"><span aria-hidden="true">${ZNAK_POZ[p.stan]}</span> ${ktoKiedy}</p>
+      <p class="pozycja-kto"><span aria-hidden="true">${znakIk(ZNAK_POZ[p.stan])}</span> ${ktoKiedy}</p>
       ${p.odebrana ? `<p class="pozycja-kto tekst-ok">Odebrana${p.odebranaPrzez ? ` przez ${esc(p.odebranaPrzez)}` : ''}${p.odebranaGodz ? `, ${esc(p.odebranaGodz)}` : ''}</p>` : ''}
       ${p.opis ? `<p class="slaby opis-pozycji">${esc(p.opis)}</p>` : ''}
       ${p.stan === 'pominieta' ? `<div class="pozycja-pole"><b>Powód pominięcia</b><p>${p.powod ? esc(p.powod) : '<span class="slaby">Bez powodu</span>'}</p></div>` : ''}
@@ -1735,7 +1708,7 @@
         const a = URL.createObjectURL(plik); adresy.push(a);
         const poz = document.createElement('span'); poz.className = 'hala-zdjecie-poz';
         const im = document.createElement('img'); im.alt = ''; im.src = a;
-        const x = document.createElement('button'); x.type = 'button'; x.className = 'maly'; x.textContent = '✕'; x.setAttribute('aria-label', 'Usuń zdjęcie');
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'maly'; x.innerHTML = ik('zamknij'); x.setAttribute('aria-label', 'Usuń zdjęcie');
         x.addEventListener('click', () => { pliki.splice(i, 1); pokaz(); });
         poz.append(im, x); miniatury.appendChild(poz);
       });
@@ -1853,7 +1826,9 @@
     const b = $('dzwiek');
     const wl = dzwiekWlaczony();
     const czeka = wl && !dzwiekGotowy();
-    b.innerHTML = wl ? (czeka ? ik('alerty', 18) + '<span class="dz-napis">Włącz dźwięk</span>' : ik('alerty', 18)) : ik('dzwonek-wyl', 18);
+    // Napis „Włącz dźwięk” w nagłówku został tylko na koncie ekranu (monitor nie ma baneru); reszta ma jeden sposób włączenia — baner.
+    const ekranKonto = !!(hala.pracownik && (hala.pracownik.role || []).includes('ekran'));
+    b.innerHTML = wl ? (czeka && ekranKonto ? ik('alerty', 18) + '<span class="dz-napis">Włącz dźwięk</span>' : ik('alerty', 18)) : ik('dzwonek-wyl', 18);
     const co = W.wieleLinii(hala.slowniki) ? 'zatrzymaniu linii' : 'zatrzymaniu maszyny';
     b.title = wl ? (czeka ? 'Włącz dźwięk — kliknij, żeby przeglądarka wpuściła dźwięk' : `Dźwięk przy awarii (${co} — mocniej), pilnym zleceniu i alercie jakości włączony`) : 'Dźwięk wyłączony';
     b.setAttribute('aria-label', b.title);
@@ -1865,7 +1840,7 @@
     const pasek = $('pasek-dzwieku');
     const pokaz = !ekran && !!hala.pracownik && (!wl || czeka);
     pasek.hidden = !pokaz;
-    if (pokaz) $('pasek-dzwieku-tekst').textContent = wl ? 'Przeglądarka blokuje dźwięk — nie usłyszysz awarii ani pilnych zleceń.' : 'Dźwięk wyłączony — nie usłyszysz awarii ani pilnych zleceń.';
+    if (pokaz) pasek.title = wl ? 'Przeglądarka blokuje dźwięk — nie usłyszysz awarii ani pilnych zleceń' : 'Dźwięk wyłączony — nie usłyszysz awarii ani pilnych zleceń';
   }
 
   $('dzwiek').addEventListener('click', () => {
@@ -1903,24 +1878,25 @@
 
   /* Na monitorze listy przewijają się w swoich sekcjach, a monitor nie ma myszy. Dopisek „jeszcze N”
      mówi, że coś jest niżej, a na koncie ekranu listy same przewijają się stronami co 12 s. */
-  const LISTY_JESZCZE = [['lista-awarii', 'jeszcze-awarie', 'awarie'], ['lista-jakosci', 'jeszcze-jakosc', 'jakosc']];
+  const LISTY_JESZCZE = [['lista-awarii', 'jeszcze-awarie', 'awarie']];
   function pokazJeszcze() {
     for (const [lista, znacznik, rodzaj] of LISTY_JESZCZE) {
       const el = $(lista), dol = el.scrollTop + el.clientHeight;
       let n = 0;
       for (const c of el.children) if (c.offsetTop + c.offsetHeight > dol + 4) n++;
       $(znacznik).hidden = !n;
-      $(znacznik).textContent = W.napisJeszcze(n, rodzaj);   // „▼ Przewiń — jeszcze 2 awarie”
+      const napis = W.napisJeszcze(n, rodzaj);
+      $(znacznik).innerHTML = napis ? ik('szewron-dol', 14) + esc(napis) : '';   // „▼ Przewiń — jeszcze 2 awarie”
     }
   }
   // UI etap 4: dopisek da się kliknąć — przewija listę o stronę (na komputerze nie każdy szuka kółkiem w karcie).
   for (const [lista, znacznik] of LISTY_JESZCZE)
     $(znacznik).addEventListener('click', () => { const el = $(lista); el.scrollTo({ top: el.scrollTop + el.clientHeight - 40, behavior: 'smooth' }); });
-  for (const lista of ['lista-awarii', 'lista-jakosci']) $(lista).addEventListener('scroll', pokazJeszcze, { passive: true });
+  for (const lista of ['lista-awarii']) $(lista).addEventListener('scroll', pokazJeszcze, { passive: true });
 
   setInterval(() => {
     if (!document.body.classList.contains('tryb-ekran') || widokAktywny !== 'na-zywo') return;
-    for (const el of [$('lista-awarii'), $('lista-jakosci')]) {
+    for (const el of [$('lista-awarii')]) {
       if (el.scrollHeight - el.clientHeight < 8) { el.scrollTop = 0; continue; }
       const koniec = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
       el.scrollTo({ top: koniec ? 0 : el.scrollTop + el.clientHeight - 40, behavior: 'smooth' });
