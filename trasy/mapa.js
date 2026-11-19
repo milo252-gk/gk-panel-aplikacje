@@ -285,6 +285,21 @@ const Mapa = (() => {
     if (dymek) znacznik.setPopupContent(dymek);
   }
 
+  /* Przyciski „gdzie jest auto” (Pulpit): wycentruj z powiększeniem / tylko przesuń (zostaje powiększenie użytkownika) / dymek. */
+  function przyblizDo(mapa, punkt, zoom) {
+    const p = wsp(punkt);
+    mapa.setView([p.lat, p.lng], zoom || 14, { animate: false });
+  }
+
+  function przesunDo(mapa, punkt) {
+    const p = wsp(punkt);
+    mapa.panTo([p.lat, p.lng], { animate: false });
+  }
+
+  function otworzDymek(znacznik) {
+    if (znacznik && znacznik.openPopup) znacznik.openPopup();
+  }
+
   function usunZnacznik(mapa, znacznik) {
     mapa.removeLayer(znacznik);
     mapa._nasze = (mapa._nasze || []).filter(w => w !== znacznik);
@@ -292,7 +307,7 @@ const Mapa = (() => {
 
   return {
     zaloz, odswiezWszystkie, rysujTrase, rysujSlad, znacznikPozycji,
-    przesunZnacznik, usunZnacznik,
+    przesunZnacznik, usunZnacznik, przyblizDo, przesunDo, otworzDymek,
     znacznikFirmowy, znacznikNumer, zwykla, dopasujWidok, przebiegPoDrogach,
   };
 })();

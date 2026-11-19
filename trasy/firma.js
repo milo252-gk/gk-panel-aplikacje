@@ -35,14 +35,14 @@ EKRANY.lokalizacje = {
           <span class="srodek">
             <span class="nazwa">${escHtml(l.nazwa)}${l.aktywna ? '' : ' <span class="male slaby">(ukryta)</span>'}</span>
             <span class="adres">${escHtml(adresJednymCiagiem(l)) || 'brak adresu'}</span>
-            ${l.godziny ? `<span class="dopisek">🕒 ${escHtml(l.godziny)}</span>` : ''}
+            ${l.godziny ? `<span class="dopisek">${ikonka('zegar')}${escHtml(l.godziny)}</span>` : ''}
           </span>
           <span class="prawo">
             ${l.domyslna ? '<span class="plakietka p-dostarczone">baza firmy</span>' : ''}
             ${l.lat == null ? '<span class="plakietka p-nieudane">brak na mapie</span>' : ''}
           </span>
         </button>`).join('')
-        : `<div class="karta"><div class="pusto"><span class="duza-ikona">🏭</span>
+        : `<div class="karta"><div class="pusto"><span class="duza-ikona">${ikonka('fabryka')}</span>
              Nie ma jeszcze żadnej lokalizacji. Dodaj magazyn, z którego wyjeżdżają auta.</div></div>`}
 
       ${lista.some(l => l.lat != null) ? `<div class="karta">
@@ -171,7 +171,7 @@ EKRANY.zalegle = {
     await listaKierowcow();
     const zalegle = wynik.zalegle;
     if (!zalegle.length) {
-      pole.innerHTML = `<div class="karta"><div class="pusto"><span class="duza-ikona">✓</span>
+      pole.innerHTML = `<div class="karta"><div class="pusto"><span class="duza-ikona">${ikonka('haczyk')}</span>
         Nic nie zalega. Wszystko z ostatnich ${wynik.dni} dni zostało dowiezione
         albo czeka na dziś.</div></div>`;
       return;
@@ -212,9 +212,9 @@ EKRANY.zalegle = {
               <span class="dopisek">${polskaData(z.data)} · ${escHtml(z.kierowca_imie || 'bez kierowcy')}
                 · ${z.ile_dni ? `${z.ile_dni} ${odmiana(z.ile_dni, 'dzień', 'dni', 'dni')} temu` : 'dziś'}</span>
               ${z.status === 'nieudane' && z.powod
-                ? `<span class="dopisek">✕ ${escHtml(z.powod)}</span>`
+                ? `<span class="dopisek">${ikonka('zamknij')}${escHtml(z.powod)}</span>`
                 : '<span class="dopisek">nie zamknięte do końca dnia</span>'}
-              ${z.towar ? `<span class="dopisek">📦 ${escHtml(z.towar)}</span>` : ''}
+              ${z.towar ? `<span class="dopisek">${ikonka('paczka')}${escHtml(z.towar)}</span>` : ''}
             </span>
           </label>`).join('')}
 
@@ -283,7 +283,7 @@ EKRANY.odrzucone = {
     if (!wynik) return;
     const lista = wynik.odrzucone || [];
     if (!lista.length) {
-      pole.innerHTML = `<div class="karta"><div class="pusto"><span class="duza-ikona">✓</span>
+      pole.innerHTML = `<div class="karta"><div class="pusto"><span class="duza-ikona">${ikonka('haczyk')}</span>
         Nic nie czeka. Każdy zapis z telefonów doszedł na swoje miejsce.</div></div>`;
       return;
     }

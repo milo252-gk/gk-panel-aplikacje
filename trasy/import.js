@@ -121,7 +121,7 @@ EKRANY.import = {
   tylkoBiuro: true,
   async rysuj(pole) {
     pole.innerHTML = `
-      <button class="tekstowy" id="im-wroc">← Trasy</button>
+      <button class="tekstowy" id="im-wroc">${ikonka('strzalka-lewo')}Trasy</button>
       <div class="karta">
         <h2>1. Wskaż plik</h2>
         <p class="male slaby">Plik <b>.xlsx</b> — ten sam, w którym układacie plan.

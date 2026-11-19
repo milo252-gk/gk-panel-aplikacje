@@ -33,7 +33,7 @@ EKRANY.szablony = {
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         <button class="glowny" id="sz-nowy">+ Nowa zapisana trasa</button>
-        <button id="sz-wroc">← Trasy</button>
+        <button id="sz-wroc">${ikonka('strzalka-lewo')}Trasy</button>
       </div>
       <p class="male slaby">Zapisana trasa zapamiętuje zestaw klientów i ich kolejność.
         Z jednej zapisanej trasy robisz dzień jednym kliknięciem — bez przeklikiwania
@@ -51,12 +51,12 @@ EKRANY.szablony = {
             </div>
             <div class="przyciski">
               <button class="maly glowny" data-uzyj="${s.id}">Zrób z tego trasę</button>
-              <button class="maly" data-edytuj="${s.id}">Zmień</button>
+              <button class="maly" data-edytuj="${s.id}">${ikonka('edytuj')}Zmień</button>
               <button class="maly" data-usun="${s.id}">Usuń</button>
             </div>
           </div>
           <div class="male">${s.punkty.map((p, i) =>
-            `${i + 1}. ${p.nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}`).join(' &nbsp;·&nbsp; ') || '<i>pusty</i>'}</div>
+            `${i + 1}. ${p.nasze ? ikonka('fabryka') : ''}${escHtml(p.klient_nazwa)}`).join(' &nbsp;·&nbsp; ') || '<i>pusty</i>'}</div>
         </div>`).join('')
         : szablony.length && !bezFiltrow ? pustoPoFiltrach('Żadna zapisana trasa')
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('zapisane', 38)}</span>
@@ -229,7 +229,7 @@ EKRANY.zaladunek = {
     const data = param.data || dzisiaj();
     const trasa = await wczytajMojaTrase(data);
     if (!trasa || !trasa.przystanki.length) {
-      pole.innerHTML = `<div class="karta"><div class="pusto"><span class="duza-ikona">📦</span>
+      pole.innerHTML = `<div class="karta"><div class="pusto"><span class="duza-ikona">${ikonka('paczka')}</span>
         Na ten dzień nie ma czego ładować.</div></div>`;
       return;
     }
@@ -256,8 +256,8 @@ EKRANY.zaladunek = {
           <p class="male slaby" style="margin-top:10px">Przy każdej pozycji przepisz numer
             zamówienia <b>z dokumentu przy towarze</b>. Zdjęcie nie jest obowiązkowe — wystarczy
             jedno całego ładunku. Działa bez zasięgu.</p>
-          <button type="button" class="duzy" id="z-ladunek">📷 Zdjęcie ładunku${
-            trasa.zdjecia_ladunku ? ` <span class="plakietka p-dostarczone">✓ ${trasa.zdjecia_ladunku}</span>` : ''}</button>
+          <button type="button" class="duzy" id="z-ladunek">${ikonka('aparat')}Zdjęcie ładunku${
+            trasa.zdjecia_ladunku ? ` <span class="plakietka p-dostarczone">${ikonka('haczyk')}${trasa.zdjecia_ladunku}</span>` : ''}</button>
         </div>
         ${pozycje.map((p, i) => {
           const zrobione = !!p.zaladowano_o;
@@ -265,19 +265,19 @@ EKRANY.zaladunek = {
           return `
           <button class="przystanek ${zle ? 's-nieudane' : zrobione ? 's-dostarczone' : 's-oczekuje'}"
                   data-poz="${p.id}">
-            <span class="numer">${zle ? '!' : zrobione ? '✓' : i + 1}</span>
+            <span class="numer">${zle ? '!' : zrobione ? ikonka('haczyk') : i + 1}</span>
             <span class="srodek">
               <span class="nazwa">${escHtml(p.klient_nazwa)}</span>
               <span class="adres">${escHtml(p.towar || 'towar nieokreślony')}</span>
               ${zrobione ? `<span class="dopisek">${zle
-                  ? '⚠ numer nie zgadza się z zamówieniem'
-                  : '📄 numer ' + escHtml(p.numer_kierowcy || '') + ' — zgodny'}</span>` : ''}
-              ${p.z_dnia ? `<span class="dopisek">⏰ zaległe z ${escHtml(p.z_dnia)}</span>` : ''}
+                  ? (ikonka('ostrzezenie') + 'numer nie zgadza się z zamówieniem')
+                  : (ikonka('raporty') + 'numer ') + escHtml(p.numer_kierowcy || '') + ' — zgodny'}</span>` : ''}
+              ${p.z_dnia ? `<span class="dopisek">${ikonka('zegar')}zaległe z ${escHtml(p.z_dnia)}</span>` : ''}
             </span>
           </button>`;
         }).join('')}
         ${trasa.status === 'planowana' && !ileDoZaladunku(trasa) ? `
-          <button class="glowny duzy" id="z-start">▶ Rozpocznij trasę</button>` : ''}`;
+          <button class="glowny duzy" id="z-start">${ikonka('odtworz')}Rozpocznij trasę</button>` : ''}`;
       pole.querySelectorAll('[data-poz]').forEach(b => b.onclick = () => {
         oknoZaladunku(pozycje.find(p => p.id === Number(b.dataset.poz)), trasa, rysuj);
       });
@@ -317,7 +317,7 @@ function oknoZaladunku(p, trasa, odswiez) {
     },
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: '✓ Potwierdź załadunek', klasa: 'zielony', klik: async z => {
+      { napis: 'Potwierdź załadunek', ikona: 'haczyk', klasa: 'zielony', klik: async z => {
         const numer = document.getElementById('z-numer').value.trim();
         if (!numer) return komunikat('Wpisz numer zamówienia z dokumentu', 'blad');
         // Bez zdjęcia też wolno (UI etap 2) — kontrolą jest numer z dokumentu.
@@ -379,7 +379,7 @@ function oknoZdjeciaLadunku(trasa, odswiez) {
     },
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: '✓ Zapisz zdjęcie', klasa: 'zielony', klik: async z => {
+      { napis: 'Zapisz zdjęcie', ikona: 'haczyk', klasa: 'zielony', klik: async z => {
         if (!zdjecia.length) return komunikat('Zrób zdjęcie ładunku', 'blad');
         z();
         await zapiszZdjecieLadunku(trasa, zdjecia.slice(0, 4));

@@ -277,16 +277,16 @@ const ETA = (() => {
     /* Przerwa jest częścią tej godziny — bez dopisku wygląda jak strata czasu
        albo pomyłka w rachunku. */
     const przerwa = p.przerwa_przed
-      ? `<span class="slaby"> · ☕ w drodze przerwa ${p.przerwa_przed} min</span>` : '';
+      ? `<span class="slaby"> · ${ikonka('przerwa')}w drodze przerwa ${p.przerwa_przed} min</span>` : '';
     if (p.spoznienie) {
-      return `<span style="color:var(--czerwony);font-weight:700">⚠ ${p.eta} — nie zdążysz,`
+      return `<span style="color:var(--czerwony);font-weight:700">${ikonka('ostrzezenie')}${p.eta} — nie zdążysz,`
         + ` zamykają ${escHtml(p.okno_do)}</span>` + przerwa;
     }
     if (p.za_wczesnie && p.za_wczesnie > 15) {
-      return `<span style="color:var(--zolty)">🕒 ${p.eta} — otwierają dopiero`
+      return `<span style="color:var(--zolty)">${ikonka('zegar')}${p.eta} — otwierają dopiero`
         + ` ${escHtml(p.okno_od)}</span>` + przerwa;
     }
-    return `<span class="slaby">🕒 ok. ${p.eta}</span>` + przerwa;
+    return `<span class="slaby">${ikonka('zegar')}ok. ${p.eta}</span>` + przerwa;
   }
 
   return { policz, opis, odlegloscKm, naGodzine, naMinuty, minutyOdPoczatkuDnia, modelCzasu,

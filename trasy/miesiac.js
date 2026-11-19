@@ -60,9 +60,9 @@ EKRANY.miesiac = {
 
     pole.innerHTML = `
       <div class="pasek-narzedzi">
-        <button type="button" id="k-wstecz" aria-label="Poprzedni miesiąc">← Poprzedni</button>
+        <button type="button" id="k-wstecz" aria-label="Poprzedni miesiąc">${ikonka('strzalka-lewo')}Poprzedni</button>
         <button type="button" id="k-dzis"${miesiac === dzis.slice(0, 7) ? ' aria-current="date"' : ''}>Ten miesiąc</button>
-        <button type="button" id="k-dalej" aria-label="Następny miesiąc">Następny →</button>
+        <button type="button" id="k-dalej" aria-label="Następny miesiąc">Następny${ikonka('strzalka-prawo', 16, true)}</button>
         <label>Miesiąc<input type="month" id="k-miesiac" value="${miesiac}"></label>
       </div>
       <div class="karta kalendarz-tras">

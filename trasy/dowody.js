@@ -72,7 +72,7 @@ async function oknoZalacznikow(przystanekId, tytul) {
         Pliki leżą też w folderze <code>pliki/</code> obok programu.</p>`,
     przyciski: [
       { napis: 'Zamknij', klik: z => z() },
-      { napis: '🖨 Wydrukuj potwierdzenie', klasa: 'glowny',
+      { napis: 'Wydrukuj potwierdzenie', ikona: 'drukuj', klasa: 'glowny',
         klik: () => wydrukPotwierdzenia(przystanekId) },
     ],
   });
@@ -158,14 +158,14 @@ async function oknoHistoriiKlienta(klientId, nazwa) {
   const wiersz = (h) => `<tr>
       <td>${escHtml(polskaData(h.data))}</td>
       <td><span class="plakietka p-${h.status}">${
-        h.status === 'dostarczone' ? '✓' : h.status === 'nieudane' ? '✕ ' + escHtml(h.powod || '') : escHtml(h.status)
+        h.status === 'dostarczone' ? ikonka('haczyk') : h.status === 'nieudane' ? ikonka('zamknij') + escHtml(h.powod || '') : escHtml(h.status)
       }</span></td>
       <td class="male">${escHtml(h.dokument || '')}</td>
       <td class="male">${escHtml((h.towar || '').slice(0, 40))}</td>
       <td class="male">${escHtml(h.odebral || '')}</td>
       <td class="male">${escHtml(h.kierowca_imie || '')}</td>
       <td>${h.ile_zalacznikow
-        ? `<button class="maly" data-dowod="${h.id}">📎 ${h.ile_zalacznikow}</button>` : ''}</td>
+        ? `<button class="maly" data-dowod="${h.id}">${ikonka('spinacz')}${h.ile_zalacznikow}</button>` : ''}</td>
     </tr>`;
 
   okno({
@@ -226,8 +226,8 @@ function oknoSzukania(poczatkowa) {
               <td><b>${escHtml(h.klient_nazwa)}</b></td>
               <td class="male">${escHtml(h.dokument || '')}</td>
               <td><span class="plakietka p-${h.status}">${
-                h.status === 'dostarczone' ? '✓' : h.status === 'nieudane'
-                  ? '✕ ' + escHtml(h.powod || '') : escHtml(h.status)}</span>${
+                h.status === 'dostarczone' ? ikonka('haczyk') : h.status === 'nieudane'
+                  ? ikonka('zamknij') + escHtml(h.powod || '') : escHtml(h.status)}</span>${
                 // „Gdzie jest mój towar" — biuro ma odpowiedzieć bez otwierania trasy.
                 h.status === 'oczekuje' && h.kolejnosc ? `<br><span class="male slaby">${
                   h.kolejnosc}. z ${h.punktow_trasy || '?'}</span>` : ''}</td>
@@ -235,7 +235,7 @@ function oknoSzukania(poczatkowa) {
               <td class="male">${escHtml(h.odebral || '')}</td>
               <td class="przyciski">
                 ${h.ile_zalacznikow ? `<button class="maly" data-dowod="${h.id}"
-                  data-nazwa="${escHtml(h.klient_nazwa)}">📎 ${h.ile_zalacznikow}</button>` : ''}
+                  data-nazwa="${escHtml(h.klient_nazwa)}">${ikonka('spinacz')}${h.ile_zalacznikow}</button>` : ''}
                 <button class="maly" data-trasa="${h.trasa}" title="Pokaż trasę" aria-label="Pokaż trasę">${ikonka('mapa')}</button>
                 <button class="maly" data-druk="${h.id}" title="Wydrukuj potwierdzenie" aria-label="Wydrukuj potwierdzenie">${ikonka('drukuj')}</button></td>
             </tr>`).join('')}</tbody></table></div>`
@@ -258,7 +258,11 @@ function oknoSzukania(poczatkowa) {
    kierowcy, nazwie trasy i dostawie — i od razu przechodzi do trasy / klienta. Rozszerza dotychczasowe „Szukaj dostawy”
    (okno z dowodami i wydrukiem zostaje: przycisk „Pełna lista…” otwiera je z wpisaną frazą). Serwer: GET
    /api/szukaj-globalne (dopisany; /api/szukaj bez zmian). Konto „podgląd” też szuka (czysty odczyt planu). */
-const STATUS_DOSTAWY_SZUKAJ = { dostarczone: '✓ dostarczone', nieudane: '✕ nieudana', oczekuje: 'czeka', odwolany: 'odwołana' };
+const STATUS_DOSTAWY_SZUKAJ = { dostarczone: ['haczyk', 'dostarczone'], nieudane: ['zamknij', 'nieudana'], oczekuje: ['', 'czeka'], odwolany: ['', 'odwołana'] };
+function statusDostawySzukaj(status) {
+  const w = STATUS_DOSTAWY_SZUKAJ[status];
+  return w ? (w[0] ? ikonka(w[0]) : '') + w[1] : escHtml(status);
+}
 
 function htmlWynikowSzukania(d) {
   const trasy = d.trasy || [], dostawy = d.dostawy || [], klienci = d.klienci || [];
@@ -273,7 +277,7 @@ function htmlWynikowSzukania(d) {
       t.auto_nazwa ? escHtml(t.auto_nazwa) : '', t.punktow + ' pkt'].filter(Boolean).join(' · '))).join(''));
   if (dostawy.length) czesci.push('<div class="wyniki-grupa">Dostawy</div>' + dostawy.map(h => wiersz(
     `data-wynik-trasa="${h.trasa}"`, h.klient_nazwa,
-    [h.dokument ? escHtml(h.dokument) : '', polskaData(h.data), STATUS_DOSTAWY_SZUKAJ[h.status] || escHtml(h.status),
+    [h.dokument ? escHtml(h.dokument) : '', polskaData(h.data), statusDostawySzukaj(h.status),
       h.kierowca_imie ? escHtml(h.kierowca_imie) : '',
       h.status === 'oczekuje' && h.kolejnosc ? h.kolejnosc + '. z ' + (h.punktow_trasy || '?') : ''].filter(Boolean).join(' · '))).join(''));
   if (klienci.length) czesci.push('<div class="wyniki-grupa">Klienci</div>' + klienci.map(c => wiersz(

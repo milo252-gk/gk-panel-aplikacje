@@ -38,10 +38,10 @@ EKRANY.pulpit = {
     pole.innerHTML = `
       <div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="p-data" value="${data}"></label>
-        <button id="p-wczoraj">← Poprzedni</button>
+        <button id="p-wczoraj">${ikonka('strzalka-lewo')}Poprzedni</button>
         <button id="p-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button>
-        <button id="p-jutro">Następny →</button>
-        <button class="glowny" id="p-planuj">${ikonka('mapa')}Zaplanuj trasę</button>
+        <button id="p-jutro">Następny${ikonka('strzalka-prawo', 16, true)}</button>
+        <button class="glowny" id="p-planuj">+ Nowa trasa</button>
       </div>
 
       <div id="p-kafelki" class="kafelki-liczb" aria-label="Najważniejsze liczby dnia"></div>
@@ -67,14 +67,17 @@ EKRANY.pulpit = {
         </div>` : ''}
 
       ${podglad ? '' : `<details class="zaawansowane" id="p-zatwierdzone">
-        <summary><span class="znak-zwiniecia">▸</span> Ostatnio zatwierdzone (24 h) <span class="filtry-licznik" id="p-zatwierdzone-licznik" hidden></span></summary>
+        <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Ostatnio zatwierdzone (24 h) <span class="filtry-licznik" id="p-zatwierdzone-licznik" hidden></span></summary>
         <div id="p-zatwierdzone-tresc" class="male slaby">Otwórz, żeby zobaczyć dostawy zatwierdzone w ostatniej dobie.</div>
       </details>`}
 
-      <h2 style="margin-top:20px">Gdzie są auta
-        <span class="male slaby" style="font-weight:400">
-          ${p.ostatnie_pozycje.length ? '' : (p.ikol ? '— brak dziś pozycji z lokalizatorów' : '— żaden kierowca nie udostępnia teraz położenia')}</span>
-      </h2>
+      <div class="gdzie-auta-gora">
+        <h2 style="margin:0">Gdzie są auta
+          <span class="male slaby" style="font-weight:400">
+            ${p.ostatnie_pozycje.length ? '' : (p.ikol ? '— brak dziś pozycji z lokalizatorów' : '— żaden kierowca nie udostępnia teraz położenia')}</span>
+        </h2>
+        ${chipyAutHtml(p.auta_ikol)}
+      </div>
       ${p.ostatnie_pozycje.length ? '' : `<div class="male slaby mapa-podpowiedz">${p.ikol
         ? 'Auta pojawią się na mapie, gdy lokalizator w aucie przekaże pozycję (Ustawienia → Zaawansowane → Lokalizatory w autach: przypisz lokalizator do kierowcy). Do tego czasu mapa jest zmniejszona.'
         : 'Auta pojawią się na mapie, gdy kierowca włączy udostępnianie położenia w „Mojej trasie”. Do tego czasu mapa jest zmniejszona.'}
@@ -142,8 +145,9 @@ EKRANY.pulpit = {
       if (dodatkowe.length) Mapa.dopasujWidok(mapa, punkty.concat(dodatkowe));
     }).catch(() => {});
     if (p.baza && !punkty.length) punkty.push(p.baza);
-    pulpitAuta = { mapa, znaczniki: {}, data };
+    pulpitAuta = { mapa, znaczniki: {}, data, auta: p.auta_ikol || [], wybrane: null, podswietl: null };
     rysujAutaNaMapie(p.ostatnie_pozycje);
+    podepnijChipyAut(pole);
     p.ostatnie_pozycje.forEach(poz => punkty.push([poz.lat, poz.lon]));
     Mapa.dopasujWidok(mapa, punkty);
   },
@@ -175,6 +179,97 @@ async function odswiezAutaNaMapie() {
   if (!pulpitAuta) return;
   const p = await API.get('/api/pulpit?data=' + pulpitAuta.data);
   rysujAutaNaMapie(p.ostatnie_pozycje || []);
+  pulpitAuta.auta = p.auta_ikol || [];
+  odswiezChipyAut();                       // wybrane auto zostaje wybrane, mapa za nim podąża (bez zmiany powiększenia)
+}
+
+/* ---- Przyciski „gdzie jest auto” nad mapą Pulpitu (2026-11-18, decyzja właściciela)
+   Źródło: wyłącznie lokalizatory IKOL (pole `auta_ikol` odpowiedzi /api/pulpit). Klik = mapa na aucie (powiększenie 14)
+   z dymkiem: auto, kierowca, czas ostatniej pozycji, prędkość; mapa za nim podąża przy odświeżaniu co 30 s, ale zostawia
+   powiększenie użytkownika. Ponowny klik = odpięcie i powrót do widoku całej floty. Auto bez pozycji — wyszarzone. */
+function opisCzasuAuta(czas) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(czas || ''));
+  if (!m) return '';
+  const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  const min = Math.round((Date.now() - t.getTime()) / 60000);
+  const godz = `${m[4]}:${m[5]}`;
+  if (min < 1) return 'przed chwilą';
+  if (min < 60) return `${min} min temu`;
+  const dzien = `${m[1]}-${m[2]}-${m[3]}`;
+  const wczoraj = przesunDate(dzisiaj(), -1);
+  if (dzien === dzisiaj()) return `dziś ${godz}`;
+  if (dzien === wczoraj) return `ostatnia pozycja wczoraj ${godz}`;
+  return `ostatnia pozycja ${polskaData(dzien)} ${godz}`;
+}
+
+function chipyAutHtml(auta) {
+  if (!auta || !auta.length) return '';
+  return `<div class="auta-chipy" id="p-auta-chipy" role="group" aria-label="Gdzie jest auto">${
+    auta.map(a => `<button type="button" class="auto-chip" data-auto="${escHtml(a.klucz)}" aria-pressed="false"><span class="auto-kropka" aria-hidden="true"></span>${escHtml(a.nazwa)}</button>`).join('')}</div>`;
+}
+
+function dymekAuta(a) {
+  const kmh = a.predkosc != null && Number.isFinite(Number(a.predkosc)) ? `<br>prędkość: ${Math.round(Number(a.predkosc))} km/h` : '';
+  return `<b>${escHtml(a.nazwa)}</b>${a.kierowca_imie ? '<br>kierowca: ' + escHtml(a.kierowca_imie) : ''}`
+    + `<br>${escHtml(opisCzasuAuta(a.czas))}${kmh}<br><span style="opacity:.7">lokalizator w aucie</span>`;
+}
+
+function odswiezChipyAut() {
+  if (!pulpitAuta) return;
+  const wiersz = document.getElementById('p-auta-chipy');
+  const auta = pulpitAuta.auta || [];
+  if (wiersz) wiersz.querySelectorAll('[data-auto]').forEach(b => {
+    const a = auta.find(x => x.klucz === b.dataset.auto);
+    const jest = !!(a && a.lat != null && a.lon != null);
+    b.disabled = !jest;
+    b.classList.toggle('wyszarzony', !jest);
+    b.title = jest ? `${a.nazwa}${a.kierowca_imie ? ' · ' + a.kierowca_imie : ''} — ${opisCzasuAuta(a.czas)}. Kliknij, żeby pokazać na mapie.`
+      : 'brak pozycji z lokalizatora';
+    const wybrany = pulpitAuta.wybrane === b.dataset.auto;
+    b.classList.toggle('wybrany', wybrany);
+    b.setAttribute('aria-pressed', wybrany ? 'true' : 'false');
+  });
+  const a = pulpitAuta.wybrane && auta.find(x => x.klucz === pulpitAuta.wybrane);
+  if (!pulpitAuta.wybrane) return;
+  if (!a || a.lat == null) { odepnijAuto(false); return; }
+  const punkt = [a.lat, a.lon];
+  if (pulpitAuta.podswietl) Mapa.przesunZnacznik(pulpitAuta.podswietl, punkt, dymekAuta(a));
+  else pulpitAuta.podswietl = Mapa.znacznikPozycji(pulpitAuta.mapa, punkt, dymekAuta(a));
+  Mapa.przesunDo(pulpitAuta.mapa, punkt);
+}
+
+function odepnijAuto(wracaj) {
+  const { mapa } = pulpitAuta;
+  if (pulpitAuta.podswietl) { Mapa.usunZnacznik(mapa, pulpitAuta.podswietl); pulpitAuta.podswietl = null; }
+  pulpitAuta.wybrane = null;
+  if (wracaj && mapa._ostatnieDopasowanie) Mapa.dopasujWidok(mapa, mapa._ostatnieDopasowanie);
+  odswiezChipyAut();
+}
+
+function podepnijChipyAut(pole) {
+  const wiersz = pole.querySelector('#p-auta-chipy');
+  if (!wiersz) return;
+  odswiezChipyAut();
+  wiersz.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => {
+    if (!pulpitAuta) return;
+    if (pulpitAuta.wybrane === b.dataset.auto) { odepnijAuto(true); return; }      // drugi klik: cała flota
+    const a = (pulpitAuta.auta || []).find(x => x.klucz === b.dataset.auto);
+    if (!a || a.lat == null) return;
+    const mapaEl = pole.querySelector('#p-mapa');
+    if (mapaEl && mapaEl.classList.contains('zwinieta')) {                          // zwiniętą mapę rozwijamy
+      mapaEl.classList.remove('zwinieta');
+      const rozmiar = pole.querySelector('#p-mapa-rozmiar');
+      if (rozmiar) { rozmiar.textContent = 'Zmniejsz mapę'; rozmiar.setAttribute('aria-expanded', 'true'); }
+      if (pulpitAuta.mapa.invalidateSize) pulpitAuta.mapa.invalidateSize();
+    }
+    if (pulpitAuta.podswietl) { Mapa.usunZnacznik(pulpitAuta.mapa, pulpitAuta.podswietl); pulpitAuta.podswietl = null; }
+    pulpitAuta.wybrane = b.dataset.auto;
+    const punkt = [a.lat, a.lon];
+    pulpitAuta.podswietl = Mapa.znacznikPozycji(pulpitAuta.mapa, punkt, dymekAuta(a));
+    Mapa.przyblizDo(pulpitAuta.mapa, punkt, 14);
+    Mapa.otworzDymek(pulpitAuta.podswietl);
+    odswiezChipyAut();
+  });
 }
 
 /* Pulpit: rząd kafelków liczb zamiast listy „Do zrobienia” (właściciel 2026-11-17: „upodobnij pulpity Tras i Panelu
@@ -349,12 +444,15 @@ function rysujKafelkiPulpitu() {
   if (!el) return;
   const w = kafelkiPulpitu(pulpitSprawy);
   const klik = k => k.doUstawien !== undefined || !!k.idzie;
-  el.innerHTML = w.spokoj ? '<p class="spokoj">✓ Wszystko w porządku — nic nie czeka na decyzję</p>' : w.kafelki.map((k, i) => {
-    const wnetrze = `<span class="etykieta">${escHtml(k.etykieta)}</span><b>${k.kod === 'alarm' ? '⚠' : k.liczba}</b>`;
+  el.innerHTML = w.spokoj ? ('<p class="spokoj">' + ikonka('haczyk') + 'Wszystko w porządku — nic nie czeka na decyzję</p>') : w.kafelki.map((k, i) => {
+    // Alarm nie ma liczby: ikona stoi w linii z tytułem, a pod nim — pełny opis (dawniej tylko w dymku, kafelek wyglądał na pusty).
+    const wnetrze = k.kod === 'alarm'
+      ? `<span class="etykieta">${ikonka('ostrzezenie')}${escHtml(k.etykieta)}</span>${k.opis ? `<span class="kafel-opis">${escHtml(k.opis)}</span>` : ''}`
+      : `<span class="etykieta">${escHtml(k.etykieta)}</span><b>${escHtml(k.liczba)}</b>`;
     const tytul = k.opis ? ` title="${escHtml(k.opis)}"` : '';
     return klik(k)
-      ? `<button type="button" class="${k.klasa}" data-kafel="${i}"${tytul}>${wnetrze}</button>`
-      : `<div class="${k.klasa}"${tytul}>${wnetrze}</div>`;
+      ? `<button type="button" class="${escHtml(k.klasa + (k.kod === 'alarm' ? ' alarm' : ''))}" data-kafel="${i}"${tytul}>${wnetrze}</button>`
+      : `<div class="${escHtml(k.klasa + (k.kod === 'alarm' ? ' alarm' : ''))}"${tytul}>${wnetrze}</div>`;
   }).join('');
   if (typeof MiaryTras !== 'undefined') MiaryTras.dolaczDoKafli(el, w.spokoj ? [] : w.kafelki);   // „i” z definicją (miary.js)
 
@@ -440,7 +538,7 @@ EKRANY.trasy = {
       <div class="pasek-narzedzi">
         ${przelacznikWidokuTras('dzien')}
         <label>Dzień<input type="date" id="t-data" value="${data}"></label>
-        <button id="t-wczoraj">← Poprzedni</button><button id="t-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button><button id="t-jutro">Następny →</button>
+        <button id="t-wczoraj">${ikonka('strzalka-lewo')}Poprzedni</button><button id="t-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button><button id="t-jutro">Następny${ikonka('strzalka-prawo', 16, true)}</button>
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
         <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
       </div>
@@ -790,7 +888,7 @@ function podsumowanieDnia(trasy) {
   const ok = czynne.reduce((s, t) => s + t.ile_ok, 0);
   const doPrzyjecia = czynne.reduce((s, t) => s + (t.ile_do_przyjecia || 0), 0);
   return `${czynne.length} ${odmiana(czynne.length, 'trasa', 'trasy', 'tras')} · ${ok} z ${ile} punktów dostarczone`
-    + (doPrzyjecia ? ` · <b style="color:var(--zolty)">⏳ ${doPrzyjecia} do zatwierdzenia</b>` : '');
+    + (doPrzyjecia ? ` · <b style="color:var(--zolty)">${ikonka('klepsydra')}${doPrzyjecia} do zatwierdzenia</b>` : '');
 }
 
 async function rysujTydzienTras(pole, data, kierowcy) {
@@ -812,7 +910,7 @@ async function rysujTydzienTras(pole, data, kierowcy) {
     <div class="pasek-narzedzi">
       ${przelacznikWidokuTras('tydzien')}
       <label>Dzień w tygodniu<input type="date" id="t-data" value="${data}"></label>
-      <button id="t-wczoraj">← Poprzedni tydzień</button><button id="t-jutro">Następny tydzień →</button>
+      <button id="t-wczoraj">${ikonka('strzalka-lewo')}Poprzedni tydzień</button><button id="t-jutro">Następny tydzień${ikonka('strzalka-prawo', 16, true)}</button>
       <button id="t-ten-tydzien">Ten tydzień</button>
       <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
     </div>
@@ -848,6 +946,7 @@ async function przyjmijDostawe(id, poZmianie, trasaId) {
   const w = await sprobuj(() => zapisBiura('POST', `/api/przystanki/${id}/przyjmij-dostawe`, {}, {
     opis: 'zatwierdzenie dostawy', popraw: poprawDostawe(id, trasaId, 'przyjete'),
   }), 'Zatwierdzono');
+  if (w && window.ReakcjeTras) ReakcjeTras.biuroZatwierdzilo();     // bez nakładki przy każdym kliknięciu — tylko „zero” (reakcje-trasy.js)
   if (w && poZmianie) poZmianie();
 }
 
@@ -916,6 +1015,7 @@ async function przyjmijDostawyTrasy(g, poZmianie) {
     zrobione++;
     if (w.wKolejce) wKolejce++;
   }
+  if (zrobione && window.ReakcjeTras) ReakcjeTras.biuroZatwierdzilo();
   if (zrobione) komunikat(`Zatwierdzono ${zrobione} z ${ile}` + (wKolejce ? ' — zapisane w tym komputerze, wyślę, gdy program odpowie' : ''),
     zrobione === ile ? 'ok' : 'blad');
   if (poZmianie) poZmianie();
@@ -953,8 +1053,8 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
     szkic: 'zamkniecie-' + p.id,
     tytul: 'Zamknij za kierowcę: ' + p.klient_nazwa,
     tresc: `<div class="wstega info">Zamykasz ten punkt w imieniu kierowcy. W uwagach punktu zostanie ślad, kto to zrobił.</div>
-      <label class="plaska"><input type="radio" name="zb-status" value="dostarczone" checked> ✓ Dostarczone</label>
-      <label class="plaska"><input type="radio" name="zb-status" value="nieudane"> ✕ Nieudane</label>
+      <label class="plaska"><input type="radio" name="zb-status" value="dostarczone" checked> ${ikonka('haczyk')}Dostarczone</label>
+      <label class="plaska"><input type="radio" name="zb-status" value="nieudane"> ${ikonka('zamknij')}Nieudane</label>
       <div id="zb-powod-pole" hidden>
         <label>Powód <span style="color:var(--czerwony)">*</span>
           <select id="zb-powod"><option value="">— wybierz —</option>
@@ -1074,8 +1174,8 @@ function sekcjaZatwierdzonychHtml(punkty, token) {
   if (!punkty.length) return '<div class="male slaby">Przez ostatnią dobę nic nie zostało zatwierdzone.</div>';
   return `<div class="karta">${punkty.map(x => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
       <b>${escHtml(x.klient_nazwa)}</b>
-      ${x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone" style="margin-left:6px">✓ dostarczone</span>'
-        : `<span class="plakietka p-nieudane" style="margin-left:6px">✕ ${escHtml(x.powod || 'nieudane')}</span>`}
+      ${x.status === 'dostarczone' ? ('<span class="plakietka p-dostarczone" style="margin-left:6px">' + ikonka('haczyk') + 'dostarczone</span>')
+        : `<span class="plakietka p-nieudane" style="margin-left:6px">${ikonka('zamknij')}${escHtml(x.powod || 'nieudane')}</span>`}
       <span class="plakietka p-oczekuje" style="margin-left:6px">${x.przyjete_auto ? 'zatwierdzone automatycznie' : 'zatwierdzone przez biuro'}</span>
       <div class="male slaby">${escHtml(x.kierowca_imie || '')} · ${escHtml(polskaData(x.data))} · zatwierdzono ${escHtml(polskaData(x.przyjeto_o))} ${escHtml(samaGodzina(x.przyjeto_o))}</div>
       ${x.notatka ? `<div class="male">${escHtml(x.notatka)}</div>` : ''}
@@ -1142,7 +1242,12 @@ async function rysujDoPrzyjecia(el, poZmianie) {
   if (!el || jestPodgladem()) return 0;    // zatwierdzanie dostaw jest tylko dla biura
   let lista = [];
   try { lista = await API.get('/api/do-przyjecia'); } catch (e) { el.innerHTML = ''; return 0; }
-  if (!lista.length) { el.innerHTML = ''; return 0; }
+  if (!lista.length) {
+    el.innerHTML = '';
+    // Lista spadła do zera zaraz po ręcznym „Zatwierdź” — jedna reakcja dziennie (nie po automacie serwera; reakcje-trasy.js).
+    if (window.ReakcjeTras) { try { ReakcjeTras.biuroListaPusta(dzisiaj()); } catch (e2) { /* bez reakcji */ } }
+    return 0;
+  }
   // Filtry Pulpitu (kierowca, auto, klient, sortowanie) ograniczają tylko to, co widać; liczba dla kafelka zostaje pełna.
   const wszystkie = lista;
   const widoczna = filtrujPulpit(wszystkie, czytajFiltryPulpitu(), AKCESORIA_PULPITU.przyjecie);
@@ -1163,18 +1268,18 @@ async function rysujDoPrzyjecia(el, poZmianie) {
     <div class="karta">${grupyDoPrzyjecia(lista).map(g => `${g.pozycje.length > 1 ? `
       <div class="przyciski" style="justify-content:space-between;align-items:center;padding:8px 0 2px;border-bottom:2px solid var(--ramka)">
         <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa czeka', 'dostawy czekają', 'dostaw czeka')}</span></b>
-        ${g.dostarczone.length > 1 ? `<button class="maly glowny" data-przyjmij-trase="${g.trasa}">✓ Zatwierdź dostarczone (${g.dostarczone.length})</button>` : ''}
+        ${g.dostarczone.length > 1 ? `<button class="maly glowny" data-przyjmij-trase="${g.trasa}">${ikonka('haczyk')}Zatwierdź dostarczone (${g.dostarczone.length})</button>` : ''}
       </div>` : ''}${g.pozycje.map(x => {
       return `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
         <b>${escHtml(x.klient_nazwa)}</b>
-        ${x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone" style="margin-left:6px">✓ dostarczone</span>'
-          : `<span class="plakietka p-nieudane" style="margin-left:6px">✕ ${escHtml(x.powod)}</span>`}
+        ${x.status === 'dostarczone' ? ('<span class="plakietka p-dostarczone" style="margin-left:6px">' + ikonka('haczyk') + 'dostarczone</span>')
+          : `<span class="plakietka p-nieudane" style="margin-left:6px">${ikonka('zamknij')}${escHtml(x.powod)}</span>`}
         <div class="male slaby">${escHtml(x.kierowca_imie || '')}${x.pojazd_nazwa ? ' · ' + escHtml(x.pojazd_nazwa) + (x.rejestracja ? ' (' + escHtml(x.rejestracja) + ')' : '') : ''} · ${polskaData(x.data)} ${samaGodzina(x.zamkniete_o)}${
-          !token && x.ile_zalacznikow ? ' · 📎 ' + x.ile_zalacznikow : ''}</div>
+          !token && x.ile_zalacznikow ? (' · ' + ikonka('spinacz')) + x.ile_zalacznikow : ''}</div>
         ${htmlDowodow(x, token)}
         <div class="przyciski" style="margin-top:6px">
-          <button class="maly glowny" data-przyjmij="${x.id}">✓ Zatwierdź</button>
-          <button class="maly" data-zwroc="${x.id}">↩ Zwróć kierowcy</button>
+          <button class="maly glowny" data-przyjmij="${x.id}">${ikonka('haczyk')}Zatwierdź</button>
+          <button class="maly" data-zwroc="${x.id}">${ikonka('cofnij')}Zwróć kierowcy</button>
           <button class="maly" data-do-trasy="${x.trasa}">Trasa</button></div>
       </div>`; }).join('')}`).join('')}</div>`;
   el.querySelectorAll('[data-przyjmij]').forEach(bt => bt.onclick = () => {
@@ -1233,7 +1338,7 @@ function kartaTrasy(t) {
           ${t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}</span>
         <span class="dopisek">${t.ile_ok} ${odmiana(t.ile_ok, 'dostarczona', 'dostarczone', 'dostarczonych')}${
           t.ile_nie ? ', ' + t.ile_nie + ' ' + odmiana(t.ile_nie, 'nieudana', 'nieudane', 'nieudanych') : ''}
-          z ${t.ile}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">⏳ ${t.ile_do_przyjecia + ' do zatwierdzenia'}</b>` : ''}</span>
+          z ${t.ile}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">${ikonka('klepsydra')}${t.ile_do_przyjecia + ' do zatwierdzenia'}</b>` : ''}</span>
       </span>
       <span class="prawo"><span class="plakietka p-${t.status}">${escHtml(etykietaStatusuTrasy(t.status))}</span></span>
     </button>`;
@@ -1259,12 +1364,12 @@ function znacznikFlotexu(f) {
   if (!f) return '';
   if (!f.sprawny) {
     return `<span class="plakietka p-nieudane" title="${escHtml((f.powody || []).join('\n'))}">`
-      + '⚠ niesprawne</span>';
+      + (ikonka('ostrzezenie') + 'niesprawne</span>');
   }
   if ((f.uwagi || []).length) {
     return `<span class="plakietka p-w_toku" title="${escHtml(f.uwagi.join('\n'))}">! uwagi</span>`;
   }
-  return '<span class="plakietka p-dostarczone" title="GK Flota: bez zastrzeżeń">✓ sprawne</span>';
+  return ('<span class="plakietka p-dostarczone" title="GK Flota: bez zastrzeżeń">' + ikonka('haczyk') + 'sprawne</span>');
 }
 
 /* Powody drobnym drukiem pod znacznikiem — title nie działa na telefonie. */
@@ -1276,7 +1381,7 @@ function powodyFlotexu(f) {
 
 function opcjaBusa(b, wybrany) {
   const zly = b.flotex && !b.flotex.sprawny;
-  return `<option value="${b.id}" ${wybrany ? 'selected' : ''}>${zly ? '⚠ ' : ''}${escHtml(b.nazwa)}${
+  return `<option value="${b.id}" ${wybrany ? 'selected' : ''}>${zly ? 'Uwaga: ' : ''}${escHtml(b.nazwa)}${
     b.rejestracja ? ' · ' + escHtml(b.rejestracja) : ''}${zly ? ' — niesprawne' : ''}</option>`;
 }
 
@@ -1354,18 +1459,18 @@ EKRANY.trasa = {
     ETA.policz(t);
 
     pole.innerHTML = `
-      <button class="tekstowy" id="tr-wroc">← Wszystkie trasy</button>
+      <button class="tekstowy" id="tr-wroc">${ikonka('strzalka-lewo')}Wszystkie trasy</button>
       ${t.status === 'odwolana' ? `<div class="wstega uwaga">Trasa odwołana — nie ma jej
         w planie ani w telefonie kierowcy. Zostaje w historii razem z dowodami.</div>` : ''}
 
       ${admin ? `<div class="karta">
-        ${t.flotex && !t.flotex.sprawny ? `<div class="wstega blad">⚠ GK Flota: auto
+        ${t.flotex && !t.flotex.sprawny ? `<div class="wstega blad">${ikonka('ostrzezenie')}GK Flota: auto
           ${escHtml(t.rejestracja || t.pojazd_nazwa || '')} jest niesprawne —
           ${escHtml((t.flotex.powody || []).join('; ') || 'bez podanego powodu')}.</div>` : ''}
         <!-- UI etap 3: na wierzchu tylko to, co biuro zmienia co dzień (dzień,
              kierowca, auto) — punkty trasy mają być widać bez przewijania.
              Reszta (nazwa, godzina, baza, układ, uwagi, rzadkie przyciski) leży
-             pod zwijanym „▸ Dane trasy”; pola zostają w DOM-ie, więc „Zapisz
+             pod zwijanym „${ikonka('szewron-prawo')}Dane trasy”; pola zostają w DOM-ie, więc „Zapisz
              zmiany” zapisuje je tak samo, jak przedtem.                        -->
         <div class="trzy">
           <label>Dzień<input type="date" id="tr-data" value="${t.data}"></label>
@@ -1388,8 +1493,8 @@ EKRANY.trasa = {
           <button class="maly" id="tr-os-akcji">Przebieg trasy — kto i co</button>
         </div>
         <details class="zaawansowane wiecej-trasy" id="tr-wiecej" open>
-          <summary><span class="znak-zwiniecia">▸</span> Dane trasy
-            ${t.uwagi ? '<span class="slaby">📌 są uwagi</span>' : ''}</summary>
+          <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Dane trasy
+            ${t.uwagi ? ('<span class="slaby">' + ikonka('pinezka') + 'są uwagi</span>') : ''}</summary>
           <div class="dwie">
             <label>Nazwa<input id="tr-nazwa" value="${escHtml(t.nazwa || '')}"></label>
             <label>Godzina wyjazdu
@@ -1420,7 +1525,7 @@ EKRANY.trasa = {
         </details>
       </div>` : `<div class="karta scisla">
         <b>${escHtml(t.kierowca_imie || '')}</b> · ${escHtml(t.pojazd_nazwa || 'bez auta')}
-        ${t.uwagi ? `<div class="wstega info" style="margin:10px 0 0">📌 ${escHtml(t.uwagi)}</div>` : ''}
+        ${t.uwagi ? `<div class="wstega info" style="margin:10px 0 0">${ikonka('pinezka')}${escHtml(t.uwagi)}</div>` : ''}
       </div>`}
 
       <div class="karta">
@@ -1428,7 +1533,7 @@ EKRANY.trasa = {
           <h2>Punkty (${t.przystanki.length})</h2>
           ${admin ? `<div class="przyciski">
             <button class="maly glowny" id="tr-dodaj">+ Dodaj punkty</button>
-            <button class="maly" id="tr-optymalizuj">✨ Zaproponuj kolejność</button>
+            <button class="maly" id="tr-optymalizuj">Zaproponuj kolejność</button>
           </div>` : ''}
         </div>
         <div id="tr-lista">
@@ -1657,44 +1762,44 @@ EKRANY.trasa = {
 };
 
 function wierszPrzystanku(p, indeks, ile, admin) {
-  const status = p.status === 'dostarczone' ? '<span class="plakietka p-dostarczone">✓</span>'
-    : p.status === 'nieudane' ? `<span class="plakietka p-nieudane">✕ ${escHtml(p.powod)}</span>`
+  const status = p.status === 'dostarczone' ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + '</span>')
+    : p.status === 'nieudane' ? `<span class="plakietka p-nieudane">${ikonka('zamknij')}${escHtml(p.powod)}</span>`
     : p.status === 'odwolany' ? '<span class="plakietka p-odwolany">Zdjęte z trasy</span>' : '';
   const dopiski = [];
-  if (p.do_przyjecia) dopiski.push('<span style="color:var(--zolty)">⏳ do zatwierdzenia</span>');
-  if (p.zwrot_powod && p.status === 'oczekuje') dopiski.push('<span style="color:var(--czerwony)">↩ zwrócone kierowcy</span>');
+  if (p.do_przyjecia) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('klepsydra') + 'do zatwierdzenia</span>'));
+  if (p.zwrot_powod && p.status === 'oczekuje') dopiski.push(('<span style="color:var(--czerwony)">' + ikonka('cofnij') + 'zwrócone kierowcy</span>'));
   // Przy naszym miejscu nie ma zamowienia ani kontroli zaladunku — czerwone
   // ostrzezenie o niezgodnym numerze byloby tu falszywym alarmem.
   const nasze = !!p.nasze;
-  if (p.z_dnia) dopiski.push('<span style="color:var(--czerwony)">⏰ zaległe z '
+  if (p.z_dnia) dopiski.push(('<span style="color:var(--czerwony)">' + ikonka('zegar') + 'zaległe z ')
     + escHtml(p.z_dnia) + '</span>');
   if (p.zaladowano_o && !nasze) {
     // Niezgodny numer to najwazniejsza informacja na tym ekranie — znaczy,
     // ze kierowca wzial spod rampy cos innego, niz mowi zamowienie.
     dopiski.push(p.zaladunek_zgodny
-      ? '✓ załadunek OK' + (p.dokument ? '' : ' · numer ' + escHtml(p.numer_kierowcy || ''))
+      ? (ikonka('haczyk') + 'załadunek OK') + (p.dokument ? '' : ' · numer ' + escHtml(p.numer_kierowcy || ''))
       : p.zaladunek_zwolniony
-        ? '<span style="color:var(--zolty)">⚠ numer niezgodny — zwolnione przez biuro</span>'
-        : '<span style="color:var(--czerwony)">⛔ WYJAZD WSTRZYMANY: kierowca wpisał '
+        ? ('<span style="color:var(--zolty)">' + ikonka('ostrzezenie') + 'numer niezgodny — zwolnione przez biuro</span>')
+        : ('<span style="color:var(--czerwony)">' + ikonka('stop') + 'WYJAZD WSTRZYMANY: kierowca wpisał ')
           + escHtml(p.numer_kierowcy || '—') + ', a zamówienie ma inny numer</span>');
   }
-  if (p.towar) dopiski.push('📦 ' + escHtml(p.towar));
-  if (p.dokument) dopiski.push('📄 ' + escHtml(p.dokument));
-  if (p.okno_od || p.okno_do) dopiski.push(`🕒 ${escHtml(p.okno_od || '…')}–${escHtml(p.okno_do || '…')}`);
+  if (p.towar) dopiski.push(ikonka('paczka') + escHtml(p.towar));
+  if (p.dokument) dopiski.push(ikonka('raporty') + escHtml(p.dokument));
+  if (p.okno_od || p.okno_do) dopiski.push(`${ikonka('zegar')}${escHtml(p.okno_od || '…')}–${escHtml(p.okno_do || '…')}`);
   // Co kierowca zostawił przy zamkniętym punkcie — widać w wierszu, bez wchodzenia w „Szczegóły”.
   if (p.status === 'dostarczone' || p.status === 'nieudane') {
-    if (p.odebral) dopiski.push('👤 odebrał: ' + escHtml(p.odebral));
-    if (p.notatka) dopiski.push('📝 ' + escHtml(String(p.notatka).length > 90 ? String(p.notatka).slice(0, 90) + '…' : p.notatka));
-    if (p.ile_zalacznikow) dopiski.push('📎 ' + p.ile_zalacznikow);
-    else if (p.status === 'dostarczone' && !nasze) dopiski.push('<span style="color:var(--zolty)">⚠ bez podpisu i zdjęcia</span>');
+    if (p.odebral) dopiski.push((ikonka('osoba') + 'odebrał: ') + escHtml(p.odebral));
+    if (p.notatka) dopiski.push(ikonka('notatka') + escHtml(String(p.notatka).length > 90 ? String(p.notatka).slice(0, 90) + '…' : p.notatka));
+    if (p.ile_zalacznikow) dopiski.push(ikonka('spinacz') + p.ile_zalacznikow);
+    else if (p.status === 'dostarczone' && !nasze) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('ostrzezenie') + 'bez podpisu i zdjęcia</span>'));
   }
   if (p.eta) dopiski.push(ETA.opis(p));
-  if (p.mapa_lat == null) dopiski.push('<span style="color:var(--zolty)">⚠ brak adresu na mapie</span>');
+  if (p.mapa_lat == null) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('ostrzezenie') + 'brak adresu na mapie</span>'));
 
   return `<div class="przystanek s-${p.status}" style="cursor:default">
       <span class="numer">${indeks + 1}</span>
       <span class="srodek">
-        <span class="nazwa">${nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}</span>
+        <span class="nazwa">${nasze ? ikonka('fabryka') : ''}${escHtml(p.klient_nazwa)}</span>
         <span class="adres">${adresHtml(p)}</span>
         ${dopiski.length ? `<span class="dopisek">${dopiski.join(' &nbsp;·&nbsp; ')}</span>` : ''}
       </span>
@@ -1705,10 +1810,10 @@ function wierszPrzystanku(p, indeks, ile, admin) {
           <button class="maly" data-szczegoly="${p.id}">Szczegóły</button>
           ${admin && p.status === 'oczekuje' ? `
             <span class="uchwyty">
-              <button data-gora="${p.id}" ${indeks === 0 ? 'disabled' : ''} title="Wyżej" aria-label="Wyżej">▲</button>
-              <button data-dol="${p.id}" ${indeks === ile - 1 ? 'disabled' : ''} title="Niżej" aria-label="Niżej">▼</button>
+              <button data-gora="${p.id}" ${indeks === 0 ? 'disabled' : ''} title="Wyżej" aria-label="Wyżej">${ikonka('szewron-gora')}</button>
+              <button data-dol="${p.id}" ${indeks === ile - 1 ? 'disabled' : ''} title="Niżej" aria-label="Niżej">${ikonka('szewron-dol')}</button>
             </span>
-            <button class="maly" data-usun-przystanek="${p.id}" title="Zdejmij z trasy" aria-label="Zdejmij z trasy">✕</button>` : ''}
+            <button class="maly" data-usun-przystanek="${p.id}" title="Zdejmij z trasy" aria-label="Zdejmij z trasy">${ikonka('zamknij')}</button>` : ''}
         </span>
       </span>
     </div>`;
@@ -1764,7 +1869,7 @@ function listaPunktowDoWyboru({ juz, wybrane, szukaj }) {
     <label class="plaska" style="padding:9px 4px;border-bottom:1px solid var(--ramka)">
       <input type="checkbox" value="${klucz}" ${wybrane.includes(klucz) ? 'checked' : ''}>
       <span style="flex:1">
-        <b>${nasze ? '🏭 ' : ''}${escHtml(x.nazwa)}</b>
+        <b>${nasze ? ikonka('fabryka') : ''}${escHtml(x.nazwa)}</b>
         <span class="male slaby" style="display:block">${escHtml(adresJednymCiagiem(x)) || 'brak adresu'}
           ${nasze ? ' · nasze miejsce, nie dostawa' : ''}
           ${juz.has(klucz) ? ' · już na trasie · można dodać ponownie' : ''}
@@ -1806,7 +1911,7 @@ async function oknoDodawaniaKlientow(t) {
     tytul: 'Dodaj punkty do trasy',
     szerokie: true,
     tresc: `<input id="dk-szukaj" placeholder="Szukaj po nazwie, mieście, ulicy…" autocomplete="off">
-            <button type="button" class="tekstowy" id="dk-do-naszych" style="display:none">↓ Nasze miejsca</button>
+            <button type="button" class="tekstowy" id="dk-do-naszych" style="display:none">${ikonka('strzalka-dol')}Nasze miejsca</button>
             <div id="dk-lista" style="margin-top:12px">${
               listaPunktowDoWyboru({ juz, wybrane, szukaj: '' })}</div>
             <label style="margin-top:10px">Wstaw
@@ -1959,16 +2064,16 @@ function oknoKopiowania(t) {
 function stanPunktu(t, p) {
   const godz = x => String(x || '').slice(11, 16);
   if (p.status === 'dostarczone') {
-    return '✓ Dostarczone' + (p.zamkniete_o ? ' o ' + godz(p.zamkniete_o) : '');
+    return ['haczyk', 'Dostarczone' + (p.zamkniete_o ? ' o ' + godz(p.zamkniete_o) : '')];
   }
-  if (p.status === 'nieudane') return '✕ Nieudane — ' + (p.powod || 'bez podanego powodu');
-  if (p.status === 'odwolany') return 'Zdjęte z trasy';
-  if (t.status === 'zakonczona') return '⚠ Trasa zamknięta, a ten punkt został otwarty';
+  if (p.status === 'nieudane') return ['zamknij', 'Nieudane — ' + (p.powod || 'bez podanego powodu')];
+  if (p.status === 'odwolany') return ['', 'Zdjęte z trasy'];
+  if (t.status === 'zakonczona') return ['ostrzezenie', 'Trasa zamknięta, a ten punkt został otwarty'];
   if (t.status === 'w_toku') {
-    return p.eta ? ('🚚 Kierowca w trasie — u klienta ok. ' + p.eta) : '🚚 Kierowca w trasie';
+    return ['ciezarowka', p.eta ? 'Kierowca w trasie — u klienta ok. ' + p.eta : 'Kierowca w trasie'];
   }
-  if (p.zaladowano_o) return '📦 Załadowane, czeka na wyjazd';
-  return '🕒 Zaplanowane' + (t.data ? ' na ' + t.data : '');
+  if (p.zaladowano_o) return ['paczka', 'Załadowane, czeka na wyjazd'];
+  return ['zegar', 'Zaplanowane' + (t.data ? ' na ' + t.data : '')];
 }
 
 /* Rodzaj czynności i wymogi dla kierowcy w NASZYCH punktach. Puste = jak dotąd (zwykły postój/doładunek).
@@ -2012,7 +2117,7 @@ function naglowekPunktu(t, p) {
       t.kierowca_imie ? ' · ' + escHtml(t.kierowca_imie) : ''}${
       t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}${
       t.data ? ' · ' + escHtml(polskaData(t.data)) : ''}</div>
-    <div style="font-weight:700;margin:5px 0 2px">${escHtml(stanPunktu(t, p))}${
+    <div style="font-weight:700;margin:5px 0 2px">${(([ik, tx]) => (ik ? ikonka(ik) : '') + escHtml(tx))(stanPunktu(t, p))}${
       p.nasze && p.rodzaj ? ' · ' + escHtml(napisRodzaju(p.rodzaj)) : ''}</div>
     ${wszystkie ? `<div class="postep"><i class="ok" style="width:${proc}%"></i></div>
       <div class="male slaby">Cała trasa: ${zrobione} z ${wszystkie} zamkniętych${
@@ -2040,7 +2145,7 @@ function osCzasuPunktu(t, p, d) {
       klasa: p.zaladunek_zgodny ? 'ok' : 'nie',
       tekst: p.zaladunek_zgodny
         ? 'Załadunek potwierdzony, numer zgodny'
-        : '⚠ Załadunek potwierdzony, ale numer NIE zgadzał się z zamówieniem',
+        : (ikonka('ostrzezenie') + 'Załadunek potwierdzony, ale numer NIE zgadzał się z zamówieniem'),
       czas: kiedy(p.zaladowano_o),
     });
     if (p.zaladunek_prob > 1) {
@@ -2140,15 +2245,15 @@ function panelPostepu(t, p, d) {
   const wiersze = [];
   const poz = d.ostatnia_pozycja;
   if (poz) {
-    wiersze.push(`🛰 Ostatnia pozycja auta: ${escHtml(godz(poz.czas))}${
+    wiersze.push(`${ikonka('znacznik-miejsca')}Ostatnia pozycja auta: ${escHtml(godz(poz.czas))}${
       poz.km_do_punktu != null ? ` · ok. ${liczbaPl(poz.km_do_punktu)} km od tego punktu` : ''}${
       poz.zrodlo === 'lokalizator' ? ' (lokalizator)' : ''}`);
   }
   if (d.ostatni_zapis) {
-    wiersze.push(`📲 Ostatni zapis z telefonu: ${escHtml(czasNaEkran(d.ostatni_zapis))}`);
+    wiersze.push(`${ikonka('zaproszenie')}Ostatni zapis z telefonu: ${escHtml(czasNaEkran(d.ostatni_zapis))}`);
   }
   if (d.gdzie_potwierdzil) {
-    wiersze.push('📍 Potwierdzenie zapisane z lokalizacji kierowcy');
+    wiersze.push((ikonka('znacznik-miejsca') + 'Potwierdzenie zapisane z lokalizacji kierowcy'));
   }
   if (!wiersze.length && !poz) {
     wiersze.push('<span class="slaby">Telefon kierowcy jeszcze się dziś nie odezwał.</span>');
@@ -2165,41 +2270,41 @@ function oknoSzczegolowPunktu(t, id) {
   const zamkniety = p.status !== 'oczekuje';
 
   okno({
-    tytul: (p.nasze ? '🏭 ' : '') + p.klient_nazwa,
+    tytul: p.klient_nazwa, ikona: p.nasze ? 'fabryka' : '',
     tresc: `
       ${naglowekPunktu(t, p)}
       <div class="karta scisla" style="margin:0 0 14px">
         <div>${escHtml(adresJednymCiagiem(p)) || '<i>brak adresu</i>'}</div>
-        ${p.telefon ? `<div class="male">📞 ${escHtml(p.telefon)}</div>` : ''}
-        ${p.osoba ? `<div class="male slaby">👤 ${escHtml(p.osoba)}</div>` : ''}
+        ${p.telefon ? `<div class="male">${ikonka('telefon-sluchawka')}${escHtml(p.telefon)}</div>` : ''}
+        ${p.osoba ? `<div class="male slaby">${ikonka('osoba')}${escHtml(p.osoba)}</div>` : ''}
       </div>
       ${zamkniety ? `<div class="wstega ${p.status === 'dostarczone' ? 'info' : 'uwaga'}">
-          ${p.status === 'dostarczone' ? '✓ Dostarczone' : '✕ Nieudane — ' + escHtml(p.powod)}
+          ${p.status === 'dostarczone' ? (ikonka('haczyk') + 'Dostarczone') : (ikonka('zamknij') + 'Nieudane — ') + escHtml(p.powod)}
           ${p.zamkniete_o ? ' · ' + escHtml(p.zamkniete_o) : ''}
           ${p.odebral ? '<br>Odebrał: <b>' + escHtml(p.odebral) + '</b>' : ''}
           ${p.notatka ? '<br>' + escHtml(p.notatka) : ''}
-          ${p.ile_zalacznikow ? `<br><span class="male" id="sp-licznik">📎 ${p.ile_zalacznikow}
+          ${p.ile_zalacznikow ? `<br><span class="male" id="sp-licznik">${ikonka('spinacz')}${p.ile_zalacznikow}
             ${odmiana(p.ile_zalacznikow, 'załącznik', 'załączniki', 'załączników')}</span>` : ''}
           <div id="sp-dowody"></div>
         </div>` : ''}
-      ${admin && zamkniety && p.do_przyjecia ? '<div class="wstega uwaga">⏳ Czeka na zatwierdzenie przez biuro.</div>' : ''}
-      ${admin && zamkniety && !p.do_przyjecia && p.przyjeto_o && p.przyjete_auto ? '<div class="wstega info">✓ Zatwierdzone automatycznie (po 15 minutach od ostatniego dowodu) — możesz jeszcze zwrócić dostawę kierowcy.</div>' : ''}
-      ${p.zwrot_powod && !zamkniety ? `<div class="wstega uwaga">↩ Zwrócone kierowcy do poprawy: ${escHtml(p.zwrot_powod)}
+      ${admin && zamkniety && p.do_przyjecia ? ('<div class="wstega uwaga">' + ikonka('klepsydra') + 'Czeka na zatwierdzenie przez biuro.</div>') : ''}
+      ${admin && zamkniety && !p.do_przyjecia && p.przyjeto_o && p.przyjete_auto ? ('<div class="wstega info">' + ikonka('haczyk') + 'Zatwierdzone automatycznie (po 15 minutach od ostatniego dowodu) — możesz jeszcze zwrócić dostawę kierowcy.</div>') : ''}
+      ${p.zwrot_powod && !zamkniety ? `<div class="wstega uwaga">${ikonka('cofnij')}Zwrócone kierowcy do poprawy: ${escHtml(p.zwrot_powod)}
           ${p.zwrocono_o ? ' · ' + escHtml(p.zwrocono_o) : ''}</div>` : ''}
       <div id="sp-os">${osCzasuPunktu(t, p, null)}</div>
       <div id="sp-postep"></div>
       <div class="przyciski" style="margin:0 0 14px">
-        ${admin && zamkniety && p.do_przyjecia ? `<button class="maly glowny" id="sp-przyjmij">✓ Zatwierdź</button>
-          <button class="maly" id="sp-zwroc">↩ Zwróć kierowcy</button>` : ''}
-        ${admin && !zamkniety && p.status === 'oczekuje' ? '<button class="maly" id="sp-zamknij-biuro">✔ Zamknij za kierowcę</button>' : ''}
-        ${p.ile_zalacznikow ? `<button class="maly${zamkniety && !p.do_przyjecia ? ' glowny' : ''}" id="sp-dowod">📎 ${
+        ${admin && zamkniety && p.do_przyjecia ? `<button class="maly glowny" id="sp-przyjmij">${ikonka('haczyk')}Zatwierdź</button>
+          <button class="maly" id="sp-zwroc">${ikonka('cofnij')}Zwróć kierowcy</button>` : ''}
+        ${admin && !zamkniety && p.status === 'oczekuje' ? ('<button class="maly" id="sp-zamknij-biuro">' + ikonka('haczyk') + 'Zamknij za kierowcę</button>') : ''}
+        ${p.ile_zalacznikow ? `<button class="maly${zamkniety && !p.do_przyjecia ? ' glowny' : ''}" id="sp-dowod">${ikonka('spinacz')}${
           p.nasze ? 'Zdjęcia z tego postoju' : zamkniety ? 'Zobacz dowód dostawy' : 'Zdjęcia z załadunku'}</button>` : ''}
         ${zamkniety && !p.nasze ? `<button class="maly" id="sp-druk">${ikonka('drukuj')}Wydrukuj potwierdzenie</button>` : ''}
         ${p.nasze ? '' : '<button class="maly" id="sp-historia">Historia tego klienta</button>'}
-        ${admin && !zamkniety && !p.nasze ? '<button class="maly" id="sp-powiadom">✉️ Powiadom klienta</button>' : ''}
-        ${admin && !zamkniety ? '<button class="maly" id="sp-przenies">➡ Przenieś na inną trasę</button>' : ''}
+        ${admin && !zamkniety && !p.nasze ? ('<button class="maly" id="sp-powiadom">' + ikonka('poczta') + 'Powiadom klienta</button>') : ''}
+        ${admin && !zamkniety ? ('<button class="maly" id="sp-przenies">' + ikonka('strzalka-prawo') + 'Przenieś na inną trasę</button>') : ''}
         ${admin && !p.nasze && p.zaladowano_o && !p.zaladunek_zgodny && !p.zaladunek_zwolniony
-          ? '<button class="maly czerwony" id="sp-zwolnij">⛔ Zwolnij mimo niezgodnego numeru</button>'
+          ? ('<button class="maly czerwony" id="sp-zwolnij">' + ikonka('stop') + 'Zwolnij mimo niezgodnego numeru</button>')
           : ''}
       </div>
       ${admin && !zamkniety ? `
@@ -2355,48 +2460,48 @@ function kartaNaZywo(t) {
   const kolor = { pilne: 'var(--czerwony)', uwaga: 'var(--zolty)', info: 'var(--tekst-slaby)' };
 
   const dokad = b ? `
-    <div style="margin:10px 0 2px"><b>${b.nasze ? '🏭 jedzie po towar do:' : '🚚 jedzie do:'}
+    <div style="margin:10px 0 2px"><b>${b.nasze ? (ikonka('fabryka') + 'jedzie po towar do:') : (ikonka('ciezarowka') + 'jedzie do:')}
       ${escHtml(b.klient)}</b>${b.miasto ? ' <span class="slaby">· ' + escHtml(b.miasto) + '</span>' : ''}</div>
     <div class="male slaby">punkt ${b.kolejnosc} z ${l.wszystkie || '?'}${
-      b.dokument ? ' · 📄 ' + escHtml(b.dokument) : ''}${
-      b.towar ? ' · 📦 ' + escHtml(b.towar) : ''}</div>
+      b.dokument ? (' · ' + ikonka('raporty')) + escHtml(b.dokument) : ''}${
+      b.towar ? (' · ' + ikonka('paczka')) + escHtml(b.towar) : ''}</div>
     <div style="margin-top:6px">${b.eta
-      ? `<b style="font-size:17px;${b.minelo ? 'color:var(--czerwony)' : ''}">🕒 ${
+      ? `<b style="font-size:17px;${b.minelo ? 'color:var(--czerwony)' : ''}">${ikonka('zegar')}${
           escHtml(b.eta)}</b>` + (b.minelo
             ? `<span style="color:var(--czerwony)"> — minęło ${godzinyMinuty(b.minelo)}
                bez potwierdzenia</span>` : '') + (
           b.spoznienie
             ? `<span style="color:var(--czerwony)"> — po oknie (zamykają ${escHtml(b.okno_do)})</span>`
             : b.okno_do
-              ? `<span class="slaby"> · okno ${escHtml(b.okno_od || '…')}–${escHtml(b.okno_do)} ✓</span>`
+              ? `<span class="slaby"> · okno ${escHtml(b.okno_od || '…')}–${escHtml(b.okno_do)} ${ikonka('haczyk')}</span>`
               : '')
         + (b.przerwa_przed ? `<span class="slaby"> · po drodze przerwa ${b.przerwa_przed} min</span>` : '')
       : '<span class="slaby">godziny nie policzę — punkt nie ma adresu na mapie</span>'}</div>`
     : `<div style="margin:10px 0"><b>${t.status === 'zakonczona'
-        ? '✓ Trasa zakończona' : 'Brak punktów do zrobienia'}</b></div>`;
+        ? (ikonka('haczyk') + 'Trasa zakończona') : 'Brak punktów do zrobienia'}</b></div>`;
 
   const slady = [];
   if (t.ostatni) {
-    slady.push(`${t.ostatni.status === 'dostarczone' ? '✓' : '✕'} ostatnio:
+    slady.push(`${t.ostatni.status === 'dostarczone' ? ikonka('haczyk') : ikonka('zamknij')} ostatnio:
       ${escHtml(t.ostatni.klient)}, ${escHtml(t.ostatni.o)}${
       t.ostatni.powod ? ' (' + escHtml(t.ostatni.powod) + ')' : ''}${
       t.ostatni.odebral ? ' · odebrał: ' + escHtml(t.ostatni.odebral) : ''}${
       t.ostatni.status === 'dostarczone' ? (t.ostatni.ile_zalacznikow
-        ? (t.ostatni.id ? ` · <button type="button" class="maly dowody-zywo" data-dowody-zywo="${t.ostatni.id}" data-klient="${escHtml(t.ostatni.klient)}" title="Pokaż zdjęcia i podpis">📎 ${t.ostatni.ile_zalacznikow}</button>`
-          : ' · 📎 ' + t.ostatni.ile_zalacznikow)
-        : (t.ostatni.nasze ? '' : ' · ⚠ bez podpisu i zdjęcia')) : ''}`);
+        ? (t.ostatni.id ? ` · <button type="button" class="maly dowody-zywo" data-dowody-zywo="${t.ostatni.id}" data-klient="${escHtml(t.ostatni.klient)}" title="Pokaż zdjęcia i podpis">${ikonka('spinacz')}${t.ostatni.ile_zalacznikow}</button>`
+          : (' · ' + ikonka('spinacz')) + t.ostatni.ile_zalacznikow)
+        : (t.ostatni.nasze ? '' : (' · ' + ikonka('ostrzezenie') + 'bez podpisu i zdjęcia'))) : ''}`);
   }
   if (t.pozycja) {
-    slady.push(`🛰 auto ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
+    slady.push(`${ikonka('znacznik-miejsca')}auto ${escHtml(String(t.pozycja.czas).slice(11, 16))}${
       t.pozycja.km_do_celu != null ? ` · ok. ${liczbaPl(t.pozycja.km_do_celu)} km od celu` : ''}`);
   }
   // Kontakt sprzed dzisiaj z datą — sama godzina „14:05” z wczoraj wyglądała
   // jak telefon, który odezwał się przed chwilą.
   const kontakt = String(t.ostatni_kontakt || '');
   slady.push(t.ostatni_kontakt
-    ? `📲 telefon ${kontakt.slice(0, 10) === dzisiaj() ? '' : escHtml(polskaData(kontakt)) + ' '}${
+    ? `${ikonka('zaproszenie')}telefon ${kontakt.slice(0, 10) === dzisiaj() ? '' : escHtml(polskaData(kontakt)) + ' '}${
       escHtml(kontakt.slice(11, 16))}`
-    : '<span class="slaby">📲 telefon jeszcze się dziś nie odezwał</span>');
+    : ('<span class="slaby">' + ikonka('zaproszenie') + 'telefon jeszcze się dziś nie odezwał</span>'));
 
   return `<div class="karta scisla">
     <div class="karta-gora">
@@ -2416,10 +2521,10 @@ function kartaNaZywo(t) {
     ${dokad}
     <div class="male slaby" style="margin-top:8px">${slady.join(' &nbsp;·&nbsp; ')}</div>
     ${(t.alerty || []).map(a => `<div class="male" style="margin-top:6px;color:${
-      kolor[a.waga] || 'inherit'}"><b>${a.waga === 'pilne' ? '⛔' : a.waga === 'uwaga' ? '⚠' : 'ℹ'}</b>
+      kolor[a.waga] || 'inherit'}"><b>${a.waga === 'pilne' ? ikonka('stop') : a.waga === 'uwaga' ? ikonka('ostrzezenie') : 'ℹ'}</b>
       ${escHtml(a.tekst)}</div>`).join('')}
     <details class="zaawansowane zywo-punkty" data-zywo-punkty="${t.id}">
-      <summary><span class="znak-zwiniecia">▸</span> Punkty trasy (${l.wszystkie || 0})</summary>
+      <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Punkty trasy (${l.wszystkie || 0})</summary>
       <div class="zywo-punkty-tresc male slaby">Wczytuję…</div>
     </details>
     <div class="przyciski" style="margin-top:10px">
@@ -2451,7 +2556,7 @@ async function rysujZywo(cel, data) {
       : wszystkieTrasy.length ? `<p class="male slaby">Filtry ukrywają wszystkie trasy (${wszystkieTrasy.length}) — kliknij „Wyczyść”.</p>`
       : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('kalendarz', 38)}</span>
            Na ten dzień nie ma jeszcze żadnej trasy.
-           <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">Zaplanuj trasę</button></div>
+           <div style="margin-top:12px"><button class="glowny" id="p-planuj-2">+ Nowa trasa</button></div>
          </div></div>`}`;
 
   // Liczba spraw do decyzji jest kafelkiem nad tą sekcją, nie wstęgą w niej.
@@ -2510,8 +2615,8 @@ function zapiszRozwinieteZywo(zbior) { Pamiec.zapisz(kluczRozwinietychZywo(), JS
 function htmlPunktuZywo(x, token, podglad) {
   const zamkniety = x.status === 'dostarczone' || x.status === 'nieudane';
   const czeka = !!x.do_przyjecia && zamkniety;
-  const status = x.status === 'dostarczone' ? '<span class="plakietka p-dostarczone">✓ dostarczone</span>'
-    : x.status === 'nieudane' ? `<span class="plakietka p-nieudane">✕ ${escHtml(x.powod || 'nieudane')}</span>`
+  const status = x.status === 'dostarczone' ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'dostarczone</span>')
+    : x.status === 'nieudane' ? `<span class="plakietka p-nieudane">${ikonka('zamknij')}${escHtml(x.powod || 'nieudane')}</span>`
     : x.status === 'odwolany' ? '<span class="plakietka p-oczekuje">odwołany</span>'
     : '<span class="plakietka p-oczekuje">do zrobienia</span>';
   const zatw = czeka ? '<span class="plakietka p-oczekuje">czeka na zatwierdzenie</span>'
@@ -2523,8 +2628,8 @@ function htmlPunktuZywo(x, token, podglad) {
       ${x.notatka && !podglad ? `<div class="male">${escHtml(x.notatka)}</div>` : ''}
       ${zamkniety && !podglad ? htmlDowodow(x, token, true) : ''}
       ${czeka && !podglad ? `<div class="przyciski" style="margin-top:6px">
-        <button class="maly glowny" data-zywo-przyjmij="${x.id}">✓ Zatwierdź</button>
-        <button class="maly" data-zywo-zwroc="${x.id}">↩ Zwróć kierowcy</button></div>` : ''}
+        <button class="maly glowny" data-zywo-przyjmij="${x.id}">${ikonka('haczyk')}Zatwierdź</button>
+        <button class="maly" data-zywo-zwroc="${x.id}">${ikonka('cofnij')}Zwróć kierowcy</button></div>` : ''}
     </div>`;
 }
 
@@ -2706,11 +2811,11 @@ function oknoImportuPliku() {
         </div>
       </div>
       <p class="male slaby">Sprawdź, czy program dobrze zrozumiał kolumny
-        <span class="slaby">(💡 = rozpoznane po zawartości, bez nagłówka)</span>:</p>
+        <span class="slaby">(${ikonka('podpowiedz')}= rozpoznane po zawartości, bez nagłówka)</span>:</p>
       <div class="dwie">
         ${podglad.pola.map(pole => `
           <label>${escHtml(NAZWY_POL_KLIENTA[pole] || pole)}${
-            (podglad.zrodlo || {})[pole] === 'zawartość' ? ' 💡' : ''}
+            (podglad.zrodlo || {})[pole] === 'zawartość' ? (' ' + ikonka('podpowiedz')) : ''}
             <select data-mapuj="${pole}">
               <option value="-1">— nie ma —</option>
               ${opcje(podglad.mapowanie[pole])}
@@ -2797,9 +2902,9 @@ function oknoKlienta(k) {
     return okno({
       tytul: k.nazwa,
       tresc: `<p><b>${escHtml(adresJednymCiagiem(k)) || 'brak adresu'}</b></p>
-        ${k.osoba ? `<p>👤 ${escHtml(k.osoba)}</p>` : ''}
-        ${k.telefon ? `<p><a href="tel:${escHtml(k.telefon.replace(/\s/g, ''))}">📞 ${escHtml(k.telefon)}</a></p>` : ''}
-        ${k.godziny ? `<p>🕒 ${escHtml(k.godziny)}</p>` : ''}
+        ${k.osoba ? `<p>${ikonka('osoba')}${escHtml(k.osoba)}</p>` : ''}
+        ${k.telefon ? `<p><a href="tel:${escHtml(k.telefon.replace(/\s/g, ''))}">${ikonka('telefon-sluchawka')}${escHtml(k.telefon)}</a></p>` : ''}
+        ${k.godziny ? `<p>${ikonka('zegar')}${escHtml(k.godziny)}</p>` : ''}
         ${k.uwagi ? `<div class="wstega uwaga">${escHtml(k.uwagi)}</div>` : ''}`,
       przyciski: [{ napis: 'Zamknij', klik: z => z() }],
     });
@@ -2835,7 +2940,7 @@ function oknoKlienta(k) {
         <button class="maly" id="kl-geo" style="margin-top:6px">${ikonka('jakosc')}Znajdź adres na mapie</button>`}`,
     przyciski: [
       ...(nowy ? [] : [{ napis: 'Historia', klik: () => oknoHistoriiKlienta(k.id, k.nazwa) }]),
-      ...(nowy ? [] : [{ napis: '🏭 Przenieś do lokalizacji', klik: async z => {
+      ...(nowy ? [] : [{ napis: 'Przenieś do lokalizacji', ikona: 'fabryka', klik: async z => {
         if (!await potwierdz('Przenieść do naszych lokalizacji?',
           'Ten wpis przestanie być odbiorcą, a stanie się naszym miejscem, z którego '
           + 'wyjeżdżamy. Adres, telefon i uwagi idą razem z nim. Jeśli był już na jakiejś '
@@ -2941,7 +3046,7 @@ async function rysujRaportyBiura(pole, param) {
       <td>${escHtml(d.auta.join(', ') || (r && r.pojazd_nazwa) || '')}</td>
       <td>${d.tras ? `${d.tras} ${odmiana(d.tras, 'trasa', 'trasy', 'tras')} · ${d.punkty} ${
         odmiana(d.punkty, 'punkt', 'punkty', 'punktów')}<br>
-        <span class="male">✓ ${d.dostarczone}${d.nieudane ? ` · ✕ ${d.nieudane}` : ''}${
+        <span class="male">${ikonka('haczyk')}${d.dostarczone}${d.nieudane ? ` · ${ikonka('zamknij')}${d.nieudane}` : ''}${
           d.otwarte ? ` · otwarte ${d.otwarte}` : ''}</span>`
         : '<span class="slaby">brak tras</span>'}</td>
       <td>${d.start_zlecen ? `${escHtml(d.start_zlecen)}–${escHtml(d.koniec_zlecen || '?')}<br>
@@ -2962,7 +3067,7 @@ async function rysujRaportyBiura(pole, param) {
         d.km_gps != null && d.zrodlo_km_auto !== 'ślad GPS' ? `<br><span class="male slaby">GPS ok. ${liczbaPl(d.km_gps)} km</span>` : ''}</td>
       <td>${r && r.paliwo_l != null ? r.paliwo_l + ' l' : ''}
           ${r && r.paliwo_pln != null ? '<br>' + liczbaPl(r.paliwo_pln.toFixed(2)) + ' zł' : ''}</td>
-      <td class="male">${r && r.usterki ? '<b style="color:var(--czerwony)">⚠ ' + escHtml(r.usterki) + '</b><br>' : ''}
+      <td class="male">${r && r.usterki ? ('<b style="color:var(--czerwony)">' + ikonka('ostrzezenie')) + escHtml(r.usterki) + '</b><br>' : ''}
           ${r ? escHtml(r.uwagi || '') : ''}
           ${d.trasy && d.trasy.length ? `<br><a href="#" data-trasa-raport="${d.trasy[0]}">trasa</a>` : ''}</td>
     </tr>`;
@@ -2978,9 +3083,9 @@ async function rysujRaportyBiura(pole, param) {
           escHtml(k.imie)}</option>`).join('')}</select></label>` : ''}
       <button id="rb-14">Ostatnie 14 dni</button>
       <button id="rb-miesiac">Ten miesiąc</button>
-      <button class="glowny" data-eksport="raport-pracy-pelny">⬇ Raport pracy do Excela</button>
-      <button data-eksport="raporty">⬇ Same raporty kierowców</button>
-      <button data-eksport="dostawy">⬇ Dostawy do Excela</button>
+      <button class="glowny" data-eksport="raport-pracy-pelny">${ikonka('pobierz')}Raport pracy do Excela</button>
+      <button data-eksport="raporty">${ikonka('pobierz')}Same raporty kierowców</button>
+      <button data-eksport="dostawy">${ikonka('pobierz')}Dostawy do Excela</button>
     </div>
 
     <div class="wstega info" style="margin-bottom:12px">Zakres: <b>${polskaData(od)} – ${polskaData(doDnia)}</b>
@@ -3148,7 +3253,7 @@ function kartaPrzerwUst(ustawienia) {
   return `
       ${zwin('Przerwy kierowcy', String(ustawienia.przerwy_wlaczone || '1') === '0'
         ? '<span class="plakietka p-oczekuje">wyłączone</span>'
-        : '<span class="plakietka p-dostarczone">✓ doliczane</span>', `
+        : ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'doliczane</span>'), `
         <p class="male slaby">Do czasu trasy program dolicza <b>przerwy kierowcy</b>.
           Kluczowa różnica wobec postoju: <b>rozładunek u klienta nie jest przerwą</b> —
           kierowca wtedy pracuje, więc licznik jazdy leci dalej. Przerwa wypada
@@ -3224,7 +3329,7 @@ function kartaKontKierowcow(ustawienia, konta) {
             ? `<br><span class="male slaby">${x.haslo_do_zmiany ? 'hasło startowe — ustawi przy pierwszym logowaniu'
               : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}</td>
         <td>${escHtml(x.login)}</td><td>${escHtml(x.telefon || '')}</td>
-        <td>${x.mozna_zmienic && mozna ? `<button class="maly" data-kierowca-konto="${x.id}">Zmień</button>` : ''}</td>
+        <td>${x.mozna_zmienic && mozna ? `<button class="maly" data-kierowca-konto="${x.id}">${ikonka('edytuj')}Zmień</button>` : ''}</td>
       </tr>`).join('') || '<tr><td colspan="4" class="slaby">Nie ma jeszcze kierowców.</td></tr>'}</tbody>
     </table></div></div>`;
 }
@@ -3374,13 +3479,13 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
             ? znacznikFlotexu(b.flotex) + powodyFlotexu(b.flotex)
             : '<span class="male slaby">nie ma w GK Flota</span>'}</td>` : ''}
           <td class="male">${escHtml(b.uwagi || '')}</td>
-          <td><button class="maly" data-bus="${b.id}">Zmień</button></td>
+          <td><button class="maly" data-bus="${b.id}">${ikonka('edytuj')}Zmień</button></td>
         </tr>`).join('') : '<tr><td colspan="5"><div class="pusto">Nie ma jeszcze aut.</div></td></tr>'}</tbody>
       </table></div>
     </div>
 
     <details class="zaawansowane" id="u-zaawansowane">
-      <summary><span class="znak-zwiniecia">▸</span> Zaawansowane
+      <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Zaawansowane
         <span class="slaby">— połączenia, kopie, tunel, poczta, przechowywanie danych</span></summary>
       <p class="male slaby">Rzadko zmieniane ustawienia techniczne. Na co dzień nie trzeba
         tu zaglądać — program sam pokaże wstęgę, gdy coś stąd wymaga uwagi.</p>
@@ -3404,7 +3509,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}
 
     ${zwin('Powiadamianie klienta', ustawienia.poczta_ustawiona
-      ? '<span class="plakietka p-dostarczone">✓ gotowe</span>'
+      ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'gotowe</span>')
       : '<span class="plakietka p-oczekuje">nieustawione</span>', `
       <p class="male slaby">Program potrafi wysłać klientowi e-mail: „planujemy dostawę
         w środę, orientacyjnie 12:30". Wysyłasz Ty, przyciskiem przy punkcie —
@@ -3474,11 +3579,11 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
         <input id="u-ors" placeholder="${ustawienia.ors_klucz_ustawiony
           ? 'klucz jest zapisany — wpisz nowy, żeby zmienić' : 'wklej klucz'}"></label>
       <div class="male ${ustawienia.ors_klucz_ustawiony ? '' : 'slaby'}">
-        ${ustawienia.ors_klucz_ustawiony ? '✓ Klucz zapisany' : 'Klucz nie jest ustawiony'}</div>
+        ${ustawienia.ors_klucz_ustawiony ? (ikonka('haczyk') + 'Klucz zapisany') : 'Klucz nie jest ustawiony'}</div>
       <button class="glowny zapisz-ustawienia" style="margin-top:12px">Zapisz ustawienia</button>`)}
 
     ${zwin('Jak wejść z telefonu', '', `
-      <p class="male">Najprościej: menu <b>📲 Zaproś kierowcę</b> — kierowca skanuje kod QR
+      <p class="male">Najprościej: menu <b>${ikonka('zaproszenie')}Zaproś kierowcę</b> — kierowca skanuje kod QR
         aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
         (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
         a gdy Panel Kierownika jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
@@ -3739,9 +3844,9 @@ function kartaKontAdmina(ustawienia, u) {
               ${opisBlokadyZInternetu(x.z_internetu)}</td>
             <td>${escHtml(x.login)}</td>
             <td>${OPIS_ROLI[x.rola] || x.rola}${x.baza_nazwa
-                  ? `<br><span class="male slaby">🏭 ${escHtml(x.baza_nazwa)}</span>` : ''}</td>
+                  ? `<br><span class="male slaby">${ikonka('fabryka')}${escHtml(x.baza_nazwa)}</span>` : ''}</td>
             <td>${escHtml(x.telefon || '')}</td>
-            <td><div class="przyciski"><button class="maly" data-konto="${x.id}">Zmień</button>
+            <td><div class="przyciski"><button class="maly" data-konto="${x.id}">${ikonka('edytuj')}Zmień</button>
               ${(x.z_internetu || {}).blokada
                 ? `<button class="maly glowny" data-odblokuj="${x.id}">Odblokuj</button>` : ''}</div></td>
           </tr>`).join('')}</tbody>
@@ -4092,7 +4197,7 @@ function wstegiAlarmow(alarmy, doUstawien) {
   return (alarmy || []).map(a => `<div class="wstega ${a.poziom === 'blad' ? 'blad' : 'uwaga'}"
       style="margin-bottom:10px${doUstawien ? ';cursor:pointer' : ''}"
       ${doUstawien ? `data-do-ustawien="${escHtml(a.kod || '')}"` : ''}>
-      <b>⚠ ${escHtml(a.tytul)}</b><br><span class="male">${escHtml(a.tresc)}</span></div>`).join('');
+      <b>${ikonka('ostrzezenie')}${escHtml(a.tytul)}</b><br><span class="male">${escHtml(a.tresc)}</span></div>`).join('');
 }
 
 
@@ -4110,8 +4215,8 @@ function kartaKopii(u) {
   const l = k.lokalne || {};
   const kiedy = t => escHtml(czasNaEkran(t));
   const plakietka = !k.folder ? '<span class="plakietka p-oczekuje">tylko na tym dysku</span>'
-    : (k.blad ? '<span class="plakietka p-nieudane">✕ błąd</span>'
-      : k.ostatnia_udana ? '<span class="plakietka p-dostarczone">✓ działa</span>'
+    : (k.blad ? ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'błąd</span>')
+      : k.ostatnia_udana ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'działa</span>')
         : '<span class="plakietka p-w_toku">czeka na pierwszą kopię</span>');
   const stare = l.stare_archiwum || {};
   return zwin('Kopie zapasowe', plakietka, `
@@ -4274,9 +4379,9 @@ function kartaTunelu(u) {
   const tunel = u.tunel || {};
   const tryb = u.tunel_tryb || 'brak';
   const stanPlakietka = {
-    dziala: '<span class="plakietka p-dostarczone">✓ działa</span>',
+    dziala: ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'działa</span>'),
     uruchamiam: '<span class="plakietka p-w_toku">łączy się…</span>',
-    blad: '<span class="plakietka p-nieudane">✕ błąd</span>',
+    blad: ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'błąd</span>'),
     wylaczony: '<span class="plakietka p-oczekuje">wyłączony</span>',
   }[tunel.stan] || '';
 
@@ -4312,7 +4417,7 @@ function kartaTunelu(u) {
         ? 'token jest zapisany — wpisz nowy, żeby zmienić' : 'wklej token z panelu Cloudflare'}">
     </label>
     <div class="male ${u.tunel_token_ustawiony ? '' : 'slaby'}">
-      ${u.tunel_token_ustawiony ? '✓ Token zapisany' : 'Token nie jest ustawiony'}</div>
+      ${u.tunel_token_ustawiony ? (ikonka('haczyk') + 'Token zapisany') : 'Token nie jest ustawiony'}</div>
     <label style="margin-top:12px">Adres tunelu stałego
       <input id="u-tunel-adres" value="${escHtml(u.tunel_adres || '')}"
              placeholder="np. https://trasy.twojafirma.pl"></label>
@@ -4360,7 +4465,7 @@ function kartaPages(u) {
       : p.blad ? '<span class="plakietka p-nieudane">błąd</span>'
         : !p.opublikowano ? '<span class="plakietka p-oczekuje">nie wysłano</span>'
           : p.starsza ? '<span class="plakietka p-w_toku">wysyła nową wersję</span>'
-            : '<span class="plakietka p-dostarczone">✓ aktualna</span>';
+            : ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'aktualna</span>');
   const kiedy = t => escHtml(czasNaEkran(t));
   return zwin('Adres dla telefonów (GitHub Pages)', plakietka, `
     <p class="male slaby">Stały adres aplikacji dla telefonów — ten sam po każdym restarcie
@@ -4387,7 +4492,7 @@ function kartaPages(u) {
             ? ' — ta sama co w programie' : p.starsza ? ` <span class="slaby">(program: ${escHtml(p.wersja_programu)})</span>` : ''}</td></tr>
       <tr><td class="slaby">Adres danych na Pages</td>
           <td>${p.adres_api ? `<code style="word-break:break-all">${escHtml(p.adres_api)}</code>
-            ${p.adres_aktualny ? '✓' : '<span class="slaby">(inny niż bieżący tunel)</span>'}`
+            ${p.adres_aktualny ? ikonka('haczyk') : '<span class="slaby">(inny niż bieżący tunel)</span>'}`
             : '—'}${p.adres_zmieniono ? ` <span class="slaby">· ${kiedy(p.adres_zmieniono)}</span>` : ''}</td></tr>
     </table>
     <p class="male slaby">Nowy adres tunelu (po każdym uruchomieniu) i nową wersję programu
@@ -4402,8 +4507,8 @@ function kartaIkol(u) {
   const wlaczony = u.ikol_wlaczony === '1';
   const lokalizatory = stan._lokalizatory || [];
   const stanPlakietka = !wlaczony ? '<span class="plakietka p-oczekuje">wyłączona</span>'
-    : s.stan === 'dziala' ? '<span class="plakietka p-dostarczone">✓ pobiera pozycje</span>'
-    : s.stan === 'blad' ? '<span class="plakietka p-nieudane">✕ błąd</span>'
+    : s.stan === 'dziala' ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'pobiera pozycje</span>')
+    : s.stan === 'blad' ? ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'błąd</span>')
     : '<span class="plakietka p-w_toku">czeka na pierwsze pobranie</span>';
 
   return zwin('Lokalizatory w autach (IKOL)', stanPlakietka, `
@@ -4541,8 +4646,8 @@ function kartaFlotexu(u) {
     ? '<span class="plakietka p-oczekuje">niepołączony</span>'
     : s.uwaga ? '<span class="plakietka p-nieudane">wymaga uwagi</span>'
     : (konta.blad || (s.pojazdy || {}).blad)
-      ? '<span class="plakietka p-nieudane">✕ błąd</span>'
-      : konta.kiedy ? '<span class="plakietka p-dostarczone">✓ połączony</span>'
+      ? ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'błąd</span>')
+      : konta.kiedy ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'połączony</span>')
       : '<span class="plakietka p-w_toku">łączy się</span>';
 
   return zwin('GK Flota (GK Transport)', plakietka, `
@@ -4565,7 +4670,7 @@ function kartaFlotexu(u) {
                  : 'z GK Flota: Ustawienia → Zaawansowane → Połączenie z GK Trasy'}"></label>
     </div>
     <div class="male ${u.flotex_klucz_ustawiony ? '' : 'slaby'}">
-      ${u.flotex_klucz_ustawiony ? '✓ Klucz ustawiony' : 'Klucz nie jest ustawiony'}</div>
+      ${u.flotex_klucz_ustawiony ? (ikonka('haczyk') + 'Klucz ustawiony') : 'Klucz nie jest ustawiony'}</div>
     <div class="przyciski" style="margin-top:10px">
       <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
       <button id="u-flotex-sprawdz">Sprawdź połączenie</button>
@@ -4631,8 +4736,8 @@ function kartaKontGK(u) {
   const plakietka = !u.hub_klucz_ustawiony || !u.hub_adres
     ? '<span class="plakietka p-oczekuje">niepołączony</span>'
     : s.uwaga ? '<span class="plakietka p-nieudane">wymaga uwagi</span>'
-    : s.blad ? '<span class="plakietka p-nieudane">✕ błąd</span>'
-    : s.kiedy ? '<span class="plakietka p-dostarczone">✓ połączony</span>'
+    : s.blad ? ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'błąd</span>')
+    : s.kiedy ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'połączony</span>')
     : '<span class="plakietka p-w_toku">łączy się</span>';
   return zwin('Konta GK (Panel Kierownika)', plakietka, `
     <p class="male slaby">Konta wszystkich aplikacji GK zakłada się w jednym miejscu:
@@ -4646,7 +4751,7 @@ function kartaKontGK(u) {
       co w Panelu (ustawia się je w aplikacji hali). Tutejszy awaryjny „admin” z tutejszym hasłem
       wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
       ponad ${Number(adm.po_godz) || 24} godzin. Inni administratorzy Panelu logują się imieniem i nazwiskiem.</p>
-    ${lok.auto ? `<div class="wstega ok">✓ Połączono samo z Panelem na tym komputerze (${escHtml(u.hub_adres || '')}).</div>`
+    ${lok.auto ? `<div class="wstega ok">${ikonka('haczyk')}Połączono samo z Panelem na tym komputerze (${escHtml(u.hub_adres || '')}).</div>`
       : lok.plik === 'wylaczone' ? `<div class="wstega uwaga">Połączenie jest wyłączone w Panelu → Administracja →
         Ustawienia → Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
       : lok.plik === 'reczny' && !s.kiedy ? `<div class="wstega uwaga">W Panelu utworzono klucz ręcznie — wklej go niżej
@@ -4663,13 +4768,13 @@ function kartaKontGK(u) {
                  : 'z Panelu: Administracja → Ustawienia → Połączenia GK'}"></label>
     </div>
     <div class="male ${u.hub_klucz_ustawiony ? '' : 'slaby'}">
-      ${u.hub_klucz_ustawiony ? '✓ Klucz ustawiony' : 'Klucz nie jest ustawiony'}</div>
+      ${u.hub_klucz_ustawiony ? (ikonka('haczyk') + 'Klucz ustawiony') : 'Klucz nie jest ustawiony'}</div>
     <div class="przyciski" style="margin-top:10px">
       <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>
-      <button id="u-hub-sprawdz">Sprawdź</button>
+      <button id="u-hub-sprawdz" aria-label="Sprawdź połączenie z Panelem">Sprawdź</button>
       ${lok.mozna && (!u.hub_klucz_ustawiony || lok.odlaczony || s.uwaga)
         ? '<button id="u-hub-lokalnie">Połącz z Panelem na tym komputerze</button>' : ''}
-      ${u.hub_klucz_ustawiony ? `<button id="u-hub-pobierz">Pobierz teraz</button>
+      ${u.hub_klucz_ustawiony ? `<button id="u-hub-pobierz" aria-label="Pobierz teraz konta z Panelu">Pobierz teraz</button>
         <button id="u-hub-zapomnij">Odłącz</button>` : ''}
     </div>
     ${u.hub_klucz_ustawiony ? `
@@ -4828,7 +4933,7 @@ function oknoPowiadomienia(p) {
         podana godzina, towar, dokument). Nic nie wysyła się samo — wysyłasz Ty, tym przyciskiem.</p>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: '✉️ Wyślij', klasa: 'glowny', klik: async z => {
+      { napis: 'Wyślij', ikona: 'poczta', klasa: 'glowny', klik: async z => {
         const dane = { okno: val('pw-okno') };
         // Własny tekst idzie tylko wtedy, gdy biuro go poprawiło — inaczej serwer składa treść sam.
         if (pw.edytowano) dane.tresc = val('pw-tresc');
@@ -4840,6 +4945,8 @@ function oknoPowiadomienia(p) {
     ],
   });
   const pw = { edytowano: false, numer: 0 };
+  // Błąd z 2026-11-19: `jest` stało tylko w zapisie Ustawień, więc podgląd treści i komunikat o błędzie rzucały ReferenceError.
+  const jest = id => !!document.getElementById(id);
   const odswiez = async () => {
     const numer = ++pw.numer;
     try {
@@ -4956,7 +5063,7 @@ async function oknoLinkuDoMap(trasaId, tylkoOtwarte) {
           <div class="male"><b>${w.czesci.length > 1 ? `Część ${i + 1}: ` : ''}${
             escHtml(c.od)} → ${escHtml(c.do)}</b></div>
           <div class="przyciski" style="margin-top:8px">
-            <a class="maly glowny" href="${c.adres}" target="_blank" rel="noopener"
+            <a class="maly glowny" href="${escHtml(c.adres)}" target="_blank" rel="noopener"
                style="padding:6px 12px;border-radius:8px;background:var(--granat);color:var(--na-marce);
                       text-decoration:none;font-weight:600;font-size:13px;display:inline-block">
                Otwórz w Google Maps</a>
@@ -4982,11 +5089,11 @@ async function oknoLinkuDoMap(trasaId, tylkoOtwarte) {
    dziś niewidzialny — nie ma wiersza, więc nie ma czego zauważyć.           */
 
 const ZNAKI_BRAKOW = {
-  brak_raportu: ['pilne', '🕒', 'Brak raportu pracy'],
-  licznik: ['pilne', '📊', 'Zerwany łańcuch licznika'],
-  bez_dowodu: ['uwaga', '📎', 'Dostarczone bez dowodu'],
-  niezamkniety: ['uwaga', '⏳', 'Punkt nie został zamknięty'],
-  bez_mapy: ['info', '📍', 'Klient bez adresu na mapie'],
+  brak_raportu: ['pilne', 'zegar', 'Brak raportu pracy'],
+  licznik: ['pilne', 'kpi', 'Zerwany łańcuch licznika'],
+  bez_dowodu: ['uwaga', 'spinacz', 'Dostarczone bez dowodu'],
+  niezamkniety: ['uwaga', 'klepsydra', 'Punkt nie został zamknięty'],
+  bez_mapy: ['info', 'znacznik-miejsca', 'Klient bez adresu na mapie'],
 };
 
 async function rysujBraki(pole, od, doDnia) {
@@ -5002,12 +5109,12 @@ async function rysujBraki(pole, od, doDnia) {
     <div class="karta">
       <div class="karta-gora"><h2>Do sprawdzenia</h2>
         <span class="plakietka ${w.braki.length ? 'p-nieudane' : 'p-dostarczone'}">
-          ${w.braki.length ? w.braki.length : '✓ nic'}</span></div>
+          ${w.braki.length ? w.braki.length : (ikonka('haczyk') + 'nic')}</span></div>
       ${w.braki.length ? Object.entries(grupy).map(([rodzaj, lista]) => {
         const [klasa, ikona, tytul] = ZNAKI_BRAKOW[rodzaj] || ['info', '•', rodzaj];
         return `<h3 style="margin:14px 0 4px">${escHtml(tytul)} (${lista.length})</h3>
           ${lista.slice(0, 25).map(b => `<div class="brak">
-            <span class="znak ${klasa}">${ikona}</span>
+            <span class="znak ${klasa}">${ikona.length > 3 ? ikonka(ikona) : ikona}</span>
             <span style="flex:1">
               <span class="male">${escHtml(b.opis)}</span>
               ${b.data ? `<span class="male slaby" style="display:block">${

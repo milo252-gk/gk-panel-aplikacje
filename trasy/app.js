@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-a82dad280e24';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-76d6ea982d26';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -101,8 +101,9 @@ function odstepBleduSerwera(ile) {
 /* ------------------------------------------------------------- drobiazgi */
 
 /* Ikona liniowa (gk-ikony.js, STYL-GK §8) przed napisem przycisku — zamiast emoji. */
-function ikonka(nazwa, rozmiar) {
-  return '<span class="ik">' + GKIkony.html(nazwa, rozmiar || 16) + '</span>';
+function ikonka(nazwa, rozmiar, poTekscie) {
+  // poTekscie: ikona stoi PO napisie (np. „Następny →”) — odstęp z lewej, nie z prawej.
+  return '<span class="ik' + (poTekscie ? ' ik-po' : '') + '">' + GKIkony.html(nazwa, rozmiar || 16) + '</span>';
 }
 
 function escHtml(t) {
@@ -403,10 +404,12 @@ async function zamknijZPytaniem() {
 }
 
 /* konto: true — okno „Moje konto” w wyglądzie okna konta aplikacji hali (style.css → .okno-konta). */
-function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto, szkic }) {
+function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto, szkic, ikona }) {
   const tlo = document.getElementById('okno-tlo');
   tlo.classList.toggle('okno-konta', !!konto);
-  document.getElementById('okno-tytul').textContent = tytul || '';
+  const poleTytulu = document.getElementById('okno-tytul');
+  poleTytulu.textContent = tytul || '';
+  if (ikona) poleTytulu.insertAdjacentHTML('afterbegin', ikonka(ikona));   // ikona liniowa przed tytułem (STYL-GK §8)
   const poleTresci = document.getElementById('okno-tresc');
   poleTresci.innerHTML = tresc || '';
   const stopka = document.getElementById('okno-stopka');
@@ -414,6 +417,7 @@ function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto, szkic }) {
   (przyciski || []).forEach(p => {
     const b = document.createElement('button');
     b.textContent = p.napis;
+    if (p.ikona) b.insertAdjacentHTML('afterbegin', ikonka(p.ikona));
     b.className = p.klasa || '';
     b.onclick = () => p.klik(zamknijOkno);
     stopka.appendChild(b);
@@ -1535,7 +1539,7 @@ async function odswiezStanSieci() {
   kropka.title = tytulKropkiSieci({ online: stan.online, wKolejce: stan.wKolejce, odrzucone: stan.odrzucone,
     bezPamieci: stan.bezPamieci, komputer: naKomputerze() });
   const znacznik = document.getElementById('znacznik-kolejki');
-  if (znacznik) znacznik.textContent = stan.wKolejce ? `⏳ ${stan.wKolejce}` : '';
+  if (znacznik) znacznik.innerHTML = stan.wKolejce ? `${ikonka('klepsydra')}${stan.wKolejce}` : '';
   odswiezPasekPolaczenia();
 }
 
@@ -2107,10 +2111,10 @@ function menuDlaRoli() {
     ? [['pulpit', 'pulpit', 'Pulpit'], ['trasy', 'mapa', 'Trasy']]
     : biuro
     ? [['pulpit', 'pulpit', 'Pulpit'], ['trasy', 'mapa', 'Trasy'],
-       ['zalegle', 'zegar', 'Zaległe'], ['klienci', 'firma', 'Klienci']]
+       ['zalegle', 'klepsydra', 'Zaległe'], ['klienci', 'firma', 'Klienci']]
     : [['moja', 'ciezarowka', 'Moja trasa'], ['zaladunek', 'paczka', 'Załadunek'],
        mojeAuto ? ['mojeauto', 'pojazd', 'Moje auto'] : ['klienci', 'firma', 'Klienci'],
-       ['raporty', 'zegar', 'Raport']];     // krótko: „Raport pracy” zawijało się w dwa wiersze (ocena UX 2026-11-17)
+       ['raporty', 'raporty', 'Raport']];     // krótko: „Raport pracy” zawijało się w dwa wiersze (ocena UX 2026-11-17)
   const pasek = document.getElementById('pasek-dolny');
   pasek.innerHTML = dolne.map(([e, i, n]) =>
     `<button data-ekran="${e}"><span class="i">${GKIkony.html(i, 24)}</span><span>${n}</span></button>`).join('');
@@ -2415,7 +2419,7 @@ function naKomputerze() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(min-width:821px)').matches;
 }
 function napisKodowQR() {
-  return naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon — kody QR';
+  return naKomputerze() ? (ikonka('telefon') + 'Kody QR aplikacji') : (ikonka('telefon') + 'Aplikacje na telefon — kody QR');
 }
 function maKodyQR() { return !!stan.uz && stan.uz.zrodlo === 'gk'; }
 
@@ -2448,6 +2452,9 @@ function arkuszKodowQR(lista) {
 function drukujArkuszQR(html) {
   const ramka = document.createElement('iframe');
   ramka.setAttribute('aria-hidden', 'true');
+  // srcdoc dziedziczy origin aplikacji (token sesji w localStorage). Arkusz to sam HTML do druku — skryptów w nim nie ma,
+  // więc je wyłączamy (bez allow-scripts); allow-same-origin zostaje, żeby rodzic mógł wywołać print(), allow-modals — okno druku.
+  ramka.setAttribute('sandbox', 'allow-modals allow-same-origin');
   ramka.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   const sprzatnij = () => setTimeout(() => ramka.remove(), 1000);
   ramka.onload = () => {
@@ -2464,7 +2471,7 @@ function drukujArkuszQR(html) {
 function oknoKodowAplikacji() {
   let lista = [];
   okno({
-    tytul: naKomputerze() ? '📱 Kody QR aplikacji' : '📱 Aplikacje na telefon',
+    tytul: naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon', ikona: 'telefon',
     konto: true,
     tresc: `<p class="konto-drobne">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu
         głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN);
@@ -2474,7 +2481,7 @@ function oknoKodowAplikacji() {
     // główne działanie (grafit) po prawej — „Zamknij” nigdy nie jest wypełnione.
     przyciski: [
       { napis: 'Zamknij', klik: z => z() },
-      { napis: '🖨 Drukuj wszystkie', klasa: 'glowny ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
+      { napis: 'Drukuj wszystkie', ikona: 'drukuj', klasa: 'glowny ukryty', klik: () => drukujArkuszQR(arkuszKodowQR(lista)) },
     ],
     poOtwarciu: async pole => {
       const el = pole.querySelector('#kody-aplikacji');
@@ -2487,7 +2494,7 @@ function oknoKodowAplikacji() {
       if (!el.isConnected) return;               // okno zamknięte w trakcie
       el.innerHTML = lista.map((a, i) => `<figure class="kod-aplikacji">
           ${a.qr ? `<div class="kod-aplikacji-qr">${a.qr}</div>`
-                 : `<div class="kod-aplikacji-qr brak">${a.komputer ? '💻' : '—'}</div>`}
+                 : `<div class="kod-aplikacji-qr brak">${a.komputer ? ikonka('komputer') : '—'}</div>`}
           <figcaption><b>${escHtml(a.nazwa)}</b>
             ${a.adres || a.siec ? `<a href="${escHtml(a.adres || a.siec)}" target="_blank" rel="noopener">${escHtml(a.adres || a.siec)}</a>` : ''}
             ${!a.adres && a.siec ? '<span class="konto-drobne">Tylko w firmowym wifi.</span>' : ''}
@@ -2497,7 +2504,7 @@ function oknoKodowAplikacji() {
       el.querySelectorAll('[data-drukuj]').forEach(b =>
         b.onclick = () => drukujArkuszQR(arkuszKodowQR([lista[+b.dataset.drukuj]])));
       const wszystkie = [...document.querySelectorAll('#okno-stopka button')]
-        .find(b => b.textContent === '🖨 Drukuj wszystkie');
+        .find(b => b.textContent === 'Drukuj wszystkie');
       if (wszystkie && lista.some(a => a.qr)) wszystkie.classList.remove('ukryty');
     },
   });
@@ -2632,7 +2639,7 @@ function oknoKonta() {
         // Wyłączenie wraca do komunikatu „nie zapisano” przy braku programu; zapisy już czekające i tak się wyślą.
         if (kolejkowanieBiuraWlaczone()) Pamiec.zapisz(USTAWIENIE_ZAPISU_BEZ_POLACZENIA, '0');
         else Pamiec.usun(USTAWIENIE_ZAPISU_BEZ_POLACZENIA);
-        bezPolaczenia.textContent = napisZapisuBezPolaczenia();
+        bezPolaczenia.innerHTML = napisZapisuBezPolaczenia();
         bezPolaczenia.setAttribute('aria-pressed', String(kolejkowanieBiuraWlaczone()));
       };
       // Instrukcja jest zwykłą stroną z web/ (instrukcja.html): działa z telefonu także z GitHub Pages (adres względny,
@@ -2651,7 +2658,7 @@ function oknoKonta() {
       pokazKolejkeWKoncie(pole);
       if (stan.obceWKolejce) {
         pole.querySelector('#obce-w-kolejce').innerHTML =
-          `⚠️ Dodatkowo <b>${stan.obceWKolejce}</b> ${odmiana(stan.obceWKolejce,
+          `${ikonka('ostrzezenie')}Dodatkowo <b>${stan.obceWKolejce}</b> ${odmiana(stan.obceWKolejce,
             'zapis czeka', 'zapisy czekają', 'zapisów czeka')} na inną osobę,
            która pracowała na tym urządzeniu. Wyślą się, gdy ta osoba się tu zaloguje —
            nie kasuj danych aplikacji, bo przepadną.`;
@@ -2677,7 +2684,7 @@ function oknoKonta() {
 }
 
 function napisZapisuBezPolaczenia() {
-  return kolejkowanieBiuraWlaczone() ? '💾 Zapisy bez połączenia: włączone' : '💾 Zapisy bez połączenia: wyłączone';
+  return kolejkowanieBiuraWlaczone() ? (ikonka('zapisz') + 'Zapisy bez połączenia: włączone') : (ikonka('zapisz') + 'Zapisy bez połączenia: wyłączone');
 }
 
 /* Dźwięk w Moim koncie → Powiadomienia (2026-10-16, ten sam układ w GK Flota):
@@ -2688,11 +2695,11 @@ function poleDzwieku() {
   return `<p class="konto-drobne">Przy otwartej aplikacji nowa sprawa daje dźwięk — w tym urządzeniu.</p>
     <div class="przyciski-konta">
       <button type="button" id="btn-dzwiek" aria-pressed="${Dzwiek.wlaczony()}">${napisDzwieku()}</button>
-      <button type="button" id="btn-sprawdz-dzwieki">Sprawdź dźwięki</button>
+      <button type="button" id="btn-sprawdz-dzwieki">${ikonka('glos')}Sprawdź dźwięki</button>
     </div>`;
 }
 function napisDzwieku() {
-  return Dzwiek.wlaczony() ? '🔔 Dźwięk powiadomień: włączony' : '🔕 Dźwięk powiadomień: wyłączony';
+  return Dzwiek.wlaczony() ? (ikonka('alerty') + 'Dźwięk powiadomień: włączony') : (ikonka('dzwonek-wyl') + 'Dźwięk powiadomień: wyłączony');
 }
 /* Pasek u góry (ocena UX D1, 2026-11-18): dźwięk powiadomień jest wyłączony przełącznikiem albo przeglądarka go jeszcze
    nie wpuściła (czeka na pierwsze dotknięcie) — ktoś, kto polega na dźwięku przy nieudanej dostawie, ma to widzieć od
@@ -2713,16 +2720,19 @@ function odswiezPasekDzwieku() {
     if (!tresc || !tresc.parentNode) return;
     pasek = document.createElement('div');
     pasek.id = 'pasek-dzwieku';
-    pasek.className = 'wstega uwaga';
+    pasek.className = 'baner-dzwieku';
     pasek.setAttribute('role', 'status');
     tresc.parentNode.insertBefore(pasek, tresc);
   }
   if (pasek.dataset.stan === stanu) return;
   pasek.dataset.stan = stanu;
-  pasek.innerHTML = (stanu === 'wylaczony'
-    ? '🔇 Dźwięk powiadomień jest wyłączony — nie usłyszysz nieudanej dostawy. '
-    : '🔇 Przeglądarka jeszcze nie wpuściła dźwięku — dotknij, żeby go włączyć. ')
-    + '<button type="button" class="maly glowny" id="btn-wlacz-dzwiek">Włącz dźwięk</button>';
+  // Wspólny wzór paska (STYL-GK §6b): jedna linia, ikona, „Dźwięk wyłączony — włącz”, przycisk „Włącz”.
+  // Przyczynę (przełącznik albo blokada przeglądarki) mówi dymek — pasek ma być krótki i niezmienny.
+  pasek.title = stanu === 'wylaczony'
+    ? 'Dźwięk powiadomień jest wyłączony — nie usłyszysz nieudanej dostawy.'
+    : 'Przeglądarka jeszcze nie wpuściła dźwięku — dotknij, żeby go włączyć.';
+  pasek.innerHTML = ikonka('glos-wyl') + '<span class="baner-tekst">Dźwięk wyłączony — włącz</span>'
+    + '<button type="button" class="maly" id="btn-wlacz-dzwiek">Włącz</button>';
   pasek.querySelector('#btn-wlacz-dzwiek').onclick = () => {
     Dzwiek.ustaw(true);
     try { window.GKDzwieki && window.GKDzwieki.odblokuj(); } catch (e) { /* bez dźwięku w tej przeglądarce */ }
@@ -2737,13 +2747,13 @@ function startPaskaDzwieku() {
   if (!zegarPaskaDzwieku) zegarPaskaDzwieku = setInterval(odswiezPasekDzwieku, 2000);
 }
 
-const PROBA_DZWIEKOW = [['info', 0], ['pilne', 1100], ['awaria', 3200]];
+const PROBA_DZWIEKOW = [['info', 0], ['pilne', 1100], ['awaria', 3200], ['reakcja', 5400]];
 function podepnijDzwiek(pole) {
   const przelacz = pole.querySelector('#btn-dzwiek');
   const sprawdz = pole.querySelector('#btn-sprawdz-dzwieki');
   if (przelacz) przelacz.onclick = () => {
     Dzwiek.ustaw(!Dzwiek.wlaczony());
-    przelacz.textContent = napisDzwieku();
+    przelacz.innerHTML = napisDzwieku();
     przelacz.setAttribute('aria-pressed', String(Dzwiek.wlaczony()));
     if (Dzwiek.wlaczony()) Dzwiek.zagraj('info');
   };

@@ -27,6 +27,8 @@ async function wczytajMojaTrase(data, zPamieci) {
     // a kierowca potwierdzałby drugi raz.
     await nalozKolejke(pelna);
     await Kolejka.zapamietaj(klucz, pelna);
+    // Reakcja „dopracuj” na zwrot od biura (reakcje-trasy.js); błąd reakcji nigdy nie psuje wczytania trasy.
+    if (!jestBiuro() && window.ReakcjeTras) { try { ReakcjeTras.poOdczycie(pelna); } catch (e2) { /* bez reakcji */ } }
     return pelna;
   } catch (e) {
     const kopia = await Kolejka.przypomnij(klucz);
@@ -141,35 +143,35 @@ function wymogiPunktu(p) {
 
 function kartaPrzystanku(p, numer, klikalny, nastepny) {
   const okno = (p.okno_od || p.okno_do)
-    ? `<span class="plakietka p-planowana">🕒 ${escHtml(p.okno_od || '…')}–${escHtml(p.okno_do || '…')}</span>` : '';
+    ? `<span class="plakietka p-planowana">${ikonka('zegar')}${escHtml(p.okno_od || '…')}–${escHtml(p.okno_do || '…')}</span>` : '';
   // Nasze miejsce (doładunek w magazynie) to nie dostawa do odbiorcy — kierowca
   // musi to poznać z odległości ramienia, więc dostaje trzy sygnały naraz:
   // inny pasek, plakietkę „NASZE" i inne słowa statusu.
   const nasze = !!p.nasze;
   const plakietka = nastepny
-    ? '<span class="plakietka p-nastepny">➜ NASTĘPNY</span>'
+    ? ('<span class="plakietka p-nastepny">' + ikonka('strzalka-prawo') + 'NASTĘPNY</span>')
     : p.status === 'dostarczone'
-    ? `<span class="plakietka p-dostarczone">✓ ${nasze ? 'Byłem' : 'Dostarczone'}</span>`
+    ? `<span class="plakietka p-dostarczone">${ikonka('haczyk')}${nasze ? 'Byłem' : 'Dostarczone'}</span>`
     : p.status === 'nieudane'
-      ? '<span class="plakietka p-nieudane">✕ Nieudane</span>'
+      ? ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'Nieudane</span>')
       : p.status === 'odwolany'
         ? '<span class="plakietka p-odwolany">Zdjęte z trasy</span>'
         : `<span class="plakietka p-oczekuje">${nasze ? 'Do odwiedzenia' : 'Do zrobienia'}</span>`;
   const dopiski = [];
-  if (p.towar) dopiski.push('📦 ' + escHtml(p.towar));
-  if (p.dokument && !nasze) dopiski.push('📄 ' + escHtml(p.dokument));
-  if (p.uwagi) dopiski.push('📝 ' + escHtml(p.uwagi));
-  if (p.status === 'oczekuje' && p.zwrot_powod) dopiski.push('<span style="color:var(--czerwony)">↩ biuro zwróciło: ' + escHtml(p.zwrot_powod) + '</span>');
-  if (p.status === 'nieudane' && p.powod) dopiski.push('⚠️ ' + escHtml(p.powod));
-  if (p.status !== 'oczekuje' && p.zamkniete_o) dopiski.push('🕓 ' + samaGodzina(p.zamkniete_o));
+  if (p.towar) dopiski.push(ikonka('paczka') + escHtml(p.towar));
+  if (p.dokument && !nasze) dopiski.push(ikonka('raporty') + escHtml(p.dokument));
+  if (p.uwagi) dopiski.push(ikonka('notatka') + escHtml(p.uwagi));
+  if (p.status === 'oczekuje' && p.zwrot_powod) dopiski.push(('<span style="color:var(--czerwony)">' + ikonka('cofnij') + 'biuro zwróciło: ') + escHtml(p.zwrot_powod) + '</span>');
+  if (p.status === 'nieudane' && p.powod) dopiski.push(ikonka('ostrzezenie') + escHtml(p.powod));
+  if (p.status !== 'oczekuje' && p.zamkniete_o) dopiski.push(ikonka('zegar') + samaGodzina(p.zamkniete_o));
   if (p.eta && p.status === 'oczekuje') dopiski.push(ETA.opis(p));
-  if (p.ile_zalacznikow) dopiski.push('📎 ' + p.ile_zalacznikow);
-  if (p.czeka_na_wyslanie) dopiski.push('<span style="color:var(--zolty)">⏳ czeka na wysłanie</span>');
+  if (p.ile_zalacznikow) dopiski.push(ikonka('spinacz') + p.ile_zalacznikow);
+  if (p.czeka_na_wyslanie) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('klepsydra') + 'czeka na wysłanie</span>'));
   // Zamknięty punkt przechodzi trzy stany: czeka w telefonie → wysłane do biura → zatwierdzone przez biuro.
   // Pierwszy był widoczny od zawsze, dwa kolejne tylko w oknie punktu.
   if (p.status !== 'oczekuje' && p.status !== 'odwolany' && !p.czeka_na_wyslanie) {
     if (p.do_przyjecia) dopiski.push('wysłane — biuro jeszcze nie zatwierdziło');
-    else if (p.przyjeto_o) dopiski.push(p.przyjete_auto ? '✓ zatwierdzone automatycznie' : '✓ zatwierdzone przez biuro');
+    else if (p.przyjeto_o) dopiski.push(p.przyjete_auto ? (ikonka('haczyk') + 'zatwierdzone automatycznie') : (ikonka('haczyk') + 'zatwierdzone przez biuro'));
   }
   if (p.status === 'odwolany') dopiski.push('biuro zdjęło ten punkt — nie jedź');
 
@@ -178,7 +180,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
       ${klikalny ? `data-przystanek="${p.id}"` : 'disabled'}>
       <span class="numer">${numer}</span>
       <span class="srodek">
-        <span class="nazwa">${nasze ? '🏭 ' : ''}${escHtml(p.klient_nazwa)}</span>
+        <span class="nazwa">${nasze ? ikonka('fabryka') : ''}${escHtml(p.klient_nazwa)}</span>
         <span class="adres">${adresHtml(p) || '<i>brak adresu</i>'}</span>
         ${dopiski.length ? `<span class="dopisek">${dopiski.join(' &nbsp;·&nbsp; ')}</span>` : ''}
       </span>
@@ -196,9 +198,9 @@ EKRANY.moja = {
 
     const wybor = `<div class="pasek-narzedzi">
         <label>Dzień<input type="date" id="data-trasy" value="${data}"></label>
-        <button id="dzien-wczoraj">← Poprzedni</button>
+        <button id="dzien-wczoraj">${ikonka('strzalka-lewo')}Poprzedni</button>
         <button id="dzien-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button>
-        <button id="dzien-jutro">Następny →</button>
+        <button id="dzien-jutro">Następny${ikonka('strzalka-prawo', 16, true)}</button>
         <button id="btn-mapa"${mojaTrasa ? '' : ' title="Mapa pokaże się, gdy na ten dzień będziesz mieć trasę"'}>${ikonka('mapa')}Mapa</button>
         ${mojaTrasa ? '' : '<span class="male slaby" id="mapa-powod">Mapa pokaże się, gdy na ten dzień będziesz mieć trasę.</span>'}
       </div>`;
@@ -211,7 +213,7 @@ EKRANY.moja = {
 
     if (!mojaTrasa) {
       pole.innerHTML = wybor + `<div class="karta"><div class="pusto">
-          <span class="duza-ikona">📭</span>
+          <span class="duza-ikona">${ikonka('pusto')}</span>
           Na ten dzień nie masz zaplanowanej trasy.
           <div class="male" style="margin-top:8px">Biuro układa trasy rano — odśwież za chwilę.</div>
         </div></div>`;
@@ -245,7 +247,7 @@ EKRANY.moja = {
           <span class="plakietka p-${mojaTrasa.status}">${escHtml(etykietaStatusuTrasy(mojaTrasa.status))}</span>
         </div>
         ${mojaTrasa.flotex && !mojaTrasa.flotex.sprawny ? `<div class="wstega blad"
-            style="margin:4px 0 10px">⚠ Auto według GK Flota: ${escHtml(
+            style="margin:4px 0 10px">${ikonka('ostrzezenie')}Auto według GK Flota: ${escHtml(
             (mojaTrasa.flotex.powody || []).join('; ') || 'niesprawne')} — zadzwoń do biura</div>` : ''}
         <div class="male"><b>${zrobione}</b> z <b>${l.wszystkie}</b>
           ${odmiana(l.wszystkie, 'punktu', 'punktów', 'punktów')}
@@ -256,7 +258,7 @@ EKRANY.moja = {
           <i class="ok" style="width:${l.wszystkie ? l.dostarczone / l.wszystkie * 100 : 0}%"></i>
           <i class="nie" style="width:${l.wszystkie ? l.nieudane / l.wszystkie * 100 : 0}%"></i>
         </div>
-        ${mojaTrasa.uwagi ? `<div class="wstega info" style="margin-top:12px">📌 ${escHtml(mojaTrasa.uwagi)}</div>` : ''}
+        ${mojaTrasa.uwagi ? `<div class="wstega info" style="margin-top:12px">${ikonka('pinezka')}${escHtml(mojaTrasa.uwagi)}</div>` : ''}
         ${(mojaTrasa.inne_trasy_dnia || []).length ? `<div class="wstega uwaga" style="margin-top:10px">
             Masz dziś jeszcze ${mojaTrasa.inne_trasy_dnia.length}
             ${odmiana(mojaTrasa.inne_trasy_dnia.length, 'trasę', 'trasy', 'tras')}:
@@ -264,11 +266,11 @@ EKRANY.moja = {
               `<b>${escHtml(x.nazwa || 'bez nazwy')}</b> (${x.ile || 0} pkt)`).join(', ')}
             — pokaże się po zamknięciu tej.</div>` : ''}
         <div class="przyciski" style="margin-top:12px">
-          ${mojaTrasa.status === 'planowana' ? '<button class="glowny" id="btn-start">▶ Rozpocznij trasę</button>' : ''}
+          ${mojaTrasa.status === 'planowana' ? ('<button class="glowny" id="btn-start">' + ikonka('odtworz') + 'Rozpocznij trasę</button>') : ''}
           ${zrobione === l.wszystkie && l.wszystkie && mojaTrasa.status !== 'zakonczona'
-        ? '<button class="zielony" id="btn-koniec">✓ Zakończ trasę</button>' : ''}
+        ? ('<button class="zielony" id="btn-koniec">' + ikonka('haczyk') + 'Zakończ trasę</button>') : ''}
           <button id="btn-mapa-link">${ikonka('mapa')}Cała trasa w Google Maps</button>
-          <button id="btn-polozenie">${sledzenieWlaczone() ? '📍 Wyłącz położenie' : '📍 Udostępniaj położenie'}</button>
+          <button id="btn-polozenie">${sledzenieWlaczone() ? (ikonka('znacznik-miejsca') + 'Wyłącz położenie') : (ikonka('znacznik-miejsca') + 'Udostępniaj położenie')}</button>
         </div>
       </div>
       <div class="mapa ukryty" id="mapa-kierowcy"></div>
@@ -303,6 +305,7 @@ EKRANY.moja = {
       await Kolejka.zapamietaj('moja-trasa-' + data, mojaTrasa);
       pokazEkran('moja', { data, zPamieci: true });
       komunikat('Nie zapomnij o raporcie pracy', 'ok');
+      if (window.ReakcjeTras) { try { ReakcjeTras.poKoncuTrasy(mojaTrasa); } catch (e) { /* bez reakcji */ } }
     };
     pole.querySelector('#btn-polozenie').onclick = przelaczSledzenie;
     const wstegaOdrzuconych = pole.querySelector('#w-odrzucone');
@@ -405,13 +408,13 @@ function oknoPrzystanku(id) {
   const przyjetaPrzezBiuro = zamkniety && !odwolany && !!p.przyjeto_o && !p.do_przyjecia && !p.czeka_na_wyslanie;
 
   okno({
-    tytul: (p.nasze ? '🏭 ' : '') + p.klient_nazwa,
+    tytul: p.klient_nazwa, ikona: p.nasze ? 'fabryka' : '',
     tresc: `
       <div class="karta scisla" style="margin:0 0 14px">
         <div><b>${escHtml(adresJednymCiagiem(p)) || 'brak adresu'}</b></div>
-        ${p.osoba ? `<div class="male slaby">👤 ${escHtml(p.osoba)}</div>` : ''}
-        ${p.telefon ? `<div class="male"><a href="tel:${escHtml(p.telefon.replace(/\s/g, ''))}">📞 ${escHtml(p.telefon)}</a></div>` : ''}
-        ${p.godziny ? `<div class="male slaby">🕒 ${escHtml(p.godziny)}</div>` : ''}
+        ${p.osoba ? `<div class="male slaby">${ikonka('osoba')}${escHtml(p.osoba)}</div>` : ''}
+        ${p.telefon ? `<div class="male"><a href="tel:${escHtml(p.telefon.replace(/\s/g, ''))}">${ikonka('telefon-sluchawka')}${escHtml(p.telefon)}</a></div>` : ''}
+        ${p.godziny ? `<div class="male slaby">${ikonka('zegar')}${escHtml(p.godziny)}</div>` : ''}
         ${p.klient_uwagi ? `<div class="wstega uwaga" style="margin:10px 0 0">${escHtml(p.klient_uwagi)}</div>` : ''}
       </div>
       ${p.nasze ? `<div class="wstega info">To nasze miejsce — doładunek albo odbiór,
@@ -422,18 +425,18 @@ function oknoPrzystanku(id) {
       ${p.towar ? `<p><b>Towar:</b> ${escHtml(p.towar)}</p>` : ''}
       ${p.dokument && !p.nasze ? `<p><b>Dokument:</b> ${escHtml(p.dokument)}</p>` : ''}
       ${p.uwagi ? `<p><b>Uwagi do dostawy:</b> ${escHtml(p.uwagi)}</p>` : ''}
-      ${p.status === 'oczekuje' && p.zwrot_powod ? `<div class="wstega uwaga">↩ Biuro zwróciło ten punkt do poprawy:
+      ${p.status === 'oczekuje' && p.zwrot_powod ? `<div class="wstega uwaga">${ikonka('cofnij')}Biuro zwróciło ten punkt do poprawy:
           <b>${escHtml(p.zwrot_powod)}</b> — popraw i zamknij jeszcze raz.</div>` : ''}
       ${zamkniety ? `<div class="wstega ${p.status === 'dostarczone' ? 'info' : 'uwaga'}">
-          ${p.status === 'dostarczone' ? (p.nasze ? '✓ Załatwione' : '✓ Dostarczone')
+          ${p.status === 'dostarczone' ? (p.nasze ? (ikonka('haczyk') + 'Załatwione') : (ikonka('haczyk') + 'Dostarczone'))
             : odwolany ? 'Biuro zdjęło ten punkt z trasy — nie musisz tam jechać'
-            : '✕ Nieudane: ' + escHtml(p.powod)}
+            : (ikonka('zamknij') + 'Nieudane: ') + escHtml(p.powod)}
           ${p.zamkniete_o ? ' o ' + samaGodzina(p.zamkniete_o) : ''}
           ${p.odebral ? '<br>Odebrał: ' + escHtml(p.odebral) : ''}
           ${p.notatka ? '<br>' + escHtml(p.notatka) : ''}
         </div>
         ${przyjetaPrzezBiuro
-          ? `<div class="male slaby" id="info-przyjete">${p.przyjete_auto ? '✓ Dostawa zatwierdzona automatycznie.' : '✓ Biuro zatwierdziło tę dostawę.'} Jeśli to pomyłka, zadzwoń do biura —
+          ? `<div class="male slaby" id="info-przyjete">${p.przyjete_auto ? (ikonka('haczyk') + 'Dostawa zatwierdzona automatycznie.') : (ikonka('haczyk') + 'Biuro zatwierdziło tę dostawę.')} Jeśli to pomyłka, zadzwoń do biura —
               biuro może ją zwrócić do poprawy.</div>`
           : '<button class="tekstowy" id="btn-cofnij">Pomyłka — otwórz ten punkt ponownie</button>'}` : ''}
       <a class="glowny" href="${linkNawigacji(p)}" target="_blank" rel="noopener"
@@ -441,10 +444,10 @@ function oknoPrzystanku(id) {
                 background:var(--granat);color:var(--na-marce);text-decoration:none;font-weight:600;margin-top:8px">
         ${ikonka('mapa')}${p.nasze ? 'Nawiguj do magazynu' : 'Nawiguj do klienta'}</a>
       ${p.nasze ? '' : '<button class="maly" id="btn-uwaga" style="margin-top:10px">'
-        + '📌 Dopisz uwagę o dojeździe</button>'}`,
+        + (ikonka('pinezka') + 'Dopisz uwagę o dojeździe</button>')}`,
     przyciski: zamkniety ? [{ napis: 'Zamknij', klik: z => z() }] : [
-      { napis: '✕ Nie udało się', klasa: 'czerwony', klik: z => { z(); oknoNieudanej(p); } },
-      { napis: p.nasze ? '✓ Załatwione' : '✓ Dostarczone', klasa: 'zielony',
+      { napis: 'Nie udało się', ikona: 'zamknij', klasa: 'czerwony', klik: z => { z(); oknoNieudanej(p); } },
+      { napis: p.nasze ? 'Załatwione' : 'Dostarczone', ikona: 'haczyk', klasa: 'zielony',
         klik: z => { z(); oknoDostarczone(p); } },
     ],
     poOtwarciu: pole => {
@@ -504,7 +507,7 @@ function oknoUwagiDojazdowej(p) {
         escHtml(p.klient_uwagi)}</p>` : ''}`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: '📌 Dopisz', klasa: 'glowny', klik: async z => {
+      { napis: 'Dopisz', ikona: 'pinezka', klasa: 'glowny', klik: async z => {
         const tekst = (document.getElementById('u-tekst') || {}).value || '';
         if (!tekst.trim()) return;
         z();
@@ -549,7 +552,7 @@ function oknoDostarczone(p) {
         try { await Kolejka.zapomnij(kluczSzkicu(p)); } catch (e) { /* trudno */ }
         z();
       } },
-      { napis: nasze ? '✓ Zapisz postój' : '✓ Zapisz dostawę', klasa: 'zielony', klik: async z => {
+      { napis: nasze ? 'Zapisz postój' : 'Zapisz dostawę', ikona: 'haczyk', klasa: 'zielony', klik: async z => {
         const wart = id => (document.getElementById(id) || {}).value || '';
         const dane = {
           status: 'dostarczone',
@@ -695,7 +698,7 @@ function oknoNieudanej(p) {
    a napis nic mu nie mówił. Input zostaje (ukryty w etykiecie): `capture`
    otwiera aparat od razu, `multiple` pozwala dodać kilka zdjęć naraz.       */
 function przyciskAparatu(id) {
-  return `<label class="przycisk-aparatu">📷 Zrób zdjęcie
+  return `<label class="przycisk-aparatu">${ikonka('aparat')}Zrób zdjęcie
         <input type="file" class="ukryty" id="${id}" accept="image/*" capture="environment" multiple></label>`;
 }
 
@@ -710,7 +713,7 @@ async function dodajZdjecia(pliki, zbior, pojemnik, wejscie) {
   }
   if (wejscie) wejscie.value = '';
   pojemnik.innerHTML = zbior.map((z, i) =>
-    `<div class="miniatura"><img src="${z}" alt=""><button type="button" data-usun="${i}">✕</button></div>`).join('');
+    `<div class="miniatura"><img src="${z}" alt=""><button type="button" data-usun="${i}">${ikonka('zamknij')}</button></div>`).join('');
   pojemnik.querySelectorAll('[data-usun]').forEach(b => b.onclick = async () => {
     // Zdjęcie zrobione w aplikacji nie trafia do galerii telefonu — skasowane
     // znaczy: wróć pod rampę. Dlatego pytamy, mimo że to jedno dotknięcie.
@@ -751,6 +754,8 @@ async function zapiszDostawe(p, dane) {
     if (mojaTrasa.status === 'planowana' && dane.status !== 'oczekuje') mojaTrasa.status = 'w_toku';
     await Kolejka.zapamietaj('moja-trasa-' + mojaTrasa.data, mojaTrasa);
     pokazEkran('moja', { data: mojaTrasa.data, zPamieci: true });
+    // Reakcja na dostawę zamkniętą w oknie / po oknie / całą trasę na czas; nieudana dostawa — bez reakcji (reakcje-trasy.js).
+    if (window.ReakcjeTras && dane.status === 'dostarczone') { try { ReakcjeTras.poZamknieciu(mojaTrasa, p, dane.status); } catch (e) { /* bez reakcji */ } }
   }
 }
 
@@ -887,7 +892,7 @@ EKRANY.raporty = {
     pole.innerHTML = `
       <div class="karta">
         <div class="karta-gora"><h2>Dzień pracy</h2>
-          <input type="date" id="r-data" value="${data}" style="width:auto">
+          <input type="date" id="r-data" value="${data}" style="width:auto" aria-label="Dzień pracy — wybierz datę">
         </div>
         ${w._podpowiedziane && (w.pojazd || w.start_o || w.km_start != null) ? `
           <div class="wstega info">Część pól wypełniłem za Ciebie — auto i godziny z dzisiejszej
