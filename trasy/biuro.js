@@ -323,14 +323,16 @@ function filtrujPulpit(lista, f, a) {
     (!f.kierowca || a.kierowca(x) === f.kierowca) && (!f.auto || a.auto(x) === f.auto)
     && (!klient || String(a.klient(x) || '').toLowerCase().includes(klient))
     && (!f.rodzaj || !a.rodzaj || a.rodzaj(x) === f.rodzaj));
-  if (f.sort) {
+  // Właściciel 2026-11-19: „Domyślnie” (pusta wartość) = od najnowszych (zamknięcie dostawy, zatwierdzenie, start trasy).
+  const sort = f.sort || 'nowe';
+  {
     const czas = x => String(a.czas(x) || '');
     w = w.map((x, i) => [x, i]).sort((p, q) => {
-      if (f.sort === 'kierowca') {
+      if (sort === 'kierowca') {
         const r = String(a.kierowca(p[0]) || '~').localeCompare(String(a.kierowca(q[0]) || '~'), 'pl');
         if (r) return r;
       } else {
-        const r = czas(p[0]).localeCompare(czas(q[0])) * (f.sort === 'nowe' ? -1 : 1);
+        const r = czas(p[0]).localeCompare(czas(q[0])) * (sort === 'nowe' ? -1 : 1);
         if (r) return r;
       }
       return p[1] - q[1];
@@ -700,8 +702,11 @@ function zastosujFiltry(lista, f, pola, a) {
     if (ma('miejsce') && !rowne(f.miejsce, a.miejsce(x))) return false;
     return true;
   });
-  if (ma('sort')) {
-    const kierunek = f.sort === 'nowe' ? -1 : 1;
+  // Właściciel 2026-11-19: listy rekordów domyślnie od najnowszych — „Domyślnie” (pusta wartość) bierze kierunek z
+  // a.sortDomyslny ('nowe' dla tras i zaległych dostaw); lista bez niego (Zapisane: nazwa A–Z) zostaje w swojej kolejności.
+  const kierunekSortu = pola.indexOf('sort') >= 0 ? (f.sort || a.sortDomyslny || '') : '';
+  if (kierunekSortu) {
+    const kierunek = kierunekSortu === 'nowe' ? -1 : 1;
     const klucz = x => [String(a.data(x) || '').slice(0, 10), Number(a.id(x)) || 0];
     wynik = wynik.map((x, i) => [x, i]).sort((p, q) => {
       const [d1, i1] = klucz(p[0]), [d2, i2] = klucz(q[0]);
@@ -806,7 +811,7 @@ function pustoPoFiltrach(co) {
 /* Filtry listy tras (widoki Dzień, Tydzień i Lista). Pola trasy w tej liście: data, status (+ „z dostawami do
    zatwierdzenia”), kierowca (id), auto (pojazd), miejsce wyjazdu (baza = id miejsca, puste = baza domyślna). */
 const AKCESORIA_TRAS = {
-  data: t => t.data, id: t => t.id,
+  data: t => t.data, id: t => t.id, sortDomyslny: 'nowe',      // „Domyślnie”: dzień malejąco, w dniu najpóźniej utworzone
   status: t => [t.status].concat(t.ile_do_przyjecia > 0 ? ['do_zatwierdzenia'] : []),
   kierowca: t => t.kierowca, auto: t => t.pojazd, miejsce: t => t.baza,
 };
@@ -1177,6 +1182,7 @@ function sekcjaZatwierdzonychHtml(punkty, token) {
       ${x.status === 'dostarczone' ? ('<span class="plakietka p-dostarczone" style="margin-left:6px">' + ikonka('haczyk') + 'dostarczone</span>')
         : `<span class="plakietka p-nieudane" style="margin-left:6px">${ikonka('zamknij')}${escHtml(x.powod || 'nieudane')}</span>`}
       <span class="plakietka p-oczekuje" style="margin-left:6px">${x.przyjete_auto ? 'zatwierdzone automatycznie' : 'zatwierdzone przez biuro'}</span>
+      ${x.zamkniete_auto ? '<span class="plakietka p-oczekuje" style="margin-left:6px">zamknięte automatycznie</span>' : ''}
       <div class="male slaby">${escHtml(x.kierowca_imie || '')} · ${escHtml(polskaData(x.data))} · zatwierdzono ${escHtml(polskaData(x.przyjeto_o))} ${escHtml(samaGodzina(x.przyjeto_o))}</div>
       ${x.notatka ? `<div class="male">${escHtml(x.notatka)}</div>` : ''}
       ${htmlDowodow(x, token, true)}
@@ -2211,8 +2217,8 @@ function osZDziennika(lista, opcje) {
   if (!lista || !lista.length) return '';
   return `<ol class="os-czasu">${lista.map(z => {
     const kto = z.kto_imie
-      ? escHtml(z.kto_imie) + (z.rola && (OPIS_ROLI[z.rola] || z.rola).toLowerCase() !== String(z.kto_imie).toLowerCase()
-        ? ' (' + escHtml((OPIS_ROLI[z.rola] || z.rola).toLowerCase()) + ')' : '')
+      ? escHtml(z.kto_imie) + (z.rola && nazwaRoliKonta(z).toLowerCase() !== String(z.kto_imie).toLowerCase()
+        ? ' (' + escHtml(nazwaRoliKonta(z)) + ')' : '')
         + (z.kto_przypuszczalnie ? ' — prawdopodobnie' : '')
       : 'wykonawca nieznany';
     return `<li class="${klasaZdarzenia(z)}">
@@ -2620,7 +2626,8 @@ function htmlPunktuZywo(x, token, podglad) {
     : x.status === 'odwolany' ? '<span class="plakietka p-oczekuje">odwołany</span>'
     : '<span class="plakietka p-oczekuje">do zrobienia</span>';
   const zatw = czeka ? '<span class="plakietka p-oczekuje">czeka na zatwierdzenie</span>'
-    : (zamkniety && x.przyjeto_o ? `<span class="plakietka p-oczekuje">${x.przyjete_auto ? 'zatwierdzone automatycznie' : 'zatwierdzone przez biuro'}</span>` : '');
+    : (zamkniety && x.przyjeto_o ? `<span class="plakietka p-oczekuje">${x.przyjete_auto ? 'zatwierdzone automatycznie' : 'zatwierdzone przez biuro'}</span>` : '')
+    + (x.zamkniete_auto ? ' <span class="plakietka p-oczekuje">zamknięte automatycznie</span>' : '');
   return `<div class="zywo-punkt" data-zywo-punkt="${x.id}">
       <div><b>${escHtml(x.klient_nazwa || 'punkt')}</b> ${status} ${zatw}</div>
       <div class="male slaby">${zamkniety && x.zamkniete_o ? escHtml(samaGodzina(x.zamkniete_o)) : ''}${
@@ -3190,7 +3197,14 @@ function godzinyMinuty(minuty) {
 
 /* ============================================================ USTAWIENIA */
 
-const OPIS_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca', podglad: 'Podgląd tras' };
+/* Nazwy ról jak w Moim koncie (NAZWA_ROLI w app.js, NAZWY_ROL w trasex.py; decyzja właściciela 2026-11-19). Kody ról
+   bez zmian. Rola programu `admin` = Szef GK Trasy (z roli huba trasy_admin) albo Menedżer (admin całego GK) — uprawnienia
+   te same, ale konto Menedżera z Panelu serwer opisuje `etykieta_roli` = „Menedżer GK Trasy” („Rozróżnij w Trasach”,
+   2026-11-19). Bez tego pola (starszy serwer) — nazwa roli z tej listy, jak dotąd. */
+const OPIS_ROLI = { admin: 'Szef GK Trasy', biuro: 'Biuro GK Trasy', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd GK Trasy' };
+function nazwaRoliKonta(x) {
+  return (x && x.etykieta_roli) || OPIS_ROLI[x && x.rola] || (x && x.rola) || '';
+}
 
 function kartaFirmyUst(ustawienia) {
   return `
@@ -3246,6 +3260,13 @@ function kartaGodzinUst(ustawienia) {
           nic, jeśli dostawę zdążono już zatwierdzić. Dotyka telefonów z włączonymi powiadomieniami.</p>
         <p class="male slaby">W ciągu dnia godziny liczą się od ostatniej zamkniętej dostawy,
           a nie od porannego planu — po pierwszym opóźnieniu reszta i tak byłaby nieprawdziwa.</p>
+        ${jestAdministratorem() ? `<label>Planowanie tras — termin (pełna godzina, 0–23)
+            <input type="number" id="u-plan-termin" min="0" max="23" step="1"
+                   value="${escHtml(ustawienia.plan_termin_godz || '17')}">
+            <span class="male slaby">Raport „Planowanie tras”: trasa jest w terminie, gdy zaplanowano ją najpóźniej o tej
+              godzinie poprzedniego dnia roboczego przed dniem jazdy. Zmienia tylko administrator.</span></label>`
+          : `<p class="male slaby">Raport „Planowanie tras”: termin to godzina ${escHtml(ustawienia.plan_termin_godz || '17')}:00
+            poprzedniego dnia roboczego przed dniem jazdy (zmienia administrator).</p>`}
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}`;
 }
 
@@ -3354,7 +3375,7 @@ async function rysujUstawieniaBiura(pole) {
   pole.innerHTML = `
     <p class="male slaby" style="margin:0 0 10px">Tu ustawiasz, jak program liczy trasy
       i pilnuje kierowców oraz zakładasz konta kierowców. Klucze, pocztę, kopie zapasowe
-      i konta biura zmienia administrator.</p>
+      i konta biura zmienia Szef GK Trasy.</p>
     ${kartaFirmyUst(ustawienia)}
     ${kartaGodzinUst(ustawienia)}
     ${kartaPrzerwUst(ustawienia)}
@@ -3610,6 +3631,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       ['praca_do_przerwy_min', 'u-praca-przerwa'], ['przerwa_pracownicza_min', 'u-przerwa-praca'],
       ['dluga_praca_min', 'u-dluga-praca'], ['przerwa_dlugiej_pracy_min', 'u-przerwa-dluga'],
       ['dobowy_limit_jazdy_min', 'u-limit-jazdy'], ['doba_pracy_min', 'u-doba'],
+      ['plan_termin_godz', 'u-plan-termin'],
       ['poczta_serwer', 'u-poczta-serwer'], ['poczta_port', 'u-poczta-port'],
       ['poczta_nadawca', 'u-poczta-nadawca'], ['poczta_login', 'u-poczta-login'],
       ['poczta_haslo', 'u-poczta-haslo'], ['poczta_stopka', 'u-poczta-stopka'], ['ors_klucz', 'u-ors'],
@@ -3823,13 +3845,13 @@ function kartaKontAdmina(ustawienia, u) {
             : kontaZespolu(ustawienia) ? '<button class="maly glowny" id="u-nowe-konto">+ Dodaj konto</button>' : ''}</div>
         ${!ustawienia.konta_z_panelu ? '' : kontaZespolu(ustawienia) ? `<div class="wstega info">Kierowców
           i biuro zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby
-          we wszystkich aplikacjach GK. Kierowników, administratorów i osoby z innymi rolami zmienia się
+          we wszystkich aplikacjach GK. Kierowników, Menedżerów i osoby z innymi rolami zmienia się
           w <b>Panelu → Administracja</b>. Konta tutejsze (np. awaryjne „admin”) działają dalej.</div>`
           : `<div class="wstega info">Konta zakłada się teraz
           w <b>Panelu → Administracja</b> (GK Panel Kierownika) — jedno konto osoby we wszystkich
           aplikacjach GK. Tutaj ustawisz tylko bazę wyjazdową. Konta tutejsze (np. awaryjne
           „admin”) działają dalej.${(ustawienia.konta_zespolu || {}).powod === 'awaryjny'
-            ? ' Kierowców i biuro może tu zakładać administrator z kontem z Panelu — zaloguj się nim.' : ''}</div>`}
+            ? ' Kierowców i biuro może tu zakładać Szef GK Trasy z kontem z Panelu — zaloguj się nim.' : ''}</div>`}
         ${wstegaLogowaniaZInternetu(ustawienia.logowanie_z_internetu)}
         <div class="tabela-przewijana"><table>
           <thead><tr><th>Imię</th><th>Login</th><th>Rola</th><th>Telefon</th><th></th></tr></thead>
@@ -3843,7 +3865,7 @@ function kartaKontAdmina(ustawienia, u) {
                   : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}
               ${opisBlokadyZInternetu(x.z_internetu)}</td>
             <td>${escHtml(x.login)}</td>
-            <td>${OPIS_ROLI[x.rola] || x.rola}${x.baza_nazwa
+            <td>${escHtml(nazwaRoliKonta(x))}${x.baza_nazwa
                   ? `<br><span class="male slaby">${ikonka('fabryka')}${escHtml(x.baza_nazwa)}</span>` : ''}</td>
             <td>${escHtml(x.telefon || '')}</td>
             <td><div class="przyciski"><button class="maly" data-konto="${x.id}">${ikonka('edytuj')}Zmień</button>
@@ -3961,17 +3983,17 @@ function oknoKonta_admin(k) {
     tresc: `
       ${zPanelu ? `<div class="wstega info">Konto z Panelu (GK Panel Kierownika). Imię, rolę,
         telefon, PIN i wyłączenie konta zmienia się w <b>Panelu → Administracja</b>.${zespol
-          ? ' Ta osoba ma też role spoza GK Trasy (np. kierownik albo administrator) — dlatego nie tutaj.' : ''}</div>` : ''}
+          ? ' Ta osoba ma też role spoza GK Trasy (np. kierownik albo Menedżer) — dlatego nie tutaj.' : ''}</div>` : ''}
       <label>Imię i nazwisko<input id="ko-imie" value="${escHtml(k.imie)}" autocapitalize="words" ${blok}></label>
       <label>Login ${nowe ? '' : '<span class="slaby">(nie da się zmienić)</span>'}
         <input id="ko-login" value="${escHtml(k.login)}" ${nowe ? '' : 'disabled'}
                autocapitalize="none" placeholder="np. marek"></label>
       <label>Rola
         <select id="ko-rola" ${blok}>
-          <option value="kierowca" ${k.rola === 'kierowca' ? 'selected' : ''}>Kierowca — tylko swoje trasy i swój raport pracy</option>
-          <option value="biuro" ${k.rola === 'biuro' ? 'selected' : ''}>Biuro — cała codzienna robota, bez Ustawień i kont</option>
-          <option value="admin" ${k.rola === 'admin' ? 'selected' : ''}>Administrator — to co biuro, plus konta i Ustawienia</option>
-          <option value="podglad" ${k.rola === 'podglad' ? 'selected' : ''}>Podgląd tras — tylko ogląda plan, niczego nie zmienia</option>
+          <option value="kierowca" ${k.rola === 'kierowca' ? 'selected' : ''}>Kierowca GK Trasy — tylko swoje trasy i swój raport pracy</option>
+          <option value="biuro" ${k.rola === 'biuro' ? 'selected' : ''}>Biuro GK Trasy — cała codzienna robota, bez Ustawień i kont</option>
+          <option value="admin" ${k.rola === 'admin' ? 'selected' : ''}>Szef GK Trasy — to co biuro, plus konta i Ustawienia</option>
+          <option value="podglad" ${k.rola === 'podglad' ? 'selected' : ''}>Podgląd GK Trasy — tylko ogląda plan, niczego nie zmienia</option>
         </select></label>
       <div class="male slaby" style="margin:-4px 0 10px">
         Biuro widzi trasy, klientów, dowody dostaw, ślady GPS i raporty pracy — może więc
@@ -4018,8 +4040,8 @@ function oknoKontaZespolu(k) {
   const nowe = !k;
   k = k || { imie: '', telefon: '', aktywny: 1, role_zespolu: ['trasy_kierowca'] };
   const role = (stan.ustawienia.konta_zespolu || {}).role
-    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca' }, { kod: 'trasy_biuro', nazwa: 'Biuro' },
-        { kod: 'trasy_podglad', nazwa: 'Podgląd tras' }];
+    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca GK Trasy' }, { kod: 'trasy_biuro', nazwa: 'Biuro GK Trasy' },
+        { kod: 'trasy_podglad', nazwa: 'Podgląd GK Trasy' }];
   const opisRoli = {
     trasy_kierowca: 'swoje trasy i raport pracy',
     trasy_biuro: 'cała codzienna robota, bez Ustawień i kont',
@@ -4054,7 +4076,7 @@ function oknoKontaZespolu(k) {
           ustawi własne hasło i PIN.</p>`
         : `<label class="plaska"><input type="checkbox" id="kz-aktywny" ${k.aktywny ? 'checked' : ''}>
           Konto aktywne</label>
-        <p class="male slaby" style="margin:-4px 0 12px">Usuwa administrator w Panelu → Administracja —
+        <p class="male slaby" style="margin:-4px 0 12px">Usuwa Menedżer w Panelu → Administracja —
           tu możesz wyłączyć konto.</p>
         <fieldset><legend>Hasło i PIN</legend>
           <p class="male slaby" style="margin:0 0 10px">Nikt nie zna niczyjego hasła ani PIN-u — możesz tylko
@@ -4120,7 +4142,7 @@ function oknoKontaZespolu(k) {
           baza: (document.getElementById('kz-baza') || {}).value || null,
         };
         if (!dane.nazwa) { pokazBlad('Podaj imię i nazwisko.'); return; }
-        if (!wybrane.length) { pokazBlad('Zaznacz rolę: Kierowca albo Biuro.'); return; }
+        if (!wybrane.length) { pokazBlad('Zaznacz rolę: Kierowca GK Trasy albo Biuro GK Trasy.'); return; }
         if (!nowe) dane.aktywny = document.getElementById('kz-aktywny').checked;
         // Zmieniona sama baza wyjazdowa — Panel nie ma tu nic do zapisania.
         const tylkoBaza = !nowe && dane.nazwa === k.imie && dane.telefon === (k.telefon || '')
@@ -4747,13 +4769,13 @@ function kartaKontGK(u) {
     <p class="male slaby"><b>Panel na tym komputerze łączy się sam</b> — Panel robi klucz i podaje go
       programowi przez plik w profilu Windows, nic nie trzeba wklejać. Ręcznie (Panel na innym
       komputerze): adres <b>https://…</b> i klucz z Panelu → Administracja → Ustawienia → Połączenia GK.</p>
-    <p class="male slaby"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
+    <p class="male slaby"><b>Login „admin”</b> to konto Menedżera z Panelu — to samo hasło i PIN
       co w Panelu (ustawia się je w aplikacji hali). Tutejszy awaryjny „admin” z tutejszym hasłem
       wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
-      ponad ${Number(adm.po_godz) || 24} godzin. Inni administratorzy Panelu logują się imieniem i nazwiskiem.</p>
+      ponad ${Number(adm.po_godz) || 24} godzin. Inni Menedżerowie logują się imieniem i nazwiskiem.</p>
     ${lok.auto ? `<div class="wstega ok">${ikonka('haczyk')}Połączono samo z Panelem na tym komputerze (${escHtml(u.hub_adres || '')}).</div>`
       : lok.plik === 'wylaczone' ? `<div class="wstega uwaga">Połączenie jest wyłączone w Panelu → Administracja →
-        Ustawienia → Połączenia GK — program nie łączy się sam, dopóki administrator Panelu go nie włączy.</div>`
+        Ustawienia → Połączenia GK — program nie łączy się sam, dopóki Menedżer w Panelu go nie włączy.</div>`
       : lok.plik === 'reczny' && !s.kiedy ? `<div class="wstega uwaga">W Panelu utworzono klucz ręcznie — wklej go niżej
         albo w Panelu kliknij „Połącz na tym komputerze”.</div>`
       : lok.odlaczony ? '<div class="male slaby">Odłączono ręcznie — program nie łączy się sam.</div>' : ''}

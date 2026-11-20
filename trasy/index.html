@@ -55,26 +55,26 @@
 })();
 </script>
 <title>GK Trasy</title>
-<link rel="manifest" href="manifest.webmanifest?v=trasex-76d6ea982d26">
-<link rel="icon" href="ikona.svg?v=trasex-76d6ea982d26">
+<link rel="manifest" href="manifest.webmanifest?v=trasex-a751098968a2">
+<link rel="icon" href="ikona.svg?v=trasex-a751098968a2">
 <!-- iPhone nie bierze ikony z manifestu ani z SVG — na ekranie poczatkowym
      pokazywal zrzut strony. Potrzebny jest PNG 180x180. -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=trasex-76d6ea982d26">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=trasex-a751098968a2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GK Trasy">
 <!-- Ciemny pasek z bialym tekstem — jak naglowek aplikacji (theme-color). -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="vendor/leaflet.css?v=trasex-76d6ea982d26">
-<link rel="stylesheet" href="style.css?v=trasex-76d6ea982d26">
-<link rel="stylesheet" href="wskazniki.css?v=trasex-76d6ea982d26">
+<link rel="stylesheet" href="vendor/leaflet.css?v=trasex-a751098968a2">
+<link rel="stylesheet" href="style.css?v=trasex-a751098968a2">
+<link rel="stylesheet" href="wskazniki.css?v=trasex-a751098968a2">
 </head>
 <body>
 
 <!-- ===================================================== EKRAN LOGOWANIA -->
 <div id="ekran-logowania" class="logowanie ukryty">
   <form class="karta-logowania" id="form-logowania">
-    <img class="znak-logo" src="logo-gkf.png?v=trasex-76d6ea982d26"
+    <img class="znak-logo" src="logo-gkf.png?v=trasex-a751098968a2"
          alt="GK Factory" width="666" height="374">
     <h1>GK Trasy</h1>
     <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
@@ -94,8 +94,8 @@
     <button class="glowny duzy" type="submit">Zaloguj</button>
     <div class="blad-logowania" id="blad-logowania" role="alert"></div>
     <!-- Tylko gdy konta przychodza z Panelu (GET /api/zyje → konta_z_panelu). -->
-    <p class="info-kont" id="info-kont" hidden>Konto zakłada administrator w Panelu Kierownika
-      → Administracja.</p>
+    <p class="info-kont" id="info-kont" hidden>Konto zakłada Szef GK Trasy albo Menedżer
+      (Panel Kierownika → Administracja).</p>
   </form>
 </div>
 
@@ -128,7 +128,7 @@
 
   <nav class="menu" id="menu">
     <div class="menu-naglowek">
-      <img class="menu-logo" src="logo-gkf.png?v=trasex-76d6ea982d26" alt="GK Factory"
+      <img class="menu-logo" src="logo-gkf.png?v=trasex-a751098968a2" alt="GK Factory"
            width="666" height="374">
       <div class="menu-imie" id="menu-imie"></div>
       <!-- Pod imieniem nazwa aplikacji, jak w aplikacjach hali (hala-menu-kto); rola jest w Moim koncie. -->
@@ -148,6 +148,8 @@
     <button data-ekran="lokalizacje" class="tylko-biuro"><span class="ikona-menu" data-ikona="lokalizacje"></span> <span>Nasze lokalizacje</span></button>
     <button data-ekran="zaproszenie" class="tylko-biuro"><span class="ikona-menu" data-ikona="zaproszenie"></span> <span>Zaproś kierowcę</span></button>
     <button data-ekran="wskazniki" class="tylko-biuro"><span class="ikona-menu" data-ikona="wskazniki"></span> <span>Wskaźniki</span></button>
+    <button data-ekran="planowanie" class="tylko-biuro"><span class="ikona-menu" data-ikona="zegar"></span> <span>Planowanie tras</span></button>
+    <button data-ekran="rcp" class="tylko-administrator"><span class="ikona-menu" data-ikona="zegar"></span> <span>RCP</span></button>
     <button data-ekran="raporty"><span class="ikona-menu" data-ikona="raporty"></span> <span>Raport pracy</span></button>
     <!-- Widoczne tylko u kierowcy i tylko przy połączeniu z GK Flota (menuDlaRoli). -->
     <button data-ekran="mojeauto" id="btn-moje-auto" class="ukryty"><span class="ikona-menu" data-ikona="pojazd"></span> <span>Moje auto</span></button>
@@ -194,34 +196,37 @@
 <div id="komunikaty" class="komunikaty"></div>
 <div id="zajetosc" class="zajetosc ukryty"><div class="kolo"></div></div>
 
-<script src="vendor/leaflet.js?v=trasex-76d6ea982d26"></script>
+<script src="vendor/leaflet.js?v=trasex-a751098968a2"></script>
 <!-- app.js pierwszy: to on zaklada wspolny 'stan' i rejestr EKRANY,
      z ktorych korzystaja biuro.js i kierowca.js. -->
 <!-- Wspólne dźwięki GK (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js, który je podpina. -->
-<script src="gk-dzwieki.js?v=trasex-76d6ea982d26"></script>
+<script src="gk-dzwieki.js?v=trasex-a751098968a2"></script>
 <!-- Reakcje (kopia 1:1 z huba) i ich reguły dla Tras (reakcje-trasy.js) — używane dopiero w kierowca.js i biuro.js. -->
-<script src="gk-reakcje.js?v=trasex-76d6ea982d26"></script>
-<script src="reakcje-trasy.js?v=trasex-76d6ea982d26"></script>
+<script src="gk-reakcje.js?v=trasex-a751098968a2"></script>
+<script src="reakcje-trasy.js?v=trasex-a751098968a2"></script>
 <!-- Wspólny zestaw ikon liniowych menu (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js (menuDlaRoli). -->
-<script src="gk-ikony.js?v=trasex-76d6ea982d26"></script>
-<script src="kolejka.js?v=trasex-76d6ea982d26"></script>
-<script src="gk-offline.js?v=trasex-76d6ea982d26"></script>
-<script src="mapa.js?v=trasex-76d6ea982d26"></script>
-<script src="podpis.js?v=trasex-76d6ea982d26"></script>
-<script src="skrot.js?v=trasex-76d6ea982d26"></script>
-<script src="app.js?v=trasex-76d6ea982d26"></script>
-<script src="eta.js?v=trasex-76d6ea982d26"></script>
-<script src="dowody.js?v=trasex-76d6ea982d26"></script>
-<script src="biuro.js?v=trasex-76d6ea982d26"></script>
-<script src="import.js?v=trasex-76d6ea982d26"></script>
-<script src="firma.js?v=trasex-76d6ea982d26"></script>
-<script src="szablony.js?v=trasex-76d6ea982d26"></script>
-<script src="zaproszenie.js?v=trasex-76d6ea982d26"></script>
+<script src="gk-ikony.js?v=trasex-a751098968a2"></script>
+<script src="kolejka.js?v=trasex-a751098968a2"></script>
+<script src="gk-offline.js?v=trasex-a751098968a2"></script>
+<script src="mapa.js?v=trasex-a751098968a2"></script>
+<script src="podpis.js?v=trasex-a751098968a2"></script>
+<script src="skrot.js?v=trasex-a751098968a2"></script>
+<script src="app.js?v=trasex-a751098968a2"></script>
+<script src="eta.js?v=trasex-a751098968a2"></script>
+<script src="dowody.js?v=trasex-a751098968a2"></script>
+<script src="biuro.js?v=trasex-a751098968a2"></script>
+<script src="import.js?v=trasex-a751098968a2"></script>
+<script src="firma.js?v=trasex-a751098968a2"></script>
+<script src="szablony.js?v=trasex-a751098968a2"></script>
+<script src="zaproszenie.js?v=trasex-a751098968a2"></script>
 <!-- 2026-11-18: wskaźniki dostaw, kalendarz miesiąca, role i uprawnienia, „i” z definicjami (nowe pliki, tylko odczyt). -->
-<script src="miary.js?v=trasex-76d6ea982d26"></script>
-<script src="wskazniki.js?v=trasex-76d6ea982d26"></script>
-<script src="miesiac.js?v=trasex-76d6ea982d26"></script>
-<script src="role.js?v=trasex-76d6ea982d26"></script>
-<script src="kierowca.js?v=trasex-76d6ea982d26"></script>
+<script src="miary.js?v=trasex-a751098968a2"></script>
+<script src="wskazniki.js?v=trasex-a751098968a2"></script>
+<!-- 2026-11-19: raport „Planowanie tras” (wynik biura: trasy zaplanowane przed terminem; tylko odczyt + CSV). -->
+<script src="planowanie.js?v=trasex-a751098968a2"></script>
+<script src="miesiac.js?v=trasex-a751098968a2"></script>
+<script src="role.js?v=trasex-a751098968a2"></script>
+<script src="kierowca.js?v=trasex-a751098968a2"></script>
+<script src="rcp.js?v=trasex-a751098968a2"></script>
 </body>
 </html>

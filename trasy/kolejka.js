@@ -127,7 +127,9 @@ const Kolejka = (() => {
         .then(() => dzialanie('kolejka', 'readwrite', s => s.delete(op.uuid)));
     },
     listaOdrzuconych() {
-      return dzialanie('odrzucone', 'readonly', s => s.getAll()).then(w => w || []);
+      // Właściciel 2026-11-19: listy od najnowszych (dawniej w kolejności kluczy uuid, czyli przypadkowej).
+      return dzialanie('odrzucone', 'readonly', s => s.getAll())
+        .then(w => (w || []).sort((a, b) => String(b.odrzucono || '').localeCompare(String(a.odrzucono || ''))));
     },
     ileOdrzuconych() { return dzialanie('odrzucone', 'readonly', s => s.count()); },
     zapomnijOdrzucona(uuid) {

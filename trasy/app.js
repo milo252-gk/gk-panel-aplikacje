@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-76d6ea982d26';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-a751098968a2';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -850,7 +850,7 @@ function oznaczSerwer(odpowiada) {
 const PAMIEC_ODPOWIEDZI = 'odp:';
 const MAKS_ODPOWIEDZI = 2 * 1024 * 1024;        // znaków JSON-a
 const MAKS_ODPOWIEDZI_OSOBY = 300;
-const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|kopie|alarmy|blokady|gk\/|eksport|szukaj|raporty\/podpowiedz|ikol\/)|\/mapa-link$/;
+const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|kopie|alarmy|blokady|gk\/|eksport|szukaj|raporty\/podpowiedz|ikol\/|rcp\/)|\/mapa-link$/;
 const KODY_BEZ_PROGRAMU = [502, 503, 504, 530];
 const ODSTEP_PROBY_PROGRAMU_MS = 30 * 1000;
 
@@ -1871,7 +1871,7 @@ function pokazLogowanie() {
   pokazInfoKont();
 }
 
-/* „Konto zakłada administrator w Panelu Kierownika → Administracja.” — tylko
+/* „Konto zakłada Szef GK Trasy albo Menedżer (Panel Kierownika → Administracja).” — tylko
    gdy konta naprawdę przychodzą z Panelu. Pyta /api/zyje (bez logowania);
    brak odpowiedzi = brak linii, logowanie na to nie czeka. Ta sama odpowiedź
    mówi, czy konta są już w D43 (hasło + PIN) — wtedy pole sekretu pisze
@@ -2067,7 +2067,13 @@ async function poZalogowaniuPonownie(poprzedni, ekran) {
 /* --------------------------------------------------------------- ekrany */
 
 // Z wielkiej litery, jak role w oknie konta aplikacji hali (STYL-GK §3).
-const NAZWA_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca', podglad: 'Podgląd tras' };
+/* Nazwy ról widoczne w Moim koncie (decyzja właściciela 2026-11-19) — kody ról bez zmian. `admin` programu pochodzi z roli
+   huba trasy_admin (Szef GK Trasy) albo admin huba (Menedżer). Uprawnienia te same; nazwę KONTA podaje serwer
+   (`etykieta_roli`: „Menedżer GK Trasy” dla Menedżera z Panelu). Bez niej (starszy serwer, profil sprzed zmiany) — ta lista. */
+const NAZWA_ROLI = { admin: 'Szef GK Trasy', biuro: 'Biuro GK Trasy', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd GK Trasy' };
+function etykietaRoli(u) {
+  return (u && u.etykieta_roli) || NAZWA_ROLI[u && u.rola] || (u && u.rola) || '';
+}
 
 /* Trzy role, dwa progi. 'biuro' to wszystko, co robi sie w biurze; 'administrator'
    to dodatkowo konta i Ustawienia. Kierowca nie widzi ani jednego, ani drugiego. */
@@ -2587,7 +2593,7 @@ function oknoKonta() {
     tytul: 'Moje konto',
     konto: true,
     tresc: `
-      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(NAZWA_ROLI[stan.uz.rola] || stan.uz.rola)}</span></p>
+      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(etykietaRoli(stan.uz))}</span></p>
       <fieldset><legend>Wygląd</legend>
         <div class="wybor-wygladu" role="group" aria-label="Wygląd">${wyborWygladu()}</div>
         <p class="konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>

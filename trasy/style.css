@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-76d6ea982d26';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-a751098968a2';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -1094,3 +1094,19 @@ body.okno-otwarte .mapa{visibility:hidden}
 .dp-lightbox-ramka img{max-width:100%; max-height:100%; object-fit:contain; background:var(--mata-zdjecia); border-radius:8px}
 /* „📎 N” na kafelku trasy w toku (Pulpit) otwiera galerię dowodów — mały przycisk w linii tekstu. */
 .dowody-zywo{min-height:0; padding:1px 8px; font-size:13px; vertical-align:baseline}
+
+/* RCP (D93, ekran rcp.js): pasek zakresu, formularze, wiersze dni — układ jak w Panelu Kierownika → RCP. */
+.rcp-pasek,.rcp-korekta,.rcp-eksport,.rcp-karta-formularz{display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; margin:0 0 10px}
+.rcp-pasek label,.rcp-korekta label,.rcp-eksport label,.rcp-karta-formularz label{display:grid; gap:4px; font-size:13px; color:var(--tekst-slaby)}
+.rcp-wybor{display:flex!important; align-items:center; gap:8px}
+.rcp-wybor input[type="checkbox"]{width:20px; height:20px; min-height:0; padding:0; flex:none}
+.rcp-dzien{margin-bottom:10px}
+.rcp-szczegoly{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:4px}
+.rcp-akcje{display:flex; flex-direction:column; gap:6px; flex:none}
+.rcp-popraw{margin-top:10px; padding-top:10px; border-top:1px solid var(--ramka)}
+.rcp-odbicia{list-style:none; margin:0 0 10px; padding:0; display:grid; gap:6px}
+.rcp-odbicia li{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
+.rcp-trasy .tabela-wsk{border-collapse:collapse; min-width:720px; width:100%}
+.rcp-trasy .tabela-wsk th,.rcp-trasy .tabela-wsk td{padding:4px 6px; border-bottom:1px solid var(--ramka); text-align:center; font-size:13px}
+.rcp-trasy .tabela-wsk tbody th{text-align:left; white-space:nowrap}
+.rcp-trasy .tabela-wsk select{min-height:34px; max-width:110px}

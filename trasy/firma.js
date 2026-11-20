@@ -178,14 +178,14 @@ EKRANY.zalegle = {
     }
     const zaznaczone = new Set(zalegle.map(z => z.id));
     // Filtry (2026-11-17): dzień trasy, status dostawy, kierowca, auto. Miejsca wyjazdu zaległa dostawa nie niesie.
-    const akcesoria = { data: z => z.data, id: z => z.id,
+    const akcesoria = { data: z => z.data, id: z => z.id, sortDomyslny: 'nowe',
       status: z => [z.status].concat(z.do_przyjecia ? ['do_zatwierdzenia'] : []),
       kierowca: z => z.kierowca, auto: z => z.pojazd, miejsce: () => null };
     const def = {
       lista: 'zalegle', pola: ['sort', 'od', 'do', 'status', 'kierowca', 'auto'], statusy: FILTRY_STATUSY.zalegle,
       kierowcy: opcjeFiltra((stan.kierowcy || []).map(k => ({ id: k.id, nazwa: k.imie })), zalegle, z => z.kierowca, z => z.kierowca_imie),
       auta: opcjeFiltra((stan.pojazdy || []).filter(b => b.aktywny), zalegle, z => z.pojazd, z => z.pojazd_nazwa),
-      sortDomyslny: 'Domyślnie (najstarsze pierwsze)', etykietaOd: 'Dzień trasy od', etykietaDo: 'Dzień trasy do',
+      sortDomyslny: 'Domyślnie (najnowsze pierwsze)', etykietaOd: 'Dzień trasy od', etykietaDo: 'Dzień trasy do',
     };
     const f = czytajFiltry('zalegle');
 

@@ -43,7 +43,7 @@ EKRANY.zaproszenie = {
 
       ${naGithubie && daneWSwiat && z.pages && !z.pages.adres_aktualny ? `<div class="wstega uwaga">
         Panel Kierownika jeszcze nie wpisał nowego adresu tunelu na GitHub Pages — zwykle
-        trwa to chwilę po starcie. Jeśli to nie minie, administrator sprawdza
+        trwa to chwilę po starcie. Jeśli to nie minie, Szef GK Trasy sprawdza
         <b>Ustawienia → Zaawansowane → Adres dla telefonów</b> i Panel → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
       ${naGithubie && z.pages && z.pages.starsza && admin ? `<div class="wstega uwaga">
@@ -54,7 +54,7 @@ EKRANY.zaproszenie = {
         <b>Ten adres zmieni się po ponownym uruchomieniu programu.</b> Nie drukuj tego
         kodu ani nie rozsyłaj go na stałe. Stały adres daje aplikacja na GitHub Pages — wysyła ją
         Panel Kierownika na tym komputerze sam${admin ? '; stan widać w <b>Ustawieniach → Zaawansowane → Adres dla telefonów</b>.'
-                : '; jeśli to nie minie, powiedz administratorowi.'}</div>` : ''}
+                : '; jeśli to nie minie, powiedz Szefowi GK Trasy.'}</div>` : ''}
 
       ${tunelowy && z.adres_trwaly ? `<div class="wstega ok">
         Adres jest stały (tunel stały). Ten kod można wydrukować i powiesić w szatni.</div>` : ''}

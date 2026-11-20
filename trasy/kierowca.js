@@ -172,6 +172,7 @@ function kartaPrzystanku(p, numer, klikalny, nastepny) {
   if (p.status !== 'oczekuje' && p.status !== 'odwolany' && !p.czeka_na_wyslanie) {
     if (p.do_przyjecia) dopiski.push('wysłane — biuro jeszcze nie zatwierdziło');
     else if (p.przyjeto_o) dopiski.push(p.przyjete_auto ? (ikonka('haczyk') + 'zatwierdzone automatycznie') : (ikonka('haczyk') + 'zatwierdzone przez biuro'));
+    if (p.zamkniete_auto) dopiski.push('zamknięte automatycznie (dowód był)');
   }
   if (p.status === 'odwolany') dopiski.push('biuro zdjęło ten punkt — nie jedź');
 

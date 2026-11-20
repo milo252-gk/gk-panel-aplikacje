@@ -38,7 +38,7 @@ const MiaryTras = (() => {
       tekst: 'Do dziesięciu klientów z największą liczbą nieudanych dostaw w zakresie dat, z liczbą wszystkich ich punktów.' },
     // ---- Kafelki Pulpitu
     'p-alarm': { nazwa: 'Alarm',
-      tekst: 'Ostrzeżenie dla administratora: kopia zapasowa, adres na Pages albo mało miejsca na dysku. Dotknięcie otwiera ustawienie, które to naprawia.' },
+      tekst: 'Ostrzeżenie dla Szefa GK Trasy: kopia zapasowa, adres na Pages albo mało miejsca na dysku. Dotknięcie otwiera ustawienie, które to naprawia.' },
     'p-zalegle': { nazwa: 'Zaległe dostawy',
       tekst: 'Punkty z minionych dni (z ostatnich dni wg ustawienia), które nie zostały dostarczone: nieudane albo niezamknięte. Odwołane przez biuro się nie liczą.' },
     'p-odrzucone': { nazwa: 'Odrzucone zapisy z telefonów',
