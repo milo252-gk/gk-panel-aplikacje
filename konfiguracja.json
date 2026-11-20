@@ -1,6 +1,6 @@
 {
   "hub": "https://butter-zip-lifestyle-hosting.trycloudflare.com",
-  "zmieniono": "2026-11-20T17:47:18.430Z",
+  "zmieniono": "2026-11-20T17:48:20.316Z",
   "wersje": {
     "wspolne": "wspolne-4090731bd69f",
     "panel": "panel-c7914e7abd0a",
@@ -9,6 +9,7 @@
     "kj": "kj-28303b30a767"
   },
   "programy": {
-    "szkolenia": "https://upgrade-kent-progress-wagner.trycloudflare.com"
+    "szkolenia": "https://upgrade-kent-progress-wagner.trycloudflare.com",
+    "wycena": "https://pentium-calibration-hong-newcastle.trycloudflare.com"
   }
 }
