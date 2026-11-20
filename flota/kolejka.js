@@ -234,7 +234,8 @@ const Kolejka = (() => {
 
     listaOdrzuconych() {
       return dzialanie('odrzucone', 'readonly', s => s.getAll())
-        .then(w => (w || []).sort((a, b) => String(a.odrzucono).localeCompare(String(b.odrzucono))));
+        // Właściciel 2026-11-19: listy od najnowszych (dawniej od najstarszego odrzucenia).
+        .then(w => (w || []).sort((a, b) => String(b.odrzucono || '').localeCompare(String(a.odrzucono || ''))));
     },
     ileOdrzuconych() { return dzialanie('odrzucone', 'readonly', s => s.count()); },
     zapomnijOdrzucona(uuid) {
