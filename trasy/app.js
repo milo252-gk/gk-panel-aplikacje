@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-a751098968a2';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-cdaa99696bd6';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -1593,7 +1593,7 @@ const Znaczniki = {
    Panel sprzed D43) — „PIN / hasło” jak dawniej (stan.trybD43 z /api/zyje).
    Link pod polem: „Zaloguj hasłem” (zapomniany PIN), przy haśle ze znacznikiem —
    „Zaloguj PIN-em”; bez znacznika linku nie ma. Serwer i tak rozstrzyga. */
-const ETYKIETY_SEKRETU = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)',
+const ETYKIETY_SEKRETU = { pin: 'PIN lub hasło', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)',
                            stary: 'PIN / hasło' };
 function poleSekretu({ ident, sekret, etykieta, przelacz }) {
   let reczny = null;
@@ -1603,12 +1603,13 @@ function poleSekretu({ ident, sekret, etykieta, przelacz }) {
     if (reczny === 'pin' && a !== 'pin') reczny = null;     // PIN-em tylko ze znacznikiem
     const tryb = reczny || a;
     if (etykieta) etykieta.textContent = ETYKIETY_SEKRETU[tryb];
-    sekret.inputMode = tryb === 'pin' ? 'numeric' : 'text';
-    sekret.maxLength = tryb === 'pin' ? 4 : 128;
+    // 2026-11-20: po haśle pole przyjmuje PIN ALBO hasło (serwer rozpoznaje po treści).
+    sekret.inputMode = 'text';
+    sekret.maxLength = 128;
     sekret.autocomplete = tryb === 'pin' ? 'off' : 'current-password';
     sekret.dataset.tryb = tryb;
     if (przelacz) {
-      przelacz.hidden = a !== 'pin';
+      przelacz.hidden = true;                // jedno pole przyjmuje PIN i hasło
       przelacz.textContent = tryb === 'pin' ? 'Zaloguj hasłem' : 'Zaloguj PIN-em';
     }
     return tryb;
