@@ -342,7 +342,7 @@
     if (typ !== 'awaria' || !obiekt) return;
     const byl = statusy.get(id);
     statusy.set(id, obiekt.status);
-    if (!byl || byl === obiekt.status || obiekt._oczekuje) return;
+    if (!byl || byl === obiekt.status || obiekt._oczekuje || L.magazyn()) return;     // D92: Magazyn bez awarii maszyn
     if (obiekt.linia !== L.linia()) return;
     const m = (obiekt.dane || {}).maszyna || '';
     if (obiekt.status === 'oczekuje_potwierdzenia') {

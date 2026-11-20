@@ -38,6 +38,10 @@
             // zablokowanej pozycji (klucz zmiany → ile razy) — tylko w pamięci tej karty, bez klucza localStorage.
             przyjecie: { odrzucone: {}, bez: {}, dotkniecia: {} } },
   };
+  /* D92: zalogowana osoba z Magazynu (W.profilMagazynu) — aplikacja „GK Magazyn” bez Zmiany, Jakości, Awarii i Raportu zmiany.
+     Ekrany, wezwania i powiadomienia produkcji pytają o to tutaj (awarie.js, jakosc.js). */
+  Lider.magazyn = () => hala.zalogowany() && W.profilMagazynu(hala.pracownik);
+  Lider.ekranDostepny = nazwa => !W.ukryteEkrany(hala.pracownik).includes(nazwa);
 
   // ------------------------------------------------------------ komunikaty
 
@@ -81,7 +85,7 @@
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś kierownika o rolę lidera, mistrza albo brygadzisty SP.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś Kierownika o funkcję Lider GK, Mistrz GK, Lider SP albo Kierownik / Pracownik MAG.';
     // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo PIN, blokada na 5 minut…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
   };
@@ -296,7 +300,7 @@
      wracał na wierzch). sw.js (wspólny hala-push-sw.js) wysyła otwartemu oknu {typ:'otworz', adres}, a gdy okna nie ma,
      otwiera ./#adres — ten adres czyta start (niżej) i zaraz go czyści, żeby odświeżenie strony nie wracało na ten ekran. */
   function otworzZAdresu(adres) {
-    const ekran = W.ekranZAdresu(adres, Object.keys(Lider.ekrany));
+    const ekran = W.ekranZAdresu(adres, Object.keys(Lider.ekrany).filter(Lider.ekranDostepny));
     if (ekran) Lider.pokazEkran(ekran);
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => {
@@ -358,7 +362,12 @@
     $('logowanie').hidden = z;
     $('aplikacja').hidden = !z;
     if (!z) {
-      document.title = 'GK Lider';                      // przed logowaniem (i po wylogowaniu) — nazwa ze statycznego manifestu
+      // Przed logowaniem: nazwa ostatnio zalogowanej osoby na tym telefonie (D92 — telefon magazynu pokazuje „GK Magazyn”),
+      // bez wpisu — „GK Lider” ze statycznego manifestu. Nowy klucz hala.lider.nazwa (tylko napis, nic poza tym).
+      const nazwa = pamiec.czytaj('nazwa') === 'GK Magazyn' ? 'GK Magazyn' : 'GK Lider';
+      document.title = nazwa;
+      const h1 = document.querySelector('#logowanie h1');
+      if (h1) h1.textContent = nazwa;
       $('blokada').hidden = true;
       if (Lider.oknoOtwarte()) { $('okno').hidden = true; document.body.classList.remove('z-oknem'); }
       rysujCzekajace();
@@ -366,10 +375,21 @@
       if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) setTimeout(() => $('identyfikator').focus(), 0);
     } else {
       ustalLinie();
+      zastosujProfil();
       Lider.narysuj();
       przywrocOkno();
     }
     rysujPasek();
+  }
+
+  /* D92: profil zalogowanej osoby — Magazyn nie ma w menu Zmiany, Jakości ani Awarii (ani Raportu zmiany w „Więcej”), nie wybiera
+     linii i startuje na Zleceniach. Inne role — menu jak dotąd. Wołane po każdym zalogowaniu (wspólny telefon). */
+  function zastosujProfil() {
+    const ukryte = W.ukryteEkrany(hala.pracownik);
+    for (const b of document.querySelectorAll('.dolny [data-ekran]')) b.hidden = ukryte.includes(b.dataset.ekran);
+    document.body.classList.toggle('profil-magazyn', Lider.magazyn());
+    pamiec.zapisz('nazwa', W.nazwaAplikacji(hala.pracownik));
+    if (ukryte.includes(Lider.stan.ekran)) Lider.pokazEkran(W.ekranStartowy(hala.pracownik), { bezHistorii: true });
   }
 
   /* Telefon bywa wspólny: zapisy osoby czekają, aż zaloguje się ona sama (hala.js). `moje` liczy
@@ -462,7 +482,7 @@
         // nie ma zespołu (stale.zespoly), więc „Mój zespół” go nie dotyczy (HalaZespol.rolaZespolu).
         const zespol = HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale);
         // Jedna linia (D51): bez „Zmień linię” i bez „przypisz linie” — nie ma czego zmieniać ani przypisywać.
-        const wiele = W.wieleLinii(hala.slowniki);
+        const wiele = W.wieleLinii(hala.slowniki) && !Lider.magazyn();      // D92: Magazyn bez linii
         el.innerHTML = `${wiele ? `<fieldset><legend>Linia</legend>
             <p class="hala-konto-drobne">${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</p>
             <button type="button" data-a="linia">Zmień linię</button></fieldset>` : ''}
@@ -480,7 +500,8 @@
         /* Jeden przycisk na powiadomienia: zgoda przeglądarki i push przy zamkniętej aplikacji (D28) naraz — wspólna
            sekcja z Panelem (konto.js → powiadomienia). lokalne: Lider sam pokazuje powiadomienia przy otwartej karcie. */
         HalaKonto.powiadomienia(el.querySelector('[data-powiadomienia]'), hala, {
-          opis: 'Przypomnienia z checklisty, alerty jakości i zlecenia od kierownika.', lokalne: true, komunikat: Lider.komunikat });
+          opis: Lider.magazyn() ? 'Zlecenia i checklisty Magazynu od kierownika.' : 'Przypomnienia z checklisty, alerty jakości i zlecenia od kierownika.',
+          lokalne: true, komunikat: Lider.komunikat });
       },
     });
   });
@@ -562,6 +583,7 @@
     const linia = Lider.stan.linia;
     // Jedna linia w zakładzie (D51): sama nazwa, bez szewronu i bez okna wyboru z jedną pozycją.
     const wiele = W.wieleLinii(hala.slowniki);
+    $('wybor-linii').hidden = Lider.magazyn();         // D92: Magazyn pracuje bez linii
     $('wybor-linii').classList.toggle('jedna', !wiele);
     $('wybor-linii').tabIndex = wiele ? 0 : -1;
     $('wybor-linii').setAttribute('aria-label', wiele ? 'Zmień linię' : 'Linia: ' + W.nazwaLinii(hala.slowniki, linia));
@@ -583,7 +605,8 @@
 
   function rysujWezwania() {
     const lista = [];
-    for (const fn of Lider.wezwania) { try { lista.push(...(fn() || [])); } catch (e) { console.error(e); } }
+    // D92: wezwania to potwierdzenia napraw maszyn na linii — Magazyn ich nie dostaje (nie potwierdza awarii).
+    if (!Lider.magazyn()) for (const fn of Lider.wezwania) { try { lista.push(...(fn() || [])); } catch (e) { console.error(e); } }
     const el = $('wezwania');
     el.innerHTML = lista.map((w, i) => `<button type="button" class="wezwanie ${esc(w.klasa || '')}" data-i="${i}">${w.html}</button>`).join('');
     el.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => lista[+b.dataset.i].akcja()));
@@ -618,6 +641,7 @@
      obchodu i lądował na ekranie głównym telefonu, z niedokończonym formularzem. Wpisy trzymają tylko nazwę ekranu. */
   const wHistorii = nazwa => { try { history.pushState({ lider: nazwa }, ''); } catch (e) { /* bez historii — Wstecz wychodzi jak dotąd */ } };
   Lider.pokazEkran = (nazwa, opcje) => {
+    if (hala.zalogowany() && !Lider.ekranDostepny(nazwa)) nazwa = W.ekranStartowy(hala.pracownik);   // D92: ekran spoza profilu
     if (nazwa !== Lider.stan.ekran && !(opcje && opcje.bezHistorii)) wHistorii(nazwa);
     Lider.stan.ekran = nazwa;
     // Ekrany schowane w „Więcej” (D74) podświetlają w menu „Więcej”.
@@ -685,17 +709,19 @@
     rysuj(el) {
       const k = Lider.stan.kolejka || {};
       // Lista tego, co jest w Moim koncie, tylko z rzeczy, które ta osoba naprawdę tam ma (linia — przy kilku liniach, Mój zespół — kierownik zakładu).
-      const wMoimKoncie = [W.wieleLinii(hala.slowniki) ? 'linia' : '', HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale) ? 'Mój zespół' : '',
+      const mag = Lider.magazyn();       // D92: Magazyn — bez linii i bez Raportu zmiany
+      const wMoimKoncie = [W.wieleLinii(hala.slowniki) && !mag ? 'linia' : '', HalaZespol.rolaZespolu((hala.pracownik || {}).role, (hala.kontrakt || {}).stale) ? 'Mój zespół' : '',
         'powiadomienia', 'dźwięki', 'wersja', 'wylogowanie'].filter(Boolean);
       const opisKonta = wMoimKoncie.slice(0, -1).join(', ') + ' i ' + wMoimKoncie[wMoimKoncie.length - 1];
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu-wiecej">
-          <button type="button" class="glowny" data-a="koniec">Raport zmiany</button>
+          ${mag ? '' : '<button type="button" class="glowny" data-a="koniec">Raport zmiany</button>'}
           <button type="button" data-a="moje">Moje zgłoszenia</button>
           <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>
         </nav>
         <p class="slaby">${esc(opisKonta.charAt(0).toUpperCase() + opisKonta.slice(1))} — w Moim koncie (ikona osoby u góry).</p>`;
-      el.querySelector('[data-a=koniec]').addEventListener('click', () => Lider.pokazEkran('koniec'));
+      const koniec = el.querySelector('[data-a=koniec]');
+      if (koniec) koniec.addEventListener('click', () => Lider.pokazEkran('koniec'));
       el.querySelector('[data-a=moje]').addEventListener('click', () => Lider.pokazEkran('moje'));
       el.querySelector('[data-a=niewyslane]').addEventListener('click', () => pokazOdrzucone());
     },

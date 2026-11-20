@@ -264,7 +264,7 @@
     if (rodzaj === 'pracownik') return { blad: 'To kod identyfikatora, a nie miejsca kontroli. Zeskanuj etykietę maszyny albo stanowiska.' };
     if (rodzaj === 'stanowiska') {
       if (!wpis) return { blad: `Nie znam stanowiska „${kod}”. Sprawdź kod albo wybierz miejsce z listy.` };
-      if (!wpis.linia) return { blad: `Stanowisko „${wpis.nazwa || kod}” nie ma linii w słowniku — zgłoś to administratorowi albo wybierz miejsce z listy.` };
+      if (!wpis.linia) return { blad: `Stanowisko „${wpis.nazwa || kod}” nie ma linii w słowniku — zgłoś to Menedżerowi albo wybierz miejsce z listy.` };
       return { linia: wpis.linia, stanowisko: kod, maszyna: null, qr };
     }
     if (rodzaj === 'maszyny') {
@@ -272,7 +272,7 @@
       // Stanowisko maszyny tylko wtedy, gdy jest w słowniku (D51: Panel ich nie zakłada, stare zostają przy maszynach).
       const stanowisko = wpis.stanowisko && st[wpis.stanowisko] ? wpis.stanowisko : null;
       const linia = wpis.linia || (stanowisko && st[stanowisko].linia) || jedynaLinia(sl);
-      if (!linia) return { blad: `Maszyna „${wpis.nazwa || kod}” nie ma linii w słowniku — zgłoś to administratorowi albo wybierz miejsce z listy.` };
+      if (!linia) return { blad: `Maszyna „${wpis.nazwa || kod}” nie ma linii w słowniku — zgłoś to Menedżerowi albo wybierz miejsce z listy.` };
       return { linia, stanowisko, maszyna: kod, qr };
     }
     if (rodzaj === 'linie') {

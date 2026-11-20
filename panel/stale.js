@@ -97,6 +97,26 @@
   const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
   // Trwające zlecenie otwarte do poprawienia (Zlecenia → ✎ Zmień): { id, kod, d }. Null — zwykłe okno zapisanego.
   let instancja = null;
+  /* D92 (właściciel 2026-11-19: „daj możliwość dołączania zdjęć do zlecanych zadań”): w oknie „Zmień” trwającego zlecenia
+     zdjęcia od zlecającego — dołączone (✕ zdejmuje z listy zlecenia; pliku na serwerze nie kasujemy) i nowe (aparat albo
+     galeria, razem najwyżej 8 — ten sam limit co „Nowe zlecenie” i hub). Wynik liczy W.zdjeciaEdycji. */
+  let zdjeciaZostaja = [];
+  const maksZdjec = P.MAKS_ZDJEC_FORMULARZA || 8;
+  const pokazNowe = P.poleZdjecia ? P.poleZdjecia(f.inst_zdjecie, { maks: () => maksZdjec - zdjeciaZostaja.length }) : () => {};
+  function rysujZdjeciaZlecenia() {
+    const lista = $('inst-zdjecia-lista');
+    lista.textContent = '';
+    $('inst-zdjecia-opis').hidden = !zdjeciaZostaja.length;
+    zdjeciaZostaja.forEach(id => {
+      const poz = document.createElement('span'); poz.className = 'hala-zdjecie-poz';
+      const im = document.createElement('img'); im.alt = ''; im.dataset.plik = id;
+      hala.adresPliku(id).then(u => { im.src = u; }).catch(() => {});
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'maly'; x.innerHTML = P.ik('zamknij');
+      x.setAttribute('aria-label', 'Zdejmij zdjęcie ze zlecenia');
+      x.addEventListener('click', () => { zdjeciaZostaja = zdjeciaZostaja.filter(z => z !== id); rysujZdjeciaZlecenia(); pokazNowe(); });
+      poz.append(im, x); lista.appendChild(poz);
+    });
+  }
   const ped = P.widoki.checklisty.utworz(f, {
     lista: $('stale-pozycje'),
     linia: () => (f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value),
@@ -226,6 +246,7 @@
     edytowanyKod = kod || null;
     instancja = inst || null;
     poZapisie = poZapisieFn || null;
+    zdjeciaZostaja = [];                                     // D91: otworzInstancje wpisze zdjęcia trwającego zlecenia
     f.reset();
     f.querySelector('.blad').hidden = true;
     f.jako_checklista.checked = !!wartosci.checklista;
@@ -435,6 +456,11 @@
                     maszyny: wybrane('maszyny_stalego') };
     const r = W.zlecenieEdytowane(pola0, d);
     if (r.bledy.length) { blad.textContent = r.bledy.join(' '); blad.hidden = false; return; }
+    // D91: zdjęcia — najpierw pliki do kolejki (hala.dodajPlik), potem pełna lista w tym samym zdarzeniu edycji.
+    const noweIds = P.zdjeciaPola ? await P.zdjeciaPola(f.inst_zdjecie) : [];
+    const zd = W.zdjeciaEdycji(d.zdjecia, zdjeciaZostaja, noweIds, maksZdjec);
+    if (zd.bledy.length) { blad.textContent = zd.bledy.join(' '); blad.hidden = false; return; }
+    if (zd.zdjecia !== undefined) r.dane.zdjecia = zd.zdjecia;
     await hala.zapisz('zlecenie.edytowane', instancja.id, r.dane);
     const wzorzec = instancja.kod && ((hala.slowniki || {}).zlecenia_stale || {})[instancja.kod];
     const dowzorca = !!wzorzec && !$('inst-wzorzec').hidden && f.inst_wzorzec.checked;
@@ -598,6 +624,9 @@
           { id: z.id, kod: d.stale || null, d, terminPole: d.termin ? W.poleCzasu(Date.parse(d.termin)) : '', odPole: d.od ? W.poleCzasu(Date.parse(d.od)) : '' });
     f.inst_termin.value = instancja.terminPole;
     f.inst_od.value = instancja.odPole;
+    zdjeciaZostaja = [].concat(d.zdjecia || []).filter(x => typeof x === 'string');
+    rysujZdjeciaZlecenia();
+    pokazNowe();
     odswiez();
   }
 

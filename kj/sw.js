@@ -10,7 +10,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                    */
 
-const WERSJA = 'kj-68a1f2f3ac4d';
+const WERSJA = 'kj-a412cbc602a1';
 
 self.HALA_PUSH_OBSLUZ_KLIK = true;   // KJ nie ma własnej obsługi dotknięcia powiadomienia
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.

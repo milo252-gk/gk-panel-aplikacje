@@ -222,7 +222,7 @@
   /* Dział do wpisania w Panelu → Zlecenia → Zapisane → „+ Checklista” zależnie od roli (pusty ekran). */
   function opisDzialuListy(pracownik) {
     const kat = W.kategorieOsoby(pracownik);
-    return kat.length > 1 ? 'dział Lider albo Mistrzowie' : kat[0] === 'mistrz' ? 'dział Mistrzowie' : 'dział Lider';
+    return kat.length > 1 ? 'dział Lider GK albo Mistrz GK' : kat[0] === 'mistrz' ? 'dział Mistrz GK' : 'dział Lider GK';
   }
 
   const wierszHtml = w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">

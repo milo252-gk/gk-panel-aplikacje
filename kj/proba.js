@@ -213,7 +213,7 @@
     if (!f.linia) {
       box.innerHTML = `<h2>Miejsce kontroli</h2>
         <button type="button" class="glowny szeroki duzy wlasny-skan" data-akcja="skanuj-stanowisko">${KJ.ik('skan', 22)}${esc(W.napisSkanu(sl))}</button>
-        ${lista || '<p class="pusto">Brak linii w systemie — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'}`;
+        ${lista || '<p class="pusto">Brak linii w systemie — Menedżer zakłada je w Panelu (Administracja → Maszyny).</p>'}`;
       return;
     }
     const miejsce = W.nazwaMiejsca(sl, f), linia = W.nazwaLinii(sl, f.linia);

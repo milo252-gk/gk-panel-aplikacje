@@ -279,7 +279,7 @@
              kody: role.some(r => r === 'kierownik' || r === 'admin'), analityka: role.some(r => r === 'kierownik' || r === 'admin') };
   };
 
-  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'administracja'];
+  const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'raporty', 'rcp', 'administracja'];
   for (const b of document.querySelectorAll('.zakladki button[data-widok]')) {
     b.addEventListener('click', () => {
       widokAktywny = b.dataset.widok;
@@ -296,11 +296,11 @@
      (GET /api/v1/panel/wskazniki → 403). Kierownik UR/KJ i ekran widzą Na żywo i Zlecenia. */
   function pokazAnalityke() {
     const ok = !!(hala.pracownik && (hala.pracownik.role || []).some(r => r === 'kierownik' || r === 'admin'));
-    for (const w of ['wskazniki', 'raporty']) {
+    for (const w of ['wskazniki', 'raporty', 'rcp']) {       // RCP: ta sama grupa ról (serwer: /api/v1/panel/rcp/… tylko kierownik i admin)
       const t = document.querySelector(`.zakladki [data-widok="${w}"]`);
       if (t) t.hidden = !ok;
     }
-    if (!ok && (widokAktywny === 'wskazniki' || widokAktywny === 'raporty')) { const n = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (n) n.click(); }
+    if (!ok && (widokAktywny === 'wskazniki' || widokAktywny === 'raporty' || widokAktywny === 'rcp')) { const n = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (n) n.click(); }
   }
   /* Liczba „Nie wysłane” (odrzucone zapisy i zdjęcia): plakietka na pozycji Administracja w pasku i licznik na chipie „Nie wysłane”.
      Plakietka tylko tam, gdzie chip jest (administrator, kierownik zakładu — W.czesciAdministracji); kierownik UR/KJ ma „Urlopy” i swój
@@ -602,6 +602,8 @@
         if ($('okno-wykonania').open && Panel.widoki.zgloszenia) Panel.widoki.zgloszenia.odswiezWykonanie();
       } else if (widokAktywny === 'wskazniki') {
         if (Panel.widoki.wskazniki) Panel.widoki.wskazniki.rysuj(d);
+      } else if (widokAktywny === 'rcp') {
+        if (Panel.widoki.rcp) Panel.widoki.rcp.rysuj($('rcp'));
       } else if (widokAktywny === 'administracja') {
         if (Panel.widoki.administracja) Panel.widoki.administracja.rysuj(d);
       } else {
@@ -653,7 +655,7 @@
     const lista = W.opisUrzadzen(urzadzenia, hala.teraz());
     d.innerHTML = `<form method="dialog"><h2>Urządzenia z niewysłanymi zapisami</h2>
       ${lista.map(u => `<p><b>${esc(u.tytul)}</b><br>${esc(u.osoby)}<br><span class="slaby">${esc(u.opis)}</span></p>`).join('') || '<p>Nic nie czeka.</p>'}
-      <p class="slaby">Zapisy wyślą się, gdy ta osoba zaloguje się na swoim telefonie. Na wspólnym telefonie wyśle je też kierownik albo administrator: Moje konto → „Zapisy innych osób” → Wyślij.</p>
+      <p class="slaby">Zapisy wyślą się, gdy ta osoba zaloguje się na swoim telefonie. Na wspólnym telefonie wyśle je też kierownik albo Menedżer: Moje konto → „Zapisy innych osób” → Wyślij.</p>
       <div class="hala-okno-przyciski"><button type="submit" class="glowny">Zamknij</button></div></form>`;
     if (!d.open) d.showModal();
   }
@@ -1625,7 +1627,7 @@
       if (fz.plan_dzien.value) {
         const pl = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
         if (pl.blad) { blad(pl.blad); return; }
-        if (!mozeWyslac('zlecenie.zaplanowane')) { blad('Na później zleca tylko kierownik zakładu.'); return; }
+        if (!mozeWyslac('zlecenie.zaplanowane')) { blad('Na później zleca tylko Kierownik.'); return; }
         planNa = pl.na;
         planPo = W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value);
         if (planPo.blad) { blad(planPo.blad); return; }
@@ -1639,7 +1641,7 @@
       // D76: „Też dla działów” — każdy dział swoje; zlecenie kierownika zakładu dla UR/KJ bez osoby — do kierownika działu.
       const tez = [...fz.querySelectorAll('input[name="tez_dzialy"]:checked')].map(x => x.value);
       const doZapisu = W.zleceniaDzialow(dane, { dzialy: [dane.dzial, ...tez], osoby, role: roleJa(), stale: hala.kontrakt.stale || {} });
-      if (!doZapisu.length) { blad('Ten dział zleca kierownik zakładu — wybierz swój dział.'); return; }
+      if (!doZapisu.length) { blad('Ten dział zleca Kierownik — wybierz swój dział.'); return; }
       // Zdjęcia wysyłamy dopiero po wszystkich sprawdzeniach — błąd w formularzu nie zostawia osieroconych plików.
       const zdjeciaIds = await zdjeciaPola(fz.zdjecie);
       for (const d1 of doZapisu) {
@@ -1689,7 +1691,10 @@
      czyta zdjeciaPola(input) przy wysyłce. */
   const MAKS_ZDJEC_FORMULARZA = 8;
   const plikiPola = new WeakMap();
-  function poleZdjecia(input) {
+  /* D91: maks() — ile nowych zdjęć jeszcze wolno (okno „Zmień” liczy też zdjęcia już dołączone do zlecenia);
+     bez opcji — MAKS_ZDJEC_FORMULARZA. Zwraca pokaz(), żeby okno mogło przerysować licznik po zmianie listy obok. */
+  function poleZdjecia(input, opcje) {
+    const maksNowych = () => Math.max(0, opcje && opcje.maks ? opcje.maks() : MAKS_ZDJEC_FORMULARZA);
     const pole = input.closest('.hala-zdjecie');
     const napis = pole.querySelector('[data-zdjecie-napis]'), img = pole.querySelector('.hala-zdjecie-miniatura');
     const nazwa = pole.querySelector('.hala-zdjecie-nazwa');
@@ -1712,17 +1717,20 @@
         x.addEventListener('click', () => { pliki.splice(i, 1); pokaz(); });
         poz.append(im, x); miniatury.appendChild(poz);
       });
-      napis.innerHTML = !pliki.length ? pusto.napis : pliki.length < MAKS_ZDJEC_FORMULARZA ? ik('aparat') + 'Dodaj kolejne' : ik('aparat') + 'Komplet';
-      nazwa.textContent = pliki.length ? `${pliki.length} z ${MAKS_ZDJEC_FORMULARZA}` : pusto.nazwa;
-      input.disabled = pliki.length >= MAKS_ZDJEC_FORMULARZA;
+      const maks = maksNowych();
+      if (pliki.length > maks) pliki.length = maks;             // po dołożeniu w liście obok nie przekraczamy limitu
+      napis.innerHTML = !maks && !pliki.length ? ik('aparat') + 'Komplet' : !pliki.length ? pusto.napis : pliki.length < maks ? ik('aparat') + 'Dodaj kolejne' : ik('aparat') + 'Komplet';
+      nazwa.textContent = pliki.length ? `${pliki.length} z ${maks}` : pusto.nazwa;
+      input.disabled = pliki.length >= maks;
     };
     input.addEventListener('change', () => {
-      for (const plik of Array.from(input.files || [])) if (pliki.length < MAKS_ZDJEC_FORMULARZA) pliki.push(plik);
+      for (const plik of Array.from(input.files || [])) if (pliki.length < maksNowych()) pliki.push(plik);
       input.value = '';                                       // kolejne zdjęcie z tego samego pola nie zastąpi poprzednich
       pokaz();
     });
     // „reset” przychodzi PRZED wyczyszczeniem pól — stan czytamy chwilę później.
     input.form.addEventListener('reset', () => setTimeout(() => { pliki.length = 0; pokaz(); }, 0));
+    return pokaz;
   }
   async function zdjeciaPola(input) {
     const ids = [];
@@ -1731,6 +1739,10 @@
   }
   poleZdjecia(fz.zdjecie);
   poleZdjecia(fa.zdjecie);
+  // D91: to samo pole w oknie „Zmień” trwającego zlecenia (stale.js) — tam limit liczy też zdjęcia już dołączone.
+  Panel.poleZdjecia = poleZdjecia;
+  Panel.zdjeciaPola = zdjeciaPola;
+  Panel.MAKS_ZDJEC_FORMULARZA = MAKS_ZDJEC_FORMULARZA;
   $('menu-awaria').addEventListener('click', () => {
     // Bez maszyn w oknie nie ma czego wybrać (przegląd 2026-10-12) — mówimy, gdzie je dodać, zamiast otwierać puste okno.
     const brak = W.brakMaszyn(hala.slowniki);

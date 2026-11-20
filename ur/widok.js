@@ -198,14 +198,14 @@
     return w;
   }
 
-  /* Lista aktywnych awarii: najpierw zatrzymania linii, potem wg priorytetu, a w nich
-     od najdłuższego przestoju. filtr: 'wszystkie' | 'moje' | 'wolne' (nikt nie przyjął). */
+  /* Lista aktywnych awarii: najpierw zatrzymania linii, potem wg priorytetu, a w nich od najnowszego zgłoszenia
+     (właściciel 2026-11-19; dawniej od najdłuższego przestoju). filtr: 'wszystkie' | 'moje' | 'wolne' (nikt nie przyjął). */
   function listaAwarii({ awarie, slowniki, pracownicy, stale, teraz, ja, filtr }) {
     const wiersze = (awarie || []).filter(a => a.aktywny !== false)
       .map(a => wierszAwarii(a, { slowniki, pracownicy, stale, teraz, ja }))
       .filter(w => filtr === 'moje' ? w.moja : filtr === 'wolne' ? w.status === 'zgloszona' : true);
     return wiersze.sort((a, b) => (Number(b.zatrzymuje) - Number(a.zatrzymuje)) || (a.kolejnosc - b.kolejnosc) ||
-      (String(a.czasZgloszenia).localeCompare(String(b.czasZgloszenia))));
+      (String(b.czasZgloszenia || '').localeCompare(String(a.czasZgloszenia || ''))));
   }
 
   /* Zamknięte / anulowane z ostatnich dni — „co się działo”, najnowsze na górze. */

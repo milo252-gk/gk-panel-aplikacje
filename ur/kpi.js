@@ -63,7 +63,7 @@
     rysuj(el) {
       // R3 (2026-11-09): KPI ogląda kierownik zakładu i administrator (zakładka schowana pozostałym) — stary adres #kpi
       // u kierownika UR albo mechanika nic nie liczy i nie pyta serwera.
-      if (!UR.mozeKpi()) { el.innerHTML = '<p class="pusto">KPI ogląda kierownik zakładu.</p>'; return; }
+      if (!UR.mozeKpi()) { el.innerHTML = '<p class="pusto">KPI ogląda Kierownik.</p>'; return; }
       const k = UR.kontekst();
       const u = Object.assign({ okres: '30', linia: '', maszyna: '' }, ustawienia.czytaj());
       // Filtr z pamięci telefonu sprawdzony ze słownikami: linia/maszyna, której już nie ma, dawała same zera przy

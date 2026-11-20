@@ -207,7 +207,7 @@
       <section class="admin-linia" data-karta="logowania-niespojnosci" id="logowania-niespojnosci" hidden></section>
       <section class="admin-linia" data-karta="logowania">
         <h3>Dziennik logowań <button type="button" class="maly" data-akcja="odswiez-logowania">Odśwież</button></h3>
-        <p class="slaby">Kto, kiedy i skąd się logował — bez haseł i PIN-ów. Wpisy leżą 90 dni, adres widzi tylko administrator. Ekran tylko do odczytu.</p>
+        <p class="slaby">Kto, kiedy i skąd się logował — bez haseł i PIN-ów. Wpisy leżą 90 dni, adres widzi tylko Menedżer. Ekran tylko do odczytu.</p>
         <div class="admin-pasek">
           <label>Wynik <select id="logowania-wynik">${opcje([['', 'wszystkie'], ['ok', 'udane'], ['zle_haslo', 'złe hasło'], ['zly_pin', 'zły PIN'],
             ['wymagane_haslo', 'wymagane hasło'], ['pauza', 'pauza'], ['seria', 'serie złych prób'], ['nieznany', 'nieznany identyfikator']])}</select></label>
@@ -269,7 +269,7 @@
     el.innerHTML = `<section class="admin-linia" data-karta="kody">
         <h3>Kody QR</h3>
         <p class="slaby">Kody aplikacji, maszyn, punktów skanu, linii i identyfikatorów osób — każdy osobno albo wszystkie z kategorii.
-          Okno to samo co wszędzie, gdzie są kody (kierownik zakładu i administrator).</p>
+          Okno to samo co wszędzie, gdzie są kody (Kierownik i Menedżer).</p>
         <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-kody">${P.ik('drukuj')}Kody QR</button></div>
       </section>`;
   }
@@ -335,7 +335,8 @@
     fp.nazwa.value = osoba ? osoba.nazwa : '';
     // Role w grupach: hala oraz GK Trasy / GK Flota (D32) — jedno konto osoby we wszystkich aplikacjach GK.
     const u = uprawnienia(osoba);
-    $('osoba-role').innerHTML = W.grupyRol(hala.kontrakt && hala.kontrakt.stale, u.role).map(g => `
+    // D92: wycofanej funkcji (marketing) nie ma do wyboru — zostaje widoczna tylko osobie, która ją już ma.
+    $('osoba-role').innerHTML = W.grupyRol(hala.kontrakt && hala.kontrakt.stale, u.role, osoba ? osoba.role : []).map(g => `
       <fieldset><legend>${esc(g.nazwa)}</legend>${g.opis ? `<p class="slaby konto-drobne">${esc(g.opis)}</p>` : ''}
         <div class="zaznaczenia">${g.role.map(r =>
           `<label class="zaznacz"><input type="checkbox" name="role" value="${esc(r.kod)}" ${(osoba ? osoba.role.includes(r.kod) : (u.role || []).length === 1) ? 'checked' : ''}> ${esc(r.nazwa)}</label>`).join('')}</div>
@@ -499,8 +500,8 @@
     // Ostatniego administratora hub i tak nie odda (409); tu chodzi o pomyłkę przy własnym koncie.
     const ja = hala.pracownik && edytowany && edytowany.id === hala.pracownik.id;
     if (ja && edytowany.role.includes('admin') && (!w.dane.role.includes('admin') || w.dane.aktywny === false)
-        && !(await P.potwierdz(w.dane.aktywny === false ? 'Wyłączyć własne konto?' : 'Odebrać sobie rolę administratora?',
-          'Po zapisie stracisz dostęp do Administracji (konta, PIN-y, tunel). Wróci tylko, gdy nada go inny administrator.',
+        && !(await P.potwierdz(w.dane.aktywny === false ? 'Wyłączyć własne konto?' : 'Odebrać sobie funkcję Menedżer?',
+          'Po zapisie stracisz dostęp do Administracji (konta, PIN-y, tunel). Wróci tylko, gdy nada go inny Menedżer.',
           w.dane.aktywny === false ? 'Wyłącz' : 'Odbierz'))) return;
     // Etap 3: osoba zleca zlecenia stałe — po wyłączeniu (albo bez roli kierownika) hub przestanie je zlecać.
     const ostrz = W.ostrzezenieAutora(hala.slowniki, edytowany, w.dane, ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || []);
@@ -841,7 +842,7 @@
           <div class="serwis-czesc-tresc" id="serwis-polaczenia-tresc"></div>
         </details>
         <div id="serwis-formularze">${FORMULARZE_KOPII_I_TUNELU}</div>
-        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Administracja → Dane</b> i w <b>Zlecenia → Czyszczenie</b> — tylko dla administratora.</p>`;
+        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Administracja → Dane</b> i w <b>Zlecenia → Czyszczenie</b> — tylko dla Menedżera.</p>`;
       podlaczKopieITunel();
     }
     rysujDostep($('serwis-dostep-tresc'));

@@ -97,8 +97,8 @@
   /* Działy z własną kartą obchodu na Pulpicie (właściciel 2026-11-18): dane-napędzane — karta pojawia się tylko, gdy dział ma na bieżącą
      zmianę zlecenia-checklisty (z pozycjami). Kolejność: mistrz, UR, KJ, brygadzista SP, potem karty lidera (linie). Dział „brygadzista-sp”
      (Strefa Płyt, aplikacja Lider) jest obsłużony po kodzie; musi go jeszcze mieć kontrakt/hub (stale.dzialy) — bez tego nie powstaną zlecenia. */
-  const DZIALY_OBCHODOW = [['mistrz', 'Checklista mistrza', 'Mistrz'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
-                           ['brygadzista-sp', 'Checklista brygadzisty SP', 'Brygadzista SP']];
+  const DZIALY_OBCHODOW = [['mistrz', 'Checklista Mistrza GK', 'Mistrz GK'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
+                           ['brygadzista-sp', 'Checklista Lidera SP', 'Lider SP']];
   function obchodyMistrza(arg) { return obchodyDzialow(Object.assign({}, arg, { tylko: ['mistrz'] })); }
   /* Karty obchodów działów innych niż lider. `ja` + `stale`: kierownik UR/KJ widzi tylko kartę swojego działu (Hala.dzialyKierownika),
      kierownik zakładu i admin wszystkie. `tylko` — zawężenie kodów (test, mistrz). */
@@ -225,7 +225,9 @@
         mozeAnulowac: !!ja && (a.status === 'zgloszona' || a.status === 'przyjeta') && H().moznaAnulowacAwarie(a, ja),
       };
     });
-    return wiersze.sort((x, y) => (y.zatrzymuje - x.zatrzymuje) || ((y.przestojMs || 0) - (x.przestojMs || 0)));
+    // Właściciel 2026-11-19: zatrzymania zostają na górze, a w grupach od najnowszego zgłoszenia (dawniej od najdłuższego przestoju).
+    return wiersze.sort((x, y) => (y.zatrzymuje - x.zatrzymuje)
+      || String(y.czasZgloszenia || '').localeCompare(String(x.czasZgloszenia || '')));
   }
 
   // ------------------------------------------------------------ incydenty jakościowe
@@ -450,7 +452,8 @@
         // ⏰ — znacznik „po terminie” na wierszu (UI etap 2: osobnego filtra już nie ma).
         spoznienie: po ? `spóźnione o ${H().formatCzasu(teraz - termin)}`
           : spoznioneWykonanie ? `wykonane ${H().formatCzasu(wykonano - termin)} po terminie`
-          : przepadlo ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})`
+          : przepadlo ? (d.przyjal || ['wykonane', 'pominiete', 'postep'].some(k => d[k] && Object.keys(d[k]).length) ? `niezrobione do końca zmiany (${godzina(d.wazne_do || d.czas_przepadniecia)})`
+            : `nieprzyjęte — wygasło przed końcem zmiany (${godzina(d.czas_przepadniecia || d.wazne_do)})`)
             // D78: hub albo tunel nie działał w czasie zadania — telefon mógł go nie dostać; terminowość tego nie liczy.
             + (d.bez_lacznosci === true ? ' — brak łączności z serwerem, nie liczy się do terminowości' : '') : null,
         przepadlo,
@@ -532,7 +535,8 @@
       || (a.zaplanowane && b.zaplanowane ? (a.zaplanowaneMs || 0) - (b.zaplanowaneMs || 0) : 0)
       || (b.poTerminie - a.poTerminie) || (a.poTerminie && b.poTerminie ? a.terminMs - b.terminMs : 0)
       || (b.przepadlo - a.przepadlo)
-      || (b.pilne - a.pilne) || String(a.czas).localeCompare(String(b.czas)));
+      // Właściciel 2026-11-19: w obrębie grup (spóźnione, przepadłe, pilne na górze; zaplanowane na dole) od najnowszych.
+      || (b.pilne - a.pilne) || String(b.czas).localeCompare(String(a.czas)));
   }
 
   /* Napisy trzech chipów filtra zleceń (UI etap 2). Liczby jak dotąd przy „W toku” i „Do odbioru”; to, co miało
@@ -1089,7 +1093,8 @@
     const role = kat.role_w_tabeli || [];
     const nazwyRol = (k.stale || {}).role || {};
     const zdarzenia = k.zdarzenia || {}, slowniki = k.slowniki || {}, aplikacje = k.aplikacje || {}, zespoly = (k.stale || {}).zespoly || {};
-    const DZIALOWE = new Set(['kierownik_ur', 'kierownik_kj']);
+    // Kierownicy działów z kontraktu (stale.dzialy[].rola_kierownika: UR, KJ, od D92 także MAG) — „◐ swój dział”.
+    const DZIALOWE = new Set(['kierownik_ur', 'kierownik_kj'].concat(((k.stale || {}).dzialy || []).map(d => d && d.rola_kierownika).filter(Boolean)));
     const komorka = (wiersz, rola) => {
       if (rola === 'admin' && !wiersz.aplikacja) return 'tak';
       let rolePozwolone = [];
@@ -1541,11 +1546,15 @@
      Rola spoza grup (np. nowa w kontrakcie) trafia do pierwszej grupy — żadna nie może zniknąć z okna.
      dozwolone (D49): role, które nadaje zarządzający zespołem (zakres z huba) — tylko one; null = administrator, wszystkie.
      Opisy grup (hierarchia, hasło biura) są dla administratora — zarządzający widzi same swoje role. */
-  function grupyRol(stale, dozwolone) {
+  /* D92 (właściciel 2026-11-19): funkcje wycofane (stale.role_wycofane, dziś „marketing”) nie są do wyboru — chyba że osoba już
+     ją ma (`maOsoba` = role edytowanego konta): wtedy zostaje zaznaczona i widoczna, żeby zapis jej nie zgubił. Hub i tak odrzuca
+     NADANIE wycofanej funkcji (zapisz_pracownika). */
+  function grupyRol(stale, dozwolone, maOsoba) {
     const role = (stale && stale.role) || {};
+    const wycofane = ((stale && stale.role_wycofane && stale.role_wycofane.role) || []).filter(r => !(maOsoba || []).includes(r));
     const grupy = ((stale && stale.grupy_rol) || [{ nazwa: 'Role', role: Object.keys(role) }])
-      .map(g => ({ nazwa: g.nazwa, opis: g.opis || '', role: (g.role || []).filter(r => role[r]).map(r => ({ kod: r, nazwa: role[r] })) }));
-    const w = new Set(grupy.flatMap(g => g.role.map(r => r.kod)));
+      .map(g => ({ nazwa: g.nazwa, opis: g.opis || '', role: (g.role || []).filter(r => role[r] && !wycofane.includes(r)).map(r => ({ kod: r, nazwa: role[r] })) }));
+    const w = new Set(grupy.flatMap(g => g.role.map(r => r.kod)).concat(wycofane));
     for (const [kod, nazwa] of Object.entries(role)) if (!w.has(kod) && grupy.length) grupy[0].role.push({ kod, nazwa });
     if (Array.isArray(dozwolone))
       for (const g of grupy) { g.role = g.role.filter(r => dozwolone.includes(r.kod)); g.opis = ''; }
@@ -1860,8 +1869,11 @@
   const ZRODLA_LOGOWAN = { zaklad: 'sieć zakładu', internet: 'internet', lokalny: 'ten komputer' };
   const PROGRAMY_LOGOWAN = { panel: 'Panel', lider: 'Lider', ur: 'Utrzymanie Ruchu', kj: 'Kontrola Jakości', trasy: 'Trasy', flota: 'Flota',
                              szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
-  const NAZWY_ROL_LOGOWAN = { admin: 'administrator', kierownik: 'kierownik zakładu', biuro: 'biuro', lider: 'lider', mistrz: 'mistrz', brygadzista_sp: 'brygadzista SP', mechanik: 'mechanik',
-                              kontroler: 'kontroler', kierowca: 'kierowca', 'kierownik-ur': 'kierownik UR', 'kierownik-kj': 'kierownik KJ' };
+  // Nazwy funkcji (D92, 2026-11-19 — tylko napisy; kody ról bez zmian). Kody bez słownika kontraktu (biuro, kierowca, kierownik-ur…)
+  // przychodzą z dziennika logowań programów.
+  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik', biuro: 'Biuro GK Trasy', lider: 'Lider GK', mistrz: 'Mistrz GK', brygadzista_sp: 'Lider SP', mechanik: 'Pracownik UR',
+                              kontroler: 'Pracownik KJ', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Kierownik UR', 'kierownik-kj': 'Kierownik KJ',
+                              kierownik_ur: 'Kierownik UR', kierownik_kj: 'Kierownik KJ', kierownik_mag: 'Kierownik MAG', pracownik_mag: 'Pracownik MAG' };
   function logowania(odp) {
     const o = odp || {};
     if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.', startowe: [], startowePodsumowanie: '', niespojnosci: [] };
@@ -2482,7 +2494,7 @@
      telefon czy komputer nie miesza ustawień ludzi. Wszystko, co nie pasuje (stary zapis, ręczna edycja), wraca do wartości
      pustej, żeby jeden zły zapis nie ukrył listy. */
   const KLUCZ_FILTROW = 'hala.panel.filtry.';
-  const SORTOWANIA = [['', 'Domyślnie (spóźnione na górze)'], ['najnowsze', 'najnowsze → najstarsze'], ['najstarsze', 'najstarsze → najnowsze']];
+  const SORTOWANIA = [['', 'Domyślnie (spóźnione na górze, potem najnowsze)'], ['najnowsze', 'najnowsze → najstarsze'], ['najstarsze', 'najstarsze → najnowsze']];
   const OKRESY_DNI = [2, 7, 30, 90];
   const kluczFiltrow = idOsoby => KLUCZ_FILTROW + String(idOsoby || '');
   function filtryZPamieci(tekst) {
@@ -2690,7 +2702,8 @@
     return { bledy, kod, wartosc };
   }
 
-  /* Zgłoszenia nieprawidłowości dla kierownika zakładu: czekające na górze (najstarsze pierwsze), potem rozpatrzone. */
+  /* Zgłoszenia nieprawidłowości dla kierownika zakładu: czekające na górze, potem rozpatrzone; w obu grupach od
+     najnowszych (właściciel 2026-11-19 — dawniej czekające od najstarszych). */
   function zgloszeniaLista({ zgloszenia, slowniki, pracownicy, stale }) {
     const dzialy = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
     const maszyny = (slowniki && slowniki.maszyny) || {};
@@ -2702,12 +2715,12 @@
                kto: nazwaPracownika(pracownicy, d.zglosil), kiedy: d.czas_zgloszenia, kiedyOpis: `${dataKrotka(d.czas_zgloszenia)} ${godzina(d.czas_zgloszenia)}`,
                zdjecia: [].concat(d.zdjecia || []), odpowiedz: d.powod_odrzucenia ? `Odrzucone: ${d.powod_odrzucenia}` : d.uwagi_przyjecia || '',
                zlecenie: d.zlecenie || null, stale: d.stale || null };
-    }).sort((a, b) => (b.nowe - a.nowe) || (a.nowe ? String(a.kiedy).localeCompare(String(b.kiedy)) : String(b.kiedy).localeCompare(String(a.kiedy))));
+    }).sort((a, b) => (b.nowe - a.nowe) || String(b.kiedy).localeCompare(String(a.kiedy)));
   }
   /* D59 (test właściciela 2026-10-13): zgłoszenia BHP z GK Lider (bhp.zgloszenie) — kierownik widział tylko liczbę
      „BHP 1” w raporcie zmiany, bez treści. Wiersze listy: otwarte na górze (pilne rodzaje — incydent, sytuacja
-     potencjalnie wypadkowa, pole „pilne” w stałej rodzaje_bhp — przed odstępstwami; najstarsze pierwsze), zamknięte
-     od najnowszych. */
+     potencjalnie wypadkowa, pole „pilne” w stałej rodzaje_bhp — przed odstępstwami), zamknięte niżej; w grupach od
+     najnowszych (właściciel 2026-11-19 — dawniej otwarte od najstarszych). */
   function bhpLista({ zgloszenia, slowniki, pracownicy, stale }) {
     const rodzaje = new Map(((stale && stale.rodzaje_bhp) || []).map(r => [r.kod, r]));
     const sl = slowniki || {};
@@ -2722,8 +2735,8 @@
                opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), kto: nazwaPracownika(pracownicy, d.zglosil),
                kiedy: d.czas_zgloszenia || '', kiedyOpis: `${dataKrotka(d.czas_zgloszenia)} ${godzina(d.czas_zgloszenia)}`,
                dzialania: d.dzialania || '', zamknieteOpis: d.czas_zamkniecia ? `${dataKrotka(d.czas_zamkniecia)} ${godzina(d.czas_zamkniecia)}` : '' };
-    }).sort((a, b) => (b.otwarte - a.otwarte) || (a.otwarte ? (b.pilne - a.pilne) || String(a.kiedy).localeCompare(String(b.kiedy))
-      : String(b.kiedy).localeCompare(String(a.kiedy))));
+    }).sort((a, b) => (b.otwarte - a.otwarte) || (a.otwarte ? b.pilne - a.pilne : 0)
+      || String(b.kiedy).localeCompare(String(a.kiedy)));
   }
   /* Zgłoszenie BHP → pola okna „Nowe zlecenie”: naprawa dla liderów tej linii, ze zdjęciem i notatką (dowód poprawy). */
   function zlecenieZBhp(w) {
@@ -2824,6 +2837,20 @@
       dane.wymagaj_skanu = !!f.wymagaj_skanu && m.length > 0;
     }
     return { bledy, dane };
+  }
+
+  /* D91 (właściciel 2026-11-19: „daj możliwość dołączania zdjęć do zlecanych zadań”): okno „Zmień” → pole `zdjecia`
+     zlecenie.edytowane. stare — lista w zleceniu, zostaja — po ✕ w oknie, nowe — id właśnie dodanych plików.
+     Wynik: { zdjecia } — PEŁNA lista (hub zastępuje) albo undefined, gdy nic się nie zmieniło (pola wtedy nie wysyłamy, więc
+     edycja treści nie nadpisze zdjęć dołożonych w międzyczasie przy przekazaniu); bledy — ponad maks (domyślnie 8). */
+  function zdjeciaEdycji(stare, zostaja, nowe, maks) {
+    const limit = maks || 8;
+    const s = [].concat(stare || []).filter(x => typeof x === 'string');
+    const z = [].concat(zostaja || []).filter(x => s.includes(x));
+    const lista = [...new Set(z.concat([].concat(nowe || []).filter(x => typeof x === 'string' && x)))];
+    const bledy = lista.length > limit && lista.length > s.length ? [`Zlecenie może mieć najwyżej ${limit} zdjęć — usuń któreś.`] : [];
+    const bez = lista.length === s.length && lista.every((x, i) => x === s[i]);
+    return { zdjecia: bez ? undefined : lista, bledy };
   }
 
   /* Zmieniony wzorzec (zapisane / checklista) → pozycje trwającego zlecenia z niego: istniejące id zostają z terminem i „od”
@@ -3044,7 +3071,7 @@
     for (const dzial of KOLEJNOSC_KART) {
       if (dzial === 'produkcja') {
         for (const lin of liniowe) {
-          const podpis = wiele ? `Lider · ${lin.nazwa}` : 'Lider';
+          const podpis = wiele ? `Lider GK · ${lin.nazwa}` : 'Lider GK';       // D92: nazwa funkcji „Lider GK”
           const checklisty = sortuj((zlecenia || []).filter(z => ((z.dane || {}).dzial === 'produkcja') && maPozycje(z)
             && H().checklistaZmiany([z], lin.linia, zmiana, 'produkcja').zlecenia.length > 0));
           const karty = checklisty.map((z, i) => karta(z, 'produkcja', lin.linia, podpis,
@@ -3159,10 +3186,66 @@
              notatki: p.filter(e => e.uwagi).map(e => e.uwagi) };
   }
 
-  const PanelWidok = { CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  // ---- RCP (rejestracja czasu pracy): co pokazać w zakładce RCP. Godziny liczy serwer (gk_rcp.py), tu tylko opis dla człowieka.
+  const RCP_UWAGI = { brak_wyjscia: 'Brak wyjścia', wyjscie_bez_wejscia: 'Wyjście bez wejścia', podwojne_wejscie: 'Podwójne wejście',
+                      za_dluga_doba: 'Doba dłuższa niż 13 h', odpoczynek_dobowy_ponizej_11h: 'Odpoczynek krótszy niż 11 h',
+                      poza_grafikiem: 'Poza grafikiem', brak_odbic_w_grafiku: 'Brak odbić w grafiku' };
+  const RCP_FILTRY = [['do_zatwierdzenia', 'Do zatwierdzenia'], ['z_uwagami', 'Z uwagami'], ['spoznienia', 'Spóźnienia'], ['zatwierdzone', 'Zatwierdzone'], ['wszystkie', 'Wszystkie']];
+  const rcpUwaga = kod => RCP_UWAGI[kod] || String(kod);
+  /* Minuty → „8:05” (godziny:minuty, jak na kartach czasu); brak liczby → kreska. */
+  function rcpCzas(min) {
+    if (typeof min !== 'number' || !isFinite(min) || min < 0) return '—';
+    return `${Math.floor(min / 60)}:${String(Math.round(min) % 60).padStart(2, '0')}`;
+  }
+  /* „06:53–14:04” z listy odbić dnia (kolejno wejście, wyjście); wejście bez wyjścia kończy się znakiem zapytania. */
+  function rcpPrzedzialy(odbicia) {
+    const wynik = [];
+    let otwarte = null;
+    for (const o of (odbicia || []).slice().sort((a, b) => String(a.czas).localeCompare(String(b.czas)))) {
+      if (o.rodzaj === 'wejscie') { if (otwarte !== null) wynik.push(`${otwarte}–?`); otwarte = godzina(o.czas); }
+      else if (otwarte !== null) { wynik.push(`${otwarte}–${godzina(o.czas)}`); otwarte = null; }
+      else wynik.push(`?–${godzina(o.czas)}`);
+    }
+    if (otwarte !== null) wynik.push(`${otwarte}–?`);
+    return wynik.join(', ');
+  }
+  function rcpStatus(d) { return d.zatwierdzono ? 'zatwierdzony' : (d.w_trakcie ? 'w_pracy' : (d.anomalie && d.anomalie.length ? 'uwagi' : 'do_zatwierdzenia')); }
+  function rcpLiczby(dni) {
+    const l = { doZatwierdzenia: 0, zUwagami: 0, zatwierdzone: 0, wPracy: 0, spoznienia: 0, razem: (dni || []).length };
+    for (const d of dni || []) { const s = rcpStatus(d); if (d.spoznienie_min > 0) l.spoznienia++; if (s === 'zatwierdzony') l.zatwierdzone++; else if (s === 'uwagi') l.zUwagami++; else if (s === 'w_pracy') l.wPracy++; else l.doZatwierdzenia++; }
+    return l;
+  }
+  /* Wiersze tabeli „Dni”: filtr (RCP_FILTRY) + szukaj po nazwisku; najnowsze dni na górze, w dniu alfabetycznie. */
+  function rcpWiersze(dni, opcje) {
+    const { filtr, szukaj } = opcje || {};
+    const q = String(szukaj || '').trim().toLowerCase();
+    return (dni || []).filter(d => {
+      const s = rcpStatus(d);
+      if (q && !String(d.nazwa || '').toLowerCase().includes(q)) return false;
+      return !filtr || filtr === 'wszystkie' || (filtr === 'do_zatwierdzenia' && s === 'do_zatwierdzenia')
+        || (filtr === 'z_uwagami' && s === 'uwagi') || (filtr === 'spoznienia' && d.spoznienie_min > 0) || (filtr === 'zatwierdzone' && s === 'zatwierdzony');
+    }).map(d => ({
+      klucz: `${d.pracownik}|${d.dzien}`, pracownik: d.pracownik, nazwa: d.nazwa, dzien: d.dzien,
+      dzienOpis: String(d.dzien).split('-').reverse().join('.'),
+      godziny: rcpPrzedzialy(d.odbicia), czas: rcpCzas(d.czas_pracy_min),
+      ponadNorme: (d.nad50_min || 0) + (d.nad_nocne_min || 0) > 0 ? rcpCzas((d.nad50_min || 0) + (d.nad_nocne_min || 0)) : '',
+      dzienWolny: d.dzien_wolny || '', wDzienWolny: d.nad100_min ? rcpCzas(d.nad100_min) : '', nad50: d.nad50_min ? rcpCzas(d.nad50_min) : '', nad100: d.nad100_min ? rcpCzas(d.nad100_min) : '',
+      nadNocne: d.nad_nocne_min ? rcpCzas(d.nad_nocne_min) : '', nocne: d.godziny_nocne_min ? rcpCzas(d.godziny_nocne_min) : '',
+      uwagi: (d.anomalie || []).map(rcpUwaga), status: rcpStatus(d), spoznienie: d.spoznienie_min > 0 ? d.spoznienie_min : 0,
+      zmiana: d.zmiana_wynik || d.zmiana || '', zatwierdzil: d.zatwierdzono ? d.zatwierdzono.kto : '',
+      odbicia: (d.odbicia || []).slice().sort((a, b) => String(a.czas).localeCompare(String(b.czas))),
+    })).sort((a, b) => b.dzien.localeCompare(a.dzien) || a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+  /* Domyślny okres zakładki: ostatnie 7 dni włącznie z dziś (dni zakładu). */
+  function rcpOkres(teraz) {
+    const ms = typeof teraz === 'number' ? teraz : Date.parse(teraz);
+    return { od: dzienZakladu(ms - 6 * 86400000), do: dzienZakladu(ms) };
+  }
+
+  const PanelWidok = { rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
-                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
+                       dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        presetyHarmonogramu, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
                        zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,

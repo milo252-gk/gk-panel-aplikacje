@@ -18,7 +18,8 @@
   function zaslona() {
     const el = L.$('blokada');
     const linia = L.linia();
-    const lista = hala.zalogowany() && linia ? W.alertyDoPotwierdzenia(hala.obiekty('alert'), linia, hala.teraz()) : [];
+    // D92: Magazyn (GK Magazyn) nie potwierdza alertów jakości linii — bez zasłony.
+    const lista = hala.zalogowany() && linia && !L.magazyn() ? W.alertyDoPotwierdzenia(hala.obiekty('alert'), linia, hala.teraz()) : [];
     L.plakietka('jakosc', lista.length + W.reklamacje(hala.obiekty('reklamacja'), linia, hala.pracownik && hala.pracownik.id).filter(r => !r.przeczytana).length);
     if (!lista.length) {
       el.hidden = true;
@@ -217,6 +218,7 @@
   // Nowa reklamacja dla mojej linii — powiadomienie (alerty mają własną zasłonę).
   const znaneReklamacje = new Set();
   L.poRysowaniu.push(() => {
+    if (L.magazyn()) return;                 // D92: reklamacje linii nie dotyczą Magazynu
     const ja = hala.pracownik && hala.pracownik.id;
     for (const r of W.reklamacje(hala.obiekty('reklamacja'), L.linia(), ja)) {
       if (znaneReklamacje.has(r.id)) continue;

@@ -180,7 +180,7 @@
     // D51: linia bez stanowisk (zakład GK: jedna linia, same maszyny) ma jeden wiersz „Cała linia” — wcześniej
     // ekran był pusty i planu nie dało się ustawić wcale.
     const grupy = W.wierszePlanu(hala.slowniki);
-    if (!grupy.length) { box.innerHTML = '<p class="pusto">Brak linii — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
+    if (!grupy.length) { box.innerHTML = '<p class="pusto">Brak linii — Menedżer zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
     box.innerHTML = `<p class="slaby">Ile prób KJ na zmianę: na każdym stanowisku, a na linii bez stanowisk — na całej linii. 0 = poza planem.</p>
       <form id="f-plan">${grupy.map(g => `<section class="grupa"><h2>${esc(g.nazwa)}</h2>${g.pozycje.map(x => edycja
           ? KJ.licznik(x.pole, x.na_zmiane, x.nazwa, true)

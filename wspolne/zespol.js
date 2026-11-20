@@ -77,10 +77,10 @@
     if (!zakres || zakres.admin !== false) return '';
     const nazwy = (stale && stale.role) || {};
     const role = (zakres.role || []).map(r => nazwy[r] || r);
-    if (!role.length) return 'Nie zarządzasz kontami — poproś administratora.';
+    if (!role.length) return 'Nie zarządzasz kontami — poproś Menedżera.';
     const linie = wieleLinii(slowniki) ? (zakres.linie || []).map(l => ((((slowniki || {}).linie || {})[l]) || {}).nazwa || l) : [];
     return `Twój zespół: ${role.join(', ')}${linie.length ? ` — linie ${linie.join(', ')}` : ''}. Nowa osoba dostaje hasło `
-      + `startowe ${HASLO_STARTOWE} i przy pierwszym logowaniu ustawia własne hasło i PIN. Usuwa administrator — Ty możesz wyłączyć konto.`;
+      + `startowe ${HASLO_STARTOWE} i przy pierwszym logowaniu ustawia własne hasło i PIN. Usuwa Menedżer — Ty możesz wyłączyć konto.`;
   }
 
   /* Stan hasła i PIN-u osoby (wiersz GET /admin/pracownicy) — znacznik na liście i zdanie w oknie. Jak Panel (widok.js →
@@ -121,7 +121,7 @@
     const dozwolone = (zakres && zakres.role) || [];
     const role = [].concat(f.role || []).filter(Boolean);
     if (!role.length) bledy.push('Zaznacz rolę.');
-    else if (role.some(r => !dozwolone.includes(r))) bledy.push('Tej roli nie nadajesz — poproś administratora.');
+    else if (role.some(r => !dozwolone.includes(r))) bledy.push('Tej funkcji nie nadajesz — poproś Menedżera.');
     const dozwoloneLinie = zakres && zakres.linie;
     const linie = [].concat(f.linie || []).filter(Boolean);
     if (dozwoloneLinie && linie.some(l => !dozwoloneLinie.includes(l))) bledy.push('Możesz przypisać tylko swoje linie.');

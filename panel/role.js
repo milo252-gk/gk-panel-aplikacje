@@ -20,7 +20,7 @@
     $('role-tresc').innerHTML = `
       <section class="role-zasady"><h3>Zasady</h3><ol>${u.zasady.map(z => `<li>${esc(z)}</li>`).join('')}</ol></section>
       <section class="role-opisy"><h3>Kto jest kim</h3><dl>${u.role.map(r => `<dt class="${moje.has(r.kod) ? 'moja-rola' : ''}">${esc(r.nazwa)}${moje.has(r.kod) ? ' <span class="znacznik ok">to Ty</span>' : ''}</dt><dd>${esc(r.opis)}</dd>`).join('')}</dl></section>
-      <p class="slaby role-legenda"><b>${P.ik('haczyk', 16)}</b> wolno · <b>${P.ik('pol-kola', 16)}</b> tylko w swoim dziale · <b>—</b> nie wolno. Konto administratora może wszystko, ale tylko on ma konfigurację i serwis.</p>
+      <p class="slaby role-legenda"><b>${P.ik('haczyk', 16)}</b> wolno · <b>${P.ik('pol-kola', 16)}</b> tylko w swoim dziale · <b>—</b> nie wolno. Konto Menedżera może wszystko, ale tylko on ma konfigurację i serwis.</p>
       <div class="role-tabela-opak"><table class="role-tabela"><thead><tr><th scope="col">Funkcja</th>${naglowek}</tr></thead>
         ${u.grupy.map(g => `<tbody><tr class="role-grupa"><th colspan="${u.role.length + 1}" scope="colgroup">${esc(g.nazwa)}</th></tr>
           ${g.wiersze.map(w => `<tr${w.tylkoAdmin ? ' class="tylko-admin"' : ''}><th scope="row">${esc(w.nazwa)}${w.opis ? `<span class="slaby role-opis">${esc(w.opis)}</span>` : ''}</th>

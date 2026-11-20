@@ -76,6 +76,21 @@
   const jestMistrzem = role => (role || []).includes('mistrz') || (role || []).includes(ROLA_BRYGADZISTY);
   const dzialMistrza = role => (role || []).includes('mistrz') ? 'mistrz' : (role || []).includes(ROLA_BRYGADZISTY) ? DZIAL_BRYGADZISTY : null;
 
+  /* Magazyn (D92, właściciel 2026-11-19): Kierownik MAG i Pracownik MAG pracują w tej samej aplikacji, która dla nich nazywa się
+     „GK Magazyn” — tylko zlecenia, checklisty i zgłoszenia działu „magazyn” (bez linii, ekranu Zmiana, raportu zmiany, jakości
+     i awarii maszyn). Profil magazynu ma osoba z rolą MAG BEZ żadnej roli produkcji (lider, mistrz, Lider SP) ani kierownika
+     zakładu / admina — ci zostają w zwykłym „GK Lider” (kody ról bez zmian). Uprawnienia egzekwuje hub (kontrakt 1.31.0). */
+  const ROLE_MAGAZYNU = ['kierownik_mag', 'pracownik_mag'], DZIAL_MAGAZYNU = 'magazyn';
+  const ROLE_GK_LIDER = ['lider', 'mistrz', ROLA_BRYGADZISTY, 'kierownik', 'admin'];
+  function profilMagazynu(pracownik) {
+    const role = (pracownik && pracownik.role) || [];
+    return role.some(r => ROLE_MAGAZYNU.includes(r)) && !role.some(r => ROLE_GK_LIDER.includes(r));
+  }
+  /* Ekrany, których osoba nie widzi (menu, adres #…, powiadomienia): Magazyn — bez Zmiany, Jakości, Awarii i Raportu zmiany. */
+  const EKRANY_BEZ_MAGAZYNU = ['zmiana', 'jakosc', 'awarie', 'koniec'];
+  const ukryteEkrany = pracownik => profilMagazynu(pracownik) ? EKRANY_BEZ_MAGAZYNU.slice() : [];
+  const ekranStartowy = pracownik => profilMagazynu(pracownik) ? 'zlecenia' : 'zmiana';
+
   function linieMistrza(pracownik, slowniki) {
     const role = (pracownik && pracownik.role) || [];
     if (!role.includes('mistrz')) return null;       // brygadzista SP: zawsze wszystkie linie
@@ -107,6 +122,7 @@
      rolami jest mistrzem: jego zadań nikt inny nie zrobi, a zlecenia linii mają swojego lidera. */
   function dzialZlecen(pracownik, linia, slowniki) {
     const role = (pracownik && pracownik.role) || [];
+    if (profilMagazynu(pracownik)) return { dzial: DZIAL_MAGAZYNU };      // D92: cały dział, bez linii
     if (!jestMistrzem(role)) return { dzial: 'produkcja', linia };
     const lm = linieMistrza(pracownik, slowniki), dzial = dzialMistrza(role);
     return lm ? { dzial, linie: lm } : { dzial };
@@ -127,6 +143,9 @@
      dostaje OBIE listy złączone w jedną (pozycje po terminie; `sekcje` mówi, która pozycja z której — ekran Zmiana rysuje
      dwie sekcje „Mistrz” i „Lider”; przyjęcie, odhaczanie i raport działają na całości). */
   function listaChecklisty(zlecenia, pracownik, linia, slowniki, zmiana) {
+    // D92: Magazyn nie ma ekranu Zmiana ani „Przyjmuję zadania” — checklisty Magazynu są zwykłymi zleceniami na ekranie Zlecenia,
+    // więc lista zmiany jest pusta (bez blokady „najpierw przyjmij” i bez przypomnień checklisty lidera).
+    if (profilMagazynu(pracownik)) return H().checklistaZmiany([], null, zmiana, DZIAL_MAGAZYNU);
     const kat = kategorieOsoby(pracownik);
     const lider = () => H().checklistaZmiany(zlecenia, linia, zmiana, 'produkcja');
     const mistrz = () => {
@@ -135,7 +154,7 @@
                                   null, zmiana, d.dzial);
     };
     if (kat.length === 1) return kat[0] === 'mistrz' ? mistrz() : lider();
-    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider', lista: lider() }]);
+    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz GK', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider GK', lista: lider() }]);
   }
 
   function polaczListy(czesci) {
@@ -232,12 +251,15 @@
 
   /* Nazwa aplikacji WEWNĄTRZ po zalogowaniu (właściciel 2026-11-16): „GK Mistrz” tylko dla roli mistrz bez roli kierownik i admin
      (mistrz z rolą lider też); kierownik i admin zawsze „GK Lider” — nawet z dodatkową rolą mistrz. To tylko napis:
-     manifest, ekran logowania, <title> przed logowaniem, push i kontrakt zostają „GK Lider”. */
+     manifest, ekran logowania, <title> przed logowaniem, push i kontrakt zostają „GK Lider”.
+     D92 (2026-11-19): Lider SP (kod brygadzista_sp) → „GK Lider SP”; Magazyn (Kierownik MAG, Pracownik MAG bez ról produkcji)
+     → „GK Magazyn”. */
   function nazwaAplikacji(pracownik) {
     const role = (pracownik && pracownik.role) || [];
+    if (profilMagazynu(pracownik)) return 'GK Magazyn';
     if (role.includes('kierownik') || role.includes('admin')) return 'GK Lider';
     if (role.includes('mistrz')) return 'GK Mistrz';
-    return role.includes(ROLA_BRYGADZISTY) ? 'GK Brygadzista SP' : 'GK Lider';
+    return role.includes(ROLA_BRYGADZISTY) ? 'GK Lider SP' : 'GK Lider';
   }
 
   /* Jedno zdanie, gdy ktoś chce odhaczyć pozycję przed „Przyjmuję zadania” (ekran Zmiana i karta zlecenia). */
@@ -408,7 +430,7 @@
       return { ok: false, powod: `To nie ten punkt obchodu. Zeskanuj kod: ${cel}.` };
     }
     const liniaKodu = odczyt.rodzaj === 'linie' ? odczyt.kod : (odczyt.wpis && odczyt.wpis.linia) || null;
-    if (!liniaKodu) return { ok: false, powod: 'Tego kodu nie ma w słowniku. Zeskanuj inną naklejkę albo zgłoś to administratorowi.' };
+    if (!liniaKodu) return { ok: false, powod: 'Tego kodu nie ma w słowniku. Zeskanuj inną naklejkę albo zgłoś to Menedżerowi.' };
     if (liniaKodu !== linia) return { ok: false, powod: `Ten kod jest z linii ${liniaKodu}. Zeskanuj kod na linii ${linia}.` };
     return { ok: true };
   }
@@ -455,7 +477,8 @@
       })
       .sort((x, y) => (x.aktywny === y.aktywny ? 0 : x.aktywny ? -1 : 1) ||
         ((KOLEJNOSC_STATUSOW[x.status] ?? 9) - (KOLEJNOSC_STATUSOW[y.status] ?? 9)) ||
-        (y.zatrzymuje - x.zatrzymuje) || String(x.czasZgloszenia).localeCompare(String(y.czasZgloszenia)));
+        // Właściciel 2026-11-19: grupy (aktywne, stan, zatrzymania) zostają, w nich od najnowszego zgłoszenia.
+        (y.zatrzymuje - x.zatrzymuje) || String(y.czasZgloszenia || '').localeCompare(String(x.czasZgloszenia || '')));
   }
 
   /* Otwarta awaria tej maszyny (najstarsza) — przy zgłoszeniu podpowiadamy „Dodać do niej?” (etap 3, tekst i przyciski: etap 6b).
@@ -783,7 +806,7 @@
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
-    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, nazwaAplikacji, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
+    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, nazwaAplikacji, profilMagazynu, ukryteEkrany, ekranStartowy, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,

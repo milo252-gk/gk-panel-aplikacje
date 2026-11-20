@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Terminal RCP (kiosk na hali): ekran z czytnikiem kart USB. Czytnik „pisze” numer karty jak klawiatura; strona go łapie,
+     wysyła do serwera (konto „ekran”) i pokazuje, kto i co odbił. Otwieraj w Edge/Chrome w trybie kiosk:
+     msedge --kiosk <adres-serwera>/panel/terminal.html --edge-kiosk-type=fullscreen -->
+<script src="../wspolne/motyw.js"></script>
+<title>GK RCP — terminal</title>
+<link rel="icon" href="ikona.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../wspolne/hala.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--tlo); color: var(--tekst); font-family: var(--czcionka); overflow: hidden; }
+  #terminal { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+              text-align: center; padding: 24px; box-sizing: border-box; transition: background .15s; }
+  #terminal.ok { background: var(--zielony-tlo); }
+  #terminal.uwaga { background: var(--zolty-tlo); }
+  #terminal.blad { background: var(--czerwony-tlo); }
+  .nazwa-apki { font-size: clamp(16px, 2.4vw, 26px); color: var(--tekst-slaby); letter-spacing: .04em; }
+  #zegar { font-size: clamp(56px, 14vw, 160px); font-weight: 700; line-height: 1.05; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+  #data { font-size: clamp(18px, 3vw, 32px); color: var(--tekst-slaby); margin: 0 0 24px; }
+  #komunikat { font-size: clamp(26px, 5.5vw, 64px); font-weight: 700; min-height: 1.3em; margin: 0; }
+  #podpis { font-size: clamp(18px, 3.4vw, 38px); margin: 6px 0 0; min-height: 1.3em; }
+  #terminal.ok #komunikat { color: var(--zielony); }
+  #terminal.uwaga #komunikat { color: var(--zolty); }
+  #terminal.blad #komunikat { color: var(--czerwony); }
+  #stan { position: fixed; left: 12px; bottom: 8px; font-size: 14px; color: var(--tekst-slaby); }
+  #stan .kropka { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--stan-ok); margin-right: 6px; }
+  #stan.czeka .kropka { background: var(--stan-czeka); }
+  #stan.blad .kropka { background: var(--stan-blad); }
+  #formularz-logowania { display: grid; gap: 12px; text-align: left; }
+  #formularz-logowania input { font-size: 20px; min-height: 52px; }
+</style>
+</head>
+<body>
+<main id="logowanie" class="hala-logowanie" hidden>
+  <div class="hala-karta-logowania">
+    <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
+    <h1>GK RCP — terminal</h1>
+    <p class="pod">Jednorazowe logowanie kontem ekranu (administrator zakłada je w Panelu → Administracja).</p>
+    <form id="formularz-logowania" autocomplete="off">
+      <label>Login konta ekranu<input id="identyfikator" autocapitalize="off" spellcheck="false"></label>
+      <label>Hasło<input id="haslo" type="password" autocomplete="current-password"></label>
+      <button class="glowny" type="submit">Zaloguj terminal</button>
+    </form>
+    <p id="blad-logowania" class="blad" role="alert" hidden></p>
+  </div>
+</main>
+
+<main id="terminal" hidden aria-live="polite">
+  <div class="nazwa-apki">GK RCP</div>
+  <p id="zegar">--:--:--</p>
+  <p id="data"></p>
+  <p id="komunikat">Zeskanuj kartę…</p>
+  <p id="podpis"></p>
+</main>
+<div id="stan" role="status"><span class="kropka"></span><span id="stan-tekst">Łączę…</span></div>
+
+<script src="../wspolne/hala.js"></script>
+<script src="../wspolne/gk-dzwieki.js"></script>
+<script src="terminal.js"></script>
+</body>
+</html>

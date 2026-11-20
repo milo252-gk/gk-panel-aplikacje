@@ -315,7 +315,7 @@
         <p><b>Zapisy innych osób na tym ${komputer ? 'urządzeniu' : 'telefonie'}: ${suma}</b></p>
         ${l.map(c => `<p class="hala-konto-cudzy"><span>${esc(c.nazwa || c.autor)}: ${Number(c.ile)}</span>${c.mozna
           ? ` <button type="button" class="maly" data-wyslij-cudze="${esc(c.autor)}">Wyślij</button>` : ''}</p>`).join('')}
-        ${l.some(c => !c.mozna) ? '<p class="hala-konto-drobne">Wyślą się, gdy ta osoba zaloguje się tutaj — albo wyśle je kierownik jej działu lub administrator.</p>' : ''}
+        ${l.some(c => !c.mozna) ? '<p class="hala-konto-drobne">Wyślą się, gdy ta osoba zaloguje się tutaj — albo wyśle je kierownik jej działu lub Menedżer.</p>' : ''}
       </div>`;
   }
 

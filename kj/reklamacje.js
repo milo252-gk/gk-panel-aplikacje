@@ -152,7 +152,7 @@
     // Jedna linia (D51): wybrana sama, pole chowamy jak Panel; zero linii — mówimy, kto je zakłada.
     const lista = W.linie(hala.slowniki);
     box.closest('fieldset').hidden = lista.length === 1 && f.linia === lista[0].kod;
-    if (!lista.length) { box.innerHTML = '<p class="pusto">Brak linii w systemie — administrator zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
+    if (!lista.length) { box.innerHTML = '<p class="pusto">Brak linii w systemie — Menedżer zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
     box.innerHTML = lista.map(l => `<button type="button" data-linia="${esc(l.kod)}" aria-pressed="${f.linia === l.kod}">${esc(l.nazwa)}</button>`).join('');
   }
 

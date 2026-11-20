@@ -64,7 +64,7 @@
         const z = o.zlecenia();
         const ja = hala.pracownik && hala.pracownik.id;
         // D76: zlecenie „do kierownika działu” słyszy tylko kierownik — reszta działu go nie widzi.
-        const kierownik = ((hala.pracownik && hala.pracownik.role) || []).some(r => ['kierownik', 'kierownik_ur', 'kierownik_kj', 'admin'].includes(r));
+        const kierownik = ((hala.pracownik && hala.pracownik.role) || []).some(r => ['kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'admin'].includes(r));
         const tylkoKierownik = d.do_kierownika === true && !d.wykonawca && !kierownik;
         if (z && !tylkoKierownik && (d.wykonawca === ja || (d.dzial === z.dzial && (!d.wykonawca || d.wykonawca === ja)))) zagraj('pilne');
       }
@@ -255,7 +255,7 @@
   function zglos(hala, opcje) {
     const o = opcje || {};
     okno(`<form method="dialog"><h2>Zgłoś nieprawidłowość</h2>
-      <p class="hala-okno-opis">Trafi do kierownika zakładu — przyjmie je (i zrobi zlecenie) albo odrzuci z powodem.</p>
+      <p class="hala-okno-opis">Trafi do Kierownika — przyjmie je (i zrobi zlecenie) albo odrzuci z powodem.</p>
       <label>Co jest nie tak?<input name="tytul" required maxlength="200" placeholder="np. Cieknie olej spod osłony"></label>
       <label>Maszyna (opcjonalnie)<select name="maszyna">${opcjeMaszyn(hala.slowniki, o.maszyna)}</select></label>
       <label>Szczegóły (opcjonalnie)<textarea name="opis" rows="3" maxlength="4000"></textarea></label>
@@ -307,21 +307,64 @@
   const cssEsc = v => (global.CSS && global.CSS.escape ? global.CSS.escape(v) : String(v));
   const dopiskiOsoby = o => [o.kierownik ? 'kierownik' : '', o.urlop ? 'urlop' : ''].filter(Boolean).join(', ');
 
+  /* D91 (właściciel 2026-11-19: „daj możliwość dołączania zdjęć do zlecanych zadań”): przy przekazaniu można dołożyć
+     zdjęcia. Pole zdjecia w zlecenie.przekazane = PEŁNA lista (istniejące + nowe) — hub zastępuje listę i odrzuca taką, która
+     gubi istniejące albo przekracza 8. Bez nowych zdjęć — undefined (pola nie wysyłamy, zdjęcia zostają bez zmian). */
+  const MAKS_ZDJEC_ZLECENIA = 8;
+  function zdjeciaPrzekazania(stare, noweIds) {
+    const s = [].concat(stare || []).filter(x => typeof x === 'string');
+    const n = [].concat(noweIds || []).filter(x => typeof x === 'string' && x && !s.includes(x));
+    return n.length ? s.concat(n) : undefined;
+  }
+
+  /* Kilka zdjęć w jednym polu (aparat albo galeria — bez capture, właściciel 2026-11-19): miniatury z ✕, najwyżej maks.
+     Zwraca () => wybrane pliki. Wygląd z hala.css (.hala-zlecenie-miniatury — jak przy „Zrobione”). */
+  function podlaczWieleZdjec(kontener, maks) {
+    const pliki = [];
+    const rysuj = () => {
+      for (const p of pliki) if (!p.url) p.url = URL.createObjectURL(p.plik);
+      kontener.innerHTML = pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}">
+          <button type="button" data-usun="${i}" aria-label="Usuń zdjęcie ${i + 1}">${global.GKIkony ? global.GKIkony.html('zamknij', 16) : '×'}</button></span>`).join('')
+        + (pliki.length < maks ? `<label class="hala-zlecenie-zdjecie">${global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('aparat', 18)}</span>` : ''}${pliki.length ? 'Jeszcze jedno' : 'Dołącz zdjęcie (opcjonalnie)'}
+          <input type="file" accept="image/*" multiple data-zdjecia-przekazania hidden></label>` : '');
+    };
+    kontener.addEventListener('change', ev => {
+      if (!ev.target.matches('[data-zdjecia-przekazania]')) return;
+      for (const plik of Array.from(ev.target.files || [])) if (pliki.length < maks) pliki.push({ plik });
+      rysuj();
+    });
+    kontener.addEventListener('click', ev => {
+      const b = ev.target.closest('[data-usun]');
+      if (!b) return;
+      const [p] = pliki.splice(+b.dataset.usun, 1);
+      if (p && p.url) { try { URL.revokeObjectURL(p.url); } catch (e) { /* – */ } }
+      rysuj();
+    });
+    rysuj();
+    return () => pliki.map(p => p.plik);
+  }
+
   function przekaz(hala, id, opcje) {
     const o = opcje || {};
     const z = hala.obiekt('zlecenie', id);
     if (!z) return;
     const d = z.dane || {};
     const osoby = osobyDzialu(hala, d.dzial).filter(x => x.id !== d.wykonawca);
+    const stareZdjecia = [].concat(d.zdjecia || []).filter(x => typeof x === 'string');
+    const wolneZdjecia = Math.max(0, MAKS_ZDJEC_ZLECENIA - stareZdjecia.length);
     okno(`<form method="dialog"><h2>Przekaż zlecenie</h2>
       <p class="hala-okno-opis">${esc(d.tytul || '')}${d.wykonawca ? ` · teraz: ${esc(nazwaOsoby(hala, d.wykonawca))}` : ''}</p>
       <fieldset><legend>Komu</legend>${osoby.map(x => `<label class="hala-zespol-zaznacz"><input type="radio" name="osoba" value="${esc(x.id)}" required>
         ${esc(x.nazwa)}${dopiskiOsoby(x) ? ` <span class="slaby">(${esc(dopiskiOsoby(x))})</span>` : ''}</label>`).join('') || '<p class="hala-okno-opis">Nikt inny w dziale nie ma konta.</p>'}</fieldset>
       <label>Uwagi (opcjonalnie)<textarea name="uwagi" rows="2" maxlength="2000"></textarea></label>
+      <div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">Zdjęcia${stareZdjecia.length ? ` <span class="slaby">— już ${stareZdjecia.length} przy zleceniu</span>` : ''}</span>
+        ${wolneZdjecia ? '<div class="hala-zlecenie-miniatury" data-zdjecia></div>' : `<p class="hala-okno-opis">Zlecenie ma już ${MAKS_ZDJEC_ZLECENIA} zdjęć.</p>`}</div>
       <p class="hala-okno-blad" hidden></p>
       <div class="hala-okno-przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="glowny">Przekaż</button></div></form>`,
     (dlg, zamknij) => {
       const f = dlg.querySelector('form');
+      const kontener = f.querySelector('[data-zdjecia]');
+      const wybranePliki = kontener ? podlaczWieleZdjec(kontener, wolneZdjecia) : () => [];
       f.addEventListener('submit', async ev => {
         ev.preventDefault();
         const b = f.querySelector('[type="submit"]');
@@ -332,6 +375,11 @@
         try {
           const dane = { wykonawca: osoba };
           if (f.uwagi.value.trim()) dane.uwagi = f.uwagi.value.trim();
+          // D91: pliki idą zwykłą kolejką zdjęć (hala.dodajPlik), lista — w zdarzeniu przekazania.
+          const noweIds = [];
+          for (const plik of wybranePliki()) noweIds.push(await hala.dodajPlik(plik));
+          const zdjecia = zdjeciaPrzekazania(stareZdjecia, noweIds);
+          if (zdjecia) dane.zdjecia = zdjecia;
           await hala.zapisz('zlecenie.przekazane', id, dane);
           zamknij();
           if (o.gotowe) o.gotowe(`Przekazane: ${nazwaOsoby(hala, osoba)} dostał(a) powiadomienie`);
@@ -393,7 +441,7 @@
   function odlozNarzedzia(hala, opcje) {
     const o = opcje || {};
     okno(`<form method="dialog"><h2>${global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('narzedzia', 20)}</span>` : ''}Odłóż zużyte narzędzia</h2>
-      <p class="hala-okno-opis">Zrób zdjęcie narzędzi w miejscu odbioru. Kierownik zakładu dostanie powiadomienie i potwierdzi odbiór zdjęciem.</p>
+      <p class="hala-okno-opis">Zrób zdjęcie narzędzi w miejscu odbioru. Kierownik dostanie powiadomienie i potwierdzi odbiór zdjęciem.</p>
       <label>Co odkładasz?<input name="co" required maxlength="200" placeholder="np. 3 frezy Ø12, piła tarczowa"></label>
       <label>Gdzie (miejsce odbioru)<input name="miejsce" maxlength="200" value="${esc(czytajMiejsce())}" placeholder="np. regał przy biurze mistrza"></label>
       <label>Uwagi (opcjonalnie)<textarea name="uwagi" rows="2" maxlength="2000"></textarea></label>
@@ -720,6 +768,6 @@
   }
 
   global.HalaDzialania = { przyciskSkanu, historia, wierszeHistorii, zglos, odlozNarzedzia, odbierzNarzedzia, zglosAwarie, menuMaszyny,
-                           zadaniaMaszyny, skanujMaszyne, mojeZgloszenia, zapiszZCofnieciem, zaproponujCofniecie, dzialOsoby, OPISY_ZDARZEN, przekaz, rozdziel, osobyDzialu };
+                           zadaniaMaszyny, skanujMaszyne, mojeZgloszenia, zapiszZCofnieciem, zaproponujCofniecie, dzialOsoby, OPISY_ZDARZEN, przekaz, rozdziel, osobyDzialu, zdjeciaPrzekazania };
   if (typeof module !== 'undefined' && module.exports) module.exports = { HalaDzwieki: global.HalaDzwieki, HalaDzialania: global.HalaDzialania };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -39,7 +39,7 @@
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
-    <p class="hala-konto-skad">Konto zakłada administrator w Panelu Kierownika → Administracja.</p>
+    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Kierownika → Administracja.</p>
   </div>
 </main>
 
@@ -62,6 +62,9 @@
     <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span><span>Zlecenia</span><span id="plakietka-zlecen" class="plakietka" hidden></span></button>
     <button type="button" role="tab" data-widok="wskazniki" class="w-wiecej" aria-selected="false"><span class="ikona" data-ikona="wskazniki" aria-hidden="true"></span><span>Wskaźniki</span></button>
     <button type="button" role="tab" data-widok="raporty" class="w-wiecej" aria-selected="false"><span class="ikona" data-ikona="raporty" aria-hidden="true"></span><span>Raporty</span></button>
+    <!-- RCP (2026-11-19): tylko kierownik zakładu i admin (panel.js: pokazAnalityke); jak Wskaźniki i Raporty — `.w-wiecej`, na telefonie schowane
+         (zatwierdzanie godzin robi się przy komputerze; terminal na hali to osobna strona terminal.html). -->
+    <button type="button" role="tab" data-widok="rcp" class="w-wiecej" aria-selected="false" hidden><span class="ikona" data-ikona="zegar" aria-hidden="true"></span><span>RCP</span></button>
     <button type="button" id="menu-awaria" class="menu-akcja" title="Zgłoś awarię" hidden><span class="ikona" data-ikona="awaria" aria-hidden="true"></span><span class="tylko-komputer">Zgłoś awarię</span><span class="tylko-telefon">Awaria</span></button>
     <!-- Właściciel 2026-11-17: Panel nie ma „☰ Więcej” — ostatnia pozycja paska to Administracja (STYL-GK §8, wyjątek). Dolny pasek telefonu:
          Pulpit, Zlecenia, Awaria, Administracja; Wskaźniki i Raporty (.w-wiecej — schowane na telefonie przez wspólne hala.css) są tam
@@ -101,7 +104,7 @@
         <span class="licznik"><button type="button" id="nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
           <button type="button" id="nowe-stale" class="glowny" hidden>+ Nowe zapisane</button>
           <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista</button>
-          <button type="button" id="zlecenia-czysc" hidden title="Usuń historię zleceń (tylko administrator)"><span class="ik" data-ikona="czyszczenie" data-rozmiar="16"></span>Czyszczenie</button></span></h2>
+          <button type="button" id="zlecenia-czysc" hidden title="Usuń historię zleceń (tylko Menedżer)"><span class="ik" data-ikona="czyszczenie" data-rozmiar="16"></span>Czyszczenie</button></span></h2>
       <!-- Jak w GK Trasy: zlecenia i zapisane (szablony). Zapisane POJEDYNCZE zleca kierownik „Zleć teraz” ile razy chce,
            STAŁE (z harmonogramem) hub zleca sam — D31; właściciel 2026-10-13: zapis nie tylko stałych. -->
       <!-- D60 (właściciel 2026-10-14): jedna lista zadań — zlecenia, zapisane/stałe, checklisty zadań, zadania kierownika,
@@ -231,6 +234,8 @@
     </section>
   </div>
 
+  <div id="rcp" class="rcp-widok" hidden></div>
+
   <div id="raporty" class="raporty" hidden>
     <section aria-labelledby="t-raporty">
       <h2 id="t-raporty">Raporty zmian</h2>
@@ -306,9 +311,9 @@
           <option value="przeglad">Przegląd UR — zaliczy się po zakończeniu przeglądu</option>
         </select></label>
         <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
-             miniatura i nazwa pliku (panel.js → poleZdjecia). -->
+             miniatura i nazwa pliku (panel.js → poleZdjecia). D91: bez capture — na telefonie wybór aparat ALBO galeria. -->
         <div class="hala-zdjecie" id="zlecenie-zdjecie">
-          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" capture="environment" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dodaj zdjęcie</span></label>
+          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dodaj zdjęcie</span></label>
           <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
         </div>
         <!-- D31: jak dowód dostawy w GK Trasy — dział nie zamknie zlecenia bez tego, co tu zaznaczone. -->
@@ -345,6 +350,16 @@
       <div class="dwie">
         <label>Od kiedy (opcjonalnie)<input name="inst_od" type="datetime-local"></label>
         <label>Termin (opcjonalnie)<input name="inst_termin" type="datetime-local"></label>
+      </div>
+      <!-- D91: zdjęcia do zlecenia — dołączone wcześniej (✕ zdejmuje z listy zlecenia, plik zostaje na serwerze) i nowe
+           (aparat albo galeria, razem najwyżej 8; stale.js → P.poleZdjecia). -->
+      <div id="inst-zdjecia">
+        <p class="slaby konto-drobne" id="inst-zdjecia-opis" hidden>Dołączone do zlecenia:</p>
+        <div class="hala-zdjecie-lista" id="inst-zdjecia-lista"></div>
+        <div class="hala-zdjecie">
+          <label class="hala-zdjecie-przycisk"><input name="inst_zdjecie" type="file" accept="image/*" multiple aria-label="Dołącz zdjęcia do zlecenia"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dołącz zdjęcie</span></label>
+          <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
+        </div>
       </div>
       <label class="zaznacz" id="inst-wzorzec"><input type="checkbox" name="inst_wzorzec" checked> Zapisz też w zapisanych zleceniach — kolejne zlecenia będą już ze zmianą</label>
     </fieldset>
@@ -686,6 +701,7 @@
 <script src="../wspolne/zlecenia.js"></script>
 <script src="widok.js"></script>
 <script src="panel.js"></script>
+<script src="rcp.js"></script>
 <script src="etykiety.js"></script>
 <script src="kody.js"></script>
 <script src="role.js"></script>

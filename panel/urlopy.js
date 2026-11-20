@@ -30,7 +30,7 @@
     const dzis = W.dzienZakladu(hala.teraz());
     el.innerHTML = `<section class="urlopy">
       <p class="slaby opis-widoku">W czasie urlopu serwer nie zleca osobie zleceń stałych, jej zlecenia widzi cały dział,
-        a statystyki osoby pomijają te dni.${Hala.dzialyKierownika(hala.pracownik && hala.pracownik.role, dzialyHali()) !== null ? ' Wpisujesz urlopy osób ze swojego działu; pozostałym wpisuje je kierownik zakładu.' : ''}</p>
+        a statystyki osoby pomijają te dni.${Hala.dzialyKierownika(hala.pracownik && hala.pracownik.role, dzialyHali()) !== null ? ' Wpisujesz urlopy osób ze swojego działu; pozostałym wpisuje je Kierownik.' : ''}</p>
       <form id="formularz-urlopu" class="urlop-formularz" autocomplete="off">
         <label>Osoba<select name="osoba" required><option value="">— wybierz —</option>${osobyHali().map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('')}</select></label>
         <label>Od<input name="od" type="date" required value="${esc(dzis)}"></label>

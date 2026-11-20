@@ -27,9 +27,17 @@
   const MAKS_ZDJEC = 8;                                // jak w GK Trasy — więcej i tak nikt nie obejrzy
 
   /* Przepadło (D35): hub już oznaczył albo minęło `wazne_do`, a dział nie zdążył. */
+  // 2026-11-19 (właściciel): zadanie zmianowe, którego NIKT NIE PRZYJĄŁ (status „nowe”), wygasa 5 min przed końcem zmiany
+  // (hub: WYGASANIE_NIEPRZYJETYCH_MIN) i nie przechodzi na następną zmianę.
+  const WYGASANIE_NIEPRZYJETYCH_MS = 5 * 60000;
+  // Nieprzyjęte = nikt go nie wziął: brak `przyjal` i żadnego postępu (checklista rozpoczęta bez „Przyjmij” jest w robocie).
+  // Bliźniak: hala.py `nieprzyjete`.
+  const maPostep = d => ['wykonane', 'pominiete', 'postep', 'pozycje_odebrane', 'pozycje_zwrocone']
+    .some(k => { const v = d[k]; return v && (Array.isArray(v) ? v.length : typeof v === 'object' ? Object.keys(v).length : true); });
+  const nieprzyjete = z => (z.status === 'nowe' || z.status === 'przepadlo') && !(z.dane || {}).przyjal && !maPostep(z.dane || {});
   function przepadlo(z, teraz) {
     if (z.status === 'przepadlo') return true;
-    const wazne = Date.parse((z.dane || {}).wazne_do);
+    const wazne = Date.parse((z.dane || {}).wazne_do) - (z.status === 'nowe' && nieprzyjete(z) ? WYGASANIE_NIEPRZYJETYCH_MS : 0);
     return DO_ZROBIENIA.has(z.status) && !isNaN(wazne) && typeof teraz === 'number' && wazne <= teraz;
   }
 
@@ -39,6 +47,7 @@
   const DOBA_MS = 86400000;
   function poCzasieDoZrobienia(z, teraz) {
     if (!przepadlo(z, teraz)) return false;
+    if (nieprzyjete(z)) return false;                  // nieprzyjęte wygasło — nie wisi jako zaległe u następnej zmiany
     const d = z.dane || {};
     const od = Date.parse(d.wazne_do || d.czas_przepadniecia);
     return !isNaN(od) && typeof teraz === 'number' && teraz - od < DOBA_MS;
@@ -142,8 +151,8 @@
       })
       .sort((a, b) => (b.doZrobienia - a.doZrobienia) || (b.zalegle - a.zalegle)
         || (a.zalegle && b.zalegle ? a.zalegleOd - b.zalegleOd : 0) || (b.pilne - a.pilne)
-        || ((a.terminMs === null) - (b.terminMs === null)) || ((a.terminMs || 0) - (b.terminMs || 0))
-        || String(a.czas).localeCompare(String(b.czas)));
+        // Właściciel 2026-11-19: zaległe i pilne zostają na górze, a w grupach od najnowszych (czas zlecenia, nie termin).
+        || String(b.czas).localeCompare(String(a.czas)));
   }
 
   /* D76: postęp rozdzielonego zlecenia do karty — „2/3 zrobione” i osoby ze znakiem stanu ich części (Hala.postepRozdzialu,
@@ -270,7 +279,7 @@
   }
 
   // D55: kierownicy widzą zlecenia osobiste całego działu (np. kierownik UR — zadania swoich mechaników).
-  const ROLE_WIDZA_WSZYSTKO = ['kierownik', 'kierownik_ur', 'kierownik_kj', 'admin'];
+  const ROLE_WIDZA_WSZYSTKO = ['kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'admin'];   // D92: + Kierownik MAG
   function dzisiaj(H, teraz) {
     if (!H || !H.lokalny) return null;
     const l = H.lokalny(teraz), d = n => String(n).padStart(2, '0');
