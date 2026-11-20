@@ -1117,7 +1117,7 @@
     const pokazDowody = p => p.stan !== 'czeka' && ((klik && poz) || wglad);
     const dowody = p => dowodyPozycji(z, p);
     const przyciskiPozycji = p => przyciskiPozycjiHtml(z, p, poz);
-    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? ik('ok-kolo', 16) : znakIk(ZNAK[p.stan])}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">${ik('skan', 12)}${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">${ik('szewron-prawo', 14)}</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${pokazDowody(p) ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !pokazDowody(p) ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
+    const liPozycji = p => `<li class="stan-${esc(p.stan)}${p.odebrana ? ' odebrana' : ''}${p.niewykonana ? ' niewykonana' : ''}"><div class="poz-wiersz">${klik ? `<button type="button" class="pozycja-otworz" data-akcja="pozycja" data-pozycja="${esc(p.id)}" title="Szczegóły pozycji: zdjęcie, notatka, kto i kiedy">` : ''}<span aria-hidden="true">${p.odebrana ? ik('ok-kolo', 16) : znakIk(ZNAK[p.stan])}</span> ${p.godz || p.od ? `<span class="slaby">${esc(p.od ? (p.godz ? `${p.od}–${p.godz}` : `od ${p.od}`) : p.godz)}</span> ` : ''}${esc(p.nazwa)}${p.maszynyPostep ? ` <span class="postep-maszyn mala${p.maszynyPostep.gotowe === p.maszynyPostep.wszystkie ? ' pelny' : ''}">${ik('skan', 12)}${p.maszynyPostep.gotowe}/${p.maszynyPostep.wszystkie}</span>` : ''}${p.poprawiona && !p.odebrana ? ' <span class="znacznik info" title="Dział poprawił pozycję po zwrocie">poprawiona</span>' : ''}${p.niewykonana ? ' <span class="znacznik alarm" title="Zmiana zamknięta bez tej pozycji">niewykonana</span>' : ''}${klik ? `${p.szczegoly.zdjecia.length ? ` <span class="pozycja-znacznik" title="Jest zdjęcie">${ik('aparat', 14)}${p.szczegoly.zdjecia.length > 1 ? p.szczegoly.zdjecia.length : ''}</span>` : ''}${p.szczegoly.notatka ? ` <span class="pozycja-znacznik" title="Jest notatka">${ik('notatka', 14)}</span>` : ''}<span class="pozycja-strzalka" aria-hidden="true">${ik('szewron-prawo', 14)}</span></button>` : ''}${przyciskiPozycji(p)}</div>${p.opis ? `<div class="slaby opis-pozycji">${esc(p.opis)}</div>` : ''}${pokazDowody(p) ? dowody(p) : p.powod ? ` <span class="slaby">— pominięte: ${esc(p.powod)}</span>` : ''}${p.uwagi && !pokazDowody(p) ? ` <span class="slaby">— ${esc(p.uwagi)}</span>` : ''}${p.zwrot ? `<div class="poz-zwrot tekst-alarm">${ik('powtarzaj', 14)} Zwrócona do działu${p.zwrot.kto ? ` (${esc(p.zwrot.kto)}${p.zwrot.godz ? `, ${esc(p.zwrot.godz)}` : ''})` : ''}: ${esc(p.zwrot.uwagi)}</div>` : ''}</li>`;
     const naglowekPozycji = z.odbior && z.doZamkniecia && z.status === 'wykonane'
       ? `Pozycje (${z.odbior.odebrane}/${z.odbior.wszystkie} odebrane)` : `Pozycje (${z.checklista ? z.checklista.gotowe : 0}/${z.checklista ? z.checklista.wszystkie : 0})${wglad ? ' — kto, kiedy, notatki i zdjęcia' : ''}`;
     const pozycje = z.pozycje.length ? `<details class="pozycje-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>${naglowekPozycji}</summary>
@@ -1135,6 +1135,7 @@
             <span class="znacznik ${klasaZlecenia(z.status)}">${esc(z.zaplanowane && z.zaplanowaneNa ? `Zaplanowane na ${z.zaplanowaneNa}` : z.etykieta)}</span>
             ${z.pilne ? '<span class="znacznik alarm">Pilne</span>' : ''}
             ${z.spoznienie ? `<span class="znacznik alarm">${ik('zegar', 14)}${esc(z.spoznienie)}</span>` : ''}
+            ${z.niewykonane ? `<span class="znacznik alarm" title="Zmiana zamknięta z niewykonanymi pozycjami — nie przeszły na następną zmianę">Niewykonane: ${z.niewykonane}${z.checklista ? ` z ${z.checklista.wszystkie}` : ''}</span>` : ''}
             <span class="znacznik neutral">${esc(z.dzialNazwa)}</span>
             ${z.liniaNazwa ? `<span>${esc(z.liniaNazwa)}</span>` : ''}${z.maszyna ? `<span>· ${esc(z.maszyna)}</span>` : ''}
             ${z.kto ? `<span>· ${esc(z.kto)}</span>` : z.wykonawca ? `<span>· dla: ${esc(z.wykonawca)}</span>` : ''}
@@ -1183,7 +1184,7 @@
     const dzis = sz.data === W.dataKrotka(hala.teraz());
     const kiedy = sz.godz ? `${sz.godz}${sz.data && !dzis ? `, ${sz.data}` : ''}` : '';
     const kto = sz.kto ? esc(sz.kto) : sz.automat ? 'automatycznie (czynność w aplikacji)' : '';
-    const ktoKiedy = p.stan === 'czeka' ? 'Dział jeszcze jej nie zamknął.'
+    const ktoKiedy = p.niewykonana ? 'Niewykonana — zmiana została zamknięta bez tej pozycji.' : p.stan === 'czeka' ? 'Dział jeszcze jej nie zamknął.'
       : `${p.stan === 'pominieta' ? 'Pominięta' : 'Zrobiona'}${kto ? ` przez ${kto}` : ''}${kiedy ? `, ${esc(kiedy)}` : ''}${!kto && !kiedy ? ' — brak danych, kto i kiedy' : ''}`;
     const kier = mozeWyslac('zlecenie.zamkniete') && z.moznaOdebrac;
     const poz = kier && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
@@ -1875,6 +1876,8 @@
   if (window.HalaDzwieki) window.HalaDzwieki.sledz(hala, { awarie: true, bhp: true, zlecenia: () => ({ dzial: 'kierownik' }), wlaczony: dzwiekWlaczony });
   // D77: reakcje kierownika przy zadaniach, które ta osoba robi w Panelu („▶ Wykonaj”); konto ekranu — bez (reakcje.js).
   if (window.HalaReakcje) window.HalaReakcje.sledz(hala);
+  // D94: „Zamknąć zmianę?” także dla kierownika/menedżera, który sam przyjął checklistę zmianową.
+  if (window.HalaZlecenia && window.HalaZlecenia.pilnujZamkniecia) window.HalaZlecenia.pilnujZamkniecia(hala, {});
 
   function sprawdzAlarmy(wiersze, incydenty) {
     const a = W.noweAlarmy(znaneAlarmy, wiersze, incydenty);

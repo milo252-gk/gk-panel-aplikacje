@@ -830,3 +830,6 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
   .awaria.zwarta .zdjecia { grid-area: zdj; }
   .awarie #lista-awarii { max-height: 40vh; }
 }
+/* 1.33.0: pozycja zamknięta „z tym, co jest” — nie zrobiona (czerwony znak), do odbioru nie podlega. */
+.pozycje-zlecenia .niewykonana > .poz-wiersz { color: var(--czerwony); }
+.pozycje-zlecenia .niewykonana > .poz-wiersz > span:first-child { color: var(--czerwony); font-weight: 700; }

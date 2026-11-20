@@ -15,6 +15,20 @@
   const H = () => global.Hala;
   const MIN = 60000;
 
+  /* Kto faktycznie pracował nad zleceniem (właściciel 2026-11-20): przy checkliście to osoba, która odhaczyła NAJWIĘCEJ pozycji
+     (wykonane + pominięte, pole `autor` wpisu) — nie ten, kto kliknął na końcu („Nie mogę”, „Zrobione” po zmianie, auto-zatwierdzenie).
+     Bez odhaczonych pozycji: wykonał → przyjął → wykonawca → odrzucił (ta sama kolejność w hala.py → kto_pracowal). Remis rozstrzyga pierwsza osoba w kolejności zapisu. */
+  const ktoPracowal = d => {
+    d = d || {};
+    const licz = new Map();
+    for (const mapa of [d.wykonane, d.pominiete]) {
+      if (!mapa || typeof mapa !== 'object') continue;
+      for (const w of Object.values(mapa)) if (w && w.autor) licz.set(w.autor, (licz.get(w.autor) || 0) + 1);
+    }
+    let kto = null, ile = 0;
+    for (const [id, n] of licz) if (n > ile) { kto = id; ile = n; }
+    return kto || d.wykonal || d.przyjal || d.wykonawca || d.odrzucil || null;
+  };
   const nazwaPracownika = (pracownicy, id) => {
     if (!id) return null;
     const p = (pracownicy || []).find(x => x.id === id);
@@ -417,7 +431,7 @@
     return bezCzesci(wszystkie).filter(z => pasuje(z)).map(z => {
       const d = z.dane || {};
       const termin = d.termin ? Date.parse(d.termin) : NaN;
-      const kto = d.wykonal || d.odrzucil || d.przyjal || d.wykonawca || null;
+      const kto = ktoPracowal(d);
       const po = poTerminie(z, teraz);
       // Wykonane po terminie też widać — kierownik egzekwuje, więc spóźnienie nie znika z chwilą wysłania.
       const wykonano = Date.parse(d.czas_wykonania);
@@ -442,6 +456,8 @@
         maszyna: (Array.isArray(d.maszyny) && d.maszyny.length ? d.maszyny : d.maszyna ? [d.maszyna] : [])
           .map(m => (maszyny[m] || {}).nazwa || m).join(', ') || null,
         postep, czynnosc: d.czynnosc || null,
+        // 1.33.0 („Zamknij z tym, co jest”): ile pozycji osoba zostawiła niewykonanych przy końcu zmiany (0 = zwykłe oddanie).
+        niewykonane: Array.isArray(d.niewykonane) ? d.niewykonane.length : 0,
         pilne: d.priorytet === 'pilne',
         kto: nazwaPracownika(pracownicy, kto),
         wykonawca: nazwaPracownika(pracownicy, d.wykonawca), wykonawcaId: d.wykonawca || null,
@@ -485,6 +501,8 @@
           terminMs: p.termin && !isNaN(Date.parse(p.termin)) ? Date.parse(p.termin) : null,
           od: p.od ? godzina(p.od) : '', maszynyPostep: maszynyPostepPozycji(d, p),
           stan: (d.wykonane || {})[p.id] ? 'wykonana' : (d.pominiete || {})[p.id] ? 'pominieta' : 'czeka',
+          // Niewykonana = „czeka” dla całej reszty logiki (nie ma co odbierać), ale z osobnym napisem na karcie — nie wygląda jak zrobiona.
+          niewykonana: !(d.wykonane || {})[p.id] && !(d.pominiete || {})[p.id] && Array.isArray(d.niewykonane) && d.niewykonane.includes(p.id),
           powod: ((d.pominiete || {})[p.id] || {}).powod || '', uwagi: ((d.wykonane || {})[p.id] || {}).uwagi || '',
           // Okno szczegółów pozycji przy odbiorze: wszystko, co dział zostawił przy tej pozycji (zdjęcia, notatka, kto i kiedy).
           id: p.id, szczegoly: szczegolyPozycji(d, p, pracownicy),
@@ -2634,7 +2652,7 @@
       if (!mapa.has(id)) {
         const p = (pracownicy || []).find(x => x.id === id);
         mapa.set(id, { id, nazwa: p ? p.nazwa : id, dzialy: new Set(), razem: 0, zrobione: 0, wTerminie: 0, spoznione: 0, przepadle: 0,
-                       nieMoze: 0, otwarte: 0, zTerminem: 0, urlopDni: 0 });
+                       nieMoze: 0, otwarte: 0, zTerminem: 0, niepelne: 0, urlopDni: 0 });
       }
       return mapa.get(id);
     };
@@ -2644,7 +2662,7 @@
       if (dzial && d.dzial !== dzial) continue;
       const kiedy = Date.parse(d.czas_zlecenia || z.utworzono);
       if (isNaN(kiedy) || kiedy < od || kiedy >= doMs) continue;
-      const kto = d.wykonal || d.odrzucil || d.przyjal || d.wykonawca;
+      const kto = ktoPracowal(d);
       if (!kto || (osoba && kto !== osoba)) continue;
       const termin = Date.parse(d.termin);
       if (!isNaN(termin) && H().naUrlopie && H().naUrlopie(slowniki, kto, dzienZakladu(termin))) continue;
@@ -2653,8 +2671,11 @@
       if (d.dzial) w.dzialy.add(nazwyDzialow.get(d.dzial) || d.dzial);
       const wykonano = Date.parse(d.czas_wykonania);
       if (z.status === 'wykonane' || z.status === 'zamkniete' && !isNaN(wykonano)) {
-        w.zrobione++;
-        if (!isNaN(termin)) { w.zTerminem++; if (wykonano <= termin) w.wTerminie++; else w.spoznione++; }
+        // 1.33.0: zamknięte z niewykonanymi pozycjami NIE jest zrobione: osobny licznik `niepelne`, a w terminowości — po terminie
+        // (tak samo liczy hub: wskazniki_okresu).
+        const zBrakami = Array.isArray(d.niewykonane) && d.niewykonane.length > 0;
+        if (zBrakami) w.niepelne++; else w.zrobione++;
+        if (!isNaN(termin)) { w.zTerminem++; if (wykonano <= termin && !zBrakami) w.wTerminie++; else w.spoznione++; }
       } else if (z.status === 'przepadlo') w.przepadle++;
       else if (z.status === 'odrzucone' || (z.status === 'zamkniete' && d.powod_odrzucenia)) w.nieMoze++;
       else w.otwarte++;
@@ -3242,7 +3263,7 @@
     return { od: dzienZakladu(ms - 6 * 86400000), do: dzienZakladu(ms) };
   }
 
-  const PanelWidok = { rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,

@@ -223,7 +223,7 @@
      każdej zmianie pola identyfikatora; przycisk przelacz (opcjonalny) zmienia go ręcznie („Zaloguj hasłem” — zapomniany
      PIN; „Zaloguj PIN-em” tylko, gdy znacznik jest). naZmiane(tryb) — np. Lider chowa klawiaturę cyfr przy haśle.
      Zwraca { tryb(), odswiez(), haslo() } — odswiez() po błędzie „wymagane_haslo” (znacznik już zapomniany). */
-  const ETYKIETY = { pin: 'PIN (4 cyfry)', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)' };
+  const ETYKIETY = { pin: 'PIN lub hasło', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)' };
   function poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane, slowaPrzelacznika }) {
     const slowa = Object.assign({ pin: 'Zaloguj hasłem', haslo: 'Zaloguj PIN-em' }, slowaPrzelacznika || {});
     let reczny = null, ostatni = null;
@@ -233,12 +233,13 @@
       if (reczny === 'pin' && a !== 'pin') reczny = null;        // PIN-em tylko z ważnym znacznikiem
       const tryb = reczny || a;
       if (etykieta) etykieta.textContent = ETYKIETY[tryb];
-      sekret.inputMode = tryb === 'pin' ? 'numeric' : 'text';
-      sekret.maxLength = tryb === 'pin' ? 4 : 128;
+      // 2026-11-20: po haśle (zaufane urządzenie) pole przyjmuje PIN ALBO hasło — serwer rozpoznaje po treści (4 cyfry = PIN).
+      sekret.inputMode = 'text';
+      sekret.maxLength = 128;
       sekret.autocomplete = tryb === 'pin' ? 'off' : 'current-password';
       sekret.dataset.tryb = tryb;
       if (przelacz) {
-        przelacz.hidden = a !== 'pin';                            // bez znacznika nie ma czego przełączać
+        przelacz.hidden = true;                                   // jedno pole przyjmuje PIN i hasło — przełącznik zbędny
         przelacz.textContent = tryb === 'pin' ? slowa.pin : slowa.haslo;
       }
       if (tryb !== ostatni) { ostatni = tryb; if (naZmiane) naZmiane(tryb); }

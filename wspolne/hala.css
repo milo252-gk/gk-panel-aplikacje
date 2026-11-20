@@ -773,6 +773,11 @@ body:has(.ekran:not([hidden]) .wlasny-skan) .hala-skan-fab { display: none; }
 .hala-pozycja.stan-wykonana .hala-pozycja-znak { color: var(--zielony); }
 .hala-pozycja.stan-wykonana .hala-pozycja-nazwa { color: var(--tekst-slaby); }
 .hala-pozycja.stan-pominieta .hala-pozycja-nazwa { color: var(--tekst-slaby); text-decoration: line-through; }
+/* 1.33.0: pozycja zamknięta „z tym, co jest” — NIE zrobiona; czerwony krzyżyk, nazwa bez przekreślenia (przekreślone = pominięte z powodem). */
+.hala-pozycja.stan-niewykonana .hala-pozycja-znak { color: var(--czerwony); }
+.hala-pozycja.stan-niewykonana .hala-pozycja-nazwa { color: var(--czerwony); }
+dialog.hala-zamkniecie .hala-zamkniecie-tytul { margin: 0; font-size: 16px; }
+.hala-zamkniecie-lista { margin: 0; padding-left: 20px; font-size: 14px; display: grid; gap: 2px; }
 .hala-pozycja.stan-przed { opacity: .6; }
 .hala-pozycja.stan-przed .hala-pozycja-znak { color: var(--tekst-slaby); }
 .hala-pozycja.stan-po-terminie { border-color: var(--czerwony); }

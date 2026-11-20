@@ -36,7 +36,8 @@
      postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia)
      odbiorPozycji       <-> odbior_pozycji    (D87: odbiór checklisty pozycja po pozycji)
      koniecZwrotu        <-> koniec_zwrotu_zmianowego (D88: zwrot tylko do końca zmiany, bez karencji)
-     koniecOdbioru       <-> koniec_odbioru_zmianowego (D88: odbiór zlecenia zmianowego tylko do końca zmiany + karencji) */
+     koniecOdbioru       <-> koniec_odbioru_zmianowego (D88: odbiór zlecenia zmianowego tylko do końca zmiany + karencji)
+     oknoZamknieciaZmiany <-> okno_zamkniecia_zmiany (1.33.0: pytanie „Zamknąć zmianę?” przy niepełnej checkliście); pozycjeBezWykonania <-> pozycje_bez_wykonania */
 
 (function (global) {
   'use strict';
@@ -214,6 +215,8 @@
     if (!spec || !spec.wymagane_jesli || !stan) return null;
     if (spec.z && !spec.z.includes(stan.status)) return null;
     const d = stan.dane || {}, dane = zd.dane || {};
+    // 1.33.0: „Zamknij z tym, co jest” (pole `niewykonane`) nie wymaga zdjęcia/notatki/skanu całego zlecenia. Bliźniak: hala.py → brak_wymagan.
+    if (spec.bez_wymagan_gdy && !puste(dane[spec.bez_wymagan_gdy])) return null;
     const powody = [];
     for (const [pole, w] of Object.entries(spec.wymagane_jesli)) {
       if (d[w.gdy] !== true) continue;
@@ -488,6 +491,28 @@
     return isNaN(w) ? null : w;
   }
 
+  /* 1.33.0 (właściciel 2026-11-20): „Jeśli ktoś nie skończył całej checklisty i jego zmiana się kończy, powinien dostać zapytanie:
+     zamknąć zmianę?” Na `stale.zamkniecie_zmiany.pytanie_min` (15) minut przed końcem zmiany osoba, która PRZYJĘŁA checklistę zmianową
+     z niedokończonymi pozycjami, dostaje pytanie. „Zamknij z tym, co jest” = zlecenie.wykonane z polem `niewykonane` (hub sam wylicza
+     listę i pilnuje osoby oraz okna czasu). Bliźniaki: hala.py → pytanie_zamkniecia_min, pozycje_bez_wykonania, okno_zamkniecia_zmiany. */
+  const PYTANIE_ZAMKNIECIA_MIN = 15;
+  function minutyPytaniaZamkniecia(stale) {
+    const m = ((stale || {}).zamkniecie_zmiany || {}).pytanie_min;
+    return typeof m === 'number' && isFinite(m) && m >= 1 ? Math.floor(m) : PYTANIE_ZAMKNIECIA_MIN;
+  }
+  function pozycjeBezWykonania(d) {
+    d = d || {};
+    const wyk = d.wykonane || {}, pom = d.pominiete || {};
+    return ((d.pozycje) || []).filter(p => p && p.id && !wyk[p.id] && !pom[p.id]).map(p => p.id);
+  }
+  function oknoZamknieciaZmiany(zlecenie, teraz, minuty) {
+    const z = zlecenie || {}, d = z.dane || {};
+    if (z.status !== 'przyjete' || !d.przyjal || !pozycjeBezWykonania(d).length) return false;
+    const koniec = Date.parse(d.wazne_do);
+    const m = (minuty === undefined ? PYTANIE_ZAMKNIECIA_MIN : minuty) * 60000;
+    return !isNaN(koniec) && typeof teraz === 'number' && koniec - m <= teraz && teraz < koniec;
+  }
+
   /* D87 (właściciel 2026-11-17): odbiór oddanej checklisty pozycja po pozycji. Stan zlecenia ma mapy `pozycje_odebrane`
      (zlecenie.pozycja_odebrana) i `pozycje_zwrocone` (zlecenie.pozycja_zwrocona — pozycja z powodem, którą dział ma poprawić).
      Pozycja jest ODEBRANA, gdy jest zrobiona (wykonana albo pominięta) i ma wpis odbioru nie starszy niż jej wykonanie —
@@ -705,7 +730,7 @@
       const d = z.dane || {}, t = msChwili(d.termin || null), wyk = msChwili(d.czas_wykonania || null);
       if (t === null || isNaN(t)) continue;
       let wynik = null;
-      if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) wynik = wyk <= t;
+      if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) wynik = wyk <= t && !(Array.isArray(d.niewykonane) && d.niewykonane.length);   // 1.33.0: zamknięte z niewykonanymi nie jest „w terminie”
       else if ((z.status === 'nowe' || z.status === 'przyjete' || z.status === 'rozdzielone') && t < teraz) wynik = false;
       // D78: przepadłe „z braku łączności” (hub albo tunel nie działał w czasie zadania) nie obniża terminowości.
       else if (z.status === 'przepadlo' && d.bez_lacznosci !== true) wynik = false;
@@ -2767,7 +2792,7 @@
 
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
-    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
+    szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, minutyPytaniaZamkniecia, pozycjeBezWykonania, oknoZamknieciaZmiany, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,

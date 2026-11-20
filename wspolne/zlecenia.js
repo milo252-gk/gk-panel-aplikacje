@@ -89,7 +89,7 @@
   }
 
   function wiersze(lista, { dzial, linia, linie, moje, pracownicy, teraz, H, poczatekZmiany, zostaw, ja, widziWszystkie, slowniki, dzien, tylko,
-                            pracownik, dzialyKontraktu }) {
+                            pracownik, dzialyKontraktu, zamkniecieMin }) {
     const nazwa = id => { if (!id) return null; const p = (pracownicy || []).find(x => x.id === id); return p ? p.nazwa : id; };
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms)) return null; const l = H.lokalny(ms);
       return `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
@@ -147,6 +147,10 @@
           rozdzial: rozdzialWiersza(z, lista, nazwa, H, H && H.widziRozdzial ? H.widziRozdzial(z, pracownik, dzialyKontraktu) : false, godz),
           czesc: !!d.nadrzedne, uwagiPrzekazania: d.uwagi_przekazania || null,
           dzialania: H && H.mozeRozdzielic ? H.mozeRozdzielic(z, pracownik, dzialyKontraktu) : { przekaz: false, rozdziel: false },
+          // 1.33.0 („Zamknąć zmianę?”): pozycje zamknięte jako niewykonane i — dla osoby, która przyjęła niepełną checklistę — okno
+          // „do końca zmiany zostało nie więcej niż pytanie_min minut” (wtedy karta ma „Zamknij z tym, co jest”).
+          niewykonane: [].concat(d.niewykonane || []),
+          zamkniecieZmiany: !!(H && H.oknoZamknieciaZmiany && ja && d.przyjal === ja && H.oknoZamknieciaZmiany(z, teraz, zamkniecieMin)),
         };
       })
       .sort((a, b) => (b.doZrobienia - a.doZrobienia) || (b.zalegle - a.zalegle)
@@ -204,12 +208,13 @@
     const godz = t => { const ms = Date.parse(t); if (isNaN(ms) || !H || !H.lokalny) return '';
       const l = H.lokalny(ms); return `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`; };
     const odbior = H && H.odbiorPozycji ? H.odbiorPozycji(d || {}).pozycje : {};
+    const niew = new Set([].concat((d && d.niewykonane) || []));          // 1.33.0: zamknięte z tym, co jest — pozycja NIE jest zrobiona
     return [].concat((d && d.pozycje) || []).filter(p => p && p.id).map(p => {
       const wyk = (d.wykonane || {})[p.id], pom = (d.pominiete || {})[p.id];
       const maszyny = maszynyPozycji(p);
       const t = Date.parse(p.termin), o = Date.parse(p.od);
       // „przed” — pozycja ma godzinę „od” (2026-10-26) i ta jeszcze nie nadeszła: widać ją, nie da się jej odhaczyć.
-      const stan = wyk ? 'wykonana' : pom ? 'pominieta' : (!isNaN(o) && o > teraz ? 'przed' : !isNaN(t) && t < teraz ? 'po-terminie' : 'czeka');
+      const stan = wyk ? 'wykonana' : pom ? 'pominieta' : niew.has(p.id) ? 'niewykonana' : (!isNaN(o) && o > teraz ? 'przed' : !isNaN(t) && t < teraz ? 'po-terminie' : 'czeka');
       return { id: p.id, nazwa: p.nazwa || '', opis: p.opis || '', godz: godz(p.termin), odGodz: godz(p.od), odMs: isNaN(o) ? null : o,
                terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
                maszyna: p.maszyna || null, maszyny, skany: skanyPozycji(d, p.id),
@@ -290,6 +295,7 @@
                                                     ja: hala.pracownik && hala.pracownik.id, slowniki: hala.slowniki,
                                                     dzien: dzisiaj(global.Hala, hala.teraz()), pracownik: hala.pracownik,
                                                     dzialyKontraktu: (((hala.kontrakt || {}).stale) || {}).dzialy || [],
+                                                    zamkniecieMin: global.Hala && global.Hala.minutyPytaniaZamkniecia ? global.Hala.minutyPytaniaZamkniecia((hala.kontrakt || {}).stale) : undefined,
                                                     widziWszystkie: ((hala.pracownik && hala.pracownik.role) || []).some(r => ROLE_WIDZA_WSZYSTKO.includes(r)) }, opcje);
 
   /* Wiersze ekranu dla aplikacji (menu po skanie QR maszyny — HalaDzialania.menuMaszyny). */
@@ -463,6 +469,7 @@
           ${z.maszyny.length && !(z.doZrobienia && z.wymagajSkanu) ? `<span>${z.maszyny.map(m => `${esc((maszyny[m] || {}).nazwa || m)} (${esc(m)})`).join(', ')}</span>` : ''}
           ${z.dlaKogo ? `<span>dla: ${esc(z.dlaKogo)}</span>` : ''}
           ${z.doKierownika ? '<span class="znacznik uwaga">Do rozdzielenia</span>' : ''}
+          ${z.niewykonane.length ? `<span class="znacznik alarm">Niewykonane: ${z.niewykonane.length}</span>` : ''}
         </div>
         ${z.opis ? `<p class="hala-zlecenie-opis">${esc(z.opis)}</p>` : ''}
         ${z.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjecia)}</div>` : ''}
@@ -479,6 +486,7 @@
         : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
+          ${z.zamkniecieZmiany ? '<button type="button" class="glowny" data-akcja="zamknij-zmiane">Zamknij z tym, co jest</button>' : ''}
           <button type="button" data-akcja="nie-moge">Nie mogę</button></div>`)
         : z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : akcjeKarty(z, s)) : z.rozdzielone ? `<div class="hala-zlecenie-akcje">${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}</div>`
         : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
@@ -597,6 +605,7 @@
       // D76: okna „Przekaż” i „Rozdziel” są wspólne z Panelem (dzialania.js).
       if (b.dataset.akcja === 'przekaz' && DZ) return DZ.przekaz(hala, id, { gotowe: info });
       if (b.dataset.akcja === 'rozdziel' && DZ) return DZ.rozdziel(hala, id, { gotowe: info });
+      if (b.dataset.akcja === 'zamknij-zmiane') return zapytajOZamknieciu(hala, id, { komunikat: t => info(t) });
       if (b.dataset.akcja === 'przyjmij') await zCofnieciem(hala, 'zlecenie.przyjete', id, {}, o);
       if (b.dataset.akcja === 'wykonane') {
         // D56: wszystko już zrobione krok po kroku — „Zrobione” wysyła od razu, bez formularza robionego „na raz”.
@@ -735,7 +744,7 @@
      w notatce), przy zrobionej — „Cofnij”. Czynność (obsada, próba, audyt BHP, przekazanie) — aplikacja, która ma jej
      formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Lider); próba i przegląd
      odhaczają się też same (hub). Ostatnia pozycja wysyła „Zrobione” sama (odhaczPozycje → zakonczJesliGotowe). */
-  const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', 'po-terminie': '○', czeka: '○', przed: '⏳' };
+  const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', niewykonana: '✗', 'po-terminie': '○', czeka: '○', przed: '⏳' };
   const OPIS_CZYNNOSCI = { obsada: 'Raport obsady', obchod: 'Obchód — skan QR', proba: 'Próba jakościowa',
                            bhp: 'Audyt BHP', przekazanie: 'Przekazanie zmiany', przeglad: 'Przegląd UR' };
   // Ikona czynności pozycji (liniowa, gk-ikony.js); obchód to ▣ — znak skanu QR jak na naklejkach.
@@ -992,6 +1001,111 @@
     return wynik.sort((a, b) => String(b.czas).localeCompare(String(a.czas))).slice(0, 8);
   }
 
+  /* ---------------------------------------------------------------- „Zamknąć zmianę?” (kontrakt 1.33.0)
+
+     Właściciel 2026-11-20: „jeśli ktoś nie skończył całej checklisty i jego zmiana się kończy, powinien dostać zapytanie: zamknąć
+     zmianę?”. Na `pytanie_min` (15) minut przed końcem zmiany osoba, która PRZYJĘŁA checklistę i nie zrobiła wszystkich pozycji,
+     dostaje okno (a hub — jedno powiadomienie push, zapytaj_o_zamkniecie_zmiany). Dwie odpowiedzi:
+       „Zamknij z tym, co jest” — zlecenie.wykonane z `niewykonane` (hub wylicza listę, pilnuje osoby i okna czasu): niewykonane pozycje
+         zostają NIEWYKONANE (nie przechodzą na następną zmianę), zlecenie idzie do kierownika z adnotacją o brakach;
+       „Wracam dokończyć” — okno znika, zadanie zostaje (do końca zmiany można zamknąć z karty). Bez odpowiedzi zadanie przepada jak dotąd.
+     Okno pamięta „Wracam” w pamięci strony (po odświeżeniu zapyta jeszcze raz — lepiej dwa razy niż wcale). */
+  const odlozone = new WeakMap();                                  // hala → Set kluczy `${id}|${przyjal}`
+  const kluczPytania = z => `${z.id}|${(z.dane || {}).przyjal}`;
+  // „Wracam dokończyć” pamiętamy także po odświeżeniu strony (localStorage, klucz hala.zamkniecie.<zlecenie>|<osoba> = czas w ms):
+  // to samo pytanie nie wraca częściej niż raz na ODLOZENIE_MS. Pamięć niedostępna (tryb prywatny) — zostaje pamięć strony.
+  const ODLOZENIE_MS = 5 * 60000;
+  const czytajOdlozenie = k => { try { return Number(global.localStorage.getItem('hala.zamkniecie.' + k)) || 0; } catch (e) { return 0; } };
+  const odloz = (hala, zl, teraz) => {
+    let m = odlozone.get(hala); if (!m) { m = new Map(); odlozone.set(hala, m); }
+    const k = kluczPytania(zl), t = typeof teraz === 'number' ? teraz : Date.now();
+    m.set(k, t);
+    try { global.localStorage.setItem('hala.zamkniecie.' + k, String(t)); } catch (e) { /* pełna albo wyłączona pamięć — trudno */ }
+  };
+  // Zestaw z `has(klucz)` dla doZamkniecia: odłożone mniej niż 5 min temu (w pamięci strony albo w localStorage).
+  const odlozoneTeraz = (hala, teraz) => ({ has: k => {
+    const m = odlozone.get(hala), t = Math.max((m && m.get(k)) || 0, czytajOdlozenie(k));
+    return t > 0 && teraz - t < ODLOZENIE_MS;
+  } });
+
+  /* Zlecenia, o które trzeba zapytać TĘ osobę teraz (czysta funkcja — testy). */
+  function doZamkniecia(lista, { ja, teraz, H, minuty, odlozone: odl }) {
+    if (!ja || !H || !H.oknoZamknieciaZmiany) return [];
+    return (lista || []).filter(z => z && z.aktywny !== false && (z.dane || {}).przyjal === ja && !(odl && odl.has(kluczPytania(z)))
+      && H.oknoZamknieciaZmiany(z, teraz, minuty));
+  }
+
+  /* Okno pytania o JEDNO zlecenie. Zwraca Promise<'zamknieto'|'wracam'|'brak'>. */
+  function zapytajOZamknieciu(hala, id, o) {
+    o = o || {};
+    const doc = global.document, H = global.Hala;
+    const zl = hala.obiekt('zlecenie', id);
+    if (!doc || !zl || !H) return Promise.resolve('brak');
+    const d = zl.dane || {};
+    const brak = H.pozycjeBezWykonania(d), wszystkie = (d.pozycje || []).filter(p => p && p.id).length;
+    if (!brak.length) return Promise.resolve('brak');
+    const nazwy = (d.pozycje || []).filter(p => p && brak.includes(p.id)).map(p => p.nazwa || p.id);
+    const koniec = Date.parse(d.wazne_do), l = !isNaN(koniec) && H.lokalny ? H.lokalny(koniec) : null;
+    const godzina = l ? `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}` : '';
+    let dlg = doc.getElementById('hala-zamkniecie-okno');
+    if (!dlg) { dlg = doc.createElement('dialog'); dlg.id = 'hala-zamkniecie-okno'; dlg.className = 'hala-okno hala-zamkniecie'; doc.body.appendChild(dlg); }
+    if (dlg.open) dlg.close();
+    dlg.innerHTML = `<form method="dialog">
+      <h2>Zamknąć zmianę?</h2>
+      <p class="hala-zamkniecie-tytul"><b>${esc(d.tytul || 'Checklista')}</b>: ${wszystkie - brak.length}/${wszystkie} — nie skończona</p>
+      <p class="hala-okno-opis">${godzina ? `Zmiana kończy się o ${esc(godzina)}. ` : ''}Niewykonane pozycje nie przejdą na następną zmianę — kierownik zobaczy, ile zrobiono i czego brakuje.</p>
+      <ul class="hala-zamkniecie-lista">${nazwy.slice(0, 5).map(n => `<li>${esc(n)}</li>`).join('')}${nazwy.length > 5 ? `<li class="slaby">+${nazwy.length - 5} więcej</li>` : ''}</ul>
+      <p class="hala-okno-blad" data-blad hidden></p>
+      <div class="hala-okno-przyciski"><button type="button" data-wracam>Wracam dokończyć</button>
+        <button type="button" class="glowny" data-zamknij-zmiane>Zamknij z tym, co jest</button></div></form>`;
+    return new Promise(resolve => {
+      const zgas = wynik => { if (dlg.open) dlg.close(); resolve(wynik); };
+      dlg.querySelector('[data-wracam]').addEventListener('click', () => { odloz(hala, zl, hala.teraz()); zgas('wracam'); });
+      dlg.querySelector('[data-zamknij-zmiane]').addEventListener('click', async ev => {
+        const b = ev.currentTarget, blad = dlg.querySelector('[data-blad]');
+        b.disabled = true;
+        try {
+          const dane = { niewykonane: brak, uwagi: `Zamknięte przy końcu zmiany: ${wszystkie - brak.length} z ${wszystkie} pozycji, niewykonane: ${brak.length}.` };
+          await zCofnieciem(hala, 'zlecenie.wykonane', id, dane, { komunikat: 'Zmiana zamknięta — kierownik zobaczy braki' });
+          if (o.komunikat) o.komunikat('Zmiana zamknięta — niewykonane pozycje zostały u kierownika');
+          zgas('zamknieto');
+        } catch (e) {
+          b.disabled = false; blad.textContent = (e && e.message) || 'Nie udało się zamknąć. Spróbuj jeszcze raz.'; blad.hidden = false;
+        }
+      });
+      // Esc = „Wracam dokończyć”: niczego nie zamykamy po cichu.
+      dlg.addEventListener('cancel', () => { odloz(hala, zl, hala.teraz()); resolve('wracam'); }, { once: true });
+      dlg.showModal();
+    });
+  }
+
+  /* Pilnuje okna czasu: przy starcie, po zmianie zleceń, po powrocie do karty i co ok. 30 s (czas mija bez zdarzeń). Jedno okno naraz. */
+  const pilnowane = new WeakSet();
+  function pilnujZamkniecia(hala, opcje) {
+    if (!hala || pilnowane.has(hala) || !global.document) return;
+    pilnowane.add(hala);
+    let zajete = false, zegar = null;
+    const przejrzyj = async () => {
+      if (zajete) return;
+      const doc = global.document;
+      if (doc.visibilityState && doc.visibilityState !== 'visible') return;      // karta w tle: pytanie czeka, nic nie przepada
+      if (!hala.zalogowany || !hala.zalogowany() || !hala.pracownik) return;
+      const H = global.Hala;
+      const lista = doZamkniecia(hala.obiekty('zlecenie'), { ja: hala.pracownik.id, teraz: hala.teraz(), H, odlozone: odlozoneTeraz(hala, hala.teraz()),
+                                                            minuty: H && H.minutyPytaniaZamkniecia ? H.minutyPytaniaZamkniecia((hala.kontrakt || {}).stale) : undefined });
+      if (!lista.length) return;
+      zajete = true;
+      try { await zapytajOZamknieciu(hala, lista[0].id, { komunikat: (opcje && opcje.komunikat) || null }); } finally { zajete = false; }
+      setTimeout(przejrzyj, 400);                                                // kolejne zlecenie, jeśli jest
+    };
+    const pozniej = () => { clearTimeout(zegar); zegar = setTimeout(przejrzyj, 800); };
+    hala.na('sesja', pozniej);
+    hala.na('zmiana', ({ typ }) => { if (typ === 'zlecenie' || typ === '*') pozniej(); });
+    if (global.document.addEventListener) global.document.addEventListener('visibilitychange', pozniej);
+    setInterval(przejrzyj, 30000);
+    pozniej();
+  }
+
   /* Nowe zlecenie dla mnie (mój dział, moja linia) — raz na zlecenie, nie po starcie ani po zalogowaniu
      (to, co już było, człowiek zobaczy na liście). opcje() — funkcja, bo linia lidera może się zmienić.
      Zlecenie ZWRÓCONE przez kierownika (zlecenie.zwrocone → znowu „nowe”, nowy czas_zwrotu) też woła fn — drugi argument
@@ -1002,6 +1116,8 @@
     if (global.HalaDzwieki) global.HalaDzwieki.sledz(hala, Object.assign({ awarie: true, zlecenia: opcje }, dzwieki));
     // D77: reakcje kierownika (zwrot, niewykonane) — każda aplikacja działu śledzi zlecenia tędy, więc i reakcje.
     if (global.HalaReakcje) global.HalaReakcje.sledz(hala);
+    // 1.33.0: „Zamknąć zmianę?” — pytanie 15 min przed końcem zmiany dla osoby z niepełną, przyjętą checklistą (też tędy, bez zmian w aplikacjach).
+    pilnujZamkniecia(hala, { komunikat: dzwieki && dzwieki.komunikat });
     // id → { zwrot: czas_zwrotu, przekazanie: czas_przekazania }, które już widzieliśmy. D76: przekazanie przez kierownika
     // działu to dla nowej osoby nowe zadanie — mówimy o nim jak o zwrocie (obiekt znany, zmienił się jeden znacznik).
     const znane = new Map();
@@ -1040,7 +1156,7 @@
 
   const HalaZlecenia = { etykietaStatusu, maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
                          brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
-                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia, akcjeKarty };
+                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, doZamkniecia, zapytajOZamknieciu, pilnujZamkniecia, odlozZamkniecie: odloz, odlozoneZamkniecie: odlozoneTeraz, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia, akcjeKarty };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

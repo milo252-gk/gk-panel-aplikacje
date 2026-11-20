@@ -455,7 +455,7 @@
     const c = ev.target.dataset && ev.target.dataset.cyfra;
     if (!c) return;
     const pole = $('pin');
-    pole.value = c === 'C' ? pole.value.slice(0, -1) : (pole.value + c).slice(0, pole.maxLength > 0 ? pole.maxLength : 32);
+    pole.value = c === 'C' ? pole.value.slice(0, -1) : (pole.value + c).slice(0, 4);   // klawiatura cyfr = tryb PIN: najwyżej 4 cyfry (piąta nie ma być próbą „hasła”)
   });
   // Skan karty tylko wpisuje identyfikator — PIN i tak trzeba podać (D24).
   $('skanuj-karte').addEventListener('click', async () => {
