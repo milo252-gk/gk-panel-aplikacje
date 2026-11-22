@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-e5f594d2d798';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-0d3e575e39eb';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 

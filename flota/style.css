@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-e5f594d2d798';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-0d3e575e39eb';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -1044,7 +1044,7 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   .okno{border-radius:16px; max-height:88vh; max-height:88dvh}
   .pasek-dolny{display:none}
   .komunikaty{bottom:18px}
-  .pasek-polaczenia{margin-left:224px; width:auto}
+  .pasek-polaczenia{margin-left:224px; width:calc(100% - 224px)}
   /* Wstęgi „Bez połączenia z programem” i zapisów biura wstawiają się przed <main>: bez tego zaczynały się pod menu
      (przycisk „Odśwież dane” był ucięty). Ten sam margines co treść. */
   #wstega-bez-programu,#wstega-zapisy-biura{margin:12px 26px 0 250px}
