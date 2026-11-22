@@ -14,7 +14,7 @@
 /* ================================================== nasze lokalizacje */
 
 EKRANY.lokalizacje = {
-  tytul: 'Nasze lokalizacje',
+  tytul: 'Miejsca wyjazdu',
   tylkoBiuro: true,
   async rysuj(pole) {
     const lista = await sprobuj(() => API.get('/api/lokalizacje?wszystkie=1')) || [];
@@ -38,7 +38,7 @@ EKRANY.lokalizacje = {
             ${l.godziny ? `<span class="dopisek">${ikonka('zegar')}${escHtml(l.godziny)}</span>` : ''}
           </span>
           <span class="prawo">
-            ${l.domyslna ? '<span class="plakietka p-dostarczone">baza firmy</span>' : ''}
+            ${l.domyslna ? '<span class="plakietka p-dostarczone">domyślne</span>' : ''}
             ${l.lat == null ? '<span class="plakietka p-nieudane">brak na mapie</span>' : ''}
           </span>
         </button>`).join('')

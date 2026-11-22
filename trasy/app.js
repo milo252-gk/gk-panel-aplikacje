@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-cdaa99696bd6';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-ef0b3c830b77';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -2092,11 +2092,15 @@ function menuDlaRoli() {
   document.querySelectorAll('.tylko-biuro').forEach(e => e.classList.toggle('ukryty', !biuro));
   document.querySelectorAll('.tylko-administrator')
     .forEach(e => e.classList.toggle('ukryty', !jestAdministratorem()));
+  // RCP czyta dane z Panelu: konto tylko z tego programu dostałoby 403, więc nie pokazujemy mu pozycji.
+  const rcp = document.querySelector('.menu button[data-ekran="rcp"]');
+  if (rcp && !(stan.uz && stan.uz.zrodlo === 'gk')) rcp.classList.add('ukryty');
   // Administrator ma jedną pozycję „Administracja” (z zakładką Ustawienia w środku); biuro zachowuje
   // swoje „Ustawienia” (firmy) — osobny znacznik, żeby nie mieszać go z tylko-biuro / tylko-administrator.
   document.querySelectorAll('.tylko-ustawienia-firmy')
     .forEach(e => e.classList.toggle('ukryty', !(biuro && !jestAdministratorem())));
   document.querySelectorAll('.tylko-kierowca').forEach(e => e.classList.toggle('ukryty', biuro));
+  document.querySelectorAll('.tylko-podglad').forEach(e => e.classList.toggle('ukryty', !jestPodgladem()));
   // Arkusz powieksza na telefonie male przyciski kierowcy (style.css, rola-kierowca).
   document.body.classList.toggle('rola-kierowca', !biuro);
   // Podgląd tras: w menu tylko Pulpit i Trasy (bez Zapisanych tras, Zaległych, Klientów, Raportów, Ustawień, szukajki),
@@ -2585,6 +2589,10 @@ function odswiezPasekPolaczenia() {
   el.hidden = !p.tekst;
 }
 
+function otworzInstrukcje() {
+  window.open(`instrukcja.html?v=${typeof WERSJA_SKRYPTU === 'string' ? WERSJA_SKRYPTU : ''}`, '_blank', 'noopener');
+}
+
 /* „Moje konto” w układzie okna konta aplikacji hali (konto.js → HalaKonto.mojeKonto):
    osoba i rola → Wygląd → Zmień hasło/PIN (formularz rozwija się w oknie) →
    Powiadomienia → Dane w tym urządzeniu → wersja → Zamknij + Wyloguj na dole. */
@@ -2651,9 +2659,7 @@ function oknoKonta() {
       };
       // Instrukcja jest zwykłą stroną z web/ (instrukcja.html): działa z telefonu także z GitHub Pages (adres względny,
       // z tym samym stemplem wersji co reszta — tak ma ją kopia offline z sw.js) i otwiera się w nowej karcie.
-      pole.querySelector('#btn-instrukcja').onclick = () => {
-        window.open(`instrukcja.html?v=${typeof WERSJA_SKRYPTU === 'string' ? WERSJA_SKRYPTU : ''}`, '_blank', 'noopener');
-      };
+      pole.querySelector('#btn-instrukcja').onclick = otworzInstrukcje;
       const przyciskRol = pole.querySelector('#btn-role');
       if (przyciskRol) przyciskRol.onclick = () => {
         zamknijOkno();
@@ -2733,12 +2739,13 @@ function odswiezPasekDzwieku() {
   }
   if (pasek.dataset.stan === stanu) return;
   pasek.dataset.stan = stanu;
-  // Wspólny wzór paska (STYL-GK §6b): jedna linia, ikona, „Dźwięk wyłączony — włącz”, przycisk „Włącz”.
-  // Przyczynę (przełącznik albo blokada przeglądarki) mówi dymek — pasek ma być krótki i niezmienny.
+  // Wspólny wzór paska (STYL-GK §6b): jedna linia, ikona, tekst, przycisk „Włącz”. Gdy dźwięk jest włączony w Moim koncie,
+  // a przeglądarka czeka na dotknięcie, pasek nie może twierdzić, że jest wyłączony.
   pasek.title = stanu === 'wylaczony'
     ? 'Dźwięk powiadomień jest wyłączony — nie usłyszysz nieudanej dostawy.'
     : 'Przeglądarka jeszcze nie wpuściła dźwięku — dotknij, żeby go włączyć.';
-  pasek.innerHTML = ikonka('glos-wyl') + '<span class="baner-tekst">Dźwięk wyłączony — włącz</span>'
+  pasek.innerHTML = ikonka('glos-wyl')
+    + '<span class="baner-tekst">' + (stanu === 'wylaczony' ? 'Dźwięk wyłączony — włącz' : 'Dotknij, aby włączyć dźwięk') + '</span>'
     + '<button type="button" class="maly" id="btn-wlacz-dzwiek">Włącz</button>';
   pasek.querySelector('#btn-wlacz-dzwiek').onclick = () => {
     Dzwiek.ustaw(true);
@@ -3005,6 +3012,8 @@ async function uruchom() {
   document.getElementById('stan-sieci-btn').onclick = oknoKonta;
   podepnijSzukajke();       // dowody.js: pole „Szukaj” w nagłówku (na telefonie rozwija je lupa)
   document.getElementById('btn-wyloguj').onclick = () => wyloguj();
+  document.getElementById('btn-menu-konto').onclick = () => { zamknijMenu(); oknoKonta(); };
+  document.getElementById('btn-menu-instrukcja').onclick = () => { zamknijMenu(); otworzInstrukcje(); };
   document.querySelectorAll('.menu button[data-ekran]').forEach(b =>
     b.onclick = () => pokazEkran(b.dataset.ekran));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') zamknijZPytaniem(); });

@@ -116,7 +116,9 @@
     const r = RODZAJE[rodzaj];
     if (!r) return false;
     if (wlaczonyFn && wlaczonyFn() === false) return false;
-    try { global.navigator && global.navigator.vibrate && global.navigator.vibrate(WIBRACJE[rodzaj]); } catch (e) { /* bez wibracji */ }
+    // Przed pierwszym dotknięciem przeglądarka blokuje wibrację i zgłasza błąd w konsoli — wibrujemy dopiero po geście użytkownika.
+    const ua = global.navigator && global.navigator.userActivation;
+    if (!ua || ua.hasBeenActive) try { global.navigator && global.navigator.vibrate && global.navigator.vibrate(WIBRACJE[rodzaj]); } catch (e) { /* bez wibracji */ }
     const a = kontekst();
     if (!a) return false;
     if (a.state !== 'running') { a.resume().catch(() => {}); return false; }

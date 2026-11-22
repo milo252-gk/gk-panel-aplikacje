@@ -47,6 +47,8 @@ const MiaryTras = (() => {
       tekst: 'Pilne ostrzeżenia z sekcji „Trasy w toku”: wstrzymany wyjazd (numer zamówienia się nie zgadza), kierowca, który miał być u klienta i nie potwierdził, albo dostawa, która nie zdąży przed zamknięciem u klienta.' },
     'p-do-zatwierdzenia': { nazwa: 'Do zatwierdzenia',
       tekst: 'Dostawy i nieudane próby zamknięte przez kierowców, których biuro jeszcze nie przyjęło — ze wszystkich dni.' },
+    'p-bez-kierowcy': { nazwa: 'Trasy bez kierowcy',
+      tekst: 'Trasy wybranego dnia (od dziś), które jeszcze nie mają kierowcy i nie są zakończone. Dotknięcie otwiera listę tych tras — kierowcę wybierzesz wprost na karcie trasy.' },
     'p-braki': { nazwa: 'Do sprawdzenia',
       tekst: 'Rozbieżności w danych, np. niezgodny licznik albo spalanie. Dotknięcie otwiera raport pracy z tym zakresem.' },
     'p-punkty': { nazwa: 'Punkty dnia',

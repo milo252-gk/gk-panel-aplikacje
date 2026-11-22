@@ -101,6 +101,12 @@ EKRANY.rcp = {
     };
     async function wczytaj() {
       tresc.textContent = '';
+      if (!stan.uz || stan.uz.zrodlo !== 'gk') {
+        S.blad = 'Czas pracy czytamy z Panelu Kierownika, a to konto jest tylko w tym programie. Zaloguj się kontem z Panelu.';
+        S.brakDostepu = true;
+        rysujTresc();
+        return;
+      }
       tresc.appendChild(el('div', 'pusto', 'Wczytuję…'));
       try {
         if (S.czesc === 'dni') S.dni = (await api.dni()).dni;
@@ -109,6 +115,7 @@ EKRANY.rcp = {
         S.blad = '';
       } catch (e) {
         S.blad = komunikatBledu(e);
+        S.brakDostepu = e.kod === 403;
       }
       rysujTresc();
     }
@@ -255,7 +262,7 @@ EKRANY.rcp = {
         return td;
       })));
       tresc.append(pasek,
-        el('p', 'slaby', 'Zmiana I zaczyna się o 6:00, II o 14:00, III o 22:00 — odbicie po starcie zmiany to spóźnienie. Bez planu zmianę podpowiada godzina wejścia. Breloki przypisujesz w części „Breloki”; tu pojawiają się osoby z brelokiem.'),
+        el('p', 'slaby', 'Zmiany zaczynają się: ' + Object.keys(g.zmiany || {}).map(k => k + ' o ' + String(g.zmiany[k].od || '').replace(/^0/, '')).join(', ') + ' — odbicie po starcie zmiany to spóźnienie. Bez planu zmianę podpowiada godzina wejścia. Breloki przypisujesz w części „Breloki”; tu pojawiają się osoby z brelokiem.'),
         osoby.length ? tabela(['Osoba'].concat(dni.map((d, i) => dniTyg[i] + ' ' + d.slice(8) + '.' + d.slice(5, 7))), wiersze_)
                      : el('div', 'karta', 'Brak osób z brelokiem — przypisz je w części „Breloki”.'));
     }
@@ -329,7 +336,8 @@ EKRANY.rcp = {
       chipy.querySelectorAll('.chip').forEach(b => { const jest = b.dataset.rcpCzesc === S.czesc; b.classList.toggle('wybrany', jest); b.setAttribute('aria-pressed', String(jest)); });
       if (S.blad) {
         const k = el('div', 'karta');
-        k.append(el('h2', '', 'Nie udało się wczytać RCP'), el('p', 'slaby', S.blad), przycisk('Spróbuj ponownie', 'glowny', 'ponow'));
+        if (S.brakDostepu) k.append(el('h2', '', 'RCP jest niedostępne dla tego konta'), el('p', 'slaby', S.blad));
+        else k.append(el('h2', '', 'Nie udało się wczytać RCP'), el('p', 'slaby', S.blad), przycisk('Spróbuj ponownie', 'glowny', 'ponow'));
         tresc.appendChild(k);
         return;
       }

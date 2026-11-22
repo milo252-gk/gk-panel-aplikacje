@@ -23,7 +23,7 @@
   'use strict';
 
   const TEKSTY = { brawo: 'Brawo, na czas!', dobra: 'Dobra robota!', dopracuj: 'Dopracuj to!', zla: '', wkoncu: 'No, w końcu!' };
-  const ARIA = { brawo: 'Brawo, na czas!', dobra: 'Dobra robota!', dopracuj: 'Dopracuj to!', zla: 'Zlecenie niewykonane', wkoncu: 'No, w końcu!' };
+  const ARIA = { brawo: 'Brawo, na czas!', dobra: 'Dobra robota!', dopracuj: 'Dopracuj to!', zla: 'Niewykonane', wkoncu: 'No, w końcu!' };
   const POKAZ_MS = 1900;              // wejście 320 ms, chwila na przeczytanie, wyjście 240 ms od 1,45 s (hala.css)
   const TIK_MS = 12000;               // zła mina nie czeka na minutowy przegląd: sprawdzamy co ok. 12 s
   const MAKS_PAMIECI = 300;

@@ -4,6 +4,15 @@
    i liczba punktów (czerwona kropka z liczbą — nieudane). Dotknięcie dnia otwiera ten dzień na ekranie Trasy.
    Dane z istniejącego GET /api/trasy?od=&do= (pola ile, ile_ok, ile_nie) — bez nowego endpointu, tylko odczyt. */
 
+/* Dzień tygodnia (1 = poniedziałek … 7 = niedziela) jest dniem pracy zakładu: z ustawienia „Dni tygodnia”, domyślnie pn–pt.
+   Dzień wolny w kalendarzu jest przezroczysty, ale trasa założona w taki dzień nadal się pokazuje. */
+function pracujemyWDzien(dzienTygodnia) {
+  let plan = {};
+  try { plan = JSON.parse((stan.ustawienia || {}).dni_tygodnia || '{}') || {}; } catch (e) { plan = {}; }
+  const wpis = plan[dzienTygodnia];
+  return wpis && typeof wpis.praca === 'boolean' ? wpis.praca : dzienTygodnia < 6;
+}
+
 EKRANY.miesiac = {
   tytul: 'Kalendarz',
   tylkoBiuro: true,
@@ -45,7 +54,7 @@ EKRANY.miesiac = {
       const d = dni[klucz];
       const klasy = ['dzien-kal'];
       if (klucz.slice(0, 7) !== miesiac) klasy.push('obcy');
-      if (i % 7 >= 5) klasy.push('weekend');
+      if (!pracujemyWDzien(i % 7 + 1)) klasy.push('weekend');
       if (klucz === dzis) klasy.push('dzis');
       if (d) klasy.push('ma-trasy');
       const opis = d

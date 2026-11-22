@@ -29,7 +29,9 @@ EKRANY.pulpit = {
       // Lista „Do zatwierdzenia” obejmuje dostawy ze wszystkich dni, więc kafelek bierze liczbę z niej (niżej, po jej
       // wczytaniu). Konto „podgląd” tej listy nie dostaje — ma liczbę dnia z pulpitu.
       doPrzyjecia: podglad ? p.trasy.reduce((s, t) => s + (t.ile_do_przyjecia || 0), 0) : 0,
-      dzisiaj: data === dzisiaj(), podglad,
+      dzisiaj: data === dzisiaj(), podglad, data,
+      // Trasa bez kierowcy to codzienna kontrola biura; w dniach minionych nie ma już czego przydzielać.
+      bezKierowcy: data >= dzisiaj() ? p.trasy.filter(t => !t.kierowca_imie && t.status === 'planowana').length : 0,
       // konto „podgląd” nie ma dostępu do zaległych, odrzuconych i braków (serwer odpowiada 403) — nie pytamy
       oczekiwane: new Set(['zywo'].concat(podglad ? [] : ['przyjecie', 'zalegle', 'odrzucone', 'braki'],
         jestAdministratorem() ? ['alarmy'] : [])),
@@ -62,7 +64,8 @@ EKRANY.pulpit = {
               <span class="plakietka p-nieudane" style="margin-left:6px">${escHtml(n.powod)}</span>
               <div class="male slaby">${samaGodzina(n.zamkniete_o)} ${escHtml(n.notatka || '')}</div>
               <div class="nu-dowody"></div>
-              <div class="przyciski" style="margin-top:6px"><button class="maly" data-do-trasy="${n.trasa}">Trasa</button></div>
+              <div class="przyciski" style="margin-top:6px"><button class="maly" data-do-trasy="${n.trasa}">Trasa</button>
+                ${podglad ? '' : `<button class="maly" data-na-jutro="${n.id}" data-trasa-kierowcy="${n.trasa}">Przenieś na jutro</button>`}</div>
             </div>`).join('')}
         </div>` : ''}
 
@@ -95,6 +98,7 @@ EKRANY.pulpit = {
     await rysujZywo(pole.querySelector('#p-zywo'), data);
     odswiezajZywo(data);
     wzbogacNieudane(pole.querySelector('#p-nieudane-karta'), nieudaneWidoczne);
+    podepnijPrzenosinyNaJutro(pole, p.trasy, () => pokazEkran('pulpit', { data }));
     if (!podglad) {
       podepnijFiltryPulpitu(pole, () => pokazEkran('pulpit', { data }));
       podepnijZatwierdzone(pole.querySelector('#p-zatwierdzone'));
@@ -135,7 +139,7 @@ EKRANY.pulpit = {
     // Najpierw NASZE miejsca (ciemne kwadraty), potem busy (zwykle pinezki).
     // Rozróżnienie jest po to, żeby na jednej mapie było widać, co jest
     // magazynem, a co jadącym samochodem.
-    API.get('/api/lokalizacje').then(lokalizacje => {
+    (kontoBiura() ? API.get('/api/lokalizacje') : Promise.resolve([])).then(lokalizacje => {
       stan.lokalizacje = lokalizacje;
       const dodatkowe = [];
       lokalizacje.filter(l => l.lat != null).forEach(l => {
@@ -350,7 +354,7 @@ function htmlFiltrowPulpitu(f) {
   const akt = k => (f[k] ? ' class="filtr-aktywny"' : '');
   return `<div class="filtry-listy${ile ? ' aktywne' : ''}" id="p-filtry" role="group" aria-label="Filtry i sortowanie Pulpitu">
       <div class="filtry-gora">
-        <span class="filtry-podsumowanie" style="font-weight:700">Filtry sekcji poniżej</span>
+        <span class="filtry-podsumowanie" style="font-weight:700">Filtry dostaw i tras niżej</span>
         ${ile ? `<span class="filtry-plakietka" title="Włączone filtry">${ile} ${odmiana(ile, 'filtr', 'filtry', 'filtrów')}</span>` : ''}
         <button type="button" class="maly filtry-wyczysc" data-pf-wyczysc${ile ? '' : ' disabled'}>Wyczyść</button>
       </div>
@@ -403,10 +407,6 @@ function kafelkiPulpitu(s) {
     braki = { ...braki, braki: brakiDoSprawdzenia(braki.braki) };
     if (!braki.braki.length && !(braki.spalanie || []).length) braki = null;
   }
-  (s.alarmy || []).forEach(a => lista.push({
-    kod: 'alarm', etykieta: a.tytul, opis: a.tresc || '', liczba: 1, klasa: a.poziom === 'blad' ? 'pilne' : 'uwaga',
-    doUstawien: a.kod || '',
-  }));
   if (s.zalegle && s.zalegle.length) lista.push({
     kod: 'zalegle', etykieta: 'Zaległe dostawy', liczba: s.zalegle.length, klasa: 'pilne', idzie: 'zalegle',
     opis: s.zalegle.slice(0, 3).map(z => z.klient_nazwa).join(', ') + (s.zalegle.length > 3 ? '…' : '') + ' — wyznacz nadrobienie',
@@ -427,6 +427,10 @@ function kafelkiPulpitu(s) {
     kod: 'do-zatwierdzenia', etykieta: 'Do zatwierdzenia', liczba: s.doPrzyjecia, klasa: 'uwaga',
     idzie: s.podglad ? null : 'przyjecie', opis: 'Dostawy zamknięte przez kierowców czekają na Twoją decyzję.',
   });
+  if (s.bezKierowcy) lista.push({
+    kod: 'bez-kierowcy', etykieta: 'Trasy bez kierowcy', liczba: s.bezKierowcy, klasa: 'uwaga',
+    idzie: s.podglad ? null : 'bez-kierowcy', dzien: s.data, opis: 'Przydziel kierowcę — otwiera listę tych tras.',
+  });
   if (braki) lista.push({
     kod: 'braki', etykieta: 'Do sprawdzenia', liczba: braki.braki.length,
     klasa: braki.braki.some(b => b.rodzaj === 'brak_raportu' || b.rodzaj === 'licznik') ? 'uwaga' : 'neutralne', idzie: 'braki',
@@ -435,6 +439,11 @@ function kafelkiPulpitu(s) {
   });
   lista.push({ kod: 'punkty', etykieta: s.dzisiaj ? 'Punkty na dziś' : 'Punkty tego dnia', liczba: s.punkty || 0, klasa: 'neutralne' });
   lista.push({ kod: 'dostarczone', etykieta: 'Dostarczone', liczba: s.dostarczone || 0, klasa: 'dobrze' });
+  // Alarmy administratora (kopie, tunel, dysk) pod liczbami dnia, jak w Panelu: liczby są tym, po co się otwiera Pulpit.
+  (s.alarmy || []).forEach(a => lista.push({
+    kod: 'alarm', etykieta: a.tytul, opis: a.tresc || '', liczba: 1, klasa: a.poziom === 'blad' ? 'pilne' : 'uwaga',
+    doUstawien: a.kod || '',
+  }));
   // Tak jak W.kafelkiDoPokazania w Panelu: zera to szum, w którym ginie jedyna ważna liczba.
   const widoczne = lista.filter(k => k.liczba > 0);
   // „Wszystko w porządku” dopiero, gdy wrócą wszystkie odpowiedzi — przed tym to byłoby zgadywanie.
@@ -470,10 +479,18 @@ function rysujKafelkiPulpitu() {
       else if (k.idzie === 'przyjecie') przewin('p-do-przyjecia');
       else if (k.idzie === 'zalegle') pokazEkran('zalegle');
       else if (k.idzie === 'odrzucone') pokazEkran('odrzucone');
+      else if (k.idzie === 'bez-kierowcy') pokazTrasyBezKierowcy(k.dzien);
       // ten sam zakres, żeby liczba z pulpitu zgadzała się z listą po kliknięciu
       else if (k.idzie === 'braki') pokazEkran('raporty', { od: k.od, do: k.do });
     };
   });
+}
+
+/* Kafelek „Trasy bez kierowcy” → lista dnia z filtrem „Bez kierowcy” + „planowana” (te same trasy co w kafelku; zakończone i
+   odwołane nie liczą się nigdzie). Filtr jest TYMCZASOWY: nie nadpisuje zapamiętanych filtrów osoby, pierwsza zmiana filtra
+   na liście zapisuje już to, co widać. */
+function pokazTrasyBezKierowcy(dzien) {
+  pokazEkran('trasy', { data: dzien, widok: 'dzien', filtrTymczasowy: { kierowca: '-', status: 'planowana' } });
 }
 
 function kafelek(napis, wartosc, kolor) {
@@ -533,6 +550,7 @@ EKRANY.trasy = {
     if (widok === 'lista') { await rysujListeTras(pole, data, kierowcy); return; }
     const filtr = await filtrAutaTras(trasy);
     const f = czytajFiltry('trasy');
+    if (param.filtrTymczasowy) Object.assign(f, { status: '', kierowca: '', auto: '', miejsce: '', od: '', do: '' }, param.filtrTymczasowy);
     const def = defFiltrowTras('dzien', trasy, kierowcy, filtr);
     const widoczne = odwolaneNaKoniec(zastosujFiltry(trasy, f, def.pola, AKCESORIA_TRAS));
     const bezFiltrow = !aktywneFiltry(f, def.pola).length;
@@ -543,6 +561,7 @@ EKRANY.trasy = {
         <button id="t-wczoraj">${ikonka('strzalka-lewo')}Poprzedni</button><button id="t-dzis"${data === dzisiaj() ? ' aria-current="date"' : ''}>Dziś</button><button id="t-jutro">Następny${ikonka('strzalka-prawo', 16, true)}</button>
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
         <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
+        ${kontoBiura() ? `<button id="t-powtorz" title="Kopiuje trasy ostatniego dnia, w którym były, na ${polskaData(data)}">${ikonka('powtarzaj')}Powtórz wczoraj</button>` : ''}
       </div>
       ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
@@ -563,10 +582,50 @@ EKRANY.trasy = {
     pole.querySelector('#t-dzis').onclick = () => pokazEkran('trasy', { data: dzisiaj() });
     pole.querySelector('#t-nowa').onclick = () => oknoNowejTrasy(data, kierowcy);
     pole.querySelector('#t-import').onclick = () => pokazEkran('import');
+    const powtorz = pole.querySelector('#t-powtorz');
+    if (powtorz) powtorz.onclick = async () => {
+      powtorz.disabled = true;
+      try { await powtorzPoprzedniDzien(data, trasy.filter(t => t.status !== 'odwolana').length); } finally { powtorz.disabled = false; }
+    };
     pole.querySelectorAll('[data-trasa]').forEach(b =>
       b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasa) }));
   },
 };
+
+/* „Powtórz wczoraj”: kopiuje na `naDzien` wszystkie trasy ostatniego dnia, w którym były (w poniedziałek to zwykle piątek;
+   szukamy do tygodnia wstecz). Każda trasa to osobna, zwykła kopia (`/kopiuj`, jak „Kopiuj na inny dzień”: punkty i kolejność,
+   bez potwierdzeń dostaw), więc działa też przez kolejkę podczas aktualizacji serwera. Dzień docelowy nie jest czyszczony. */
+let powtarzanieWToku = false;
+async function powtorzPoprzedniDzien(naDzien, ileJuzJest) {
+  if (powtarzanieWToku) return;           // podwójne kliknięcie nie robi drugiego kompletu kopii
+  powtarzanieWToku = true;
+  try { await powtorzTrasyZPoprzedniegoDnia(naDzien, ileJuzJest); } finally { powtarzanieWToku = false; }
+}
+
+async function powtorzTrasyZPoprzedniegoDnia(naDzien, ileJuzJest) {
+  const lista = await sprobuj(() => API.get(`/api/trasy?od=${przesunDate(naDzien, -7)}&do=${przesunDate(naDzien, -1)}`));
+  if (!lista) return;
+  const zrodlowe = lista.filter(t => t.status !== 'odwolana');
+  const dzien = zrodlowe.reduce((max, t) => (t.data > max ? t.data : max), '');
+  if (!dzien) { komunikat('W ostatnim tygodniu przed tym dniem nie było tras', 'uwaga'); return; }
+  const trasy = zrodlowe.filter(t => t.data === dzien);
+  const ile = trasy.length;
+  const ktory = dzien === przesunDate(naDzien, -1) ? 'wczorajszego dnia' : 'dnia ' + polskaData(dzien);
+  if (!await potwierdz('Powtórzyć trasy?',
+    `Skopiuję ${ile} ${odmiana(ile, 'trasę', 'trasy', 'tras')} z ${ktory} na ${polskaData(naDzien)}: punkty i kolejność, bez potwierdzeń dostaw.`
+    + (ileJuzJest ? ` Ten dzień ma już ${ileJuzJest} ${odmiana(ileJuzJest, 'trasę', 'trasy', 'tras')} — kopie dojdą obok.` : ''),
+    { tak: 'Skopiuj', nie: 'Anuluj' })) return;
+  let zrobione = 0;
+  for (const t of trasy) {
+    const nowa = await sprobuj(() => zapisBiura('POST', `/api/trasy/${t.id}/kopiuj`, { data: naDzien }, {
+      opis: `kopia trasy „${t.nazwa || polskaData(t.data)}” na ${polskaData(naDzien)}`,
+    }));
+    if (!nowa) { komunikat(`Skopiowano ${zrobione} z ${ile} tras — reszty nie udało się skopiować`, 'blad'); break; }
+    zrobione++;
+  }
+  if (zrobione === ile) komunikat(`Skopiowano ${zrobione} ${odmiana(zrobione, 'trasę', 'trasy', 'tras')} na ${polskaData(naDzien)}`, 'ok');
+  pokazEkran('trasy', { data: naDzien });
+}
 
 /* ------------------------------------------------------------ widok tygodnia */
 
@@ -741,7 +800,7 @@ function htmlFiltrow(f, def, ile, razem) {
     if (k === 'status') return nazwaOpcji(def.statusy, f.status);
     if (k === 'kierowca') return f.kierowca === '-' ? 'bez kierowcy' : nazwaOpcji(def.kierowcy, f.kierowca);
     if (k === 'auto') return f.auto === '-' ? 'bez auta' : nazwaOpcji(def.auta, f.auto);
-    return f.miejsce === '-' ? 'baza domyślna' : nazwaOpcji(def.miejsca, f.miejsce);
+    return f.miejsce === '-' ? 'domyślne miejsce' : nazwaOpcji(def.miejsca, f.miejsce);
   };
   const podsumowanie = aktywne.length
     ? aktywne.map(k => `${FILTRY_ETYKIETY[k]}: ${escHtml(opis(k))}`).join(' · ') : 'bez filtrów';
@@ -770,7 +829,7 @@ function htmlFiltrow(f, def, ile, razem) {
         ${wybor('status', def.statusy || [], 'Wszystkie')}
         ${wybor('kierowca', def.kierowcy || [], 'Wszyscy', 'Bez kierowcy')}
         ${wybor('auto', def.auta || [], 'Wszystkie auta', 'Bez auta')}
-        ${wybor('miejsce', def.miejsca || [], 'Wszystkie miejsca', 'Baza domyślna')}
+        ${wybor('miejsce', def.miejsca || [], 'Wszystkie miejsca', 'Domyślne miejsce')}
       </div>
     </div>`;
 }
@@ -1155,6 +1214,28 @@ function htmlDowodow(x, token, bezOdebralNotatki) {
     ${miniatury ? `<div class="dp-media">${miniatury}</div>` : ''}`;
 }
 
+/* „Przenieś na jutro” przy nieudanej dostawie: ta sama droga co „Zaległe dostawy → Przenieś zaznaczone” (zapisBiura, pyta
+   o ryzyko przy zapisach czekających w telefonie), z kierowcą trasy, na której punkt zawiódł. Punkt wraca na „oczekuje”.
+   Dzień to najbliższy dzień pracy zakładu po dzisiaj (Dni tygodnia, święta) — serwer go liczy; bez odpowiedzi: jutro. */
+function podepnijPrzenosinyNaJutro(pole, trasy, poZapisie) {
+  pole.querySelectorAll('[data-na-jutro]').forEach(b => b.onclick = async () => {
+    const punkt = Number(b.dataset.naJutro);
+    const trasa = (trasy || []).find(t => t.id === Number(b.dataset.trasaKierowcy)) || {};
+    let data = jutro();
+    try { data = (await API.get('/api/dzien-roboczy?po=' + dzisiaj())).data || data; } catch (e) { /* zostaje jutro */ }
+    if (!await potwierdz(data === jutro() ? 'Przenieść na jutro?' : 'Przenieść na najbliższy dzień pracy?',
+      `Punkt trafi na trasę ${polskaData(data)}${trasa.kierowca_imie ? ' — ' + trasa.kierowca_imie : ''}.`)) return;
+    const w = await zRyzykiemKolejki(
+      { punkty: [punkt], data, kierowca: trasa.kierowca || null },
+      d => zapisBiura('POST', '/api/zalegle/przenies', d, {
+        opis: 'przeniesienie nieudanej dostawy na ' + polskaData(data), zrodla: ['/api/zalegle'],
+      }));
+    if (!w) return;
+    komunikat(w.wKolejce ? KOMUNIKAT_KOLEJKI_BIURA : 'Przeniesione na ' + polskaData(data), 'ok');
+    poZapisie();
+  });
+}
+
 /* „Nieudane dostawy — do decyzji” na Pulpicie: powód i notatka były gołym tekstem. Doładowujemy dowody punktu (miniatury
    zdjęć i podpisu — te same funkcje co „Do zatwierdzenia”), z kliknięciem do powiększenia. Bez tokenu albo błędu
    zostaje to, co było. */
@@ -1328,10 +1409,69 @@ function grupyTrasWgAuta(trasy) {
 function kartyTrasWgAuta(trasy) {
   const grupy = grupyTrasWgAuta(trasy);
   // Bez nagłówków tylko gdy żadna trasa nie ma auta; jedno auto też dostaje nagłówek z nazwą.
-  if (!grupy.length || (grupy.length === 1 && !grupy[0].nazwa)) return trasy.map(t => kartaTrasy(t)).join('');
+  if (!grupy.length || (grupy.length === 1 && !grupy[0].nazwa)) return trasy.map(t => kartaTrasyZPrzydzialem(t)).join('');
   return grupy.map(g => `<div class="grupa-rozmiaru">
       <div class="grupa-rozmiaru-tytul">${escHtml(g.nazwa || 'Bez auta')} <span class="slaby">(${g.trasy.length})</span></div>
-      ${g.trasy.map(t => kartaTrasy(t)).join('')}</div>`).join('');
+      ${g.trasy.map(t => kartaTrasyZPrzydzialem(t)).join('')}</div>`).join('');
+}
+
+/* Karta trasy na listach biura z listami „Kierowca” i „Auto” pod spodem: przydział jednym wyborem, bez wchodzenia w trasę
+   (dawniej 4 kliknięcia). Zapis idzie tą samą drogą co „Zapisz zmiany” w trasie (zapisBiura, więc działa też w kolejce
+   podczas aktualizacji serwera), a serwer zmienia tylko to jedno pole. Trasy zakończone i odwołane są bez list;
+   konto „podgląd” też. */
+function kartaTrasyZPrzydzialem(t) {
+  const karta = kartaTrasy(t);
+  if (!kontoBiura() || t.status === 'zakonczona' || t.status === 'odwolana') return karta;
+  const auta = (stan.pojazdy || []).filter(b => b.aktywny || b.id === t.pojazd);
+  const kierowcy = (stan.kierowcy || []).slice();
+  if (t.kierowca && !kierowcy.some(k => k.id === t.kierowca)) kierowcy.push({ id: t.kierowca, imie: t.kierowca_imie || ('Konto nr ' + t.kierowca) });
+  return `<div class="trasa-z-przydzialem">${karta}
+      <div class="przydzial" data-przydzial="${t.id}" data-w-toku="${t.status === 'w_toku' ? '1' : ''}" data-zamkniete="${(t.ile_ok || 0) + (t.ile_nie || 0)}">
+        <label>Kierowca<select data-przydziel="kierowca">
+          <option value="">— nie przydzielono —</option>
+          ${kierowcy.map(k => `<option value="${k.id}"${t.kierowca === k.id ? ' selected' : ''}>${escHtml(k.imie)}</option>`).join('')}
+        </select></label>
+        <label>Auto<select data-przydziel="pojazd">
+          <option value="">— nie wybrano —</option>
+          ${auta.map(b => opcjaBusa(b, t.pojazd === b.id)).join('')}
+        </select></label>
+      </div>
+    </div>`;
+}
+
+/* Jeden słuchacz na całą stronę: listy tras rysują się od nowa przy każdym filtrze. */
+document.addEventListener('change', e => {
+  const wybor = e.target.closest && e.target.closest('[data-przydziel]');
+  if (wybor) zmienPrzydzial(wybor);
+});
+
+async function zmienPrzydzial(wybor) {
+  const wiersz = wybor.closest('[data-przydzial]');
+  const id = Number(wiersz.dataset.przydzial);
+  const pole = wybor.dataset.przydziel;
+  const wartosc = wybor.value ? Number(wybor.value) : null;
+  const wToku = !!wiersz.dataset.wToku;
+  const zamkniete = Number(wiersz.dataset.zamkniete) || 0;
+  // Zmiana kierowcy trasy z zamkniętymi punktami zeruje ich załadunek, a trasa w toku jedzie już u kogoś: pytamy jak przy ręcznym zapisie ryzyka.
+  const ryzyko = pole === 'kierowca' ? (wToku || zamkniete > 0) : wToku;
+  if (ryzyko && !await potwierdz(pole === 'kierowca' ? 'Zmienić kierowcę?' : 'Zmienić auto?',
+    wToku ? 'Ta trasa już jedzie — zmiana przełączy ją na inną osobę lub auto w trakcie dnia.'
+      : `Na tej trasie ${zamkniete} ${odmiana(zamkniete, 'punkt jest już zamknięty', 'punkty są już zamknięte', 'punktów jest już zamkniętych')} — zmiana kierowcy zeruje załadunek.`,
+    { tak: 'Zmień mimo to', nie: 'Wróć', groznie: true })) { odswiezEkran(); return; }
+  if (pole === 'pojazd' && wartosc && !await zgodaNaBus(wartosc)) { odswiezEkran(); return; }
+  const w = await sprobuj(() => zapisBiura('POST', '/api/trasy', { id, [pole]: wartosc }, {
+    opis: (pole === 'kierowca' ? 'zmiana kierowcy' : 'zmiana auta') + ' na trasie nr ' + id,
+    zrodla: ['/api/trasy/' + id],
+    popraw: (sciezka, d) => {
+      if (sciezka !== '/api/trasy/' + id && !sciezka.startsWith('/api/trasy?')) return;
+      const k = (stan.kierowcy || []).find(x => x.id === wartosc);
+      const b = (stan.pojazdy || []).find(x => x.id === wartosc);
+      wPamieci(d, id, x => Object.assign(x, pole === 'kierowca'
+        ? { kierowca: wartosc, kierowca_imie: k ? k.imie : null }
+        : { pojazd: wartosc, pojazd_nazwa: b ? b.nazwa : null, rejestracja: b ? b.rejestracja : null }));
+    },
+  }), 'Zapisano');
+  odswiezEkran();
 }
 
 function kartaTrasy(t) {
@@ -1506,9 +1646,9 @@ EKRANY.trasa = {
             <label>Godzina wyjazdu
               <input type="time" id="tr-wyjazd" value="${escHtml(t.wyjazd_o || '')}"
                      placeholder="${escHtml(t.wyjazd || '07:00')}"></label>
-            <label>Baza na tej trasie
+            <label>Miejsce wyjazdu na tej trasie
               <select id="tr-baza">
-                <option value="">— ${escHtml(t.baza_nazwa || 'baza domyślna')} —</option>
+                <option value="">— ${escHtml(t.baza_nazwa || 'domyślne miejsce')} —</option>
                 ${(stan.lokalizacje || []).filter(l => l.aktywna !== 0).map(l =>
                   `<option value="${l.id}" ${t.baza === l.id ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
               </select></label>
@@ -1551,7 +1691,7 @@ EKRANY.trasa = {
       ${t.szacunek ? `<div class="karta scisla">
         <div class="karta-gora"><h2 style="margin:0">Przewidywany czas realizacji</h2>
           <span class="plakietka ${t.szacunek.doba_przekroczona
-            || t.szacunek.limit_jazdy_przekroczony ? 'p-nieudane' : 'p-dostarczone'}">
+            || t.szacunek.limit_jazdy_przekroczony || t.szacunek.po_koncu_zmiany ? 'p-nieudane' : 'p-dostarczone'}">
             ${godzinyMinuty(t.szacunek.minuty)}</span></div>
         <div class="kafelki">
           <div><span class="etykieta">${t.szacunek.start_w_bazie ? 'Wyjazd z bazy' : 'Start'}</span>
@@ -1584,6 +1724,9 @@ EKRANY.trasa = {
             ? `<br><span style="color:var(--czerwony)"><b>Cały dzień przekracza
               ${godzinyMinuty(Number(stan.ustawienia.doba_pracy_min) || 780)}</b>
               od wyjazdu do powrotu.</span>` : ''}
+          ${t.szacunek.po_koncu_zmiany
+            ? `<br><span style="color:var(--czerwony)"><b>Trasa kończy się po końcu zmiany</b>
+              (${escHtml(t.szacunek.koniec_zmiany)}) — rozważ wcześniejszy wyjazd albo podział na dwie trasy.</span>` : ''}
           ${t.szacunek.bez_mapy ? `<br><span style="color:var(--zolty)">
             ${t.szacunek.bez_mapy} ${odmiana(t.szacunek.bez_mapy, 'punkt nie ma', 'punkty nie mają',
               'punktów nie ma')} odnalezionego adresu — szacunek ich nie obejmuje.</span>` : ''}
@@ -1902,6 +2045,19 @@ function punktZKlucza(klucz) {
   return { typ: klucz[0] === 'L' ? 'lokalizacja' : 'klient', id: Number(klucz.slice(1)) };
 }
 
+/* Przed dodaniem punktów: klienci, którzy mają już dostawę tego dnia na innej trasie. Pytanie, nie blokada —
+   dwa auta do jednego klienta bywają celowe (duży towar). Gdy nie da się zapytać (brak programu), dodajemy jak dotąd. */
+async function potwierdzDubleNaTrasie(idTrasy, wybrane) {
+  const klienci = wybrane.filter(k => k[0] === 'K').map(k => k.slice(1));
+  if (!klienci.length) return true;
+  let duble = [];
+  try { duble = (await API.get(`/api/trasy/${idTrasy}/duble?klienci=${klienci.join(',')}`)).duble || []; } catch (e) { return true; }
+  if (!duble.length) return true;
+  const opis = duble.map(d => `${d.klient_nazwa} — trasa „${d.trasa_nazwa || 'bez nazwy'}”${d.kierowca_imie ? ' (' + d.kierowca_imie + ')' : ''}`).join('; ');
+  return potwierdz('Klient już ma dostawę tego dnia',
+    `${opis}. Dodać na tę trasę mimo to?`, { tak: 'Dodaj mimo to', nie: 'Wróć' });
+}
+
 function kluczPunktu(p) {
   return p.nasze ? 'L' + p.lokalizacja : 'K' + p.klient;
 }
@@ -1917,7 +2073,7 @@ async function oknoDodawaniaKlientow(t) {
     tytul: 'Dodaj punkty do trasy',
     szerokie: true,
     tresc: `<input id="dk-szukaj" placeholder="Szukaj po nazwie, mieście, ulicy…" autocomplete="off">
-            <button type="button" class="tekstowy" id="dk-do-naszych" style="display:none">${ikonka('strzalka-dol')}Nasze miejsca</button>
+            <button type="button" class="tekstowy" id="dk-do-naszych" style="display:none">${ikonka('strzalka-dol')}Miejsca wyjazdu</button>
             <div id="dk-lista" style="margin-top:12px">${
               listaPunktowDoWyboru({ juz, wybrane, szukaj: '' })}</div>
             <label style="margin-top:10px">Wstaw
@@ -1928,7 +2084,7 @@ async function oknoDodawaniaKlientow(t) {
                     escHtml(x.klient_nazwa)}</option>`).join('')}
               </select></label>
             <div id="dk-rodzaj-blok" style="display:none;margin-top:10px">
-              <label>Nasze miejsca — co kierowca tam robi
+              <label>Miejsca wyjazdu — co kierowca tam robi
                 <select id="dk-rodzaj">${opcjeRodzajuNaszych('')}</select></label>
               <div class="male slaby" style="margin-top:8px">Kierowca ma podać:</div>
               <div id="dk-wymogi">${checkboxyWymogow('dk', '')}</div>
@@ -1943,6 +2099,7 @@ async function oknoDodawaniaKlientow(t) {
         // Wartości pól czytamy PRZED zamknięciem okna, bo potem pól już nie ma.
         const rodzajNaszych = (document.getElementById('dk-rodzaj') || {}).value || '';
         const wymogiNaszych = wymogiZPola(document, 'dk');
+        if (!await potwierdzDubleNaTrasie(t.id, wybrane)) return;
         z();
         const po = (document.getElementById('dk-gdzie') || {}).value || '';
         const tresc = po ? { punkty: wybrane.map(punktZKlucza), po: Number(po) }
@@ -2717,7 +2874,7 @@ EKRANY.klienci = {
     if (navigator.onLine) {
       try {
         stan.klienci = await API.get('/api/klienci' + (zUkrytymi ? '?wszyscy=1' : ''));
-        stan.ukryciKlienci = await API.get('/api/klienci/ukryci').catch(() => null);
+        stan.ukryciKlienci = kontoBiura() ? await API.get('/api/klienci/ukryci').catch(() => null) : null;
       } catch (e) { /* zostaje kopia */ }
     }
     const szukaj = (param.szukaj || '').toLowerCase();
@@ -2974,7 +3131,7 @@ function oknoKlienta(k) {
         if (w.schowany) {
           komunikat(`Wpis został schowany, nie skasowany — trzyma go `
             + `${w.dostaw} ${odmiana(w.dostaw, 'dostawa', 'dostawy', 'dostaw')} w historii.`
-            + (w.przeniesiony ? ' Sama lokalizacja jest w „Nasze lokalizacje”.' : ''), 'ok');
+            + (w.przeniesiony ? ' Samo miejsce jest w „Miejsca wyjazdu”.' : ''), 'ok');
         } else {
           komunikat('Klient usunięty', 'ok');
         }
@@ -3225,6 +3382,44 @@ function kartaFirmyUst(ustawienia) {
       </div>`;
 }
 
+const DNI_USTAWIEN = [[1, 'Poniedziałek'], [2, 'Wtorek'], [3, 'Środa'], [4, 'Czwartek'], [5, 'Piątek'], [6, 'Sobota'], [7, 'Niedziela']];
+
+/* Dni tygodnia (tylko Szef): czy pracujemy, o której domyślnie ruszają trasy i kiedy kończy się zmiana. Pusta godzina =
+   „jak dotąd” (wyjazd z pola wyżej, brak końca zmiany); bez zmian w tabeli ustawienie zostaje puste. */
+function kartaDniTygodniaUst(ustawienia) {
+  let plan = {};
+  try { plan = JSON.parse(ustawienia.dni_tygodnia || '{}') || {}; } catch (e) { plan = {}; }
+  return `<fieldset class="dni-tygodnia"><legend>Dni tygodnia</legend>
+      <p class="male slaby">Dzień pracy decyduje o propozycjach dat przy imporcie, o kalendarzu i o terminie układania tras.
+        Święta zostają wolne. Ostrzeżenie „po końcu zmiany” pokazuje się na trasie, gdy szacowany powrót wypada po tej godzinie.</p>
+      <table class="tabela-dni"><thead><tr><th>Dzień</th><th>Pracujemy</th><th>Wyjazd</th><th>Koniec zmiany</th></tr></thead><tbody>
+      ${DNI_USTAWIEN.map(([nr, nazwa]) => {
+        const wpis = plan[nr] || {};
+        const praca = typeof wpis.praca === 'boolean' ? wpis.praca : nr < 6;
+        return `<tr><th scope="row">${nazwa}</th>
+          <td><input type="checkbox" id="u-dt-praca-${nr}" aria-label="${nazwa}: pracujemy"${praca ? ' checked' : ''}></td>
+          <td><input type="time" id="u-dt-wyjazd-${nr}" aria-label="${nazwa}: godzina wyjazdu" value="${escHtml(wpis.wyjazd || '')}"></td>
+          <td><input type="time" id="u-dt-koniec-${nr}" aria-label="${nazwa}: koniec zmiany" value="${escHtml(wpis.koniec || '')}"></td></tr>`;
+      }).join('')}
+      </tbody></table></fieldset>`;
+}
+
+/* Z tabeli do zapisu: tylko odstępstwa od domyślnych (pracują pn–pt, godziny puste); same domyślne = puste ustawienie. */
+function zbierzDniTygodnia() {
+  const plan = {};
+  DNI_USTAWIEN.forEach(([nr]) => {
+    const wpis = {};
+    const praca = document.getElementById('u-dt-praca-' + nr).checked;
+    if (praca !== (nr < 6)) wpis.praca = praca;
+    const wyjazd = document.getElementById('u-dt-wyjazd-' + nr).value;
+    const koniec = document.getElementById('u-dt-koniec-' + nr).value;
+    if (wyjazd) wpis.wyjazd = wyjazd;
+    if (koniec) wpis.koniec = koniec;
+    if (Object.keys(wpis).length) plan[nr] = wpis;
+  });
+  return Object.keys(plan).length ? JSON.stringify(plan) : '';
+}
+
 function kartaGodzinUst(ustawienia) {
   return `
       ${zwin('Godziny dojazdu', '', `
@@ -3260,12 +3455,13 @@ function kartaGodzinUst(ustawienia) {
           nic, jeśli dostawę zdążono już zatwierdzić. Dotyka telefonów z włączonymi powiadomieniami.</p>
         <p class="male slaby">W ciągu dnia godziny liczą się od ostatniej zamkniętej dostawy,
           a nie od porannego planu — po pierwszym opóźnieniu reszta i tak byłaby nieprawdziwa.</p>
-        ${jestAdministratorem() ? `<label>Planowanie tras — termin (pełna godzina, 0–23)
+        ${jestAdministratorem() ? kartaDniTygodniaUst(ustawienia) : ''}
+        ${jestAdministratorem() ? `<label>Terminowość planowania — termin (pełna godzina, 0–23)
             <input type="number" id="u-plan-termin" min="0" max="23" step="1"
                    value="${escHtml(ustawienia.plan_termin_godz || '17')}">
-            <span class="male slaby">Raport „Planowanie tras”: trasa jest w terminie, gdy zaplanowano ją najpóźniej o tej
+            <span class="male slaby">Raport „Terminowość planowania”: trasa jest w terminie, gdy zaplanowano ją najpóźniej o tej
               godzinie poprzedniego dnia roboczego przed dniem jazdy. Zmienia tylko administrator.</span></label>`
-          : `<p class="male slaby">Raport „Planowanie tras”: termin to godzina ${escHtml(ustawienia.plan_termin_godz || '17')}:00
+          : `<p class="male slaby">Raport „Terminowość planowania”: termin to godzina ${escHtml(ustawienia.plan_termin_godz || '17')}:00
             poprzedniego dnia roboczego przed dniem jazdy (zmienia administrator).</p>`}
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}`;
 }
@@ -3644,6 +3840,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     ].forEach(([klucz, id]) => { if (jest(id)) daneUstawien[klucz] = val(id); });
     if (jest('u-push-zatw')) daneUstawien.push_do_zatwierdzenia = document.getElementById('u-push-zatw').checked ? '1' : '0';
     if (jest('u-przepisy')) daneUstawien.przerwy_wlaczone = document.getElementById('u-przepisy').checked ? '1' : '0';
+    if (jest('u-dt-praca-1')) daneUstawien.dni_tygodnia = zbierzDniTygodnia();
     if (jest('u-poczta-szyfrowanie')) daneUstawien.poczta_szyfrowanie = document.getElementById('u-poczta-szyfrowanie').value;
     if (jest('u-tunel-token')) {
       daneUstawien.tunel_tryb = (document.querySelector('input[name=tunel]:checked') || {}).value || 'brak';
@@ -4002,7 +4199,7 @@ function oknoKonta_admin(k) {
       <label>Telefon<input id="ko-telefon" value="${escHtml(k.telefon || '')}" inputmode="tel" ${blok}></label>
       <label>Domyślna baza wyjazdowa
         <select id="ko-baza">
-          <option value="">— domyślna baza firmy —</option>
+          <option value="">— domyślne miejsce wyjazdu —</option>
           ${(stan.lokalizacje || []).map(l =>
             `<option value="${l.id}" ${k.baza === l.id ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
         </select></label>
@@ -4068,7 +4265,7 @@ function oknoKontaZespolu(k) {
              autocomplete="off" placeholder="np. 600 100 200"></label>
       <label>Domyślna baza wyjazdowa
         <select id="kz-baza">
-          <option value="">— domyślna baza firmy —</option>
+          <option value="">— domyślne miejsce wyjazdu —</option>
           ${(stan.lokalizacje || []).map(l =>
             `<option value="${l.id}" ${k.baza === l.id ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
         </select></label>

@@ -111,8 +111,8 @@ async function oknoSzablonu(s, kierowcy, busy) {
               ${escHtml(b.nazwa)}</option>`).join('')}</select></label>
       </div>
       <div class="dwie">
-        <label>Baza na tej trasie
-          <select id="sb-baza"><option value="">— baza domyślna —</option>
+        <label>Miejsce wyjazdu na tej trasie
+          <select id="sb-baza"><option value="">— domyślne miejsce —</option>
             ${(stan.lokalizacje || []).filter(l => l.aktywna !== 0).map(l =>
               `<option value="${l.id}" ${s.baza === l.id ? 'selected' : ''}>
                 ${escHtml(l.nazwa)}</option>`).join('')}</select></label>

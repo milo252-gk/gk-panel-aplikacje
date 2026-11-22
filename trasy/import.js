@@ -316,7 +316,7 @@ function rysujKrokMapowania() {
         </label>
         <label>Skąd odbieramy towar
           <select id="im-baza">
-            <option value="">${miejscaOdbioru.length ? '— wybierz, skąd odbieramy —' : '— najpierw dodaj miejsce w „Nasze lokalizacje” —'}</option>
+            <option value="">${miejscaOdbioru.length ? '— wybierz, skąd odbieramy —' : '— najpierw dodaj miejsce w „Miejsca wyjazdu” —'}</option>
             ${miejscaOdbioru.map(l => `<option value="${l.id}" ${l.id === domyslneMiejsce ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
           </select>
           <span class="male slaby">plik tego nie mówi — potwierdź miejsce; stąd wyjeżdżają wszystkie trasy z pliku</span>

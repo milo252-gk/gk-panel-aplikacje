@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-cdaa99696bd6';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-ef0b3c830b77';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -522,6 +522,18 @@ tbody tr:hover{background:var(--hover-tlo)}
 .tabela-przewijana{overflow-x:auto; -webkit-overflow-scrolling:touch}
 
 /* ------------------------------------------------------------ przystanki */
+.dni-tygodnia{border:1px solid var(--ramka); border-radius:var(--promien); padding:8px 12px 12px; margin:10px 0}
+.tabela-dni{border-collapse:collapse; width:100%}
+.tabela-dni th,.tabela-dni td{padding:4px 6px; text-align:left; font-weight:400}
+.tabela-dni thead th{font-size:12px; color:var(--tekst-slaby)}
+.tabela-dni tbody th{font-weight:600; white-space:nowrap}
+.tabela-dni input[type=time]{min-height:var(--dotyk); width:100%; min-width:92px}
+.trasa-z-przydzialem{margin-bottom:10px}
+.trasa-z-przydzialem>.przystanek{margin-bottom:0}
+.przydzial{display:flex; flex-wrap:wrap; gap:8px 14px; padding:6px 12px 8px; background:var(--tlo-neutralne);
+  border:1px solid var(--ramka); border-top:0; border-radius:0 0 var(--promien) var(--promien)}
+.przydzial label{display:flex; flex-direction:column; gap:2px; font-size:12px; color:var(--tekst-slaby); flex:1 1 160px; min-width:0}
+.przydzial select{min-height:var(--dotyk); width:100%}
 .przystanek{
   display:flex; gap:12px; align-items:flex-start; background:var(--karta); border:1px solid var(--ramka);
   border-left:5px solid var(--ramka-mocna); border-radius:var(--promien); padding:13px;
@@ -832,7 +844,7 @@ body.okno-otwarte .mapa{visibility:hidden}
   .okno{border-radius:16px; max-height:88vh}
   .pasek-dolny{display:none}
   .komunikaty{bottom:18px}
-  .pasek-polaczenia{margin-left:224px; width:auto}
+  .pasek-polaczenia{margin-left:224px; width:calc(100% - 224px)}
   /* Wstęgi „Bez połączenia z programem” i zapisów biura wstawiają się przed <main>: bez tego zaczynały się pod menu. */
   #wstega-bez-programu,#wstega-zapisy-biura,#pasek-dzwieku{margin:12px 26px 0 250px}
 }

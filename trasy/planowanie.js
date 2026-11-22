@@ -1,4 +1,4 @@
-/* GK Trasy — ekran „Planowanie tras” (2026-11-19, decyzja właściciela): wynik pracy BIURA w planowaniu tras.
+/* GK Trasy — ekran „Terminowość planowania” (2026-11-19, decyzja właściciela): wynik pracy BIURA w planowaniu tras.
 
    Trasa liczy się „w terminie”, gdy po raz pierwszy zaplanowano ją (założona i z pierwszym punktem) najpóźniej o godzinie
    granicznej (domyślnie 17:00, ustawia administrator) poprzedniego DNIA ROBOCZEGO przed dniem jazdy. Wynik idzie na osobę,
@@ -7,7 +7,7 @@
    Tylko odczyt; CSV przez token pobrania (jak Raport pracy). Bez nowych kluczy pamięci. */
 
 EKRANY.planowanie = {
-  tytul: 'Planowanie tras',
+  tytul: 'Terminowość planowania',
   tylkoBiuro: true,
   async rysuj(pole) {
     const dzis = dzisiaj();
@@ -91,8 +91,8 @@ EKRANY.planowanie = {
       const z = MiaryTras.zakres(d.od, d.do);
       tresc.innerHTML = `
         <p class="slaby okres-opis">Dzień jazdy: ${escHtml(z.opis || '')}. Termin: ${escHtml(String(d.termin_godz))}:00 poprzedniego dnia roboczego
-          (w poniedziałek — piątek, po święcie — ostatni dzień roboczy przed nim).</p>
-        <div class="kafelki-liczb wskazniki-kafelki" aria-label="Planowanie tras — podsumowanie">
+          (wg ustawienia Dni tygodnia; po dniu wolnym — ostatni dzień roboczy przed nim).</p>
+        <div class="kafelki-liczb wskazniki-kafelki" aria-label="Terminowość planowania — podsumowanie">
           <div class="${escHtml(suma.w + suma.p ? '' : 'zero')}"><span class="etykieta">Trasy</span><b>${escHtml(String(suma.w + suma.p))}</b></div>
           <div class="${escHtml(suma.w ? 'dobrze' : 'zero')}"><span class="etykieta">W terminie</span><b>${escHtml(String(suma.w))}</b></div>
           <div class="${escHtml(suma.p ? 'pilne' : 'zero')}"><span class="etykieta">Późno</span><b>${escHtml(String(suma.p))}</b></div>

@@ -86,7 +86,7 @@ const Mapa = (() => {
     return '<div class="dymek-lokalizacji">'
       + '<img src="' + (marka === 'strefa' ? 'logo-strefa.jpg' : 'logo-gkf.png') + '" alt="">'
       + '<b>' + escHtml(l.nazwa) + '</b><br>' + escHtml(adresJednymCiagiem(l) || '')
-      + (l.domyslna ? '<br><i>domyślna baza firmy</i>' : '') + '</div>';
+      + (l.domyslna ? '<br><i>domyślne miejsce wyjazdu</i>' : '') + '</div>';
   }
 
   /* ------------------------------------------------- rejestr i zakładanie */
@@ -174,7 +174,7 @@ const Mapa = (() => {
     const bazaKoniec = o.bazaKoniec !== undefined ? o.bazaKoniec : o.baza;
     if (bazaStart) {
       znacznik(mapa, bazaStart, 'B', 'baza', 30,
-        escHtml(o.bazaNazwa || 'Baza / magazyn') + '<br><span class="male">start</span>');
+        escHtml(o.bazaNazwa || 'Miejsce wyjazdu') + '<br><span class="male">start</span>');
       punkty.push(bazaStart);
     }
 
@@ -196,7 +196,7 @@ const Mapa = (() => {
       const tenSam = bazaStart && bazaStart[0] === bazaKoniec[0] && bazaStart[1] === bazaKoniec[1];
       if (!tenSam) {
         znacznik(mapa, bazaKoniec, 'B', 'baza', 30,
-          escHtml(o.bazaNazwa || 'Baza / magazyn') + '<br><span class="male">powrót</span>');
+          escHtml(o.bazaNazwa || 'Miejsce wyjazdu') + '<br><span class="male">powrót</span>');
       }
       punkty.push(bazaKoniec);
     }
