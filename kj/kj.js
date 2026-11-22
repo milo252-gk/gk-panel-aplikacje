@@ -340,7 +340,7 @@
      dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
   /* D64: powiadomienia w Moim koncie — to samo miejsce co w Panelu, Liderze i UR (wcześniej „Więcej”). */
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
-    aplikacja: 'kj', komunikat: (t, r) => KJ.komunikat(t, r), wyloguj, odrzucone: () => KJ.idz('odrzucone'),
+    aplikacja: 'kj', komunikat: (t, r) => KJ.komunikat(t, r), wyloguj, odrzucone: () => KJ.idz('odrzucone'), instrukcja: 'instrukcja.html',
     dodatki: el => global.HalaKonto.powiadomienia(el, hala, {
       opis: 'Zlecenia od kierownika i alerty jakości — także przy zamkniętej aplikacji.', komunikat: (t, r) => KJ.komunikat(t, r) }) }));
 
@@ -450,6 +450,16 @@
     pokazSesje();
     // D64: pasek „Dźwięk powiadomień wyłączony — dotknij” jak w UR i Liderze (HalaDzwieki.pasek).
     if (global.HalaDzwieki) global.HalaDzwieki.pasek(hala);
+    global.HalaNaglowek.zamontuj(hala, { zrodla: () => [
+      ...global.HalaZlecenia.wierszeDla(hala, { dzial: 'kj' }).map(z => ({ grupa: 'Zlecenia', tytul: `${z.numer} · ${z.tytul}`,
+        opis: [z.maszyna, z.dlaKogo, z.zlecil].filter(Boolean).join(' · '), znacznik: z.etykieta, szukaj: z.opis,
+        otworz: () => { KJ.idz('zlecenia'); global.HalaNaglowek.zaznacz(z.id); } })),
+      ...W.listaAlertow({ alerty: hala.obiekty('alert'), slowniki: hala.slowniki, pracownicy: hala.pracownicy, teraz: hala.teraz() })
+        .map(a => ({ grupa: 'Alerty', tytul: `${a.numer} · ${a.tytul}`, znacznik: a.etykieta, otworz: () => KJ.idz('alerty') })),
+      ...W.listaReklamacji({ reklamacje: hala.obiekty('reklamacja'), slowniki: hala.slowniki, pracownicy: hala.pracownicy })
+        .map(r => ({ grupa: 'Reklamacje', tytul: `${r.numer} · ${r.wyrobNazwa || r.wyrob}`, opis: [r.klient, r.liniaNazwa].filter(Boolean).join(' · '),
+          znacznik: r.etykieta, otworz: () => KJ.idz('reklamacje') })),
+    ], podpowiedz: 'Wpisz numer, tytuł, wyrób, klienta albo osobę.', znak: 'numer, tytuł, wyrób, klient' });
     setTimeout(rysujPasek, LASKA_MS + 500);
     // Zegar zmiany i kolory planu zmieniają się z upływem czasu, nie tylko po zdarzeniu.
     setInterval(() => { rysujNaglowek(); if (KJ.biezacy && !KJ.biezacy.def.formularz) KJ.odswiez(); }, 60000);

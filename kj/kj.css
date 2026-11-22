@@ -32,8 +32,6 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
 
 .aplikacja { min-height: 100vh; display: flex; flex-direction: column; }
 /* Pasek górny (.naglowek), menu po lewej i dolny pasek: wygląd w hala.css (jak GK Trasy). Tu tylko układ treści paska. */
-.naglowek .kto { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.naglowek .kto span { opacity: .8; }
 
 .ekran { flex: 1; width: 100%; max-width: 720px; margin: 0 auto; box-sizing: border-box; padding: 12px 12px 96px; outline: none;
          overflow-wrap: anywhere; }   /* długi ciąg bez spacji (numer, wklejony tekst) nie może rozepchać ekranu w bok */
@@ -42,10 +40,6 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
    a treść szersza niż na telefonie. Logo stoi w menu, nie w nagłówku. */
 @media (min-width: 821px) {
   .ekran { max-width: none; padding: 22px 26px 40px; }   /* jak main w GK Trasy na komputerze */
-}
-
-@media (max-width: 420px) {
-  .naglowek .kto span { display: none; }
 }
 
 /* ---------------------------------------------------------------- klocki */

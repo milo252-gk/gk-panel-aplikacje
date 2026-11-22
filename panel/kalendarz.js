@@ -108,7 +108,7 @@
     const zlecone = (c.zlecone || []).map(z => `<li><span class="slaby">${esc(z.godz)}</span> <b>${esc(z.tytul)}</b> <span class="slaby">${esc(z.numer)} · ${esc(z.status)}${
       z.postep ? ` · ${P.ik('lista', 14)}${z.postep.gotowe}/${z.postep.wszystkie}` : ''}${z.stale ? ' · ' + P.ik('powtarzaj') : ''}</span></li>`).join('');
     el.innerHTML = `<h3>${c.przeszly ? 'Było zaplanowane' : 'Zaplanowane'}</h3>`
-      + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Nowe stałe zlecenie: Zapisane → „+ Nowe zapisane”.' : ''}</p>`)
+      + (wiersze || `<p class="pusto">${c.przeszly ? 'Tego dnia nic nie było zaplanowane.' : 'Nic zaplanowanego.'}${pisze ? ' Dodasz je w Zapisane → „+ Nowe”.' : ''}</p>`)
       + (zlecone ? `<h3>Zlecone tego dnia (${c.zlecone.length})</h3><ul class="kal-zlecone">${zlecone}</ul>` : '');
   }
 
@@ -166,7 +166,7 @@
         await zapiszHarmonogram(kod, h => W.przelaczDzien(h, data),
                                 b.dataset.akcja === 'pomin' ? `Pominięte ${+data.slice(8)}.${data.slice(5, 7)} — pozostałe dni bez zmian` : 'Przywrócone');
       if (b.dataset.akcja === 'zakoncz') {
-        if (!(await P.potwierdz('Zakończyć to zlecenie stałe?', `„${s.tytul}” — ostatni raz ${data}. Później serwer już go nie zleci; wcześniejsze zlecenia zostają.`, 'Zakończ'))) return;
+        if (!(await P.potwierdz('Zakończyć to zapisane zlecenie?', `„${s.tytul}” — ostatni raz ${data}. Później serwer już go nie zleci; wcześniejsze zlecenia zostają.`, 'Zakończ'))) return;
         await zapiszHarmonogram(kod, h => Object.assign(h, { do: data }), 'Zakończone po tym dniu');
       }
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }

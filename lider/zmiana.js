@@ -84,7 +84,7 @@
     const kto = W.nazwaPracownika(hala.pracownicy, wpis.autor);
     const glowna = {
       obchod: 'Skanuj QR — jestem na miejscu', proba: 'Wypełnij próbę', bhp: 'Zrób audyt BHP', obsada: 'Wpisz obsadę',
-      przekazanie: 'Przekaż zmianę', zadanie: 'Zrobione',
+      przekazanie: 'Napisz notatkę dla następnej zmiany', zadanie: 'Zrobione',
     }[p.typ] || 'Zrobione';
     const m = k.lista.mapa[p.id] || {};
     if (!m.zlecenie) { L.komunikat('Kierownik zmienił tę listę — pozycji już nie ma. Odśwież ekran.', 'blad', 'pozycja-zniknela'); return; }
@@ -161,7 +161,7 @@
   // ------------------------------------------------------------ przekazanie od poprzedniej zmiany
 
   function kartaPrzekazania(k) {
-    const prev = W.poprzedniaZmiana(k.zmiana, hala.slowniki.zmiany);
+    const prev = W.poprzedniaZmiana(k.zmiana, hala.slowniki.zmiany, hala.slowniki.plan_zmian);
     if (!prev) return '';
     const zlp = hala.obiekt('zmiana_linii', W.kluczZmiany(k.linia, prev));
     const p = zlp && zlp.dane && zlp.dane.przekazanie;
@@ -211,7 +211,7 @@
     const d = (k.zl && k.zl.dane) || {};
     const opis = wyslany ? `${L.ik('haczyk', 14)}${esc(W.godzina(d.czas_zamkniecia))}` : 'Na końcu';
     return `<li class="pozycja ostatni-krok stan-${wyslany ? 'wykonana' : 'czeka'}" data-a="raport" role="button" tabindex="0"
-          aria-label="Raport zmiany — ${wyslany ? 'wysłany ' + esc(W.godzina(d.czas_zamkniecia)) : 'na końcu listy, po wykonaniu zadań'}">
+          aria-label="Raport zmiany — ${wyslany ? 'wysłany ' + esc(W.godzina(d.czas_zamkniecia)) : 'na końcu listy, po zrobieniu pozycji'}">
           <span class="czas">—</span>
           <span class="ikona-typu" aria-hidden="true">${ikonaTypu('przekazanie')}</span>
           <span class="tresc">Raport zmiany</span>
@@ -219,7 +219,7 @@
         </li>`;
   }
 
-  /* Dział do wpisania w Panelu → Zlecenia → Zapisane → „+ Checklista” zależnie od roli (pusty ekran). */
+  /* Dział do wpisania w Panelu → Zlecenia → Zapisane → „+ Nowe” → „Checklista” zależnie od roli (pusty ekran). */
   function opisDzialuListy(pracownik) {
     const kat = W.kategorieOsoby(pracownik);
     return kat.length > 1 ? 'dział Lider GK albo Mistrz GK' : kat[0] === 'mistrz' ? 'dział Mistrz GK' : 'dział Lider GK';
@@ -255,7 +255,7 @@
         <article class="karta otwarcie">
           <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))}</p>
-          <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik układa ją w Panelu → Zlecenia → ${window.GKIkony ? window.GKIkony.html('zapisane', 16) + ' ' : ''}Zapisane → „+ Checklista”
+          <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik układa ją w Panelu → Zlecenia → ${window.GKIkony ? window.GKIkony.html('zapisane', 16) + ' ' : ''}Zapisane → „+ Nowe” → „Checklista”
             (${esc(opisDzialuListy(hala.pracownik))}) — pojawi się tu sama na początku zmiany.</p>
         </article>
         ${przyciskiZmiany([])}
@@ -268,8 +268,8 @@
     // Jedna czynność przejęcia całej checklisty działu na tę zmianę; potem — kto i o której (kierownik i admin widzą to samo).
     const przyjecie = !pr.stan ? '' : pr.moze && pr.doPrzyjecia.length
       ? `<article class="karta przyjecie"><p><b>${esc(pr.tekst)}</b></p>
-          ${pr.odrzucone ? `<p class="tekst-alarm" role="alert">Serwer nie przyjął zadań: ${esc(pr.odrzucone)}</p>` : ''}
-          <button type="button" class="glowny duzy szeroki" data-a="przyjmuje">Przyjmuję zadania</button>
+          ${pr.odrzucone ? `<p class="tekst-alarm" role="alert">Serwer nie przyjął zleceń: ${esc(pr.odrzucone)}</p>` : ''}
+          <button type="button" class="glowny duzy szeroki" data-a="przyjmuje">Przyjmuję zlecenia</button>
           ${pr.awaryjne ? '<button type="button" class="maly szeroki" data-a="bez-przyjecia">Pracuję bez przyjęcia</button>' : ''}</article>`
       : `<p class="slaby przyjecie" role="status">${esc(pr.tekst)}${pr.bezPrzyjecia ? ' · pracujesz bez przyjęcia' : ''}</p>`;
     const komplet = W.stanKonca(k.lista).komplet;
@@ -322,11 +322,11 @@
       const zd = await L.zapisz('zlecenie.przyjete', id, {});
       if (!zd) {
         przycisk.disabled = false;
-        L.komunikat('Nie udało się przyjąć zadań. Dotknij jeszcze raz.', 'blad');
+        L.komunikat('Nie udało się przyjąć zleceń. Dotknij jeszcze raz.', 'blad');
         return;
       }
     }
-    L.poZapisie('Zadania przyjęte');
+    L.poZapisie('Zlecenia przyjęte');
   }
   L.$('ekran-zmiana').addEventListener('keydown', ev => {
     const t = ev.target.closest('[data-pozycja],[data-a=raport]');

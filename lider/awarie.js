@@ -314,7 +314,7 @@
     const zakonczone = wiersze(a => W.zakonczonaNaZmianie(a, od));
     el.innerHTML = `
       <h2>Aktywne awarie <span class="slaby">${aktywne.length || ''}</span></h2>
-      ${aktywne.map(karta).join('') || `<p class="pusto ok">Brak aktywnych awarii${W.wieleLinii(hala.slowniki) ? ' na linii' : ''}</p>`}
+      ${aktywne.map(karta).join('') || `<p class="pusto ok">Brak aktywnych awarii${W.wieleLinii(hala.slowniki) ? ' na linii' : ''}. Gdy coś stanie, zgłoś awarię na górze ekranu.</p>`}
       ${zakonczone.length ? `<h2>Zakończone na tej zmianie</h2>${zakonczone.map(karta).join('')}` : ''}`;
     // Zdjęcia ze zgłoszenia (D47) — lokalne (jeszcze w kolejce) albo z huba; dotknięcie otwiera całe zdjęcie.
     for (const g of el.querySelectorAll('.galeria-awarii')) L.galeria(g, g.dataset.zdjecia.split(',').filter(Boolean));
@@ -329,6 +329,9 @@
   }
 
   // Wezwanie na każdym ekranie: naprawa czeka na potwierdzenie lidera.
+  /* Dla „Szukaj” w nagłówku: awarie widoczne dla tej osoby (jej linia i jej zgłoszenia), także zamknięte z ostatnich dni. */
+  L.awarieDoSzukania = () => wiersze();
+
   L.wezwania.push(() => wiersze(a => a.aktywny && a.status === 'oczekuje_potwierdzenia').map(w => ({
     klasa: 'ok', akcja: () => potwierdz(w.id),
     html: `<b>${esc(w.maszyna)} naprawiona</b> — potwierdź, że ${rusza()} ruszyła ›` })));

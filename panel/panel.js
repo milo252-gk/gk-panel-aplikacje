@@ -189,7 +189,7 @@
   // ------------------------------------------------------------ „Moje konto” (ikona osoby w pasku)
 
   const NAZWY_TYPOW = {
-    'awaria.zgloszona': 'Zgłoszenie awarii', 'zlecenie.utworzone': 'Nowe zlecenie', 'zlecenie.zamkniete': 'Zamknięcie zlecenia',
+    'awaria.zgloszona': 'Zgłoszenie awarii', 'zlecenie.utworzone': 'Nowe zlecenie', 'zlecenie.zamkniete': 'Odbiór zlecenia',
     'zlecenie.zwrocone': 'Zwrot zlecenia', 'zlecenie.anulowane': 'Odwołanie zlecenia', 'zlecenie.wykonane': 'Wykonanie zlecenia',
     'zlecenie.cofniete': 'Cofnięcie czynności na zleceniu',
     'zlecenie.zatwierdzone_automatycznie': 'Zatwierdzenie automatyczne', 'zlecenie.pozycja_odebrana': 'Odbiór pozycji checklisty', 'zlecenie.pozycja_zwrocona': 'Zwrot pozycji checklisty',
@@ -211,9 +211,11 @@
     HalaKonto.mojeKonto(hala, {
       aplikacja: 'panel', komunikat, wyloguj, odrzucone: pokazOdrzucone,
       // Instrukcja: krótka strona obok Panelu (instrukcja.html) — telefon z Pages nie ma Instrukcja.pdf z folderu programu. Dla każdej roli, też ekranu.
+      instrukcja: 'instrukcja.html',
       dodatki: el => {
-        el.innerHTML = `${ekran ? '' : '<div id="konto-powiadomienia"></div>'}<a class="przycisk" id="konto-instrukcja" href="instrukcja.html" target="_blank" rel="noopener">Instrukcja</a>`;
-        if (!ekran) HalaKonto.powiadomienia(el.firstChild, hala, { opis: 'Gdy Twoje zlecenie jest po terminie — także przy zamkniętym Panelu.', komunikat });
+        if (ekran) return;
+        el.innerHTML = '<div id="konto-powiadomienia"></div>';
+        HalaKonto.powiadomienia(el.firstChild, hala, { opis: 'Gdy Twoje zlecenie jest po terminie — także przy zamkniętym Panelu.', komunikat });
       },
     });
   }
@@ -275,6 +277,7 @@
     return { admin: role.includes('admin'), zespol: HalaZespol.zarzadzaKontami(role, (hala.kontrakt || {}).stale),
              szablony: role.some(r => zapisSzablonow.includes(r)), urlopy: role.some(r => zapisUrlopow.includes(r)),
              maszyny: role.some(r => zapisMaszyn.includes(r)),
+             plan: W.obslugujeZmianyWgDni(hala.kontrakt) && role.some(r => ((((hala.kontrakt || {}).slowniki || {}).plan_zmian || {}).zapis || []).includes(r)),
              // kody.dostepne(): kierownik albo administrator; analityka (Wskaźniki, Raporty): to samo grono (pokazAnalityke).
              kody: role.some(r => r === 'kierownik' || r === 'admin'), analityka: role.some(r => r === 'kierownik' || r === 'admin') };
   };
@@ -336,7 +339,7 @@
   function rysujNaglowek(d) {
     const z = W.opisBiezacejZmiany(d.zmiana, d.teraz);
     $('zmiana').innerHTML = z
-      ? `<b>${esc(z.nazwa)}</b> <span>${esc(z.od)}–${esc(z.do)}</span> <span class="slaby">zostało ${esc(Hala.formatCzasu(z.zostaloMs))}</span>`
+      ? `<b>${esc(z.nazwa)}</b> <span>${esc(z.od)}–${esc(z.do)}</span> <span class="slaby">${z.pozaPlanem ? 'Poza planem zakładu' : `zostało ${esc(Hala.formatCzasu(z.zostaloMs))}`}</span>`
       : '<span class="slaby">Poza zmianą</span>';                // D64: ten sam tekst co Lider, UR i KJ
     $('zegar').textContent = W.godzina(d.teraz);
   }
@@ -844,7 +847,7 @@
       const w = await hala.pobierzStan('zlecenie', { aktywne: 0, od, limit: 5000 });
       starsze = { od, lista: w.obiekty || [], wczytuje: false };
       const uciete = W.komunikatUciecia(w);
-      if (uciete) komunikat('Zamknięte zlecenia: ' + uciete, 'uwaga');
+      if (uciete) komunikat('Odebrane zlecenia: ' + uciete, 'uwaga');
     } catch (e) { starsze.wczytuje = false; komunikat('Starszych zleceń nie wczytano — ' + komunikatBledu(e), 'uwaga'); }
     narysuj();
   }
@@ -966,8 +969,7 @@
     const ZG = Panel.widoki.zgloszenia;
     for (const t of ['biezace', 'stale', 'kalendarz']) $(`zlecenia-${t}`).hidden = trybZlecen !== t;
     $('nowe-zlecenie').hidden = !(trybZlecen === 'biezace' && mozeWyslac('zlecenie.utworzone'));
-    $('nowe-stale').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
-    $('nowa-checklista-zlecen').hidden = $('nowe-stale').hidden;
+    $('nowe-menu').hidden = !(trybZlecen === 'stale' && mozeZapisacStale());
     $('zlecenia-czysc').hidden = !(trybZlecen === 'biezace' && Panel.widoki.czyszczenie && Panel.widoki.czyszczenie.dostepne());
     // D71: 📅 Kalendarz — miesiąc zleceń stałych i zaplanowanych (kalendarz.js).
     if (trybZlecen === 'kalendarz') {
@@ -1299,8 +1301,8 @@
     if (!((Hala.odbiorPozycji((po && po.dane) || {}).pozycje[pozycja] || {}).odebrana)) return;
     if (W.czyZamknacPoOdbiorze(hala.obiekt('zlecenie', id))) {
       const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.zamkniete', id, {},
-        { tekst: 'Odebrane wszystkie pozycje — zlecenie zamknięte.', komunikat, cofnieto: t => komunikat(t, 'ok') });
-      if (!pasek) komunikat('Odebrane wszystkie pozycje — zlecenie zamknięte', 'ok');
+        { tekst: 'Odebrane wszystkie pozycje.', komunikat, cofnieto: t => komunikat(t, 'ok') });
+      if (!pasek) komunikat('Odebrane wszystkie pozycje', 'ok');
     } else {
       const z = hala.obiekt('zlecenie', id), o = Hala.odbiorPozycji((z && z.dane) || {});
       komunikat(`Pozycja odebrana (${o.odebrane}/${o.wszystkie})`, 'ok');
@@ -1338,7 +1340,7 @@
       if (b.dataset.akcja === 'zamknij') {
         // Etap 6c: bez pytania — pasek „Odebrane. Cofnij” (kilka sekund); starszy serwer bez cofania dostaje zwykły komunikat.
         const { pasek } = await window.HalaDzialania.zapiszZCofnieciem(hala, 'zlecenie.zamkniete', id, {}, { komunikat, cofnieto: t => komunikat(t, 'ok') });
-        if (!pasek) komunikat(/^Odbierz/.test(b.textContent.trim()) ? 'Odebrane — zlecenie zamknięte' : 'Zamknięte', 'ok');
+        if (!pasek) komunikat('Odebrane', 'ok');
       }
       if (b.dataset.akcja === 'anuluj') {
         const powod = await Panel.zapytajTekst({ tytul: 'Odwołać zlecenie?', etykieta: 'Dlaczego? (można zostawić puste)', przycisk: 'Odwołaj zlecenie', wstecz: 'Nie' });
@@ -1436,7 +1438,7 @@
     const w = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
     $('zlecenie-plan-opis').textContent = !naPozniej ? '' : !fz.plan_dzien.value ? (plan ? 'Wybierz dzień startu.' : 'Puste = zlecenie idzie do działu od razu.')
       : w.blad ? w.blad : `Dział zobaczy je ${w.opis} i wtedy dostanie powiadomienie.`;
-    fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz zmiany' : fz.plan_dzien.value ? 'Zaplanuj' : 'Zleć';
+    fz.querySelector('button[type="submit"]').textContent = plan ? 'Zapisz' : fz.plan_dzien.value ? 'Zaplanuj' : 'Zleć';
   }
   /* D55: „Dla kogo” — osoby działu do zaznaczenia (każda dostaje własne zlecenie); „Na zmianę” — zmiany ze słownika. */
   /* D56: maszyny zlecenia jako lista do zaznaczenia (kilka naraz); ukryte pole „maszyna” = pierwsza zaznaczona (skan, plan). */

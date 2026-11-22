@@ -19,7 +19,7 @@
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Reklamacje</h1>
           ${KJ.mozna('reklamacja.zarejestrowana') ? '<a class="przycisk glowny" href="#reklamacja-nowa">+ Nowa reklamacja</a>' : ''}</div>
-        <div class="lista">${otwarte.map(karta).join('') || '<p class="pusto ok">Brak otwartych reklamacji</p>'}</div>
+        <div class="lista">${otwarte.map(karta).join('') || `<p class="pusto ok">Brak otwartych reklamacji.${KJ.mozna('reklamacja.zarejestrowana') ? ' Zarejestruj nową przyciskiem „+ Nowa reklamacja”.' : ''}</p>`}</div>
         ${zamkniete.length ? `<details class="archiwum"><summary>Zamknięte (${zamkniete.length})</summary><div class="lista">${zamkniete.map(karta).join('')}</div></details>` : ''}`;
     },
   });

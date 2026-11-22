@@ -19,7 +19,7 @@
   const ctx = o => {
     // Zapamiętanej zmiany nie da się odtworzyć (ktoś zmienił godziny zmian) → kontekst bez zmiany, a wysyłka zatrzymuje się
     // na brakZmiany. Wcześniej L.kontekst(null) brał po cichu bieżącą zmianę — raport zmiany I szedł do zmiany II.
-    const z = W.zmianaFormularza(o.zmianaId, hala.slowniki.zmiany, hala.zmianaTeraz());
+    const z = W.zmianaFormularza(o.zmianaId, hala.slowniki.zmiany, hala.zmianaTeraz(), hala.slowniki.plan_zmian);
     return z ? L.kontekst(z, o.linia) : { linia: o.linia, zmiana: null, klucz: null, zl: null };
   };
   function ustalKontekst(o) {
@@ -84,10 +84,10 @@
         </fieldset>
         <div class="pole-zdjec"></div>
         <details class="wiecej" ${wiecejOtwarte ? 'open' : ''}><summary>Więcej</summary>
-          <fieldset><legend>Zlecenie</legend>
+          <fieldset><legend>Zlecenie produkcyjne</legend>
             <div class="pole-zlecenia"></div>
-            <div class="rzad"><input name="numer" placeholder="Numer zlecenia (opcjonalnie)" autocapitalize="characters">
-            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia">${L.ik('skan', 20)}</button></div>
+            <div class="rzad"><input name="numer" placeholder="Numer zlecenia produkcyjnego (opcjonalnie)" autocapitalize="characters">
+            <button type="button" data-skan="numer" aria-label="Skanuj numer zlecenia produkcyjnego">${L.ik('skan', 20)}</button></div>
           </fieldset>
           <label>Wnioski<textarea name="wnioski" rows="2" maxlength="2000"></textarea></label>
           <label>Działania korygujące<textarea name="dzialania" rows="2" maxlength="2000"></textarea></label>
@@ -125,7 +125,7 @@
         rysujWady();
         form.querySelectorAll('[data-skan]').forEach(b => b.addEventListener('click', async () => {
           if (b.dataset.skan === 'numer') {
-            const t = await HalaSkaner.skanuj({ tytul: 'Zeskanuj numer zlecenia' });
+            const t = await HalaSkaner.skanuj({ tytul: 'Zeskanuj numer zlecenia produkcyjnego' });
             if (t) { d.numer = t; form.numer.value = t; f.zmieniono(); }
             return;
           }
@@ -492,7 +492,7 @@
     const koniec = W.stanKonca(k.lista && ((k.lista.dane || {}).pozycje || []).length ? k.lista : k.zl);
     const wyslany = W.mojRaportWyslany(k.zl, hala.pracownik, hala.pracownicy);
     if (koniec.brakuje && !wyslany && !o.wznowione
-        && !(await L.potwierdz(koniec.pytanie, koniec.opis, 'Zakończ zmianę', 'Wróć'))) return;
+        && !(await L.potwierdz(koniec.pytanie, koniec.opis, 'Zamknij zmianę', 'Wróć'))) return;
     const f = await L.formularz('raport:' + k.klucz, { uwagi: (k.zl && k.zl.dane && k.zl.dane.raport && k.zl.dane.raport.uwagi) || '' });
     const r = zbudujRaport(k, f.dane.uwagi);
     const bezPrzekazania = !(k.zl && k.zl.dane && k.zl.dane.przekazanie);
@@ -500,7 +500,7 @@
       tytul: 'Raport zmiany', klucz: 'raport', parametry: o,
       html: `<p class="slaby">${esc(W.opisZmiany(k.zmiana.id, hala.slowniki))} · ${esc(W.nazwaLinii(hala.slowniki, k.linia))}</p>
         ${wyslany ? `<p class="ok-tekst">Raport wysłany ${esc(W.godzina(k.zl.dane.czas_zamkniecia))}. Możesz wysłać poprawiony.</p>` : ''}
-        ${bezPrzekazania ? `<div class="ostrzezenie">Nie ma przekazania zmiany dla następnego lidera.
+        ${bezPrzekazania ? `<div class="ostrzezenie">Nie ma notatki dla następnej zmiany.
             <button type="button" data-a="przekazanie">Najpierw przekazanie</button></div>` : ''}
         ${opisRaportu(r, k)}
         <form class="formularz">
@@ -559,7 +559,7 @@
     rysuj(el) {
       const k = L.kontekst();
       // Zmiany tej linii bez raportu z ostatnich 24 h — każdy lider tej linii albo mistrz może je zamknąć (W.zalegleRaporty).
-      const zalegle = W.zalegleRaporty(hala.obiekty('zmiana_linii'), { linia: k.linia, teraz: hala.teraz(), zmiany: hala.slowniki.zmiany,
+      const zalegle = W.zalegleRaporty(hala.obiekty('zmiana_linii'), { linia: k.linia, teraz: hala.teraz(), zmiany: hala.slowniki.zmiany, plan: hala.slowniki.plan_zmian,
                                                                         pracownik: hala.pracownik, kontrakt: hala.kontrakt });
       el.innerHTML = zalegle.map(x => kartaKonca(L.kontekst(x.zmiana, k.linia), 'Zmiana bez raportu')).join('')
         + (k.zmiana ? kartaKonca(k, 'Ta zmiana') : '<p class="pusto">Poza godzinami zmian.</p>');

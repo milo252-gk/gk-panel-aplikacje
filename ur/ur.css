@@ -33,8 +33,6 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
 
 .aplikacja { min-height: 100vh; display: flex; flex-direction: column; }
 /* Pasek górny (.naglowek), menu po lewej i dolny pasek: wygląd w hala.css (jak GK Trasy). Tu tylko układ treści paska. */
-.naglowek .kto { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.naglowek .kto span { opacity: .8; }
 
 .ekran { flex: 1; width: 100%; max-width: 720px; margin: 0 auto; box-sizing: border-box; padding: 12px 12px 96px; outline: none; }
 
@@ -42,10 +40,6 @@ h2 { font-size: 1em; margin: 16px 0 8px; }
    a treść szersza niż na telefonie. Logo stoi w menu, nie w nagłówku. */
 @media (min-width: 821px) {
   .ekran { max-width: none; padding: 22px 26px 40px; }   /* jak main w GK Trasy na komputerze */
-}
-
-@media (max-width: 420px) {
-  .naglowek .kto span { display: none; }
 }
 
 /* ---------------------------------------------------------------- klocki */
@@ -164,9 +158,6 @@ body.kpi-ur .tylko-kpi { display: flex !important; }
 .plakietka { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
   border-radius: 10px; background: var(--czerwony); color: var(--na-barwie); font-size: .95em; line-height: 20px; text-align: center; }
 
-/* Prośba o dźwięk: przeglądarka gra dopiero po pierwszym dotknięciu strony. UI etap 3: pasek duży, z ikoną glos-wyl, przyklejony
-   u góry — wcześniej cienki żółty napis łatwo było przeoczyć, a mechanik bez dźwięku nie usłyszy awarii. */
-/* Pasek „Dźwięk powiadomień wyłączony” — wspólny styl .hala-dzwonek w hala.css (D64). */
 /* UI etap 4: nazwa zmiany z godzinami nie może się uciąć („Zmiana II 14…”) — na 390 px mieści się w całości. */
 .naglowek .zmiana { flex: 0 0 auto; }
 

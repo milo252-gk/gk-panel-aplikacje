@@ -27,7 +27,7 @@
         || '<span class="slaby">Brak maszyn — dodaj je w Administracja → Maszyny.</span>'}</div></fieldset>`;
   }
 
-  /* f — formularz okna; o: { lista: element z wierszami, linia: () => kod linii albo '', zmianaOd: () => 'HH:MM' pierwszej
+  /* f — formularz okna; o: { lista: element z wierszami, wklej: pole „Wklej listę” (nieobowiązkowe), linia: () => kod linii albo '', zmianaOd: () => 'HH:MM' pierwszej
      zaznaczonej zmiany, zmiana: () => odświeżenie okna, instancja: () => czy trwa edycja zlecenia (godzin nie zmieniamy) }. */
   // Czynność pozycji → ikona liniowa z gk-ikony.js (obchód to ▣ — znak skanu QR, jak na naklejkach).
   const IKONA_CZYNNOSCI = { obsada: 'konta', proba: 'proba', bhp: 'ratunek', przekazanie: 'zlecenia', przeglad: 'przeglady' };
@@ -117,6 +117,37 @@
       odswiez();
     });
     f.addEventListener('input', ev => { if (lista.contains(ev.target)) odswiez(); });
+
+    /* Pozycje z wklejonego tekstu (jedna w wierszu): zajmują puste wiersze od początku, reszta dochodzi na końcu. */
+    function dodajZTekstu(tekst) {
+      const nowe = W.pozycjeZTekstu(tekst);
+      if (!nowe.length) return 0;
+      const obecne = odczytaj();
+      const wolne = obecne.filter(p => !String(p.nazwa || '').trim());
+      rysuj([...obecne.filter(p => String(p.nazwa || '').trim()), ...nowe.map(p => Object.assign({}, wolne.shift() || {}, p))]);
+      return nowe.length;
+    }
+    /* Enter w nazwie dodaje pozycję pod bieżącą (zamiast zapisywać formularz); w pustej nic nie robi. */
+    f.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter' || !ev.target.matches || !ev.target.matches('.pozycja-checklisty .nazwa, .pozycja-checklisty .godzina')) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      const w = ev.target.closest('.pozycja-checklisty');
+      if (ev.target.matches('.godzina')) { w.querySelector('.nazwa').focus(); return; }
+      if (!ev.target.value.trim()) return;
+      w.insertAdjacentHTML('afterend', wiersz({}));
+      w.nextElementSibling.querySelector('.godzina').focus();
+      odswiez();
+      if (o.zmiana) o.zmiana();
+    }, true);
+    /* Wklejenie kilku wierszy do nazwy rozkłada je na pozycje — bez klikania „Wklej listę”. */
+    f.addEventListener('paste', ev => {
+      const pole = ev.target.closest && ev.target.closest('.pozycja-checklisty .nazwa');
+      const tekst = (ev.clipboardData && ev.clipboardData.getData('text')) || '';
+      if (!pole || !/\r?\n.*\S/.test(tekst.trim())) return;
+      ev.preventDefault();
+      if (dodajZTekstu(tekst) && o.zmiana) o.zmiana();
+    });
     f.addEventListener('click', ev => {
       const b = ev.target.closest('button');
       if (!b) return;
@@ -135,6 +166,18 @@
       } else if (b.hasAttribute('data-dodaj-pozycje')) {
         lista.insertAdjacentHTML('beforeend', wiersz({}));
         lista.lastElementChild.querySelector('.nazwa').focus();
+      } else if (b.hasAttribute('data-wklej-liste') || b.hasAttribute('data-wklej-anuluj')) {
+        const otwarte = b.hasAttribute('data-wklej-liste') && o.wklej.hidden;
+        o.wklej.hidden = !otwarte;
+        f.querySelector('[data-wklej-liste]').setAttribute('aria-expanded', String(otwarte));
+        if (otwarte) o.wklej.querySelector('textarea').focus();
+        return;
+      } else if (b.hasAttribute('data-wklej-dodaj')) {
+        const pole = o.wklej.querySelector('textarea');
+        dodajZTekstu(pole.value);
+        pole.value = '';
+        o.wklej.hidden = true;
+        f.querySelector('[data-wklej-liste]').setAttribute('aria-expanded', 'false');
       } else return;
       odswiez();
       if (b.dataset.ruch && b.isConnected) b.focus();                  // klawiatura i czytnik ekranu nie tracą miejsca po przesunięciu

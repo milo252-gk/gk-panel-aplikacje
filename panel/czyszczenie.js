@@ -16,7 +16,7 @@
 
   const GRUPY = [['zakonczone', 'Zakończone'], ['w_toku', 'W toku'], ['wszystkie', 'Wszystkie']];
   const WIEK = [['', 'kiedykolwiek'], ['dzis', 'sprzed dzisiaj'], ['7', 'starsze niż 7 dni'], ['30', 'starsze niż 30 dni']];
-  const STATUSY = { zamkniete: 'Zamknięte', anulowane: 'Odwołane', przepadlo: 'Przepadło', nowe: 'Nowe', przyjete: 'Przyjęte',
+  const STATUSY = { zamkniete: 'Odebrane', anulowane: 'Odwołane', przepadlo: 'Przepadło', nowe: 'Nowe', przyjete: 'Przyjęte',
                     wykonane: 'Zrobione — czeka na odbiór', odrzucone: 'Dział nie może', rozdzielone: 'Rozdzielone' };
   const KONCOWE = new Set(['zamkniete', 'anulowane', 'przepadlo']);
 

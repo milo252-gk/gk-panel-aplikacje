@@ -12,6 +12,8 @@
      „🖨 Drukuj etykiety” drukuje naklejki QR (dawny chip „Etykiety QR” — te same opcje i ten sam druk).
    Nazwy chipów od 2026-11-10 (właściciel: jedna nazwa „Ustawienia” w całej rodzinie); kody części w kodzie bez zmian:
    - „Progi i godziny” (kod 'ustawienia'): progi alarmów i sieć zakładu (hub sprawdza zakresy przy zapisie), godziny zmian.
+   - „Plan zmian” (kod 'plan', D95; Menedżer i Kierownik zakładu): siatka dzień × zmiana, własne godziny zmiany w dniu, dni inne niż
+     zwykle (daty), podgląd „co się zmieni” w zleceniach stałych. Zapis: słownik plan_zmian.
    - „Ustawienia” (kod 'serwis', dawny Serwis) — dwie zwijane części, nad nimi niezwinięty alarm „Sieć zakładu”, pod nimi formularze
      „Tunel i GitHub” oraz „Kopie poza komputerem” (etap 2: folder, przechowywanie zdjęć, „Zrób kopię teraz” — GET/POST
      /api/v1/admin/kopie), przeniesione z dawnych Ustawień, bo to ustawienia techniczne:
@@ -128,6 +130,7 @@
     else if (czesc === 'logowania') rysujLogowania(el);
     else if (czesc === 'kody') rysujKody(el);
     else if (czesc === 'serwis') rysujSerwis(el);
+    else if (czesc === 'plan') rysujPlan(el);
     else rysujUstawienia(el);
   }
 
@@ -141,7 +144,7 @@
     if (el.querySelector('[data-karta="dane"]')) return;
     el.innerHTML = `<section class="admin-linia" data-karta="dane">
         <h3>Czyszczenie zleceń</h3>
-        <p class="slaby">Usuwa wybrane zlecenia (albo całą historię sprzed wybranej chwili) z Panelu i telefonów. Zapisanych zleceń stałych nie rusza.
+        <p class="slaby">Usuwa wybrane zlecenia (albo całą historię sprzed wybranej chwili) z Panelu i telefonów. Zapisanych zleceń nie rusza.
           Serwer najpierw robi pełną kopię bazy (folder Odlozone na serwerze: 5 ostatnich, najwyżej 90 dni; zawiera też klucze i skróty haseł) i po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → Czyszczenie.</p>
         <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-czyszczenie">${P.ik('czyszczenie')}Czyszczenie zleceń</button></div>
       </section>
@@ -505,7 +508,7 @@
           w.dane.aktywny === false ? 'Wyłącz' : 'Odbierz'))) return;
     // Etap 3: osoba zleca zlecenia stałe — po wyłączeniu (albo bez roli kierownika) hub przestanie je zlecać.
     const ostrz = W.ostrzezenieAutora(hala.slowniki, edytowany, w.dane, ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || []);
-    if (ostrz && !(await P.potwierdz('Zlecenia stałe tej osoby', ostrz, 'Zapisz mimo to'))) return;
+    if (ostrz && !(await P.potwierdz('Zapisane zlecenia tej osoby', ostrz, 'Zapisz mimo to'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/pracownik', w.dane);
       $('okno-osoby').close();
@@ -689,6 +692,101 @@
         blad.className = wynik.klasa; blad.textContent = wynik.tekst;
       } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
     });
+  }
+
+  // ------------------------------------------------------------ plan zmian zakładu (D95)
+
+  /* Które zmiany pracują w który dzień — Menedżer i Kierownik zakładu. Brak ustawień = jak dotąd (wszystkie zmiany codziennie).
+     Plan niczego nie blokuje: praca poza planem dalej się zapisuje (Poza planem zakładu); plan zawęża tylko zlecenia stałe i
+     checklisty „codziennie”, a „Zleć teraz” działa zawsze. Wiersze z liczeniem — W.planDoFormularza, W.planZeStanu,
+     W.skutkiPlanu (panel/web/widok.js, testy w widok-testy.js). */
+  function rysujPlan(el) {
+    const zmiany = (hala.slowniki && hala.slowniki.zmiany) || {};
+    const nry = Object.keys(zmiany);
+    const obecny = (hala.slowniki && hala.slowniki.plan_zmian) || {};
+    const stan0 = W.planDoFormularza(obecny, zmiany);
+    const wiersze = w => nry.map(nr => {
+      const g = (w.godziny || {})[nr] || {};
+      return `<div class="plan-zmiana"><label><input type="checkbox" data-nr="${esc(nr)}"${w.zmiany.includes(nr) ? ' checked' : ''}> ${esc(zmiany[nr].nazwa || nr)}</label>
+        <input data-od value="${esc(g.od || '')}" placeholder="${esc(zmiany[nr].od)}" aria-label="Początek zmiany ${esc(nr)}" maxlength="5">
+        <input data-do value="${esc(g.do || '')}" placeholder="${esc(zmiany[nr].do)}" aria-label="Koniec zmiany ${esc(nr)}" maxlength="5"></div>`;
+    }).join('');
+    const wyjatek = w => `<div class="plan-dzien plan-wyjatek"><div class="plan-wyjatek-gora">
+        <input type="date" data-data value="${esc(w.data || '')}" aria-label="Data wyjątku">
+        <input data-uwaga value="${esc(w.uwaga || '')}" placeholder="Uwaga, np. Wigilia" maxlength="200" aria-label="Uwaga do wyjątku">
+        <button type="button" class="maly" data-usun-wyjatek aria-label="Usuń wyjątek">${P.ik('zamknij')}</button></div>${wiersze(w)}</div>`;
+    el.innerHTML = `
+      <form id="formularz-planu" class="admin-ustawienia">
+        <h3>Plan zmian zakładu</h3>
+        <p class="slaby">Zaznacz zmiany, które pracują w dany dzień. Dzień bez zaznaczenia — zakład nie pracuje. Zapis ustawia wszystkie siedem dni. Zmiana należy do dnia, w którym się
+          zaczyna: nocna z piątku trwa w sobotę do 6:00. Godziny zmiany w danym dniu zmienisz w polach Od i Do (puste = godziny z „Progi i godziny”).</p>
+        <p class="slaby">Plan nie blokuje pracy: zapisy poza planem dalej działają, tylko są oznaczone „Poza planem zakładu”. Zapisane zlecenia i checklisty
+          nie powstają na zmiany spoza planu; „Zleć teraz” działa zawsze. Bez ustawień wszystko działa jak dotąd.</p>
+        <div class="plan-naglowek" aria-hidden="true"><span>Zmiana</span><span>Od</span><span>Do</span></div>
+        ${stan0.dni.map((w, i) => `<div class="plan-dzien" data-dzien="${i}"><h4>${esc(W.DNI_NAZWY[i].replace(/^./, c => c.toUpperCase()))}</h4>${wiersze(w)}</div>`).join('')}
+        <h4>Dni inne niż zwykle</h4>
+        <p class="slaby">Wyjątek od daty ma pierwszeństwo przed dniem tygodnia. Gdy plan ma jakikolwiek dzień tygodnia, święta ustawowe są wolne
+          (nie dotyczy zapisanych zleceń z jawnymi datami albo bez pomijania świąt). Pracę w święto dopisz tu, z zaznaczoną zmianą.</p>
+        <div id="plan-wyjatki">${stan0.wyjatki.map(wyjatek).join('')}</div>
+        <button type="button" id="plan-dodaj-wyjatek">+ Dodaj dzień</button>
+        <div id="plan-skutki" class="plan-skutki" aria-live="polite"></div>
+        <p class="blad" role="alert" hidden></p>
+        <div class="przyciski"><button class="glowny" type="submit">Zapisz plan</button></div>
+      </form>`;
+    const czytaj = blok => {
+      const zm = [], godziny = {};
+      for (const r of blok.querySelectorAll('.plan-zmiana')) {
+        const cb = r.querySelector('input[type=checkbox]'), od = r.querySelector('[data-od]').value.trim(), dd = r.querySelector('[data-do]').value.trim();
+        if (cb.checked) zm.push(cb.dataset.nr);
+        if (od || dd) godziny[cb.dataset.nr] = { od, do: dd };
+      }
+      return { zmiany: zm, godziny };
+    };
+    const stanZFormularza = () => ({
+      dni: [...el.querySelectorAll('.plan-dzien[data-dzien]')].map(czytaj),
+      wyjatki: [...el.querySelectorAll('.plan-wyjatek')].map(b => Object.assign(czytaj(b), { data: b.querySelector('[data-data]').value, uwaga: b.querySelector('[data-uwaga]').value })),
+    });
+    const liczPlan = () => {
+      const stan = stanZFormularza(), w = W.planZeStanu(stan, zmiany);
+      return { stan, plan: w.plan, bledy: w.bledy, zapisy: w.bledy.length ? [] : W.planZmianZapisy(w.plan, obecny) };
+    };
+    const odswiez = () => {
+      const w = liczPlan(), pole = $('plan-skutki');
+      if (w.bledy.length) { pole.innerHTML = `<p class="blad">${w.bledy.map(esc).join('<br>')}</p>`; return; }
+      const s = W.skutkiPlanu(w.stan, w.plan, obecny, hala.slowniki, hala.teraz());
+      const lista = (naglowek, l) => l.length ? `<p><b>${esc(naglowek)}</b></p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+      const ostrzezenie = s.bezWpisu.length
+        ? `<p class="blad">Zapisany plan nie ma wpisu dla: ${esc(s.bezWpisu.join(', ').toLowerCase())}. W te dni zakład pracuje na wszystkich zmianach. Zapis planu ustawi wpis dla każdego dnia.</p>` : '';
+      pole.innerHTML = ostrzezenie + (w.zapisy.length
+        ? `<h4>Co się zmieni</h4>${lista('Plan po zapisie', s.opis)}${s.swieta ? '<p class="slaby">Święta ustawowe: zakład nie pracuje (poza dniami dopisanymi wyżej).</p>' : ''}
+           ${lista('Najbliższe 14 dni — zapisane zlecenia i checklisty', s.ubytki.concat(s.przybytki)) || '<p class="slaby">Żadne zapisane zlecenie nie zmieni terminów w najbliższych 14 dniach.</p>'}
+           <p class="slaby">Zlecenia już utworzone zostają bez zmian.</p>`
+        : '<p class="slaby">Plan jest taki sam jak zapisany.</p>');
+    };
+    el.addEventListener('input', odswiez);
+    el.addEventListener('change', odswiez);
+    $('plan-dodaj-wyjatek').addEventListener('click', () => {
+      $('plan-wyjatki').insertAdjacentHTML('beforeend', wyjatek({ data: '', zmiany: [], godziny: {} }));
+      odswiez();
+    });
+    $('plan-wyjatki').addEventListener('click', ev => {
+      const b = ev.target.closest('[data-usun-wyjatek]');
+      if (b) { b.closest('.plan-wyjatek').remove(); odswiez(); }
+    });
+    $('formularz-planu').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const blad = ev.target.querySelector('p[role=alert]');
+      const w = liczPlan();
+      if (w.bledy.length) { blad.hidden = false; blad.className = 'blad'; blad.textContent = w.bledy.join(' '); return; }
+      const s = W.skutkiPlanu(w.stan, w.plan, obecny, hala.slowniki, hala.teraz());
+      if (s.ubytki.length && !(await P.potwierdz('Zapisać plan zmian?', `${s.ubytki.join('. ')}.`, 'Zapisz plan'))) return;
+      try {
+        blad.hidden = false; blad.className = 'slaby'; blad.textContent = 'Zapisuję…';
+        const wynik = W.wynikZapisu(await P.zapiszWHubie(w.zapisy));
+        blad.className = wynik.klasa; blad.textContent = wynik.tekst;
+      } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
+    });
+    odswiez();
   }
 
   // ------------------------------------------------------------ ustawienia techniczne: kopie i tunel (2026-11-10)

@@ -20,7 +20,6 @@
 /* Pasek górny (.naglowek), menu po lewej i dolny pasek: wygląd w hala.css (jak GK Trasy). Tu tylko treść paska Panelu. */
 .naglowek .zmiana .slaby { color: var(--na-marce); opacity: .75; }
 .naglowek .zegar { margin-left: auto; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.naglowek .kto { display: flex; align-items: center; gap: 4px; color: var(--na-marce); }
 /* Dźwięk włączony, ale przeglądarka czeka na kliknięcie — przycisk ma się rzucać w oczy. */
 .naglowek button.maly.czeka { box-shadow: inset 0 0 0 2px var(--pomarancz); }
 @media (max-width: 820px) {
@@ -57,7 +56,8 @@
 .pulpit-gora { grid-area: liczby; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
 .pulpit-gora > .kafelki-liczb { flex: 1 1 320px; min-width: 0; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .pulpit-gora > #pulpit-nowe-zlecenie { flex: 0 0 auto; }
-@media (max-width: 600px) { .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; } }
+/* Telefon: główne działanie Pulpitu na całą szerokość i w pomarańczu — grafitowy przycisk w ciemnym motywie wyglądał na wyłączony (audyt 2026-11-21). */
+@media (max-width: 600px) { .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; background: var(--pomarancz); border-color: var(--pomarancz); color: var(--na-pomarancz); } }
 /* Same zera — jedno spokojne zdanie zamiast kafelków. */
 .kafelki-liczb > .spokoj { grid-column: 1 / -1; margin: 0; background: none; padding: 4px 8px; text-align: left;
   color: var(--zielony); font-weight: 600; }
@@ -112,7 +112,6 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 /* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
 @media (max-width: 600px) {
   .naglowek .kto > span { display: none; }
-  .naglowek .szukaj-napis { display: none; }
   .naglowek .zegar { font-size: 18px; }
   /* Ocena UX 2026-11-17, poz. 11: „Zmiana II 14:00–22:00…” był ucięty — tytuł w dwóch wierszach (nazwa nad godzinami). */
   .hala-uklad > .naglowek .zmiana { white-space: normal; overflow: visible; line-height: 1.2; font-size: 16px; }
@@ -391,6 +390,15 @@ dialog.okno.okno-szerokie { width: min(860px, calc(100vw - 24px)); }
 /* Podpisy kolumn nad wierszami godzin zmian — same pola z „06:00” nie mówiły, co jest czym. */
 .naglowek-zmian { margin-bottom: 0; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .wiersz-zmiany input { font-weight: 400; }
+/* Plan zmian zakładu (D95): dzień = blok z wierszem na każdą zmianę (zaznaczenie + własne godziny). */
+.plan-dzien { display: grid; gap: 4px; padding: 8px 0; border-top: 1px solid var(--ramka); }
+.plan-dzien h4 { margin: 0; }
+.plan-naglowek, .plan-zmiana { display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px; gap: 6px; align-items: center; }
+.plan-naglowek { font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.plan-zmiana label { display: flex; gap: 8px; align-items: center; }
+.plan-wyjatek-gora { display: grid; grid-template-columns: 160px minmax(0, 1fr) 52px; gap: 6px; }
+.plan-skutki { margin-top: 12px; }
+.plan-skutki ul { margin: 4px 0 8px; padding-left: 20px; }
 #formularz-etykiet .przyciski { align-items: center; }
 #formularz-etykiet .przyciski .slaby { margin-right: auto; }
 
@@ -680,7 +688,6 @@ dialog.okno .mies-tryb { grid-template-columns: 1fr; gap: 10px; }
 dialog.okno .mies-tryb label.zaznacz { flex-wrap: nowrap; white-space: nowrap; }
 dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
 @media (max-width: 600px) { dialog.okno .mies-tryb label.zaznacz { flex-wrap: wrap; white-space: normal; } }
-.presety .chip.maly { min-height: var(--dotyk); padding: 0 12px; }
 .blad-tekst { color: var(--czerwony); }
 @media (max-width: 600px) { .dla-dzialy { grid-template-columns: minmax(0, 1fr); } }
 
@@ -789,20 +796,8 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 #dzwiek .ik, .pozycja-glowna .ikony .ik { margin-right: 2px; }
 #dzwiek { display: inline-flex; align-items: center; gap: 4px; }
 
-/* D4: okno „Szukaj” (przycisk w nagłówku) — pole, wyniki pogrupowane, zlecenie znalezione na liście dostaje ramkę. */
+/* D4: okno „Szukaj” i grupa przycisków w nagłówku — wspólne z Liderem, UR i KJ (hala.css). */
 .naglowek #szukaj .szukaj-napis { font-size: 14px; }
-.okno-szukaj { width: min(560px, 94vw); }
-.okno-szukaj input[type="search"] { width: 100%; box-sizing: border-box; min-height: 48px; font-size: 17px; }
-/* Flex zamiast siatki: w siatce z max-height wiersze się ściskały i wyniki nachodziły na siebie (audyt 2026-11-18, telefon). */
-.szukaj-wyniki { margin-top: 10px; max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-.szukaj-wyniki > * { flex: none; }
-.szukaj-grupa { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--tekst-slaby); }
-.szukaj-wynik { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px;
-  text-align: left; background: var(--karta); color: var(--tekst); border: 1px solid var(--ramka); border-radius: var(--promien, 10px); font-weight: 400; }
-.szukaj-tekst { display: grid; gap: 2px; min-width: 0; }
-.szukaj-tekst b { overflow-wrap: anywhere; }
-.szukaj-wynik .znacznik { flex: none; }
-.zlecenie.znalezione { outline: 3px solid var(--pomarancz); outline-offset: 2px; }
 
 /* Instrukcja w Moje konto: odnosnik wyglada jak pozostale przyciski okna. */
 #konto-instrukcja { display: flex; align-items: center; justify-content: center; width: 100%; box-sizing: border-box; text-decoration: none; margin-top: 8px; }
@@ -833,3 +828,47 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 /* 1.33.0: pozycja zamknięta „z tym, co jest” — nie zrobiona (czerwony znak), do odbioru nie podlega. */
 .pozycje-zlecenia .niewykonana > .poz-wiersz { color: var(--czerwony); }
 .pozycje-zlecenia .niewykonana > .poz-wiersz > span:first-child { color: var(--czerwony); font-weight: 700; }
+.rcp-siatka option.poza-planem { color: var(--tekst-slaby); }
+
+/* ---------------------------------------------------------------- okno zapisanego zlecenia i checklisty (2026-11-21)
+   Jeden ekran na komputerze: dni, zmiany i działy to chipy (pola wyboru wyglądające jak przyciski), reszta w „Zaawansowane”.
+   Na telefonie (≤ 600 px) przy nowym wzorcu ten sam formularz idzie krok po kroku (.kreator, data-krok) — stale.js. */
+.nowe-menu { position: relative; display: inline-block; }
+.nowe-menu-lista { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: grid; gap: 4px; min-width: 210px; padding: 6px;
+                   background: var(--karta); border: 1px solid var(--ramka-mocna); border-radius: var(--promien); box-shadow: var(--cien-mocny); }
+.nowe-menu-lista button { justify-content: flex-start; text-align: left; }
+.zapisane-wiecej { margin-bottom: 10px; }
+.zapisane-wiecej summary { cursor: pointer; font-weight: 700; min-height: var(--dotyk); display: flex; align-items: center; }
+.zapisane-narzedzia { display: flex; flex-wrap: wrap; gap: 8px; }
+.stale-tryb { margin: 0; padding: 8px 12px; border-radius: var(--promien); background: var(--info-tlo); color: var(--tekst); font-weight: 600; }
+.stale-krok-naglowek { margin: 0; font-weight: 700; color: var(--tekst-slaby); }
+.stale-sekcja { display: grid; gap: 12px; }
+.stale-wiersz { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.stale-rytm { max-width: 420px; }
+.stale-skroty { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.stale-skroty .chip.maly { min-height: var(--dotyk); }
+.stale-chipy { display: flex; flex-wrap: wrap; gap: 8px; }
+dialog.okno .stale-chipy > label.zaznacz { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--dotyk); min-width: 48px;
+  padding: 0 16px; border: 1px solid var(--ramka-mocna); border-radius: 999px; background: var(--karta); color: var(--tekst); font-size: 15px; font-weight: 600; cursor: pointer; }
+dialog.okno .stale-chipy > label.zaznacz input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
+dialog.okno .stale-chipy > label.zaznacz:has(input:checked) { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+dialog.okno .stale-chipy > label.zaznacz:has(input:focus-visible) { outline: 3px solid var(--akcent); outline-offset: 2px; }
+dialog.okno .stale-chipy > label.zaznacz small { font-weight: 400; opacity: .8; }
+.stale-macierz { display: grid; gap: 8px; margin-top: 8px; }
+.stale-wiersz-dnia { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; align-items: center; }
+.dla-dzialy { align-items: center; }
+.stale-chipy.kto { margin-top: 10px; }
+.wklej-liste { display: grid; gap: 8px; margin-top: 8px; }
+.stale-zaawansowane { border: 1px solid var(--ramka); border-radius: 10px; padding: 0 12px; }
+.stale-zaawansowane summary { cursor: pointer; font-weight: 700; min-height: var(--dotyk); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stale-zaawansowane summary .slaby { font-weight: 400; font-size: 13px; }
+.stale-zaaw-tresc { display: grid; gap: 12px; padding: 4px 0 12px; }
+.stale-suma { flex: 1 1 auto; align-self: center; min-width: 0; font-size: 13px; }
+.stale-sprawdz { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.stale-sprawdz li { display: flex; gap: 8px; }
+.stale-sprawdz b { flex: 0 0 90px; color: var(--tekst-slaby); }
+dialog.okno .sobota-lista { grid-template-columns: 1fr; }
+/* Kreator: ten sam formularz po jednym pytaniu; kroki bez klasy .krok-aktywny znikają (hidden dalej wygrywa z display). */
+.kreator [data-krok]:not(.krok-aktywny) { display: none; }
+.kreator .stale-suma { display: none; }
+@media (max-width: 600px) { .stale-wiersz-dnia { grid-template-columns: 1fr; } .stale-suma { flex-basis: 100%; } }

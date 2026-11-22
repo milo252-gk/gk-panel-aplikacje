@@ -181,17 +181,17 @@
     const sl = hala.slowniki;
     const nowa = !kod || kod === 'nowa';
     const istn = nowa ? null : (sl.karty_przegladow || {})[kod];
-    if (!nowa && !istn) { el.innerHTML = '<a class="wstecz" href="#plan">‹ Plan</a><p class="pusto">Nie ma takiej karty.</p>'; return; }
+    if (!nowa && !istn) { el.innerHTML = '<a class="wstecz" href="#plan">‹ Przeglądy: plan</a><p class="pusto">Nie ma takiej karty.</p>'; return; }
     const kodB = nowa ? 'nowa' : kod;
     const b = await hala.brudnopis.odczytaj(kluczBrudnopisu(kodB));
     stan = b || { kod: nowa ? null : kod, nowa, nazwa: istn ? istn.nazwa : '', tryb: istn && (istn.maszyny || []).length && !istn.typ_maszyny ? 'maszyny' : 'typ',
                   typ_maszyny: istn ? (istn.typ_maszyny || '') : '', maszyny: istn ? (istn.maszyny || []).slice() : [],
                   punkty: istn ? JSON.parse(JSON.stringify(istn.punkty || [])) : [{ nazwa: '', rodzaj: 'ok_nok' }] };
     const typy = typyMaszyn(sl);
-    el.innerHTML = `<a class="wstecz" href="#plan">‹ Plan</a>
+    el.innerHTML = `<a class="wstecz" href="#plan">‹ Przeglądy: plan</a>
       <form class="formularz" id="edytor-karty" autocomplete="off">
         <h1>${nowa ? 'Nowa karta' : 'Karta przeglądu'}</h1>
-        ${b ? '<p class="tekst-uwaga">Przywrócono niezapisane zmiany.</p>' : ''}
+        ${b ? '<p class="tekst-uwaga">Przywrócono niezapisane dane.</p>' : ''}
         <label>Nazwa<input name="nazwa-karty" value="${esc(stan.nazwa)}" placeholder="np. Wtryskarka — przegląd miesięczny"></label>
         <fieldset><legend>Dla</legend>
           <div class="wybor" id="tryb">${[['typ', 'Typu maszyny'], ['maszyny', 'Wybranych maszyn']].map(([k, n]) => `<button type="button" data-tryb="${k}" aria-pressed="${stan.tryb === k}">${n}</button>`).join('')}</div>

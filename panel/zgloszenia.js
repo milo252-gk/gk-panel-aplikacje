@@ -40,8 +40,8 @@
         </div>
         <div class="numer slaby">${esc(g.kiedyOpis)}</div>
         <div class="akcje">${g.nowe && kier ? `
-          <button type="button" class="maly glowny" data-akcja="zlecenie">Zrób zlecenie</button>
-          ${P.mozeZapisacStale() ? '<button type="button" class="maly" data-akcja="stale">Zrób stałe</button>' : ''}
+          <button type="button" class="maly glowny" data-akcja="zlecenie">Utwórz zlecenie</button>
+          ${P.mozeZapisacStale() ? '<button type="button" class="maly" data-akcja="stale">Utwórz zapisane</button>' : ''}
           <button type="button" class="maly" data-akcja="przyjmij">Przyjmij</button>
           <button type="button" class="maly" data-akcja="odrzuc">Odrzuć</button>` : ''}
         </div>
@@ -81,7 +81,7 @@
         <div class="numer slaby">${esc(b.kiedyOpis)}</div>
         <div class="akcje">${b.otwarte && moze ? `
           <button type="button" class="maly glowny" data-akcja="zamknij">Zamknij</button>
-          ${P.mozeWyslac && P.mozeWyslac('zlecenie.utworzone') ? '<button type="button" class="maly" data-akcja="zlecenie">Zrób zlecenie</button>' : ''}` : ''}
+          ${P.mozeWyslac && P.mozeWyslac('zlecenie.utworzone') ? '<button type="button" class="maly" data-akcja="zlecenie">Utwórz zlecenie</button>' : ''}` : ''}
         </div>
       </article>`;
   }
@@ -125,15 +125,15 @@
     if (nazwa === 'historia') return DZ().historia(hala, 'zgloszenie', id);
     if (nazwa === 'zlecenie') {
       P.noweZlecenie(Object.assign(W.zlecenieZeZgloszenia(g), { zgloszenie: id }), null, async zid => {
-        await hala.zapisz('zgloszenie.przyjete', id, { zlecenie: zid, uwagi: 'Zrobiono z tego zlecenie' });
+        await hala.zapisz('zgloszenie.przyjete', id, { zlecenie: zid, uwagi: 'Utworzono z tego zlecenie' });
       });
     }
     if (nazwa === 'stale') {
       const w = W.zlecenieZeZgloszenia(g);
       P.widoki.stale.otworzZ(Object.assign(W.stalyDoFormularza({ tytul: w.tytul, opis: w.opis, dzial: w.dzial, linia: w.linia,
         maszyna: w.maszyna, wymagaj_zdjecia: true, wymagaj_notatki: true, harmonogram: { rodzaj: 'codziennie', zmiany: [] },
-        termin: { rodzaj: 'koniec_zmiany' } })), 'Zlecenie stałe ze zgłoszenia', async kod => {
-        await hala.zapisz('zgloszenie.przyjete', id, { stale: kod, uwagi: 'Zrobiono z tego zlecenie stałe' });
+        termin: { rodzaj: 'koniec_zmiany' } })), 'Zapisane zlecenie ze zgłoszenia', async kod => {
+        await hala.zapisz('zgloszenie.przyjete', id, { stale: kod, uwagi: 'Utworzono z tego zapisane zlecenie' });
       });
     }
     if (nazwa === 'przyjmij') {

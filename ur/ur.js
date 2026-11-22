@@ -214,10 +214,9 @@
   /* Mechanik ma telefon w kieszeni i hałas wokół: dźwięk + wibracja + powiadomienie systemowe.
      Przy ZAMKNIĘTEJ aplikacji — Web Push (D28, Moje konto → Powiadomienia).
      Dźwięki ze wspólnego zestawu GK (gk-dzwieki.js): przeglądarka gra dopiero po pierwszym dotknięciu strony,
-     dlatego pasek „Dotknij, żeby włączyć dźwięk”.                                          */
+     dlatego baner „Dźwięk wyłączony — włącz” (HalaDzwieki.pasek).                          */
   // Jeden zestaw dźwięków GK (gk-dzwieki.js, 2026-10-16) — dawny brzęczyk z falą prostokątną brzmiał jak gra 8-bitowa.
   const GD = () => global.GKDzwieki;
-  const kontekstAudio = () => (GD() ? GD().kontekst() : null);
   UR.brzeczyk = {
     // Awaria: dzwonek alarmowy; zatrzymanie (pilna) — gęściej, trzy serie (D55, wspólny dzialania.js).
     awaria(pilna) { if (global.HalaDzwieki) global.HalaDzwieki.zagraj('awaria', pilna); else if (GD()) GD().zagraj(pilna ? 'zatrzymanie' : 'awaria'); },
@@ -226,22 +225,6 @@
     blad() { if (GD()) GD().zagraj('blad'); },
     ok() { if (GD()) GD().zagraj('sukces'); },
   };
-  function odblokujDzwiek() {
-    if (GD()) GD().odblokuj();
-    setTimeout(pokazDzwonek, 300);
-  }
-  /* UI etap 3: duży pasek z ikoną glos-wyl nad treścią (przyklejony pod nagłówkiem), aż do dotknięcia — mechanik bez dźwięku nie
-     usłyszy awarii. UI etap 4: tylko pasek; drugi znacznik w nagłówku dublował go i ucinał godziny zmiany na telefonie.
-     Sprawdzamy też po powrocie z tła (iPhone usypia dźwięk). */
-  function pokazDzwonek() {
-    const a = kontekstAudio();
-    $('dzwonek').hidden = !W.dzwiekWylaczony(hala.zalogowany(), a && a.state);
-    if (a && !a.urPasek) { a.urPasek = true; a.addEventListener('statechange', pokazDzwonek); }
-  }
-  document.addEventListener('pointerdown', odblokujDzwiek, true);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pokazDzwonek(); });
-  $('dzwonek').addEventListener('click', () => { odblokujDzwiek(); setTimeout(() => UR.brzeczyk.ok(), 150); });
-
   UR.powiadomienia = {
     dostepne: () => 'Notification' in global,
     stan: () => ('Notification' in global ? Notification.permission : 'brak'),
@@ -477,7 +460,7 @@
      dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
   /* D64: powiadomienia i „Sprawdź dźwięk” w Moim koncie — to samo miejsce co w Panelu i Liderze (wcześniej „Więcej”). */
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
-    aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone'),
+    aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone'), instrukcja: 'instrukcja.html',
     dodatki: el => {
       // „Sprawdź dźwięki” jest teraz we wspólnej sekcji Powiadomienia (konto.js) — ten sam przycisk w każdej aplikacji.
       el.innerHTML = '<div data-powiadomienia></div>';
@@ -494,7 +477,6 @@
     document.body.classList.toggle('kierownik-ur', z && UR.kierownikUR());
     document.body.classList.toggle('kpi-ur', z && UR.mozeKpi());
     rysujPasek();
-    pokazDzwonek();
     if (z) { rysujNaglowek(); rysujPlakietki(); pokazEkran(); } else if (global.matchMedia && global.matchMedia('(pointer: fine)').matches) { setTimeout(() => $('identyfikator').focus(), 0); }   // na telefonie fokus = klawiatura zasłania pół ekranu
   }
 
@@ -610,6 +592,20 @@
   document.addEventListener('DOMContentLoaded', async () => {
     await hala.start();
     pokazSesje();
+    if (global.HalaDzwieki) global.HalaDzwieki.pasek(hala);
+    global.HalaNaglowek.zamontuj(hala, { zrodla: () => {
+      const k = UR.kontekst();
+      const przeglady = W.listaPrzegladow(Object.assign({ przeglady: hala.obiekty('przeglad'), filtr: 'wszystkie' }, k));
+      return [
+        ...global.HalaZlecenia.wierszeDla(hala, { dzial: 'ur' }).map(z => ({ grupa: 'Zlecenia', tytul: `${z.numer} · ${z.tytul}`,
+          opis: [z.maszyna, z.dlaKogo, z.zlecil].filter(Boolean).join(' · '), znacznik: z.etykieta, szukaj: z.opis,
+          otworz: () => { UR.idz('zlecenia'); global.HalaNaglowek.zaznacz(z.id); } })),
+        ...W.listaAwarii(Object.assign({ awarie: hala.obiekty('awaria') }, k)).map(a => ({ grupa: 'Awarie', tytul: `${a.numer} · ${a.maszynaNazwa}`,
+          opis: [a.liniaNazwa, a.priorytetNazwa, a.mechanikNazwa].filter(Boolean).join(' · '), znacznik: a.etykieta, szukaj: a.opis, otworz: () => UR.idz('awarie') })),
+        ...Object.values(przeglady).flat().map(p => ({ grupa: 'Przeglądy', tytul: `${p.numer} · ${p.maszynaNazwa}`,
+          opis: [p.kartaNazwa, p.mechanikNazwa].filter(Boolean).join(' · '), znacznik: p.etykieta, otworz: () => UR.idz('przeglady') })),
+      ];
+    } });
     setTimeout(rysujPasek, LASKA_MS + 500);
     // Liczniki przestoju co sekundę (tylko liczby), pełne przerysowanie co minutę (opóźnienia przeglądów).
     setInterval(() => {

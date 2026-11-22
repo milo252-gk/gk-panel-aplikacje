@@ -971,10 +971,6 @@
 
   // ------------------------------------------------------------ UI etap 3 (2026-10-12, ocena właściciela)
 
-  /* Czy dźwięk powiadomień jest wyłączony (przeglądarka gra dopiero po dotknięciu strony; iPhone potrafi go znowu
-     uśpić po powrocie z tła). Bez AudioContext (stan null) nie ma czego włączać — pasek by tylko kłuł w oczy. */
-  const dzwiekWylaczony = (zalogowany, stanAudio) => !!zalogowany && !!stanAudio && stanAudio !== 'running';
-
   /* „Wersja z 12.10.2026” w Więcej zamiast surowego skrótu „wersja 1726f7030f5d”. Data = dzień, w którym ten telefon
      dostał tę wersję (pierwszy raz zobaczył ten stempel service workera) — zapis {stempel, dzien} w telefonie.
      Skrót zostaje w podpowiedzi dla serwisu. Bez stempla (http, bez workera) — null: zostaje wersja klienta. */
@@ -986,7 +982,7 @@
   }
 
   global.URWidok = {
-    dzwiekWylaczony, wersjaZDnia,
+    wersjaZDnia,
     wieleLinii, dzienRoboczy, maszynyBezHarmonogramu, opcjeKart, kolizjaPlanowania, filtryKpi, oknoPlanuKpi, bladZapytania, czekaNaWyslanie,
     raz, odmiana, liczba, linie, maszyny, nazwaLinii, nazwaMaszyny, nazwaKarty, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
     dzienZakladu, koniecDnia, dodajDni, mozna, dozwolonyZ, kodZNazwy, priorytetInfo, nazwaPriorytetu, napisStoi, nazwaZeStalej, zatrzymuje,

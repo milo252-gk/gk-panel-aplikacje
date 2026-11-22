@@ -754,7 +754,7 @@
     const nazwaM = m => (maszyny[m] || {}).nazwa || m;
     const p = z.postepPozycji || { gotowe: 0, wszystkie: z.pozycje.length };
     const otwarta = s.poz && s.poz.id === z.id ? s.poz : null;
-    // Właściciel 2026-11-10: długa checklista (np. „Standardowa zmiana 8 h”) zwinięta do jednej linii „Checklista: 3 z 8” — dotknięcie
+    // Właściciel 2026-11-10: długa checklista (np. „Plan zmiany lidera”) zwinięta do jednej linii „Checklista: 3 z 8” — dotknięcie
     // rozwija, nic nie znika. Rozwinięta, gdy ktoś ją rozwinął albo ma otwartą pozycję; krótka (do 3 pozycji) zawsze widoczna.
     // W oknie jednego zlecenia („▶ Wykonaj”, opcje.tylko) checklista jest jedyną treścią — tam zawsze rozwinięta.
     const dluga = z.pozycje.length > 3 && !(opcje && opcje.tylko);

@@ -78,13 +78,11 @@
   const bhpPilne = (kontrakt, rodzaj) => (((kontrakt && kontrakt.stale && kontrakt.stale.rodzaje_bhp) || [])
     .some(r => r && r.kod === rodzaj && r.pilne));
 
-  /* D64 (właściciel 2026-10-14: „jedno spójne środowisko”): pasek „🔇 Dźwięk powiadomień wyłączony — dotknij, żeby
-     włączyć” — wzór z GK Utrzymanie Ruchu, teraz ten sam w Liderze i KJ (wcześniej tylko UR, a Lider i KJ nie mówiły,
-     że przeglądarka trzyma dźwięk do pierwszego dotknięcia). Pod nagłówkiem, nad ekranem; znika, gdy dźwięk ruszy. */
-  function pasek(hala, opcje) {
+  /* Baner „Dźwięk wyłączony — włącz” (D64, STYL-GK §8) w Liderze, UR i KJ — przeglądarka trzyma dźwięk do pierwszego dotknięcia.
+     Pierwszy w #aplikacja, nad nagłówkiem — to samo miejsce co w Panelu; znika, gdy dźwięk ruszy. */
+  function pasek(hala) {
     const doc = global.document;
     if (!doc) return;
-    const o = opcje || {};
     let el = doc.getElementById('hala-dzwonek');
     const pokaz = () => {
       const a = kontekst();
@@ -94,13 +92,12 @@
     if (!el) {
       el = doc.createElement('div');
       el.id = 'hala-dzwonek';
-      el.className = 'hala-dzwonek baner-dzwieku';
+      el.className = 'baner-dzwieku';
       el.setAttribute('role', 'button');
       el.tabIndex = 0;
       el.hidden = true;
       el.innerHTML = '<span class="ikona" aria-hidden="true">' + (global.GKIkony ? global.GKIkony.html('glos-wyl', 20) : '') + '</span><span class="baner-tekst">Dźwięk wyłączony — włącz</span><span class="baner-przycisk" aria-hidden="true">Włącz</span>';
-      const miejsce = o.przed || doc.querySelector('#aplikacja > main, #aplikacja > .ekrany');
-      if (miejsce && miejsce.parentNode) miejsce.parentNode.insertBefore(el, miejsce); else doc.body.prepend(el);
+      (doc.getElementById('aplikacja') || doc.body).prepend(el);
       const wlacz = () => { odblokuj(); setTimeout(() => { zagraj('pilne'); pokaz(); }, 150); };
       el.addEventListener('click', wlacz);
       el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); wlacz(); } });
@@ -175,7 +172,7 @@
   const OPISY_ZDARZEN = {
     'zlecenie.pozycja_wykonana': 'Pozycja odhaczona', 'zlecenie.pozycja_pominieta': 'Pozycja pominięta', 'zlecenie.pozycja_cofnieta': 'Odhaczenie cofnięte',
     'zlecenie.edytowane': 'Poprawione przez kierownika', 'zlecenie.postep': 'Krok wykonania',
-    'zlecenie.utworzone': 'Zlecone', 'zlecenie.zaplanowane': 'Zaplanowane', 'zlecenie.plan_zmieniony': 'Plan zmieniony',
+    'zlecenie.utworzone': 'Zlecone', 'zlecenie.zaplanowane': 'Zaplanowane', 'zlecenie.plan_zmieniony': 'Plan zaktualizowany',
     'zlecenie.aktywowane': 'Zlecone (z planu)', 'zlecenie.przyjete': 'Przyjęte — „Biorę”', 'zlecenie.wykonane': 'Zrobione',
     'zlecenie.odrzucone': '„Nie mogę”', 'zlecenie.zwrocone': 'Zwrócone przez kierownika', 'zlecenie.zamkniete': 'Odebrane przez kierownika',
     'zlecenie.anulowane': 'Odwołane', 'zlecenie.przepadlo': 'Minął koniec zmiany', 'zlecenie.cofniete': 'Cofnięte przez autora',
@@ -729,7 +726,7 @@
   }
 
   /* D56 (właściciel 2026-10-13: „niech skanowanie QR będzie bardziej na wierzchu — teraz trzeba go szukać”): pływający
-     przycisk „▣ Skanuj” na każdym ekranie aplikacji działu (nad dolnym paskiem). Skan maszyny → menu: Wykonaj zadanie
+     przycisk „Skanuj QR” na każdym ekranie aplikacji działu (nad dolnym paskiem). Skan maszyny → menu: Wykonaj zadanie
      (skan od razu zapisany w zleceniu jako krok, potem ekran Zleceń), Zgłoś awarię, Zgłoś nieprawidłowość.
      opcje: { zlecenia: () => {dzial, linia?}, otworzZlecenia: () => …, komunikat: t => …, awaria?: maszyna => … }. */
   function przyciskSkanu(hala, opcje) {
@@ -741,16 +738,9 @@
       b = doc.createElement('button');
       b.type = 'button'; b.id = 'hala-skan-fab'; b.className = 'hala-skan-fab';
       doc.body.classList.add('hala-ma-skan');          // D64: miejsce pod listą i nad komunikatami (hala.css)
-      b.setAttribute('aria-label', 'Skanuj kod QR maszyny');
-      b.innerHTML = '<span class="ik" aria-hidden="true">' + (global.GKIkony ? global.GKIkony.html('skan', 24) : '') + '</span><span class="napis">Skanuj</span>';
+      b.setAttribute('aria-label', 'Skanuj QR maszyny');
+      b.innerHTML = '<span class="ik" aria-hidden="true">' + (global.GKIkony ? global.GKIkony.html('skan', 24) : '') + '</span><span class="napis">Skanuj QR</span>';
       doc.body.appendChild(b);
-      // Telefon: po przewinięciu w dół przycisk zwija się do ikony, żeby nie zasłaniać przycisków kart (hala.css, ocena UX 2026-11-17).
-      let ostatniY = 0;
-      global.addEventListener('scroll', () => {
-        const y = global.scrollY || 0;
-        b.classList.toggle('zwiniety', y > 80 && y > ostatniY);
-        ostatniY = y;
-      }, { passive: true });
     }
     const pokaz = () => { b.hidden = !hala.zalogowany(); };
     hala.na('sesja', pokaz);

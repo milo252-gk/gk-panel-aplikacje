@@ -60,7 +60,7 @@
         <div class="wybor filtr" id="filtr-awarii">${[['wszystkie', 'Wszystkie'], ['wolne', 'Nieprzyjęte'], ['moje', 'Moje']].map(([kod, n]) =>
           `<button type="button" data-filtr="${kod}" aria-pressed="${f === kod}">${n}</button>`).join('')}</div>
         <div class="lista">${lista.map(kartaListy).join('') ||
-          `<p class="pusto ok">${f === 'moje' ? 'Nie masz przypisanych awarii' : f === 'wolne' ? 'Wszystkie awarie są przyjęte' : 'Brak aktywnych awarii'}</p>`}</div>
+          `<p class="pusto ok">${f === 'moje' ? 'Nie masz przypisanych awarii' : f === 'wolne' ? 'Wszystkie awarie są przyjęte' : 'Brak aktywnych awarii. Nowe zgłoszenie z hali pojawi się tu samo.'}</p>`}</div>
         ${zamkniete.length ? `<details class="archiwum"><summary>Zamknięte w ostatnich 2 dniach (${zamkniete.length})</summary>
           <div class="lista">${zamkniete.map(kartaListy).join('')}</div></details>` : ''}`;
       // Zaległe zlecenia od kierownika na samej górze (wspólna karta z ../wspolne/zlecenia.js) — przed listą awarii,
@@ -357,7 +357,7 @@
     if (!w) return;                                  // Esc / wstecz — brudnopis zostaje na później
     if (!w.wartosc) return;
     const f = formularz(w.dane);
-    if (await zapisz('awaria.zakonczona_ur', a.id, W.daneZakonczenia(f), 'Zakończona — czeka na potwierdzenie lidera')) {
+    if (await zapisz('awaria.zakonczona_ur', a.id, W.daneZakonczenia(f), 'Zrobione — czeka na potwierdzenie lidera')) {
       await hala.brudnopis.usun(klucz);              // dopiero gdy zdarzenie jest w kolejce (KONTRAKT §9)
     }
   }

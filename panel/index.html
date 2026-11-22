@@ -102,8 +102,13 @@
     <section aria-labelledby="t-zlecenia">
       <h2 id="t-zlecenia">Zlecenia dla działów
         <span class="licznik"><button type="button" id="nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
-          <button type="button" id="nowe-stale" class="glowny" hidden>+ Nowe zapisane</button>
-          <button type="button" id="nowa-checklista-zlecen" hidden>+ Checklista</button>
+          <span class="nowe-menu" id="nowe-menu" hidden>
+            <button type="button" id="nowe-stale" class="glowny" aria-expanded="false">+ Nowe</button>
+            <span class="nowe-menu-lista" id="nowe-menu-lista" hidden>
+              <button type="button" id="nowa-checklista-zlecen">Checklista</button>
+              <button type="button" id="nowe-zapisane-zlecenie">Zlecenie zapisane</button>
+            </span>
+          </span>
           <button type="button" id="zlecenia-czysc" hidden title="Usuń historię zleceń (tylko Menedżer)"><span class="ik" data-ikona="czyszczenie" data-rozmiar="16"></span>Czyszczenie</button></span></h2>
       <!-- Jak w GK Trasy: zlecenia i zapisane (szablony). Zapisane POJEDYNCZE zleca kierownik „Zleć teraz” ile razy chce,
            STAŁE (z harmonogramem) hub zleca sam — D31; właściciel 2026-10-13: zapis nie tylko stałych. -->
@@ -120,7 +125,7 @@
         <div class="chipy" id="filtr-zlecen" role="group" aria-label="Które zlecenia">
           <button type="button" class="chip" data-filtr="otwarte" aria-pressed="true">W toku</button>
           <button type="button" class="chip" data-filtr="do-zamkniecia" aria-pressed="false">Do odbioru</button>
-          <button type="button" class="chip" data-filtr="zamkniete" aria-pressed="false">Zamknięte</button>
+          <button type="button" class="chip" data-filtr="zamkniete" aria-pressed="false">Odebrane</button>
         </div>
         <!-- D55: filtry — dział, osoba, okres (zamknięte starsze niż 2 dni dociągane z serwera), tylko spóźnione. -->
         <form class="filtry-zlecen" id="filtry-zlecen" autocomplete="off">
@@ -152,12 +157,18 @@
         <div id="lista-zlecen" class="lista"></div>
       </div>
       <div id="zlecenia-stale" class="zlecenia-czesc" hidden>
-        <p class="slaby opis-widoku">Zapisane zlecenie zapamiętuje treść i dział, żeby zlecać je ponownie. <b>Pojedyncze</b> zlecasz sam — „Zleć teraz”, ile razy trzeba.
-          <b>Stałe</b> ma harmonogram — serwer sam je zleca (też co 1–4 h w ciągu zmiany). <b>Checklista</b> to zlecenie z listą pozycji do odhaczenia
+        <p class="slaby opis-widoku">Zapisane zlecenie zapamiętuje treść i dział, żeby zlecać je ponownie. <b>Ręczne</b> zlecasz sam — „Zleć teraz”, ile razy trzeba.
+          <b>Powtarza się</b> — serwer sam je zleca (też co 1–4 h w ciągu zmiany). <b>Checklista</b> to zlecenie z listą pozycji do odhaczenia
           (np. plan zmiany lidera). Najprościej: przy gotowym zleceniu użyj „Do zapisanych”.</p>
-        <button type="button" id="zestaw-stalych" hidden>+ Zlecenia mistrza i lidera</button>
-        <!-- Właściciel 2026-10-20: naklejki maszyn, które zapisane każą zeskanować (▣, obchód) — wszystkie naraz; 🖨 QR przy wpisie. -->
-        <button type="button" id="kody-punktow" hidden><span class="ik" data-ikona="drukuj" data-rozmiar="16"></span>Kody QR punktów</button>
+        <details class="zapisane-wiecej" id="zapisane-wiecej" hidden>
+          <summary>Więcej narzędzi</summary>
+          <div class="zapisane-narzedzia">
+            <button type="button" id="sobota-narzedzie" hidden>Dodaj sobotę (zmiana I) do checklist</button>
+            <button type="button" id="zestaw-stalych" hidden>+ Zlecenia mistrza i lidera</button>
+            <!-- Właściciel 2026-10-20: naklejki maszyn, które zapisane każą zeskanować (▣, obchód) — wszystkie naraz; 🖨 QR przy wpisie. -->
+            <button type="button" id="kody-punktow" hidden><span class="ik" data-ikona="drukuj" data-rozmiar="16"></span>Kody QR punktów</button>
+          </div>
+        </details>
         <div id="lista-stalych" class="lista"></div>
       </div>
       <!-- D71 (właściciel 2026-10-15: „Dodaj do aplikacji kalendarz, żeby móc też wybierać dni zleceń”): miesiąc — co dnia
@@ -227,6 +238,7 @@
         <button type="button" class="chip" data-czesc="kody" aria-pressed="false"><span class="ik" data-ikona="kody" data-rozmiar="16"></span>Kody QR</button>
         <button type="button" class="chip" data-czesc="role" aria-pressed="false"><span class="ik" data-ikona="konta" data-rozmiar="16"></span>Role i uprawnienia</button>
         <button type="button" class="chip" data-czesc="niewyslane" id="chip-niewyslane" aria-pressed="false"><span class="ik" data-ikona="powtarzaj" data-rozmiar="16"></span><span id="chip-niewyslane-tekst">Nie wysłane</span></button>
+        <button type="button" class="chip" data-czesc="plan" aria-pressed="false">Plan zmian</button>
         <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false">Progi i godziny</button>
         <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Ustawienia</button>
       </div>
@@ -337,15 +349,24 @@
   </form>
 </dialog>
 
-<!-- Zlecenie stałe (D31) — jak „Nowe zlecenie stałe” w GK Trasy. -->
+<!-- Zapisane zlecenie i checklista (D31, 2026-10-27, układ z 2026-11-21): na komputerze jeden ekran z czterema pytaniami
+     (Kiedy, Pozycje, Dla kogo, Zaawansowane), na telefonie (≤ 600 px) przy nowym wzorcu ten sam formularz jako kreator krok po kroku
+     (stale.js, klasa .kreator). Jedno okno, te same pola i dane w obu układach. -->
 <dialog id="okno-stalego" class="okno okno-szerokie" aria-labelledby="t-okno-stalego">
   <form method="dialog" id="formularz-stalego" autocomplete="off">
     <h2 id="t-okno-stalego">Nowe zapisane zlecenie</h2>
-    <label>Co zrobić<input name="tytul" list="podpowiedzi-czynnosci" required maxlength="200" placeholder="np. Sprzątanie stanowisk po zmianie"></label>
-    <label>Opis<textarea name="opis" rows="2" maxlength="4000"></textarea></label>
-    <!-- 2026-10-27: jedno okno dla zapisanego zlecenia i checklisty — checklista to to samo zlecenie z listą pozycji. -->
-    <label class="zaznacz" id="stale-jako-checklista"><input type="checkbox" name="jako_checklista"> <span class="ik" data-ikona="lista" data-rozmiar="16"></span>Checklista — lista pozycji do odhaczenia (godzina, maszyny i wymagania każdej osobno)</label>
-    <!-- Trwające zlecenie (Zlecenia → ✎ Zmień): termin i „od” zamiast harmonogramu; zmiana trafia też do wzorca. -->
+    <p class="stale-tryb" id="stale-tryb" hidden></p>
+    <p class="stale-krok-naglowek" id="stale-krok-naglowek" aria-live="polite" hidden></p>
+    <div class="stale-sekcja" data-krok="1">
+      <label>Co zrobić<input name="tytul" list="podpowiedzi-czynnosci" required maxlength="200" placeholder="np. Sprzątanie stanowisk po zmianie"></label>
+      <label>Opis<textarea name="opis" rows="1" maxlength="4000"></textarea></label>
+      <div class="stale-wiersz">
+        <label class="zaznacz"><input type="checkbox" name="pilne"> Pilne</label>
+        <!-- Nowy wzorzec wybiera „+ Nowe” (zlecenie albo checklista); przełącznik zostaje przy zmianie istniejącego. -->
+        <label class="zaznacz" id="stale-jako-checklista"><input type="checkbox" name="jako_checklista"> <span class="ik" data-ikona="lista" data-rozmiar="16"></span>Checklista (lista pozycji do odhaczenia)</label>
+      </div>
+    </div>
+    <!-- Trwające zlecenie (Zlecenia → Zmień): termin i „od” zamiast harmonogramu; zmiana może trafić też do wzorca. -->
     <fieldset id="stale-instancja" hidden><legend>To zlecenie trwa</legend>
       <div class="dwie">
         <label>Od kiedy (opcjonalnie)<input name="inst_od" type="datetime-local"></label>
@@ -361,54 +382,19 @@
           <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
         </div>
       </div>
-      <label class="zaznacz" id="inst-wzorzec"><input type="checkbox" name="inst_wzorzec" checked> Zapisz też w zapisanych zleceniach — kolejne zlecenia będą już ze zmianą</label>
+      <label class="zaznacz" id="inst-wzorzec"><input type="checkbox" name="inst_wzorzec"> Zapisz też w zapisanych — kolejne zlecenia będą już ze zmianą</label>
     </fieldset>
-    <!-- D71: „Dla kogo” — właściciel 2026-10-15: „zlecenia cykliczne, które można wrzucić wszystkim”. -->
-    <fieldset id="stale-dla"><legend>Dla kogo</legend>
-      <div class="dla-dzialy"><div id="stale-dzialy" class="zaznaczenia"></div>
-        <button type="button" class="maly" id="stale-wszystkie">Wszystkie działy</button></div>
-      <div class="zaznaczenia kto" role="radiogroup" aria-label="Kto robi">
-        <label class="zaznacz"><input type="radio" name="kto" value="dzial"> Dział — zrobi jedna osoba</label>
-        <label class="zaznacz"><input type="radio" name="kto" value="kazdy"> Każdy osobno</label>
-        <label class="zaznacz"><input type="radio" name="kto" value="osoby"> Wybrane osoby</label>
-      </div>
-      <div id="stale-osoby" class="zaznaczenia osoby-stalego"></div>
-      <p class="slaby konto-drobne" id="stale-adresaci" aria-live="polite"></p>
-    </fieldset>
-    <div class="dwie">
-      <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
-      <label id="stale-maszyna" hidden>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
-    </div>
-    <!-- Właściciel 2026-10-26: „wyznaczać kilka maszyn do sprawdzenia” — jak w oknie „Nowe zlecenie” (D56): pola wyboru,
-         ukryte pole „maszyna” = pierwsza zaznaczona (skan, wymagania). -->
-    <fieldset id="stale-maszyny"><legend>Maszyny (zaznacz jedną albo kilka)</legend>
-      <div class="maszyny-akcje"><button type="button" class="maly" data-maszyny-stale="wszystkie">Wszystkie</button>
-        <button type="button" class="maly" data-maszyny-stale="zadna">Żadna</button></div>
-      <div class="maszyny-lista" data-maszyny-stalego></div></fieldset>
-    <fieldset id="stale-pozycje-pole" hidden><legend>Pozycje — godzina od startu zmiany i co zrobić</legend>
-      <div id="stale-pozycje" class="pozycje-checklisty"></div>
-      <div class="dodaj-pozycje">
-        <button type="button" data-dodaj-pozycje>+ Dodaj pozycję</button>
-        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">+ Z zapisanych…</option></select>
-      </div>
-    </fieldset>
-    <fieldset id="stale-kiedy"><legend>Kiedy</legend>
-      <div class="chipy presety" id="stale-presety" role="group" aria-label="Gotowe opcje"></div>
+    <fieldset id="stale-kiedy" data-krok="2"><legend>Kiedy</legend>
+      <label class="stale-rytm">Powtarzaj<select name="rodzaj">
+        <option value="dni_tygodnia">W wybrane dni tygodnia</option>
+        <option value="co_dni">Co kilka dni</option>
+        <option value="miesiecznie">Raz w miesiącu</option>
+        <option value="daty">W dni wybrane w kalendarzu</option>
+        <option value="reczny">Ręczne — zlecam sam („Zleć teraz”)</option>
+      </select></label>
       <div class="dwie">
-        <label>Powtarzaj<select name="rodzaj">
-          <option value="reczny">Pojedyncze — zlecam sam („Zleć teraz”)</option>
-          <option value="codziennie">Stałe: codziennie</option>
-          <option value="dni_tygodnia">Stałe: w wybrane dni tygodnia</option>
-          <option value="co_dni">Stałe: co kilka dni</option>
-          <option value="miesiecznie">Stałe: raz w miesiącu</option>
-          <option value="daty">Stałe: w dni wybrane w kalendarzu</option>
-        </select></label>
         <label id="stale-dzien">Dzień miesiąca<input name="dzien_miesiaca" type="number" min="1" max="31" inputmode="numeric"></label>
         <label id="stale-co-dni">Co ile dni<input name="co" type="number" min="2" max="365" inputmode="numeric"></label>
-        <label id="stale-co-tygodni">Jak często<select name="co_tygodni">
-          <option value="1">co tydzień</option><option value="2">co 2 tygodnie</option>
-          <option value="3">co 3 tygodnie</option><option value="4">co 4 tygodnie</option>
-        </select></label>
       </div>
       <div id="stale-mies" class="zaznaczenia mies-tryb">
         <label class="zaznacz"><input type="radio" name="mies_tryb" value="dzien"> Dnia o numerze (wyżej)</label>
@@ -419,53 +405,43 @@
             <option value="3">środę</option><option value="4">czwartek</option><option value="5">piątek</option>
             <option value="6">sobotę</option><option value="7">niedzielę</option></select> miesiąca</label>
       </div>
-      <div id="stale-dni" class="zaznaczenia"></div>
-      <div class="dwie" id="stale-zakres">
-        <label>Od dnia<input name="od" type="date"></label>
-        <label>Do dnia (puste = bez końca)<input name="do" type="date"></label>
+      <div id="stale-dni-pole">
+        <div class="stale-chipy" id="stale-dni" role="group" aria-label="Dni tygodnia"></div>
+        <div class="stale-skroty"><button type="button" class="chip maly" data-dni-gotowe="robocze">Dni robocze</button>
+          <button type="button" class="chip maly" data-dni-gotowe="codziennie">Codziennie</button></div>
       </div>
-      <label class="zaznacz" id="stale-swieta"><input type="checkbox" name="bez_swiat"> Pomijaj święta (dni wolne w Polsce)</label>
-      <p class="slaby konto-drobne" id="stale-zmiany-opis">Zmiany (nic nie zaznaczone = raz dziennie, na start pierwszej zmiany):</p>
-      <div id="stale-zmiany" class="zaznaczenia"></div>
-      <label id="stale-co">W ciągu zmiany<select name="co_min">
-        <option value="">raz</option>
-        <option value="60">co 1 godzinę</option>
-        <option value="120">co 2 godziny</option>
-        <option value="180">co 3 godziny</option>
-        <option value="240">co 4 godziny</option>
-      </select></label>
-      <!-- Podgląd przed zapisem (badanie: inne narzędzia pokazują terminy dopiero po zapisie): miesiąc z dniami zlecenia,
-           dotknięcie dnia — pomiń/przywróć, przy „w dni wybrane w kalendarzu” — dodaj/zabierz. -->
-      <div class="mini-kalendarz" id="stale-kalendarz">
-        <div class="kal-nawigacja"><button type="button" class="maly" data-mkal="-1" aria-label="Poprzedni miesiąc"><span class="ik" data-ikona="szewron-lewo" data-rozmiar="18"></span></button>
-          <b id="stale-kal-tytul"></b><button type="button" class="maly" data-mkal="1" aria-label="Następny miesiąc"><span class="ik" data-ikona="szewron-prawo" data-rozmiar="18"></span></button></div>
-        <div class="kal-siatka mala" id="stale-kal-siatka" role="grid" aria-label="Dni zlecenia"></div>
-        <p class="slaby konto-drobne" id="stale-kal-opis"></p>
+      <p class="slaby konto-drobne" id="stale-zmiany-opis">Każda zaznaczona zmiana dostaje własne zlecenie. Bez zaznaczenia: jedno dziennie, na start pierwszej zmiany.</p>
+      <div class="stale-chipy" id="stale-zmiany" role="group" aria-label="Zmiany"></div>
+      <!-- Różne zmiany w różne dni (harmonogram.zmiany_wg_dni, kontrakt od 1.34.0): wiersz na każdy zaznaczony dzień. -->
+      <div class="stale-skroty" id="stale-wg-dni-pole" hidden>
+        <button type="button" class="chip maly" id="stale-wg-dni" aria-pressed="false">Różne zmiany w różne dni</button>
+        <button type="button" class="chip maly" id="stale-sobota-i">Sobota tylko zmiana I</button>
       </div>
+      <div class="stale-macierz" id="stale-zmiany-dni" hidden></div>
+      <div id="stale-kal-kiedy"></div>
       <p class="najblizsze" id="stale-najblizsze" aria-live="polite"></p>
     </fieldset>
-    <fieldset id="stale-termin"><legend>Termin</legend>
-      <div class="dwie">
-        <label>Do kiedy<select name="termin_rodzaj">
-          <option value="koniec_zmiany">Do końca zmiany</option>
-          <option value="godzina">Do godziny</option>
-          <option value="minuty">Minut od startu zmiany</option>
-        </select></label>
-        <label id="stale-godzina">Godzina<input name="godzina" type="time"></label>
-        <label id="stale-minuty">Minut<input name="minuty" type="number" min="1" max="10080" inputmode="numeric"></label>
+    <fieldset id="stale-pozycje-pole" data-krok="3" hidden><legend>Pozycje — godzina od startu zmiany i co zrobić</legend>
+      <div id="stale-pozycje" class="pozycje-checklisty"></div>
+      <div class="dodaj-pozycje">
+        <button type="button" data-dodaj-pozycje>+ Dodaj pozycję</button>
+        <button type="button" data-wklej-liste aria-expanded="false">Wklej listę</button>
+        <select data-z-zapisanych aria-label="Dodaj pozycję z zapisanych zleceń"><option value="">+ Z zapisanych…</option></select>
       </div>
-      <!-- Okno od–do (2026-10-26): przed tą godziną zlecenie jest widoczne, ale nie da się go zrobić. -->
-      <div class="dwie">
-        <label>Od kiedy<select name="okno_rodzaj">
-          <option value="">Od startu zmiany</option>
-          <option value="godzina">Od godziny</option>
-          <option value="minuty">Minut po starcie zmiany</option>
-        </select></label>
-        <label id="stale-okno-godzina">Godzina od<input name="okno_godzina" type="time"></label>
-        <label id="stale-okno-minuty">Minut po starcie<input name="okno_minuty" type="number" min="1" max="10080" inputmode="numeric"></label>
+      <div class="wklej-liste" id="stale-wklej" hidden>
+        <label>Jedna pozycja w wierszu, opcjonalnie „g:mm nazwa” (np. „2:00 Obchód BHP”)
+          <textarea id="stale-wklej-tekst" rows="5" placeholder="0:30 Sprawdź czystość stanowiska&#10;2:00 Obchód BHP&#10;Sprzątanie po zmianie"></textarea></label>
+        <div class="stale-skroty"><button type="button" class="glowny maly" data-wklej-dodaj>Dodaj do listy</button><button type="button" class="maly" data-wklej-anuluj>Anuluj</button></div>
       </div>
+      <p class="slaby konto-drobne">Enter w nazwie dodaje nową pozycję. Opis jest pod nazwą, a maszyny, zdjęcie, notatka i skan — pod „⋯”.</p>
     </fieldset>
-    <fieldset id="stale-wymagania"><legend>Do zakończenia potrzebne</legend>
+    <!-- Właściciel 2026-10-26: „wyznaczać kilka maszyn do sprawdzenia” — jak w oknie „Nowe zlecenie” (D56): pola wyboru,
+         ukryte pole „maszyna” = pierwsza zaznaczona (skan, wymagania). Zwykłe zapisane (bez pozycji). -->
+    <fieldset id="stale-maszyny" data-krok="3"><legend>Maszyny (zaznacz jedną albo kilka)</legend>
+      <div class="maszyny-akcje"><button type="button" class="maly" data-maszyny-stale="wszystkie">Wszystkie</button>
+        <button type="button" class="maly" data-maszyny-stale="zadna">Żadna</button></div>
+      <div class="maszyny-lista" data-maszyny-stalego></div></fieldset>
+    <fieldset id="stale-wymagania" data-krok="3"><legend>Do zakończenia potrzebne</legend>
       <div class="zaznaczenia">
         <label class="zaznacz"><input type="checkbox" name="wymagaj_zdjecia"> <span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Wymagaj zdjęcia</label>
         <label class="zaznacz"><input type="checkbox" name="wymagaj_notatki"> <span class="ik" data-ikona="notatka" data-rozmiar="16"></span>Wymagaj notatki</label>
@@ -473,13 +449,107 @@
       </div>
       <p class="slaby konto-drobne" data-bez-maszyny>Skan QR — najpierw wybierz maszynę.</p>
     </fieldset>
-    <div class="zaznaczenia">
-      <label class="zaznacz"><input type="checkbox" name="pilne"> Pilne</label>
-      <label class="zaznacz" id="stale-aktywne"><input type="checkbox" name="aktywny"> Aktywne (odznacz, żeby wstrzymać)</label>
-    </div>
-    <p class="slaby" id="stale-podglad"></p>
+    <!-- D71: „Dla kogo” — działy jako przyciski, „kto” jako wybór jednego (właściciel 2026-11-21: prościej; linia i maszyny w Zaawansowane). -->
+    <fieldset id="stale-dla" data-krok="4"><legend>Dla kogo</legend>
+      <div class="dla-dzialy"><div id="stale-dzialy" class="stale-chipy"></div>
+        <button type="button" class="maly" id="stale-wszystkie">Wszystkie działy</button></div>
+      <div class="stale-chipy kto" role="radiogroup" aria-label="Kto robi">
+        <label class="zaznacz"><input type="radio" name="kto" value="dzial"> Jedna osoba z działu</label>
+        <label class="zaznacz"><input type="radio" name="kto" value="kazdy"> Każdy osobno</label>
+        <label class="zaznacz"><input type="radio" name="kto" value="osoby"> Wybrane osoby</label>
+      </div>
+      <div id="stale-osoby" class="zaznaczenia osoby-stalego"></div>
+      <p class="slaby konto-drobne" id="stale-adresaci" aria-live="polite"></p>
+    </fieldset>
+    <details id="stale-zaawansowane" class="stale-zaawansowane" data-krok="5">
+      <summary>Zaawansowane <span class="slaby">linia, maszyny, powtarzanie w ciągu zmiany, daty i święta, termin, wstrzymanie</span></summary>
+      <div class="stale-zaaw-tresc">
+        <div class="dwie">
+          <label class="pole-linii">Linia<select name="linia"><option value="">— każda —</option></select></label>
+          <label id="stale-maszyna" hidden>Maszyna<select name="maszyna"><option value="">— żadna —</option></select></label>
+        </div>
+        <div class="dwie">
+          <label id="stale-co-tygodni">Jak często<select name="co_tygodni">
+            <option value="1">co tydzień</option><option value="2">co 2 tygodnie</option>
+            <option value="3">co 3 tygodnie</option><option value="4">co 4 tygodnie</option>
+          </select></label>
+          <label id="stale-co">W ciągu zmiany<select name="co_min">
+            <option value="">raz</option>
+            <option value="60">co 1 godzinę</option>
+            <option value="120">co 2 godziny</option>
+            <option value="180">co 3 godziny</option>
+            <option value="240">co 4 godziny</option>
+          </select></label>
+        </div>
+        <div class="dwie" id="stale-zakres">
+          <label>Od dnia<input name="od" type="date"></label>
+          <label>Do dnia (puste = bez końca)<input name="do" type="date"></label>
+        </div>
+        <label class="zaznacz" id="stale-swieta"><input type="checkbox" name="bez_swiat"> Pomijaj święta (dni wolne w Polsce)</label>
+        <!-- Podgląd przed zapisem: miesiąc z dniami zlecenia, dotknięcie dnia — pomiń/przywróć, przy „w dni wybrane w kalendarzu” —
+             dodaj/zabierz. Przy tym rodzaju stoi pod „Kiedy”, w pozostałych tutaj (stale.js przenosi węzeł). -->
+        <div id="stale-kal-zaaw"><div class="mini-kalendarz" id="stale-kalendarz">
+          <div class="kal-nawigacja"><button type="button" class="maly" data-mkal="-1" aria-label="Poprzedni miesiąc"><span class="ik" data-ikona="szewron-lewo" data-rozmiar="18"></span></button>
+            <b id="stale-kal-tytul"></b><button type="button" class="maly" data-mkal="1" aria-label="Następny miesiąc"><span class="ik" data-ikona="szewron-prawo" data-rozmiar="18"></span></button></div>
+          <div class="kal-siatka mala" id="stale-kal-siatka" role="grid" aria-label="Dni zlecenia"></div>
+          <p class="slaby konto-drobne" id="stale-kal-opis"></p>
+        </div></div>
+        <fieldset id="stale-termin"><legend>Termin</legend>
+          <div class="dwie">
+            <label>Do kiedy<select name="termin_rodzaj">
+              <option value="koniec_zmiany">Do końca zmiany</option>
+              <option value="godzina">Do godziny</option>
+              <option value="minuty">Minut od startu zmiany</option>
+            </select></label>
+            <label id="stale-godzina">Godzina<input name="godzina" type="time"></label>
+            <label id="stale-minuty">Minut<input name="minuty" type="number" min="1" max="10080" inputmode="numeric"></label>
+          </div>
+          <!-- Okno od–do (2026-10-26): przed tą godziną zlecenie jest widoczne, ale nie da się go zrobić. -->
+          <div class="dwie">
+            <label>Od kiedy<select name="okno_rodzaj">
+              <option value="">Od startu zmiany</option>
+              <option value="godzina">Od godziny</option>
+              <option value="minuty">Minut po starcie zmiany</option>
+            </select></label>
+            <label id="stale-okno-godzina">Godzina od<input name="okno_godzina" type="time"></label>
+            <label id="stale-okno-minuty">Minut po starcie<input name="okno_minuty" type="number" min="1" max="10080" inputmode="numeric"></label>
+          </div>
+        </fieldset>
+        <label class="zaznacz" id="stale-aktywne"><input type="checkbox" name="aktywny"> Aktywne (odznacz, żeby wstrzymać)</label>
+      </div>
+    </details>
+    <ul class="stale-sprawdz" id="stale-sprawdz" data-krok="5" hidden></ul>
     <p class="blad" role="alert" hidden></p>
-    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Zapisz</button></div>
+    <div class="przyciski">
+      <span class="stale-suma slaby" id="stale-podsumowanie"></span>
+      <button type="button" data-zamknij>Anuluj</button>
+      <button type="button" data-krok-wstecz hidden>Wstecz</button>
+      <button type="button" class="glowny" data-krok-dalej hidden>Dalej</button>
+      <button class="glowny" type="submit">Zapisz</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Duplikuj wzorzec na inną zmianę lub dział: wybór, potem to samo okno z gotową kopią do sprawdzenia. -->
+<dialog id="okno-duplikatu" class="okno" aria-labelledby="t-okno-duplikatu">
+  <form method="dialog" id="formularz-duplikatu" autocomplete="off">
+    <h2 id="t-okno-duplikatu">Duplikuj</h2>
+    <p class="slaby" id="duplikat-nazwa"></p>
+    <fieldset><legend>Zmiana</legend><div class="stale-chipy" id="duplikat-zmiany"></div></fieldset>
+    <fieldset><legend>Dział</legend><div class="stale-chipy" id="duplikat-dzialy"></div></fieldset>
+    <p class="blad" role="alert" hidden></p>
+    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit">Utwórz kopię</button></div>
+  </form>
+</dialog>
+
+<!-- „Dodaj sobotę (zmiana I) do wybranych checklist” (Zapisane): lista z podglądem przed i po, potwierdzenie przyciskiem. -->
+<dialog id="okno-soboty" class="okno okno-szerokie" aria-labelledby="t-okno-soboty">
+  <form method="dialog" id="formularz-soboty" autocomplete="off">
+    <h2 id="t-okno-soboty">Dodaj sobotę do checklist</h2>
+    <p class="slaby" id="sobota-opis"></p>
+    <div id="sobota-lista" class="zaznaczenia sobota-lista"></div>
+    <p class="blad" role="alert" hidden></p>
+    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="glowny" type="submit" id="sobota-tak">Dodaj sobotę</button></div>
   </form>
 </dialog>
 
@@ -632,7 +702,7 @@
 <dialog id="okno-czyszczenia" class="okno" aria-labelledby="t-okno-czyszczenia">
   <form method="dialog">
     <h2 id="t-okno-czyszczenia"><span class="ik" data-ikona="czyszczenie" data-rozmiar="20"></span>Czyszczenie zleceń</h2>
-    <p class="slaby">Zaznacz zlecenia, które mają zniknąć <b>na stałe</b> (razem z historią). Zapisane i stałe zlecenia oraz zaplanowane na później
+    <p class="slaby">Zaznacz zlecenia, które mają zniknąć <b>na stałe</b> (razem z historią). Zapisane zlecenia oraz zaplanowane na później
       zostają. Przed usunięciem serwer robi pełną kopię bazy i zostawia ją na swoim dysku w folderze Odlozone (5 ostatnich, najwyżej 90 dni). To cała baza, także klucze i skróty haseł — nie wysyłaj jej nikomu.</p>
     <div class="czysc-krok">
       <b>1. Które pokazać?</b>

@@ -53,12 +53,6 @@
     <div class="kto"><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
-  <!-- UI etap 3: pasek nie do przeoczenia (ikona glos-wyl, przyklejony u góry) — zostaje, aż ktoś dotknie ekranu. -->
-  <div id="dzwonek" class="hala-dzwonek" role="button" tabindex="0" hidden>
-    <span class="ikona" aria-hidden="true"><span class="ik" data-ikona="glos-wyl" data-rozmiar="20"></span></span>
-    <span>Dźwięk wyłączony — <u>dotknij, żeby włączyć</u></span>
-  </div>
-
   <main id="ekran" class="ekran" tabindex="-1"></main>
 
   <!-- Menu jak w GK Trasy/GK Flota: po lewej na komputerze i tablecie (hala.css → .hala-menu), dolny pasek na telefonie. -->
@@ -75,7 +69,7 @@
          STYL-GK §8 (2026-11-04): na telefonie najwyżej 4 ekrany + Więcej — Plan (`.w-wiecej`) jest tam tylko w „Więcej”,
          na komputerze zostaje w menu bocznym. -->
     <a href="#kpi" data-ekran="kpi" class="tylko-kpi w-wiecej"><span class="ikona" data-ikona="kpi" aria-hidden="true"></span>KPI</a>
-    <a href="#plan" data-ekran="plan" class="tylko-kierownik w-wiecej"><span class="ikona" data-ikona="plan" aria-hidden="true"></span>Plan</a>
+    <a href="#plan" data-ekran="plan" class="tylko-kierownik w-wiecej"><span class="ikona" data-ikona="plan" aria-hidden="true"></span>Przeglądy: plan</a>
     <a href="#zlecenia" data-ekran="zlecenia"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span>Zlecenia<b id="licznik-zlecen" class="plakietka" hidden></b></a>
     <!-- D64: „Więcej” = ikona wiecej (ikona ustawienia to Administracja w Panelu), zawsze ostatnie. -->
     <a href="#wiecej" data-ekran="wiecej"><span class="ikona" data-ikona="wiecej" aria-hidden="true"></span>Więcej</a>
@@ -98,6 +92,7 @@
 <script src="../wspolne/kolejka-ui.js"></script>
 <script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>
+<script src="../wspolne/naglowek.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="../wspolne/skaner.js"></script>
 <script src="widok.js"></script>

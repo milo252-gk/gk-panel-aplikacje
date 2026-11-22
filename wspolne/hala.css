@@ -217,7 +217,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 @media (max-width: 820px) {
   body .hala-polaczenie:not(.ok) { position: fixed; top: auto; left: 0; right: 0; width: auto; z-index: 46;
     bottom: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); padding: 3px 10px; line-height: 1.35; }
-  body:has(.hala-polaczenie:not(.ok)) .hala-skan-fab { bottom: calc(var(--dol-wys) + 48px + env(safe-area-inset-bottom, 0px)); }
+  body:has(.hala-polaczenie:not(.ok)) .hala-skan-fab { bottom: calc(var(--dol-wys) + 28px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ------------------------------------------------ ekran logowania (standard GK) */
@@ -514,8 +514,8 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
 .hala-blad-globalny[hidden] { display: none; }
 /* D64: przy pływającym „▣ Skanuj” (body.hala-ma-skan) komunikat stoi nad nim, a koniec listy da się przewinąć spod
    przycisku — ostatnie „Zrobione / Nie mogę” nie leżą już pod nim. */
-body.hala-ma-skan .komunikaty { bottom: calc(var(--dol-wys) + 84px + env(safe-area-inset-bottom, 0px)); }
-body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: calc(var(--dol-wys) + 90px + env(safe-area-inset-bottom, 0px)); }
+body.hala-ma-skan .komunikaty { bottom: calc(var(--dol-wys) + 56px + env(safe-area-inset-bottom, 0px)); }
+body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: calc(var(--dol-wys) + 64px + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 821px) {
   body.hala-ma-skan .komunikaty { bottom: 90px; }
   body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: 96px; }
@@ -533,7 +533,7 @@ body.hala-ma-skan :is(.ekran, .ekrany) { padding-bottom: calc(var(--dol-wys) + 9
                      padding: 6px 8px 6px 17px; border-radius: 10px; font-size: 14px; box-shadow: var(--cien-mocny); max-width: 480px; box-sizing: border-box; animation: hala-wjazd .18s; }
 .hala-cofnij-karta button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--pomarancz); color: var(--na-pomarancz); font: inherit; font-weight: 700; cursor: pointer; }
 @media (min-width: 821px) { .hala-cofnij { bottom: 18px; } }
-body.hala-ma-skan .hala-cofnij { bottom: calc(var(--dol-wys) + 84px + env(safe-area-inset-bottom, 0px)); }
+body.hala-ma-skan .hala-cofnij { bottom: calc(var(--dol-wys) + 56px + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 821px) { body.hala-ma-skan .hala-cofnij { bottom: 90px; } }
 @media (prefers-reduced-motion: reduce) { .hala-cofnij-karta { animation: none; } }
 
@@ -690,6 +690,7 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-menu-maszyny [data-zadania] { display: grid; gap: 6px; padding-left: 10px; }
 /* D57: „📱 Aplikacje na telefon” w Moje konto — kod QR każdej aplikacji osoby. */
 .hala-konto-aplikacje { width: 100%; min-height: var(--dotyk); font-weight: 700; }
+a.hala-konto-aplikacje { display: flex; align-items: center; justify-content: center; box-sizing: border-box; margin-top: 8px; text-decoration: none; }
 .hala-aplikacje-lista { display: grid; gap: 12px; }
 .hala-aplikacja { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: center; margin: 0; padding: 10px;
   border: 1px solid var(--ramka); border-radius: var(--promien); background: var(--karta); }
@@ -698,23 +699,30 @@ dialog.hala-okno textarea, dialog.hala-okno select { font: inherit; font-size: 1
 .hala-aplikacja-qr.brak { display: flex; align-items: center; justify-content: center; font-size: 36px; background: var(--tlo-neutralne); }
 .hala-aplikacja figcaption { display: grid; gap: 4px; min-width: 0; }
 .hala-aplikacja figcaption a { overflow-wrap: anywhere; font-size: 13px; }
-/* D64: pasek „Dźwięk powiadomień wyłączony — dotknij” (HalaDzwieki.pasek; wzór GK UR) — Lider, UR i KJ jednakowo.
-   Przyklejony pod nagłówkiem, nie do przeoczenia, aż ktoś dotknie ekranu. */
-/* Jeden baner „Dźwięk wyłączony — włącz” w całej rodzinie (STYL-GK §8, 2026-11-19): pasek na pełną szerokość, najwyżej 40 px,
-   ikona glos-wyl, tekst i przycisk „Włącz”, tło ostrzeżenia; znika, gdy dźwięk działa. Klasa .baner-dzwieku to wzór (Panel, Trasy,
-   Flota); .hala-dzwonek (Lider, UR, KJ) wygląda tak samo. */
-.baner-dzwieku, .hala-dzwonek { position: sticky; top: var(--baner-gora, 0px); z-index: 30; display: flex; box-sizing: border-box;
-  align-items: center; justify-content: center; gap: 10px; min-height: 36px; max-height: 40px; padding: 2px 12px; overflow: hidden;
+/* Jeden baner „Dźwięk wyłączony — włącz” w całej rodzinie (STYL-GK §8, 2026-11-19): pasek na pełną szerokość u góry, najwyżej 40 px,
+   ikona glos-wyl, tekst i przycisk „Włącz”, tło ostrzeżenia; znika, gdy dźwięk działa. Zawsze pierwszy w .hala-uklad, nad nagłówkiem
+   (Panel, Lider, UR, KJ — HalaDzwieki.pasek i panel.js); gdy stoi, nagłówek przykleja się pod nim, a nie pod krawędzią okna. */
+:root { --baner-wys: calc(36px + env(safe-area-inset-top, 0px)); --pasek-wys: 0px; }
+.baner-dzwieku { position: sticky; top: var(--pasek-wys); z-index: 30; display: flex; box-sizing: border-box; height: var(--baner-wys);
+  align-items: center; justify-content: center; gap: 10px; padding: calc(2px + env(safe-area-inset-top, 0px)) 12px 2px; overflow: hidden;
   background: var(--zolty-tlo); color: var(--tekst); border-bottom: 2px solid var(--zolty); text-align: center; font-weight: 700;
   font-size: 14px; line-height: 1.2; cursor: pointer; }
-.hala-dzwonek { position: sticky; top: calc(var(--gora-wys) + env(safe-area-inset-top, 0px)); z-index: 5; }   /* Lider/UR/KJ: pod nagłówkiem (D64) */
-.baner-dzwieku .ikona, .hala-dzwonek .ikona { display: inline-flex; color: var(--zolty); }
-.baner-dzwieku .ikona svg, .hala-dzwonek .ikona svg, .baner-dzwieku .ik svg { width: 20px; height: 20px; display: block; }
+.hala-uklad > .naglowek { top: var(--pasek-wys); }
+/* Baner już wypełnia pas pod notchem (padding wyżej), więc przyklejony pod nim nagłówek nie dolicza go drugi raz. */
+.hala-uklad:has(> .baner-dzwieku:not([hidden])) > .naglowek { top: calc(var(--pasek-wys) + var(--baner-wys)); min-height: var(--gora-wys); padding-top: 0; }
+/* Komputer: pasek „Brak połączenia” jest przyklejony u góry (z-index 50) — ma stałe 30 px, a baner i nagłówek przyklejają się pod nim. */
+@media (min-width: 821px) {
+  .hala-polaczenie:not(.ok) { box-sizing: border-box; height: 30px; min-height: 0; padding-top: 0; padding-bottom: 0; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; white-space: nowrap; }
+  body:has(.hala-polaczenie:not(.ok)) { --pasek-wys: 30px; }
+}
+.baner-dzwieku .ikona { display: inline-flex; color: var(--zolty); }
+.baner-dzwieku .ikona svg, .baner-dzwieku .ik svg { width: 20px; height: 20px; display: block; }
 .baner-dzwieku .ik { margin-right: 0; }
 .baner-przycisk, .baner-dzwieku button { display: inline-flex; align-items: center; min-height: 30px; padding: 0 14px; border-radius: 10px;
   border: 1px solid var(--zolty); background: var(--zolty); color: var(--na-barwie); font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
-.baner-dzwieku[hidden], .hala-dzwonek[hidden] { display: none; }
-@media (prefers-reduced-motion: no-preference) { .baner-dzwieku, .hala-dzwonek { animation: baner-wjazd .18s ease-out; } }
+.baner-dzwieku[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) { .baner-dzwieku { animation: baner-wjazd .18s ease-out; } }
 @keyframes baner-wjazd { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 /* D61: druk jednego kodu aplikacji — mały przycisk pod opisem (wszystkie naraz: „🖨 Drukuj wszystkie” na dole okna). */
@@ -740,13 +748,12 @@ details[open] > .szewron-summary::before { transform: rotate(90deg); }
 body:has(.ekran:not([hidden]) .wlasny-skan) .hala-skan-fab { display: none; }
 .hala-skan-fab:focus-visible { outline: 3px solid var(--tekst); outline-offset: 2px; }
 @media (min-width: 821px) { .hala-skan-fab { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); } }
-/* Ocena UX 2026-11-17, poz. 2 (P1): pływający przycisk przykrywał „Więcej” karty zlecenia i prawe części kart. Na telefonie jest
-   mniejszy (48 px), a po przewinięciu listy w dół zwija się do samej ikony (dzialania.js → przyciskSkanu dodaje .zwiniety; wraca
-   na górze ekranu i przy przewijaniu w górę). Zapas pod listą (body.hala-ma-skan) jest wyżej. Funkcja bez zmian. */
+/* Audyt 2026-11-21: na telefonie pływający przycisk zasłaniał prawą kolumnę listy (statusy, „Więcej” kart), także po zwinięciu do ikony.
+   Teraz stoi jako pasek na całą szerokość tuż nad dolnym paskiem ekranów — nie leży na treści, a koniec listy przewija się nad nim
+   (zapas w body.hala-ma-skan). Na komputerze zostaje przyciskiem w rogu. */
 @media (max-width: 820px) {
-  .hala-skan-fab { min-height: 48px; padding: 0 16px; font-size: 15px; gap: 6px; right: 12px; transition: padding .15s; }
-  .hala-skan-fab.zwiniety { padding: 0; width: 48px; justify-content: center; }
-  .hala-skan-fab.zwiniety .napis { display: none; }
+  .hala-skan-fab { left: 0; right: 0; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 0; font-size: 15px; gap: 8px;
+    box-shadow: 0 -1px 0 var(--ramka); }
 }
 /* D56: wymagania zlecenia odhaczane na żywo i kroki postępu. */
 .hala-zlecenie-wymogi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -870,3 +877,21 @@ dialog.hala-zamkniecie .hala-zamkniecie-tytul { margin: 0; font-size: 16px; }
 body.hala-ma-skan :is(.hala-zlecenie-formularz, .hala-pozycja-panel) { padding-bottom: 76px; }
 /* Przy pisaniu (klawiatura telefonu zmniejsza ekran i „Skanuj” wisiałby tuż nad polem i przyciskiem „Wyślij”) pływający przycisk znika. */
 @media (max-width: 820px) { body:has(textarea:focus, input:not([type="checkbox"], [type="radio"], [type="file"]):focus) .hala-skan-fab { display: none; } }
+
+/* Prawa strona nagłówka: Szukaj, dzwonek dźwięku, konto — wszystkie cztery aplikacje (naglowek.js, Panel: panel.js). Na telefonie sam znak lupy. */
+.hala-uklad > .naglowek .kto { display: flex; align-items: center; gap: 4px; margin-left: auto; color: var(--na-marce); white-space: nowrap; }
+.naglowek #szukaj .szukaj-napis { font-size: 14px; }
+@media (max-width: 600px) { .naglowek .szukaj-napis { display: none; } }
+/* Okno „Szukaj” (nagłówek): pole, wyniki pogrupowane, znaleziony wiersz listy dostaje ramkę. */
+.okno-szukaj { width: min(560px, 94vw); }
+.okno-szukaj input[type="search"] { width: 100%; box-sizing: border-box; min-height: 48px; font-size: 17px; }
+/* Flex zamiast siatki: w siatce z max-height wiersze się ściskały i wyniki nachodziły na siebie (audyt 2026-11-18, telefon). */
+.szukaj-wyniki { margin-top: 10px; max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.szukaj-wyniki > * { flex: none; }
+.szukaj-grupa { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--tekst-slaby); }
+.szukaj-wynik { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px;
+  text-align: left; background: var(--karta); color: var(--tekst); border: 1px solid var(--ramka); border-radius: var(--promien, 10px); font-weight: 400; }
+.szukaj-tekst { display: grid; gap: 2px; min-width: 0; }
+.szukaj-tekst b { overflow-wrap: anywhere; }
+.szukaj-wynik .znacznik { flex: none; }
+.znalezione { outline: 3px solid var(--pomarancz); outline-offset: 2px; }

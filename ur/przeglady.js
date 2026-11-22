@@ -59,7 +59,7 @@
           ${UR.mozna('przeglad.zaplanowany') && kart ? '<button type="button" id="zaplanuj">+ Zaplanuj</button>' : ''}</div>
         <div class="wybor filtr" id="filtr-przegladow">${[['wszystkie', 'Wszystkie'], ['moje', 'Moje']].map(([kod, n]) =>
           `<button type="button" data-filtr="${kod}" aria-pressed="${f === kod}">${n}</button>`).join('')}</div>
-        ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">Planie</a>.' : ' Poproś kierownika UR o plan przeglądów.'}</p>` : ''}
+        ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">planie przeglądów</a>.' : ' Poproś kierownika UR o plan przeglądów.'}</p>` : ''}
         ${sekcja('Po terminie', g.opoznione, 'tekst-alarm')}
         ${sekcja('W trakcie', g.wTrakcie)}
         ${sekcja('Dziś', g.dzis, '', 'Na dziś nic nie zaplanowano')}

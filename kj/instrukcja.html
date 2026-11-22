@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Instrukcja w aplikacji (2026-11-21): telefon z GitHub Pages nie ma pliku Instrukcja.pdf z folderu programu na komputerze, więc
+     krótka wersja „na start” leży obok aplikacji i otwiera się w przeglądarce — jak w Panelu. Pełna instrukcja jest w folderze programu. -->
+<script src="../wspolne/motyw.js"></script>
+<title>GK Kontrola Jakości — instrukcja</title>
+<link rel="stylesheet" href="../wspolne/hala.css">
+<style>
+  body { margin: 0; background: var(--tlo); color: var(--tekst); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin: 8px 0 4px; }
+  h2 { font-size: 17px; margin: 22px 0 6px; }
+  p, li { margin: 4px 0; }
+  ul { padding-left: 20px; }
+  .slaby { color: var(--tekst-slaby); }
+  a.wstecz { display: inline-flex; align-items: center; min-height: var(--dotyk); }
+</style>
+</head>
+<body>
+<main>
+  <a class="wstecz" href="./"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Wróć do aplikacji</a>
+  <h1>GK Kontrola Jakości — krótka instrukcja</h1>
+  <p class="slaby">Dla Pracownika KJ i Kierownika KJ.</p>
+
+  <h2>Próba</h2>
+  <p><b>Skanuj maszynę</b> (gdzie są stanowiska — <b>Skanuj stanowisko</b>) → numer zlecenia produkcyjnego (skan przewodnika albo zdjęcie) → liczba sprawdzonych → wady z listy → zdjęcia → <b>Zapisz próbę</b>. Kod nieczytelny? <b>Wybierz z listy</b>. Braki liczą się same; po przekroczeniu progu aplikacja zapyta o partię brakową.</p>
+
+  <h2>Próbkowanie</h2>
+  <p>Ile prób zostało na zmianie (np. 1/2). Próby liderów ponad progiem trafiają do Ciebie: <b>Partia brakowa</b> albo <b>Pomiń</b> (chowa próbę do końca zmiany). Plan ustawia Kierownik KJ: <b>Więcej → Katalog, wyroby, plan</b>.</p>
+
+  <h2>Alerty</h2>
+  <p><b>Nowy alert</b>: tytuł, zdjęcie wzoru i wady, problem, instrukcja dla operatora → <b>Opublikuj</b>. Widzisz, kto potwierdził (np. 1/3).</p>
+
+  <h2>Reklamacje</h2>
+  <p><b>Nowa</b>: kod wyrobu, opis i zdjęcia wady → <b>Zarejestruj</b>. Reklamację zamyka KJ. Pareto wad pokazuje, co daje najwięcej braków.</p>
+
+  <h2>Zlecenia</h2>
+  <p>Zlecenia od Kierownika: <b>Biorę</b> → <b>Zrobione</b> (albo <b>Nie mogę</b>). Zlecenie z próbą zalicza się samo po zapisaniu próby. Pomyłka? Przez kilka sekund świeci pasek „Zrobione. Cofnij”.</p>
+
+  <h2>Skanuj QR</h2>
+  <p>Pasek nad dolnym menu: kod QR maszyny → zlecenie, awaria albo nieprawidłowość. Naklejka nieczytelna? Wpisz w oknie skanera sam kod maszyny (np. WT-01).</p>
+
+  <h2>Konto</h2>
+  <p>Ikona osoby u góry: wygląd (jasny, ciemny), zmiana PIN-u i hasła, powiadomienia, kody QR aplikacji, wyloguj. Hasło wpisujesz raz na 16 godzin na urządzeniu, na co dzień wystarcza PIN.</p>
+
+  <h2>Bez internetu</h2>
+  <p>Zapisy czekają na tym urządzeniu i wyślą się, gdy wróci połączenie. Pasek na dole pokazuje, ile czeka.</p>
+</main>
+</body>
+</html>

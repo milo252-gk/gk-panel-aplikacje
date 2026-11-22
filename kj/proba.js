@@ -68,7 +68,7 @@
             ${mogePartie ? `<button type="button" data-partia-proby="${esc(p.id)}">Partia brakowa</button>` : ''}
             <button type="button" data-pomin-probe="${esc(p.id)}">Pomiń</button></div>`).join('')}</section>` : ''}
         <section class="grupa"><h2>Próby KJ na tej zmianie <span class="slaby">${moje.length}</span></h2>
-          ${widoczne.widoczne.map(kartaProby).join('') || '<p class="pusto">Jeszcze żadnej</p>'}
+          ${widoczne.widoczne.map(kartaProby).join('') || '<p class="pusto">Brak prób na tej zmianie. Zeskanuj maszynę, żeby zacząć pierwszą.</p>'}
           ${widoczne.ukryte ? `<button type="button" class="szeroki" id="wszystkie-proby">Pokaż wszystkie (${moje.length})</button>` : ''}</section>`;
       const b = el.querySelector('#skanuj-stanowisko');
       if (b) b.addEventListener('click', () => KJ.idz('proba/skanuj'));
@@ -106,7 +106,7 @@
       <div class="wiersz"><b>${esc(p.stanowisko)}</b> <span class="slaby">${linia ? esc(linia) + ' · ' : ''}${esc(W.godzina(p.czas))}</span>
         ${p.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
       <div class="wiersz"><span>Braki <b class="${alarm ? 'tekst-alarm' : ''}">${p.braki}/${p.sprawdzone}</b>${p.proc !== null ? ` (${String(p.proc).replace('.', ',')} %)` : ''}</span>
-        ${p.zlecenie ? `<span class="slaby">zlec. ${esc(p.zlecenie)}</span>` : ''}</div>
+        ${p.zlecenie ? `<span class="slaby">zlec. prod. ${esc(p.zlecenie)}</span>` : ''}</div>
     </a>`;
   }
 
@@ -115,7 +115,7 @@
       <div class="wiersz"><span class="znacznik ${p.aktywna ? 'alarm' : 'neutral'}">${esc(p.numer)}</span>
         <b>${esc(p.liniaNazwa)}</b><span class="slaby">${esc(W.kiedy(p.czas, hala.teraz()))}</span>
         ${p.oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
-      <div class="slaby">${[p.zlecenie && 'zlec. ' + p.zlecenie, p.partia && 'partia ' + p.partia, p.wyrob, p.ilosc !== null && p.ilosc + ' szt.'].filter(Boolean).map(esc).join(' · ')}</div>
+      <div class="slaby">${[p.zlecenie && 'zlec. prod. ' + p.zlecenie, p.partia && 'partia ' + p.partia, p.wyrob, p.ilosc !== null && p.ilosc + ' szt.'].filter(Boolean).map(esc).join(' · ')}</div>
       <div class="tekst-opisu">${esc(p.powod)}</div>
     </a>`;
   }
@@ -162,10 +162,10 @@
           <section class="grupa"><h2>Zdjęcia wad</h2><div class="zdjecia" id="p-zdjecia"></div></section>
           <!-- UI etap 3: zlecenie i wyrób rzadko wpisywane na hali — zwinięte pod „Więcej”, żeby formularz był krótki;
                otwarte, gdy brudnopis już coś w nich ma. -->
-          <details class="grupa wiecej-proby" ${W.wiecejProbyOtwarte(f) ? 'open' : ''}><summary>Więcej <span class="slaby">(zlecenie, wyrób — opcjonalnie)</span></summary>
-            <label for="p-zlecenie">Zlecenie / partia</label>
-            <div class="z-przyciskiem"><input id="p-zlecenie" name="zlecenie" value="${esc(f.zlecenie)}" placeholder="Numer z przewodnika" aria-label="Numer zlecenia">
-              <button type="button" id="skanuj-zlecenie" aria-label="Skanuj numer zlecenia">Skanuj</button></div>
+          <details class="grupa wiecej-proby" ${W.wiecejProbyOtwarte(f) ? 'open' : ''}><summary>Więcej <span class="slaby">(zlecenie produkcyjne, wyrób — opcjonalnie)</span></summary>
+            <label for="p-zlecenie">Zlecenie produkcyjne / partia</label>
+            <div class="z-przyciskiem"><input id="p-zlecenie" name="zlecenie" value="${esc(f.zlecenie)}" placeholder="Numer z przewodnika" aria-label="Numer zlecenia produkcyjnego">
+              <button type="button" id="skanuj-zlecenie" aria-label="Skanuj numer zlecenia produkcyjnego">Skanuj</button></div>
             <div id="p-zdjecie-zlecenia"></div>
             <label>Wyrób<select name="wyrob" id="p-wyrob"></select></label>
           </details>
@@ -384,7 +384,7 @@
   }
 
   async function skanujZlecenie() {
-    const t = await KJ.skanuj('Zeskanuj kod przewodnika', 'Numer zlecenia');
+    const t = await KJ.skanuj('Zeskanuj kod przewodnika', 'Numer zlecenia produkcyjnego');
     if (!t) return;
     if (/^HALA:/i.test(t)) { KJ.komunikat('To kod maszyny (albo stanowiska). Zeskanuj kod kreskowy z przewodnika.', 'alarm'); return; }
     f.zlecenie = t;
@@ -402,7 +402,7 @@
     b.innerHTML = bledy.map(esc).join('<br>');
     if (bledy.length) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     if (!f.zlecenie.trim() && !f.zdjecie_zlecenia &&
-        !(await KJ.potwierdz('Bez zlecenia?', 'Bez numeru ani zdjęcia przewodnika tej próby nie da się połączyć z partią.', 'Zapisz bez zlecenia'))) {
+        !(await KJ.potwierdz('Bez numeru zlecenia produkcyjnego?', 'Bez numeru ani zdjęcia przewodnika tej próby nie da się połączyć z partią.', 'Zapisz bez numeru'))) {
       // Pole zlecenia jest zwinięte pod „Więcej” (UI etap 3) — po „Anuluj” otwieramy je, żeby było gdzie wpisać.
       const w = form.querySelector('.wiecej-proby');
       if (w) { w.open = true; form.elements.zlecenie.focus(); }
@@ -459,7 +459,7 @@
       const lista = W.listaPartii({ partie: hala.obiekty('partia'), slowniki: hala.slowniki });
       const aktywne = lista.filter(p => p.aktywna), zwolnione = lista.filter(p => !p.aktywna);
       el.innerHTML = `<h1>Partie brakowe</h1>
-        <div class="lista">${aktywne.map(kartaPartii).join('') || '<p class="pusto ok">Brak partii brakowych</p>'}</div>
+        <div class="lista">${aktywne.map(kartaPartii).join('') || '<p class="pusto ok">Brak partii brakowych. Pojawi się tu, gdy braki w próbie przekroczą próg.</p>'}</div>
         ${zwolnione.length ? `<details class="archiwum"><summary>Zwolnione (${zwolnione.length})</summary><div class="lista">${zwolnione.map(kartaPartii).join('')}</div></details>` : ''}`;
     },
   });
@@ -468,13 +468,13 @@
     zakladka: 'plan',
     rysuj(el, id) {
       const p = hala.obiekt('partia', id);
-      if (!p) { el.innerHTML = '<p class="pusto">Nie ma takiej partii. <a href="#plan">Wróć do planu</a></p>'; return; }
+      if (!p) { el.innerHTML = '<p class="pusto">Nie ma takiej partii. <a href="#plan">Wróć do próbkowania</a></p>'; return; }
       const d = p.dane;
       el.innerHTML = `<a class="wstecz" href="#partie">‹ Partie brakowe</a>
         <div class="wiersz"><span class="znacznik ${p.status === 'brakowa' ? 'alarm' : 'neutral'}">${esc(W.numer(p))}</span><span class="slaby">${esc(p.etykieta)}</span></div>
         <h1>${esc(W.nazwaLinii(hala.slowniki, p.linia))}</h1>
         <dl class="szczegoly">
-          ${d.zlecenie ? `<dt>Zlecenie</dt><dd>${esc(d.zlecenie)}</dd>` : ''}
+          ${d.zlecenie ? `<dt>Zlecenie produkcyjne</dt><dd>${esc(d.zlecenie)}</dd>` : ''}
           ${d.partia ? `<dt>Partia</dt><dd>${esc(d.partia)}</dd>` : ''}
           ${d.wyrob ? `<dt>Wyrób</dt><dd>${esc(d.wyrob)} ${esc(W.nazwaWyrobu(hala.slowniki, d.wyrob) || '')}</dd>` : ''}
           ${d.ilosc !== undefined ? `<dt>Ilość</dt><dd>${esc(d.ilosc)} szt.</dd>` : ''}
@@ -506,13 +506,13 @@
     zakladka: 'plan',
     rysuj(el, id) {
       const p = hala.obiekt('proba', id);
-      if (!p) { el.innerHTML = '<p class="pusto">Nie ma takiej próby. <a href="#plan">Wróć do planu</a></p>'; return; }
+      if (!p) { el.innerHTML = '<p class="pusto">Nie ma takiej próby. <a href="#plan">Wróć do próbkowania</a></p>'; return; }
       const d = p.dane;
       const partia = hala.obiekty('partia', x => x.dane.proba === id)[0];
       const proc = d.sprawdzone ? Math.round(d.braki * 1000 / d.sprawdzone) / 10 : null;
       // Miejsce: stanowisko, maszyna ze skanu albo cała linia (D51) — wcześniej bez stanowiska nagłówek był „—”.
       const miejsce = W.nazwaMiejsca(hala.slowniki, Object.assign({ linia: p.linia }, d)), linia = W.nazwaLinii(hala.slowniki, p.linia);
-      el.innerHTML = `<a class="wstecz" href="#plan">‹ Plan</a>
+      el.innerHTML = `<a class="wstecz" href="#plan">‹ Próbkowanie</a>
         <div class="wiersz"><span class="znacznik ${d.zrodlo === 'kj' ? 'info' : 'neutral'}">${d.zrodlo === 'kj' ? 'Próba KJ' : 'Próba lidera'}</span>
           <span class="slaby">${esc(W.kiedy(d.czas_rozpoczecia || p.utworzono, hala.teraz()))} · ${esc(W.nazwaPracownika(hala.pracownicy, d.kontrolowal) || '')}</span>
           ${p._oczekuje ? '<span class="znacznik info">czeka na wysłanie</span>' : ''}</div>
@@ -523,7 +523,7 @@
           <div class="${proc !== null && proc >= KJ.prog() ? 'alarm' : ''}"><span>Braki</span><b>${esc(d.braki)}</b>${proc !== null ? `<small>${String(proc).replace('.', ',')} %</small>` : ''}</div>
         </div>
         <dl class="szczegoly">
-          <dt>Zlecenie</dt><dd>${esc((d.zlecenie || {}).numer || '—')}</dd>
+          <dt>Zlecenie produkcyjne</dt><dd>${esc((d.zlecenie || {}).numer || '—')}</dd>
           ${d.wyrob ? `<dt>Wyrób</dt><dd>${esc(d.wyrob)} ${esc(W.nazwaWyrobu(hala.slowniki, d.wyrob) || '')}</dd>` : ''}
           <dt>Wady</dt><dd>${(d.wady || []).map(w => `${esc(W.nazwaWady(hala.slowniki, w.kod))} ${esc(w.ilosc)}`).join(', ') || 'brak'}</dd>
           ${d.wnioski ? `<dt>Wnioski</dt><dd>${esc(d.wnioski)}</dd>` : ''}

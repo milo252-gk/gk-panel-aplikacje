@@ -215,8 +215,8 @@
     const stan = doPrzyjecia.length && !przyjete.length ? 'brak' : doPrzyjecia.length ? 'czesc' : przyjete.length ? 'przyjete' : null;
     const d = przyjete.length ? przyjete[0].dane : null;
     const kto = d ? nazwaPracownika(pracownicy, d.przyjal) : null, godz = d && d.czas_przyjecia ? godzina(d.czas_przyjecia) : null;
-    const tekst = stan === 'brak' ? 'Nikt jeszcze nie przyjął zadań'
-      : stan ? `Przyjął: ${kto}${godz ? ' · ' + godz : ''}${stan === 'czesc' ? ' (część zadań czeka)' : ''}` : '';
+    const tekst = stan === 'brak' ? 'Nikt jeszcze nie przyjął zleceń'
+      : stan ? `Przyjął: ${kto}${godz ? ' · ' + godz : ''}${stan === 'czesc' ? ' (część zleceń czeka)' : ''}` : '';
     const odrz = o.odrzucone || {};
     const powod = zl.map(z => odrz[z.id]).find(Boolean) || null;
     const zablokowane = moze && doPrzyjecia.length > 0 && !o.bezPrzyjecia;
@@ -224,7 +224,7 @@
              awaryjne: zablokowane && (!!powod || (o.dotkniecia || 0) >= 2), bezPrzyjecia: !!o.bezPrzyjecia && moze && doPrzyjecia.length > 0,
              podpis: zablokowane ? PODPIS_BLOKADY : '' };
   }
-  const PODPIS_BLOKADY = 'Najpierw przyjmij zadania, potem odhaczaj';
+  const PODPIS_BLOKADY = 'Najpierw przyjmij zlecenia, potem odhaczaj';
 
   /* Czy MÓJ raport zmiany jest już wysłany (właściciel 2026-11-17: lider i mistrz wysyłają po raporcie; rozróżnienie po roli autora
      TYLKO w kliencie). Obiekt zmiana_linii ma jedno pole raport (późniejszy raport zastępuje treść — hub ich nie rozdziela),
@@ -240,12 +240,12 @@
   }
 
   /* Koniec zmiany (właściciel 2026-11-16): „Raport zmiany” jest ostatnim krokiem checklisty. Ile pozycji zostało (niezrobionych
-     i niepominiętych) — gdy coś zostało, koniec zmiany wymaga potwierdzenia „Zakończyć zmianę bez wykonania wszystkich zadań?”. */
+     i niepominiętych) — gdy coś zostało, koniec zmiany wymaga potwierdzenia „Zamknąć zmianę bez wykonania wszystkich pozycji?”. */
   function stanKonca(lista) {
     const d = (lista && lista.dane) || {};
     const poz = d.pozycje || [], wyk = d.wykonane || {}, pom = d.pominiete || {};
     const brakuje = poz.filter(p => !wyk[p.id] && !pom[p.id]).length;
-    return { wszystkie: poz.length, brakuje, komplet: poz.length > 0 && brakuje === 0, pytanie: 'Zakończyć zmianę bez wykonania wszystkich zadań?',
+    return { wszystkie: poz.length, brakuje, komplet: poz.length > 0 && brakuje === 0, pytanie: 'Zamknąć zmianę bez wykonania wszystkich pozycji?',
              opis: brakuje ? `Niezrobione: ${brakuje} z ${poz.length}.` : '' };
   }
 
@@ -263,7 +263,7 @@
   }
 
   /* Jedno zdanie, gdy ktoś chce odhaczyć pozycję przed „Przyjmuję zadania” (ekran Zmiana i karta zlecenia). */
-  const NAJPIERW_PRZYJMIJ = 'Najpierw dotknij „Przyjmuję zadania” na ekranie Zmiana';
+  const NAJPIERW_PRZYJMIJ = 'Najpierw dotknij „Przyjmuję zlecenia” na ekranie Moja zmiana';
 
   /* Linia na starcie: zapamiętana (przesunięcie), inaczej pierwsza z przypisanych, inaczej pierwsza w zakładzie.
      Mistrz z liniami: zapamiętana spoza nich się nie liczy (np. zostało z czasu, gdy jeszcze nie miał linii). */
@@ -307,15 +307,15 @@
 
   /* Zmiana tuż przed podaną — minuta przed jej początkiem. Tak samo liczy hub i hala.js,
      więc zmiana III przez północ i noc zmiany czasu wychodzą same, bez arytmetyki dat. */
-  function poprzedniaZmiana(zmiana, zmiany) {
+  function poprzedniaZmiana(zmiana, zmiany, plan) {
     if (!zmiana || !zmiana.od) return null;
-    return H().zmianaDla(ms(zmiana.od) - MIN, zmiany);
+    return H().zmianaDla(ms(zmiana.od) - MIN, zmiany, plan);
   }
 
   /* Pełny opis zmiany o danym id (od–do). Szukamy chwili w dniu jej początku, dla której
      Hala.zmianaDla zwraca to id — bez własnego czytania godzin (słownik bywa pusty, wtedy
      hala.js bierze godziny domyślne) i bez własnej arytmetyki dat.                          */
-  function zmianaPoId(id, zmiany) {
+  function zmianaPoId(id, zmiany, plan) {
     const m = /^(\d{4})-(\d{2})-(\d{2})\/(.+)$/.exec(id || '');
     if (!m) return null;
     const polnoc = H().zLokalnego(+m[1], +m[2], +m[3], 0, 0);
@@ -323,7 +323,7 @@
     // i formularz szedł do bieżącej zmiany), a zmiana zaczęta po 23:30 widać dopiero po północy (przegląd 2026-10-06).
     // Nadmiar nic nie psuje — liczy się tylko zmiana o tym id.
     for (let i = 0; i < 54; i++) {
-      const z = H().zmianaDla(polnoc + i * 30 * MIN, zmiany);
+      const z = H().zmianaDla(polnoc + i * 30 * MIN, zmiany, plan);
       if (z && z.id === id) return z;
     }
     return null;
@@ -335,14 +335,14 @@
      telefon padł, przyszedł dzień wolny, a kierownik ma dostać raport (recenzja 2026-10-05). Wcześniej warunek
      `lider === ja` i tylko poprzednia zmiana — raport przepadał. Po 24 h zmianę widać już tylko na Panelu („bez raportu”). */
   const RAPORT_ZALEGLY_MS = 24 * 60 * MIN;
-  function zalegleRaporty(zmianyLinii, { linia, teraz, zmiany, pracownik, kontrakt }) {
+  function zalegleRaporty(zmianyLinii, { linia, teraz, zmiany, plan, pracownik, kontrakt }) {
     const role = (pracownik && pracownik.role) || [];
     const spec = kontrakt && kontrakt.zdarzenia && kontrakt.zdarzenia['zmiana.raport'];
     if (!spec || !role.some(r => r === 'admin' || (spec.role || []).includes(r))) return [];
     return (zmianyLinii || [])
       // D67: zmiana otwarta przez lidera (zmiana.rozpoczeta — przy pierwszym odhaczeniu checklisty) albo ze starą migawką.
       .filter(z => z && z.status === 'otwarta' && z.linia === linia && ((z.dane || {}).czas_rozpoczecia || (((z.dane || {}).pozycje) || []).length))
-      .map(zl => ({ zl, zmiana: zmianaPoId((zl.dane || {}).zmiana, zmiany) }))
+      .map(zl => ({ zl, zmiana: zmianaPoId((zl.dane || {}).zmiana, zmiany, plan) }))
       .filter(x => x.zmiana && ms(x.zmiana.do) <= teraz && teraz - ms(x.zmiana.do) <= RAPORT_ZALEGLY_MS)
       .sort((a, b) => ms(b.zmiana.od) - ms(a.zmiana.od));
   }
@@ -731,8 +731,8 @@
   /* Zmiana formularza przy wysyłce (granica zmiany, etap 1): zapamiętane id → TA zmiana albo null, gdy jej już nie da się
      odtworzyć (ktoś zmienił godziny zmian) — nigdy po cichu bieżąca, bo wtedy raport zmiany I szedł do zmiany II.
      Bez zapamiętanego id (formularz poza zmianą) — bieżąca. */
-  function zmianaFormularza(zmianaId, zmiany, zmianaTeraz) {
-    return zmianaId ? zmianaPoId(zmianaId, zmiany) : (zmianaTeraz || null);
+  function zmianaFormularza(zmianaId, zmiany, zmianaTeraz, plan) {
+    return zmianaId ? zmianaPoId(zmianaId, zmiany, plan) : (zmianaTeraz || null);
   }
 
   /* „3 zapisy czekają na wysłanie”, „5 zapisów czeka na wysłanie” (wcześniej „3 czeka na wysłanie”). */

@@ -125,15 +125,23 @@
     // Wiersze: osoby z brelokiem (to oni odbijają się na terminalu) + każdy, kto ma plan w tym tygodniu.
     const osoby = (hala.pracownicy || []).filter(p => p.aktywny !== false && (maja.has(p.id) || dni.some(d => plan.has(`${p.id}|${d}`))))
       .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
-    const komorka = (p, d) => `<td><select data-grafik data-pracownik="${esc(p.id)}" data-dzien="${d}" aria-label="${esc(p.nazwa)} ${d}">
-        <option value="">—</option>${zmiany.map(([k, z]) => `<option value="${esc(k)}" title="${esc(z.od)}–${esc(z.do)}"${plan.get(p.id + '|' + d) === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select></td>`;
+    // D95: zmiany, których plan zakładu tego dnia nie przewiduje, są wyszarzone (wybór nadal możliwy — plan niczego nie blokuje).
+    const komorka = (p, d) => {
+      const planowe = Hala.zmianyPlanowe ? Hala.zmianyPlanowe(d, g.plan_zmian, g.zmiany) : null;
+      return `<td><select data-grafik data-pracownik="${esc(p.id)}" data-dzien="${d}" aria-label="${esc(p.nazwa)} ${d}">
+        <option value="">—</option>${zmiany.map(([k, z]) => {
+          const poza = planowe && !planowe.includes(k);
+          return `<option value="${esc(k)}" title="${esc(z.od)}–${esc(z.do)}${poza ? ' — poza planem zakładu' : ''}"${poza ? ' class="poza-planem"' : ''}${plan.get(p.id + '|' + d) === k ? ' selected' : ''}>${esc(k)}</option>`;
+        }).join('')}</select></td>`;
+    };
+    const startyZmian = zmiany.map(([k, z]) => `${esc(k)} o ${esc(String(z.od).replace(/^0/, ''))}`).join(', ');
     return `<div class="rcp-pasek">
         <button type="button" class="maly" data-akcja="tydzien-wstecz">${P.ik('strzalka-lewo', 14)}Poprzedni</button>
         <b>${esc(S.tydzien.split('-').reverse().join('.'))} – ${esc(dni[6].split('-').reverse().join('.'))}</b>
         <button type="button" class="maly" data-akcja="tydzien-dalej">Następny${P.ik('strzalka-prawo', 14)}</button>
         <button type="button" class="maly" data-akcja="kopiuj-tydzien">Kopiuj ten tydzień na następny</button>
       </div>
-      <p class="slaby opis-widoku">Zmiana I zaczyna się o 6:00, II o 14:00, III o 22:00 — odbicie po starcie zmiany to spóźnienie. Bez planu zmianę
+      <p class="slaby opis-widoku">Zmiany zaczynają się: ${startyZmian} — odbicie po starcie zmiany to spóźnienie. Bez planu zmianę
         podpowiada godzina wejścia. Breloki przypisujesz w części „Breloki”; tu pojawiają się osoby z brelokiem.</p>
       <div class="rcp-siatka-pudlo"><table class="rcp-siatka"><thead><tr><th>Osoba</th>${dni.map((d, i) => `<th>${DNI_TYG[i]} ${esc(d.slice(8))}.${esc(d.slice(5, 7))}</th>`).join('')}</tr></thead>
         <tbody>${osoby.map(p => `<tr><th scope="row">${esc(p.nazwa)}</th>${dni.map(d => komorka(p, d)).join('')}</tr>`).join('')

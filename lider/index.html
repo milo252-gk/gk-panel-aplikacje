@@ -64,13 +64,13 @@
   <header class="naglowek">
     <button id="wybor-linii" class="linia" type="button" aria-label="Zmień linię"></button>
     <div id="opis-zmiany" class="opis-zmiany"></div>
-    <button id="menu" class="kto hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button>
+    <div class="kto"><button id="menu" class="hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
   <div id="wezwania" class="wezwania" aria-live="assertive"></div>
 
   <main class="ekrany">
-    <section id="ekran-zmiana" class="ekran" aria-label="Zmiana"></section>
+    <section id="ekran-zmiana" class="ekran" aria-label="Moja zmiana"></section>
     <section id="ekran-awarie" class="ekran" aria-label="Awaria" hidden></section>
     <section id="ekran-jakosc" class="ekran" aria-label="Jakość" hidden></section>
     <section id="ekran-koniec" class="ekran" aria-label="Koniec zmiany" hidden></section>
@@ -86,11 +86,11 @@
       <div class="hala-menu-nazwa" id="menu-kto"></div>
       <div class="hala-menu-kto" id="menu-aplikacja">GK Lider</div>
     </div>
-    <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona" data-ikona="zmiana" aria-hidden="true"></span>Zmiana</button>
+    <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona" data-ikona="zmiana" aria-hidden="true"></span>Moja zmiana</button>
     <button type="button" data-ekran="jakosc"><span class="ikona" data-ikona="jakosc" aria-hidden="true"></span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>
     <!-- Ikona awaria = awarie (zgłoszenie i lista) w GK Lider i GK Utrzymanie Ruchu; ikona przeglady to w UR przeglądy — jedna ikona, jedna rzecz.
          UI etap 2: jedna czerwona zakładka zamiast przycisku AWARIA i zakładki „Awarie” — zgłoszenie na górze, pod nim lista. -->
-    <button type="button" data-ekran="awarie" class="awaria"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awaria<span class="plakietka" data-plakietka="awarie" hidden></span></button>
+    <button type="button" data-ekran="awarie" class="awaria"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awarie<span class="plakietka" data-plakietka="awarie" hidden></span></button>
     <button type="button" data-ekran="zlecenia"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span>Zlecenia<span class="plakietka" data-plakietka="zlecenia" hidden></span></button>
     <!-- D74 (właściciel 2026-10-16): menu kończy się „Zlecenia” i „Więcej”, jak w UR i KJ (D64) — „Koniec zmiany” jest w Więcej. -->
     <button type="button" data-ekran="wiecej"><span class="ikona" data-ikona="wiecej" aria-hidden="true"></span>Więcej<span class="plakietka" data-plakietka="wiecej" hidden></span></button>
@@ -122,6 +122,7 @@
 <script src="../wspolne/kolejka-ui.js"></script>
 <script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>
+<script src="../wspolne/naglowek.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="../wspolne/skaner.js"></script>
 <script src="widok.js"></script>

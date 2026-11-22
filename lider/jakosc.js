@@ -44,9 +44,9 @@
       <div class="blokada-gora">
         <span class="znacznik alarm">Alert jakości</span>
         <span class="slaby">${esc(a.numer || '—')} · ${esc(W.godzina(d.czas_publikacji || a.utworzono))}${lista.length > 1 ? ` · 1 z ${lista.length}` : ''}</span>
-        <button type="button" class="alarm maly" data-awaria>${window.GKIkony ? `<span class="ik">${window.GKIkony.html('awaria', 18)}</span>` : ''}Awaria</button>
+        <button type="button" class="alarm maly" data-awaria>${window.GKIkony ? `<span class="ik">${window.GKIkony.html('awaria', 18)}</span>` : ''}Zgłoś awarię</button>
       </div>
-      <h2 id="blokada-tytul">${esc(d.tytul || 'Alert jakościowy')}</h2>
+      <h2 id="blokada-tytul">${esc(d.tytul || 'Alert jakości')}</h2>
       ${d.wyrob ? `<p class="slaby">Wyrób: ${esc(d.wyrob)}</p>` : ''}
       <p>${esc(d.opis || '')}</p>
       <div class="instrukcja"><b>Co robić na linii</b><p>${esc(d.instrukcja || '')}</p></div>
@@ -138,7 +138,7 @@
       html: `<dl class="dane">
           <dt>${esc(w.miejsceEtykieta)}</dt><dd>${esc(w.miejsce || '—')}</dd>
           <dt>Kontrolował</dt><dd>${esc(W.nazwaPracownika(hala.pracownicy, d.kontrolowal) || '—')}</dd>
-          <dt>Zlecenie</dt><dd>${esc(w.zlecenie || '—')}</dd>
+          <dt>Zlecenie produkcyjne</dt><dd>${esc(w.zlecenie || '—')}</dd>
           <dt>Sprawdzone</dt><dd>${esc(w.sprawdzone)}</dd>
           <dt>Zgodne / braki</dt><dd>${esc(w.zgodne)} / <b>${esc(w.braki)}</b>${w.proc !== null ? ` (${esc(w.proc)} %)` : ''}</dd>
           <dt>Wady</dt><dd>${esc(w.wady.join(', ') || '—')}</dd>
@@ -185,21 +185,21 @@
             <span class="czas">${esc(W.dataKrotka(a.czas))}</span>
             <span class="tresc"><b>${esc(a.tytul)}</b> <span class="slaby">${esc(a.numer)}</span></span>
             <span class="znacznik ${a.potwierdzony ? 'ok' : a.aktywny ? 'alarm' : 'neutral'}">${a.potwierdzony ? 'Potwierdzony' : a.aktywny ? 'Do potwierdzenia' : a.wygasl ? 'Nieważny' : 'Wycofany'}</span></li>`).join('')
-          || '<li class="pusto ok">Brak aktywnych alertów dla linii</li>'}</ul>
+          || '<li class="pusto ok">Brak aktywnych alertów dla linii. Nowy alert zasłoni ekran do potwierdzenia.</li>'}</ul>
         <h2>Reklamacje klientów</h2>
         <ul class="lista">${rekl.map(r => `<li class="wiersz ${r.przeczytana ? '' : 'pilne'}" data-reklamacja="${esc(r.id)}">
             <span class="czas">${esc(W.dataKrotka(r.czas))}</span>
             <span class="tresc"><b>${esc(r.numer)}</b> ${esc(r.wyrob)} <span class="slaby">${esc(r.opis.slice(0, 80))}</span></span>
             <span class="znacznik ${r.przeczytana ? 'neutral' : 'uwaga'}">${r.przeczytana ? (r.otwarta ? 'Otwarta' : 'Zamknięta') : 'Nowa'}</span></li>`).join('')
-          || '<li class="pusto ok">Brak reklamacji dla linii</li>'}</ul>
+          || '<li class="pusto ok">Brak reklamacji dla linii. Rejestruje je Kontrola Jakości.</li>'}</ul>
         <h2>Moje próby</h2>
-        <ul class="lista">${moje.map(wierszProby).join('') || '<li class="pusto">Brak prób</li>'}</ul>
+        <ul class="lista">${moje.map(wierszProby).join('') || '<li class="pusto">Brak prób. Dodaj pierwszą przyciskiem „+ Próba”.</li>'}</ul>
         <h2>Zgłoszenia BHP — otwarte</h2>
         <ul class="lista">${bhp.map(b => `<li class="wiersz" data-bhp="${esc(b.id)}">
             <span class="czas">${esc(W.godzina((b.dane || {}).czas_zgloszenia || b.utworzono))}</span>
             <span class="tresc"><b>${esc(b.numer || '—')}</b> ${esc(rodzajeBhp[(b.dane || {}).rodzaj] || '')} <span class="slaby">${esc(((b.dane || {}).opis || '').slice(0, 80))}</span></span>
             <button type="button" class="maly" data-zamknij-bhp="${esc(b.id)}">Zamknij</button></li>`).join('')
-          || '<li class="pusto ok">Brak otwartych zgłoszeń</li>'}</ul>`;
+          || '<li class="pusto ok">Brak otwartych zgłoszeń BHP. Nowe dodasz przyciskiem „+ Zgłoszenie BHP”.</li>'}</ul>`;
     },
   };
 

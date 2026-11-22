@@ -475,7 +475,7 @@
      (Zmień linię, Odrzucone) zamykamy je, inaczej przykryłoby tamto. */
   $('menu').addEventListener('click', () => {
     HalaKonto.mojeKonto(hala, {
-      aplikacja: 'lider', komunikat: Lider.komunikat, wyloguj, odrzucone: pokazOdrzucone,
+      aplikacja: 'lider', komunikat: Lider.komunikat, wyloguj, odrzucone: pokazOdrzucone, instrukcja: 'instrukcja.html',
       dodatki: el => {
         const ost = hala.polaczenie.ostatniaSynchronizacja;
         // D49: kierownik zakładu prowadzi tu konta swoich ludzi (wspolne/zespol.js). D76: mistrz nie jest przełożonym lidera —
@@ -668,7 +668,7 @@
   /* D67: pozycja checklisty z czynnością (obsada, próba, audyt BHP, przekazanie) otwiera w karcie zlecenia ten sam formularz
      co na ekranie Zmiana — po wysłaniu formularz odhacza pozycję (L.odhacz). */
   Lider.czynnoscPozycji = {
-    nazwy: { obsada: 'Wpisz obsadę', proba: 'Wypełnij próbę', bhp: 'Zrób audyt BHP', przekazanie: 'Przekaż zmianę' },   // te same czasowniki co w oknie pozycji na ekranie Zmiana (zmiana.js)
+    nazwy: { obsada: 'Wpisz obsadę', proba: 'Wypełnij próbę', bhp: 'Zrób audyt BHP', przekazanie: 'Napisz notatkę dla następnej zmiany' },   // te same czasowniki co w oknie pozycji na ekranie Zmiana (zmiana.js)
     wykonaj: (z, q) => Lider.wykonajPozycje(`${z.id}|${q.id}`),
   };
   /* „Przyjmuję zadania” (ekran Zmiana) to jedyna droga przejęcia checklisty: pozycji checklisty bieżącej zmiany nie otwieramy w karcie
@@ -689,8 +689,8 @@
     const pr = W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy, Lider.opcjePrzyjecia(k.klucz));
     if (!pr.zablokowane) return null;
     if (k.klucz) { Lider.stan.przyjecie.dotkniecia[k.klucz] = (Lider.stan.przyjecie.dotkniecia[k.klucz] || 0) + 1; Lider.narysuj(); }
-    const drugi = (Lider.stan.przyjecie.dotkniecia[k.klucz] || 0) >= 2 ? '. Jeśli to nie działa: „Pracuję bez przyjęcia” na ekranie Zmiana' : '';
-    return (pr.odrzucone ? `Serwer nie przyjął zadań: ${pr.odrzucone}. Dotknij „Przyjmuję zadania” jeszcze raz` : W.NAJPIERW_PRZYJMIJ) + drugi;
+    const drugi = (Lider.stan.przyjecie.dotkniecia[k.klucz] || 0) >= 2 ? '. Jeśli to nie działa: „Pracuję bez przyjęcia” na ekranie Moja zmiana' : '';
+    return (pr.odrzucone ? `Serwer nie przyjął zleceń: ${pr.odrzucone}. Dotknij „Przyjmuję zlecenia” jeszcze raz` : W.NAJPIERW_PRZYJMIJ) + drugi;
   };
   Lider.pracujBezPrzyjecia = () => {
     const k = Lider.kontekst();
@@ -820,6 +820,13 @@
     pokazSesje();
     // D64: pasek „Dźwięk powiadomień wyłączony — dotknij” jak w UR i KJ (HalaDzwieki.pasek).
     if (window.HalaDzwieki) window.HalaDzwieki.pasek(hala);
+    HalaNaglowek.zamontuj(hala, { zrodla: () => [
+      ...HalaZlecenia.wierszeDla(hala, Lider.dzialZlecen()).map(z => ({ grupa: 'Zlecenia', tytul: `${z.numer} · ${z.tytul}`,
+        opis: [z.maszyna, z.dlaKogo, z.zlecil].filter(Boolean).join(' · '), znacznik: z.etykieta, szukaj: z.opis,
+        otworz: () => { Lider.pokazEkran('zlecenia'); HalaNaglowek.zaznacz(z.id); } })),
+      ...Lider.awarieDoSzukania().map(a => ({ grupa: 'Awarie', tytul: `${a.numer} · ${a.maszynaNazwa}`, opis: [a.priorytetNazwa, a.mechanik].filter(Boolean).join(' · '),
+        znacznik: a.etykieta, szukaj: a.opis, otworz: () => Lider.pokazEkran('awarie') })),
+    ] });
     setTimeout(rysujPasek, LASKA_MS + 500);   // po okresie łaski pasek mówi prawdę
     // Nowa wersja: odświeża sama, ale nie przy otwartym oknie (formularz, okno awarii) — aktualizacja.js.
     HalaAktualizacja.pilnuj({ komunikat: Lider.komunikat, zajety: () => Lider.oknoOtwarte() });

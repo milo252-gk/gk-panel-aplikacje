@@ -21,7 +21,8 @@
      zastosuj            <-> zastosuj
      brakWymagan         <-> brak_wymagan
      przesuniecieZakladu <-> przesuniecie_zakladu
-     zmianaDla           <-> zmiana_dla
+     zmianaDla           <-> zmiana_dla (z planem zakładu: pole `planowana`)
+     planDnia, zmianyDnia, zmianyPlanowe <-> plan_dnia, zmiany_dnia, zmiany_planowe (D95: plan zmian zakładu)
      wystapieniaStale    <-> wystapienia_stale
      dzienHarmonogramu   <-> dzien_harmonogramu (D71: kalendarz zleceń stałych)
      swietaPL            <-> swieta_pl
@@ -42,7 +43,7 @@
 (function (global) {
   'use strict';
 
-  const WERSJA_KLIENTA = '0.32.0';
+  const WERSJA_KLIENTA = '0.33.0';
   const PACZKA = 50;                 // zdarzeń na jedno POST
   // Bez limitu prób: zdarzenie to fakt z hali, więc błąd SIECI nigdy go nie wyrzuca —
   // czeka do skutku. Do „odrzuconych” trafia tylko to, czego hub świadomie nie przyjął.
@@ -164,32 +165,55 @@
                             II: { nazwa: 'Zmiana II', od: '14:00', do: '22:00' },
                             III: { nazwa: 'Zmiana III', od: '22:00', do: '06:00' } };
 
-  function zmianaDla(chwila, zmiany) {
+  /* Granice zmiany `z` zaczętej w dniu [r, mi, dz] (czas zakładu jako UTC bez strefy) albo null przy złych godzinach.
+     Jedna reguła godziny z hubem (hhmm ↔ _hhmm): zła godzina = zmiana pominięta po obu stronach. */
+  function granice(r, mi, dz, z) {
+    const m1 = hhmm(z && z.od), m2 = hhmm(z && z.do);
+    if (!m1 || !m2) return null;
+    const startN = Date.UTC(r, mi - 1, dz, m1[0], m1[1]);
+    let koniecN = Date.UTC(r, mi - 1, dz, m2[0], m2[1]);
+    if (koniecN <= startN) koniecN += 86400000;
+    return { startN, koniecN, m1 };
+  }
+
+  function opisZmiany(r, mi, dz, nr, z, g) {
+    const e = new Date(g.koniecN);
+    return { id: `${r}-${String(mi).padStart(2, '0')}-${String(dz).padStart(2, '0')}/${nr}`, nr, nazwa: z.nazwa || nr,
+             od: iso(zLokalnego(r, mi, dz, g.m1[0], g.m1[1])),
+             // godziny z e, nie z m2: '24:00' to już 00:00 następnego dnia
+             do: iso(zLokalnego(e.getUTCFullYear(), e.getUTCMonth() + 1, e.getUTCDate(), e.getUTCHours(), e.getUTCMinutes())) };
+  }
+
+  /* Zmiana, w której wypada chwila. Z planem zakładu (D95) wynik ma też `planowana` — czy plan tego dnia przewiduje tę zmianę;
+     godziny bierze z planu dnia jej startu (to samo id ma zawsze te same od/do). Plan niczego nie blokuje: chwila poza godzinami
+     planu dostaje zmianę ze słownika (`planowana: false`), żeby praca dodatkowa dalej się zapisywała. Bez planu wynik jak przed
+     D95 (bez pola). Bliźniak: zmiana_dla w gk_czas.py. */
+  function zmianaDla(chwila, zmiany, plan) {
     const ms = typeof chwila === 'number' ? chwila : new Date(chwila).getTime();
     const loc = lokalny(ms);
     const lista = zmiany && Object.keys(zmiany).length ? zmiany : ZMIANY_DOMYSLNE;
-    for (const [nr, z] of Object.entries(lista)) {
-      // Jedna reguła godziny z hubem (hhmm ↔ _hhmm): zła godzina = zmiana pominięta po obu stronach.
-      const m1 = hhmm(z && z.od), m2 = hhmm(z && z.do);
-      if (!m1 || !m2) continue;
+    const zPlanem = !!plan && Object.keys(plan).length > 0;
+    let zapasowa = null;
+    for (const nr of Object.keys(lista)) {
       for (const wstecz of [0, 1]) {
-        const dzienMs = Date.UTC(loc.rok, loc.miesiac - 1, loc.dzien - wstecz);
-        const d = new Date(dzienMs);
+        const d = new Date(Date.UTC(loc.rok, loc.miesiac - 1, loc.dzien - wstecz));
         const [r, mi, dz] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
-        const startN = Date.UTC(r, mi - 1, dz, m1[0], m1[1]);
-        let koniecN = Date.UTC(r, mi - 1, dz, m2[0], m2[1]);
-        if (koniecN <= startN) koniecN += 86400000;
-        if (startN <= loc.ms && loc.ms < koniecN) {
-          const e = new Date(koniecN);
-          const data = `${r}-${String(mi).padStart(2, '0')}-${String(dz).padStart(2, '0')}`;
-          return { id: `${data}/${nr}`, nr, nazwa: z.nazwa || nr,
-                   od: iso(zLokalnego(r, mi, dz, m1[0], m1[1])),
-                   // godziny z e, nie z m2: '24:00' to już 00:00 następnego dnia
-                   do: iso(zLokalnego(e.getUTCFullYear(), e.getUTCMonth() + 1, e.getUTCDate(), e.getUTCHours(), e.getUTCMinutes())) };
+        const data = `${r}-${String(mi).padStart(2, '0')}-${String(dz).padStart(2, '0')}`;
+        const zDnia = zPlanem ? zmianyDnia(data, plan, lista)[nr] : lista[nr];
+        const g = granice(r, mi, dz, zDnia);
+        if (g && g.startN <= loc.ms && loc.ms < g.koniecN) {
+          const w = opisZmiany(r, mi, dz, nr, zDnia, g);
+          if (zPlanem) w.planowana = zmianyPlanowe(data, plan, lista).includes(nr);
+          return w;
         }
+        const gb = zPlanem ? granice(r, mi, dz, lista[nr]) : null;
+        if (!zapasowa && gb && gb.startN <= loc.ms && loc.ms < gb.koniecN) zapasowa = { r, mi, dz, nr, zDnia, g: granice(r, mi, dz, zDnia) || gb };
       }
     }
-    return null;
+    if (!zapasowa) return null;
+    const w = opisZmiany(zapasowa.r, zapasowa.mi, zapasowa.dz, zapasowa.nr, zapasowa.zDnia, zapasowa.g);
+    w.planowana = false;
+    return w;
   }
 
   // ---------------------------------------------------------------- reduktor (bliźniak hala.py)
@@ -1134,20 +1158,66 @@
     return [+m[1], +m[2]];
   }
 
+  /* D95: plan zmian zakładu (słownik `plan_zmian`: klucze '1'–'7' = dzień tygodnia, pn = 1, i daty 'RRRR-MM-DD' z pierwszeństwem;
+     wartość {zmiany: [nr], godziny?: {nr: {od, do}}}). Zmiana należy do dnia startu. Brak planu albo wpisu dla dnia = wszystkie
+     zmiany słownika. Przy jakimkolwiek dniu tygodnia w planie święta ustawowe są domyślnie bez pracy (jawna data = praca w święto).
+     `swieta = false` pomija regułę świąt (harmonogram z jawnymi datami albo z `bez_swiat: false`; godziny zmian).
+     Bliźniaki: plan_dnia, zmiany_dnia, zmiany_planowe w gk_czas.py. */
+  function planDnia(plan, data, swieta = true) {
+    if (!plan || !Object.keys(plan).length) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data || '');
+    if (!m) return null;
+    const w = plan[data];
+    if (w && Array.isArray(w.zmiany)) return w;
+    if (swieta && ['1', '2', '3', '4', '5', '6', '7'].some(k => k in plan) && swietaPL(+m[1])[data]) return { zmiany: [] };
+    const dt = (new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() + 6) % 7 + 1;
+    const x = plan[String(dt)];
+    return x && Array.isArray(x.zmiany) ? x : null;
+  }
+
+  function zmianyDnia(data, plan, zmiany) {
+    const baza = zmiany && Object.keys(zmiany).length ? zmiany : ZMIANY_DOMYSLNE;
+    const godziny = (planDnia(plan, data, false) || {}).godziny;
+    if (!godziny || typeof godziny !== 'object') return baza;
+    const wynik = Object.assign({}, baza);
+    for (const [nr, g] of Object.entries(godziny)) {
+      if (nr in wynik && g && hhmm(g.od) && hhmm(g.do)) wynik[nr] = Object.assign({}, wynik[nr], { od: g.od, do: g.do });
+    }
+    return wynik;
+  }
+
+  function zmianyWgStartu(zmiany) {
+    return Object.entries(zmiany && Object.keys(zmiany).length ? zmiany : ZMIANY_DOMYSLNE)
+      .map(([nr, z]) => [nr, hhmm(z && z.od), hhmm(z && z.do)]).filter(x => x[1] && x[2])
+      .sort((a, b) => (a[1][0] * 60 + a[1][1]) - (b[1][0] * 60 + b[1][1]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  }
+
+  function zmianyPlanowe(data, plan, zmiany, swieta = true) {
+    const w = planDnia(plan, data, swieta);
+    const nry = zmianyWgStartu(zmianyDnia(data, plan, zmiany)).map(x => x[0]);
+    return w === null ? nry : nry.filter(nr => w.zmiany.includes(nr));
+  }
+
   /* Wystąpienia zlecenia stałego, które ZACZYNAJĄ SIĘ danego dnia zakładu ('RRRR-MM-DD'): [{klucz, zmiana, start,
      termin}] (ISO UTC). Bliźniak hubu (hala.py → wystapienia_stale), który z tego robi zlecenia; Panel liczy tym
      „następne wystąpienie”. Puste „zmiany” = raz dziennie na start pierwszej zmiany doby; w krótszym miesiącu
-     „31.” = ostatni dzień; termin „godzina” to najbliższa taka godzina po starcie (nocna zmiana — następny dzień). */
-  function wystapieniaStale(kod, szablon, data, zmiany) {
+     „31.” = ostatni dzień; termin „godzina” to najbliższa taka godzina po starcie (nocna zmiana — następny dzień).
+     `zmiany_wg_dni` ({'6': ['I']}) podmienia `zmiany` dla tego dnia tygodnia (pusta lista = tego dnia nic); plan zakładu (D95)
+     zawęża zmiany do pracujących tego dnia i podaje ich godziny. */
+  function wystapieniaStale(kod, szablon, data, zmiany, plan) {
     const h = (szablon && szablon.harmonogram) || {};
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data || '');
     if (!m) return [];
     const [r, mi, dz] = [+m[1], +m[2], +m[3]];
     if (!dzienHarmonogramu(h, data)) return [];
-    const lista = Object.entries(zmiany && Object.keys(zmiany).length ? zmiany : ZMIANY_DOMYSLNE)
-      .map(([nr, z]) => [nr, hhmm(z && z.od), hhmm(z && z.do)]).filter(x => x[1] && x[2])
-      .sort((a, b) => (a[1][0] * 60 + a[1][1]) - (b[1][0] * 60 + b[1][1]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-    const wybrane = (h.zmiany || []).filter(z => typeof z === 'string');
+    const dt = (new Date(Date.UTC(r, mi - 1, dz)).getUTCDay() + 6) % 7 + 1;
+    const wgDni = h.zmiany_wg_dni && typeof h.zmiany_wg_dni === 'object' && !Array.isArray(h.zmiany_wg_dni) ? h.zmiany_wg_dni : null;
+    const wpisDnia = wgDni ? wgDni[String(dt)] : undefined;
+    const wybrane = (Array.isArray(wpisDnia) ? wpisDnia : (h.zmiany || [])).filter(z => typeof z === 'string');
+    if (Array.isArray(wpisDnia) && !wybrane.length) return [];
+    // Święto zeruje dzień planu tylko tam, gdzie harmonogram sam nie pyta o święta (jawne daty albo „pomijaj święta” = nie).
+    const planowe = zmianyPlanowe(data, plan, zmiany, h.rodzaj !== 'daty' && h.bez_swiat !== false);
+    const lista = zmianyWgStartu(zmianyDnia(data, plan, zmiany)).filter(x => planowe.includes(x[0]));
     const zm = wybrane.length ? lista.filter(z => wybrane.includes(z[0])) : lista.slice(0, 1);
     const t = (szablon && szablon.termin) || {};
     // Kilka razy w ciągu zmiany (2026-10-13): co_min minut od startu do końca zmiany; kolejne mają klucz „…|+<minuty>”.
@@ -2671,7 +2741,7 @@
     }
     h.teraz = () => Date.now() + przesuniecieZegara;
     h.zegarZnany = () => zegarZnany;
-    h.zmianaTeraz = () => zmianaDla(h.teraz(), h.slowniki.zmiany);
+    h.zmianaTeraz = () => zmianaDla(h.teraz(), h.slowniki.zmiany, h.slowniki.plan_zmian);
     h.ustawienie = (klucz, domyslna) => {
       const w = (h.slowniki.ustawienia || {})[klucz];
       return w && w.wartosc !== undefined ? w.wartosc : domyslna;
@@ -2793,7 +2863,7 @@
   const Hala = {
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, minutyPytaniaZamkniecia, pozycjeBezWykonania, oknoZamknieciaZmiany, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
-    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
+    odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, zmianyPlanowe, zmianyDnia, planDnia, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
     mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec, limitZapytania, pilnujBledow, opisBledu, NIE_ZAPISANO,

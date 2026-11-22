@@ -292,15 +292,15 @@
        HalaKonto.mojeKonto(hala, { aplikacja: 'ur', komunikat, wyloguj: async () => …, odrzucone: () => …,
                                    dodatki: el => … })
      wyloguj — wylogowanie aplikacji (pyta o kolejkę, rysuje ekran logowania); odrzucone — otwiera listę odrzuconych
-     (przycisk widać, gdy coś jest); dodatki(el) — dorysowuje części tej aplikacji (Lider: linia, powiadomienia). */
+     (przycisk widać, gdy coś jest); dodatki(el) — dorysowuje części tej aplikacji (Lider: linia, powiadomienia);
+     instrukcja — adres krótkiej instrukcji obok aplikacji (`instrukcja.html`): przycisk „Instrukcja” pod częściami aplikacji. */
 
-  /* Wygląd: ta sama reguła (brak wyboru = jak urządzenie), inne słowo — na telefonie „Jak w telefonie”, na komputerze
-     „Jak w systemie” (STYL-GK §4; §6: na komputerze nie piszemy „telefon”). Próg jak w GK Trasy / GK Flota
-     (app.js → wyborWygladu) i w hala.css: komputer od 821 px szerokości. Słowo ustala się przy otwarciu okna. */
+  /* Wygląd: brak wyboru = jak urządzenie. Jedna etykieta „Jak w systemie” na telefonie i na komputerze (audyt 2026-11-21: ten sam
+     ekran na dwóch urządzeniach miał dwa różne napisy). */
   function naKomputerze() {
     return typeof global.matchMedia === 'function' && global.matchMedia('(min-width:821px)').matches;
   }
-  const wyglady = komputer => [['auto', komputer ? 'Jak w systemie' : 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']];
+  const WYGLADY = [['auto', 'Jak w systemie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']];
 
   /* Treść okna (czysta funkcja — testy: reduktor-testy.js). dane: {nazwa, role: [nazwy], wyglad, komputer, czeka, cudze,
      odrzucone, zOdrzuconymi, pin} → HTML. komputer — szerokość komputera (naKomputerze()); bez niego słowa telefonu. */
@@ -326,13 +326,14 @@
         <h2 id="hala-okno-konta-tytul">Moje konto</h2>
         <p class="hala-konto-kto"><b>${esc(d.nazwa || '—')}</b>${(d.role || []).length ? `<span>${esc(d.role.join(', '))}</span>` : ''}</p>
         <fieldset><legend>Wygląd</legend>
-          <div class="hala-wybor" role="group" aria-label="Wygląd">${wyglady(d.komputer).map(([k, n]) =>
+          <div class="hala-wybor" role="group" aria-label="Wygląd">${WYGLADY.map(([k, n]) =>
             `<button type="button" data-wyglad="${k}" aria-pressed="${d.wyglad === k}">${n}</button>`).join('')}</div>
           <p class="hala-konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
         </fieldset>
         ${d.pin ? '<div data-pin></div>' : ''}
-        ${d.pin ? `<button type="button" class="hala-konto-aplikacje" data-aplikacje>${ikonaKonta('telefon', 18)}${d.komputer ? 'Kody QR aplikacji' : 'Aplikacje na telefon — kody QR'}</button>` : ''}
+        ${d.pin ? `<button type="button" class="hala-konto-aplikacje" data-aplikacje>${ikonaKonta('telefon', 18)}Kody QR aplikacji</button>` : ''}
         <div data-dodatki></div>
+        ${d.instrukcja ? `<a class="przycisk hala-konto-aplikacje" id="konto-instrukcja" href="${esc(d.instrukcja)}" target="_blank" rel="noopener">${ikonaKonta('notatka', 18)}Instrukcja</a>` : ''}
         <fieldset><legend>Dane w tym urządzeniu</legend>
           <p class="hala-konto-drobne" data-kolejka>Czeka na wysłanie: ${Number(d.czeka) || 0}${d.cudze ? ` (+${d.cudze} od innych osób)` : ''}</p>
           ${trescCudzych(d.cudzeLista, d.komputer)}
@@ -344,7 +345,7 @@
   }
 
   async function mojeKonto(hala, opcje) {
-    const o = Object.assign({ aplikacja: hala.aplikacja, komunikat: null, wyloguj: null, odrzucone: null, dodatki: null }, opcje || {});
+    const o = Object.assign({ aplikacja: hala.aplikacja, komunikat: null, wyloguj: null, odrzucone: null, dodatki: null, instrukcja: null }, opcje || {});
     let d = document.getElementById('hala-okno-konta');
     if (!d) {
       d = document.createElement('dialog');
@@ -362,7 +363,7 @@
     const motyw = global.HalaMotyw;
     d.innerHTML = trescKonta({ nazwa: p.nazwa, role: (p.role || []).map(r => nazwyRol[r] || r), wyglad: motyw ? motyw.odczytaj() : 'auto',
                                komputer: naKomputerze(), czeka: k.moje || 0, cudze: Math.max(0, (k.oczekuje || 0) - (k.moje || 0)), odrzucone,
-                               zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran,
+                               zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran, instrukcja: o.instrukcja,
                                cudzeLista: hala.cudzeZapisy ? hala.cudzeZapisy() : [] });
     // D78: „Wyślij” zapisy innej osoby (w jej imieniu — hub zapisze, kto przekazał).
     for (const b of d.querySelectorAll('[data-wyslij-cudze]')) b.addEventListener('click', async () => {
@@ -516,8 +517,7 @@
       d.setAttribute('aria-labelledby', 'hala-okno-aplikacji-tytul');
       document.body.appendChild(d);
     }
-    // D64: tytuł jak przycisk, który je otworzył — na komputerze „Kody QR aplikacji” (STYL-GK §6: bez „telefon” na komputerze).
-    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">${ikonaKonta('telefon', 22)}${naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon'}</h2>
+    d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">${ikonaKonta('telefon', 22)}Kody QR aplikacji</h2>
       <p class="hala-okno-opis">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego. Aplikacje hali, GK Trasy
         i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
       <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>
