@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-0d3e575e39eb';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-0a20edb7f486';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -354,6 +354,8 @@ button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line
 .menu-stopka .ikona-menu svg{display:block}
 .zaslona{position:fixed; inset:0; background:var(--zaslona); z-index:1050; display:none}
 .zaslona.widoczna{display:block}
+/* 2026-11-23: linia z nazwą roli pod imieniem (jak w GK Trasy); nazwa programu pod nią zostaje jak była. */
+.menu-rola.menu-rola-osoby{font-size:13px; opacity:.85; text-transform:none; letter-spacing:0; margin:1px 0 3px}
 /* Ikony liniowe GKIkony (gk-ikony.js, STYL-GK §8) w menu bocznym: 20 px, currentColor — biel menu; tak samo jak „Wyloguj”. */
 .menu .ikona-menu{display:inline-flex; justify-content:center}
 .menu .ikona-menu svg{display:block}

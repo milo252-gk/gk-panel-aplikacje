@@ -17,7 +17,7 @@ const MIN_PIN = { kierowca: 4, biuro: 8, admin: 8 };
    byłoby kłamstwem: zmiana wróciłaby do starej przy najbliższej wymianie,
    a serwer i tak odpowiada na nią odmową. Auto przypisuje się dalej tutaj,
    na karcie auta — to jest sprawa floty, nie planu dnia.                 */
-/* Konto z Panelu Kierownika (GK-KONTA.md) — jedna osoba, jedno konto we
+/* Konto z Panelu Zarządczego GK (GK-KONTA.md) — jedna osoba, jedno konto we
    wszystkich aplikacjach GK. Zakłada się je i zmienia w Panelu → Administracja;
    tutaj tylko oglądamy. PIN osoba zmienia sama w „Moje konto” (idzie do Panelu),
    auto przypisuje się dalej tutaj, na karcie auta.                          */
@@ -25,7 +25,7 @@ function oknoKontaZPanelu(u) {
   okno({
     tytul: 'Konto ' + u.imie,
     tresc: `
-      <div class="wstega info">Konto prowadzi <b>Panel Kierownika</b> — imię i nazwisko,
+      <div class="wstega info">Konto prowadzi <b>Panel Zarządczy GK</b> — imię i nazwisko,
         rolę, telefon i wyłączenie zmieniasz w Panelu → <b>Administracja</b>${jestAdministratorem()
           ? '' : ' (albo prosisz o to administratora)'}. PIN osoba
         zmienia sama w „Moje konto”. Auto przypisujesz tutaj: Flota → karta auta →
@@ -153,7 +153,7 @@ EKRANY.konta = {
 };
 
 /* „Konta kierowców” — ekran BIURA (R13, właściciel 2026-11-09): biuro GK Floty odblokowuje kierowców i zakłada
-   ich konta, tak jak biuro GK Trasy. Konto powstaje w Panelu Kierownika (POST /api/panel/osoba); konta biura
+   ich konta, tak jak biuro GK Trasy. Konto powstaje w Panelu Zarządczym GK (POST /api/panel/osoba); konta biura
    i administratorów oraz ustawienia programu zostają przy administratorze (Administracja). Administrator ma
    te same konta w Administracja → Konta, więc w jego menu tego ekranu nie ma.                                  */
 EKRANY.kierowcy = {
@@ -172,7 +172,7 @@ EKRANY.kierowcy = {
     const czynnych = konta.filter(u => u.aktywny).length;
     pole.innerHTML = `
       <div class="wstega info">Tu zakładasz konta <b>kierowców</b> i odblokowujesz im logowanie z internetu.
-        Konto powstaje w <b>Panelu Kierownika</b> (jedna osoba, jedno konto we wszystkich aplikacjach GK; hasło
+        Konto powstaje w <b>Panelu Zarządczym GK</b> (jedna osoba, jedno konto we wszystkich aplikacjach GK; hasło
         startowe <code>haslo123</code>). Konta biura i administratorów prowadzi administrator.
         ${zespol.mozna ? '' : `<br>${escHtml(zespol.powod || 'Konta kierowców można tu zakładać, gdy GK Flota jest połączona z Panelem.')}`}</div>
       <div class="pasek-narzedzi">
@@ -355,7 +355,7 @@ function oknoKontaLokalnegoKierowcy(u) {
   okno({
     tytul: 'Konto ' + u.imie,
     tresc: `
-      <div class="wstega info">To konto prowadzi sam <b>GK Flota</b> (nie pochodzi z Panelu Kierownika) — zmienia je
+      <div class="wstega info">To konto prowadzi sam <b>GK Flota</b> (nie pochodzi z Panelu Zarządczego GK) — zmienia je
         administrator: Administracja → Konta. Auto przypisujesz tutaj: Flota → karta auta → <b>Kierowca</b>.</div>
       <p class="slaby male">${escHtml(u.login)} · konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,

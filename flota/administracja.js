@@ -54,7 +54,7 @@ function kartaKodowQRAdmina() {
       To samo okno co w „Moje konto” — tu jest na wierzchu.</p>
     ${maKodyQR()
       ? `<div class="przyciski"><button class="glowny" id="a-kody-qr">${ikonka('telefon')}${napisKodowQR()}</button></div>`
-      : `<div class="wstega info">Kody QR są dla kont z Panelu Kierownika. Zalogowano kontem awaryjnym tego programu —
+      : `<div class="wstega info">Kody QR są dla kont z Panelu Zarządczego GK. Zalogowano kontem awaryjnym tego programu —
           zaloguj się swoim kontem z Panelu (imię i nazwisko), żeby je zobaczyć.</div>`}
   </div>`;
 }

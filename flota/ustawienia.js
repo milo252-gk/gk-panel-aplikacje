@@ -91,7 +91,7 @@ EKRANY.ustawienia = {
         <summary>Zaawansowane</summary>
         <div class="zwijana-tresc">
       <p class="slaby male" style="margin-top:0">Poczta, tunel i adres dla telefonów, kopie
-        zapasowe, połączenia z Panelem Kierownika i GK Trasy, trzymanie danych — ustawia się
+        zapasowe, połączenia z Panelem Zarządczym GK i GK Trasy, trzymanie danych — ustawia się
         je raz. Zmiany w polach zapisuje ten sam przycisk „Zapisz ustawienia” na dole.</p>
 
       <div class="karta" id="u-poczta">
@@ -364,7 +364,7 @@ function podepnijTunel(pole) {
     // Panelu publikuje bieżący adres tunelu, a telefony same się na niego przełączają.
     szybki: 'Adres losowy, w rodzaju https://cos-tam.trycloudflare.com, i ZMIENIA SIĘ '
       + 'po każdym uruchomieniu programu. Z aplikacją na GitHub Pages to wystarcza '
-      + 'na co dzień: Panel Kierownika publikuje bieżący adres, a telefony kierowców '
+      + 'na co dzień: Panel Zarządczy GK publikuje bieżący adres, a telefony kierowców '
       + 'same się na niego przełączają — bez nowego linku i bez logowania od nowa.',
     staly: 'Własny, niezmienny adres. Token generuje się raz w panelu Cloudflare '
       + '(Zero Trust → Networks → Tunnels). Ten adres wpisuje się kierowcom raz '
@@ -380,7 +380,7 @@ function podepnijTunel(pole) {
   odswiez();
 }
 
-/* Konta GK — połączenie z Panelem Kierownika (umowa GK-KONTA.md).
+/* Konta GK — połączenie z Panelem Zarządczym GK (umowa GK-KONTA.md).
 
    Decyzja właściciela: jedna osoba ma jedno konto we wszystkich aplikacjach GK,
    zakładane w Panelu → Administracja. GK Flota pobiera konta sama (co 5 minut),
@@ -403,7 +403,7 @@ function sekcjaKontGk(u) {
     <ul class="male">${pozycje.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>` : '';
   return `
     <div class="karta">
-      <div class="karta-gora" id="u-konta-gk"><h3>Konta GK (Panel Kierownika)</h3>
+      <div class="karta-gora" id="u-konta-gk"><h3>Konta GK (Panel Zarządczy GK)</h3>
         <span class="plakietka ${klasa}">${escHtml(opis)}</span></div>
 
       <div class="wstega info">Jedna osoba — jedno konto we wszystkich aplikacjach GK.
@@ -438,7 +438,7 @@ function sekcjaKontGk(u) {
       ${lista('Do wyjaśnienia:', s.konflikty)}
 
       <div class="dwie-kolumny">
-        <label class="pole">Adres Panelu Kierownika
+        <label class="pole">Adres Panelu Zarządczego GK
           <input id="u-hub-adres" maxlength="200" autocapitalize="none" spellcheck="false"
                  value="${escHtml(u.hub_adres || '')}"
                  placeholder="np. https://panel.twojafirma.pl"></label>
@@ -473,7 +473,7 @@ function podepnijKontaGk(pole) {
     const dane = { hub_adres: we('u-hub-adres').value.trim() };
     const klucz = we('u-hub-klucz').value.trim();
     if (klucz) dane.hub_klucz = klucz;
-    if (!dane.hub_adres) { komunikat('Wpisz adres Panelu Kierownika', 'blad'); return; }
+    if (!dane.hub_adres) { komunikat('Wpisz adres Panelu Zarządczego GK', 'blad'); return; }
     const w = await sprobuj(() => API.post('/api/panel/sprawdz', dane));
     if (!w) { odswiezEkran(); return; }
     await potwierdz('Połączenie działa', w.komunikat + ' Konta pobiorą się same w ciągu '
@@ -499,7 +499,7 @@ function podepnijKontaGk(pole) {
     odswiezEkran();
   };
   we('u-hub-import').onclick = async () => {
-    if (!await potwierdz('Przenieść konta do Panelu Kierownika?',
+    if (!await potwierdz('Przenieść konta do Panelu Zarządczego GK?',
       'Konta biura i kierowców założone w GK Flota trafią do Panelu razem z obecnymi PIN-ami '
       + '(PIN się nie zmienia). Osoba, która w Panelu już jest, dostanie tylko rolę GK Flota '
       + 'i swój stary login — jej PIN z Panelu wygrywa. Potem konta zmienia się już tylko '
@@ -522,7 +522,7 @@ function podepnijKontaGk(pole) {
     });
   };
   we('u-hub-odlacz').onclick = async () => {
-    if (!await potwierdz('Odłączyć GK Flota od Panelu Kierownika?',
+    if (!await potwierdz('Odłączyć GK Flota od Panelu Zarządczego GK?',
       'Konta z Panelu zostają i logowanie działa dalej, ale od teraz zmienia się je tutaj, '
       + 'a zmiany w Panelu przestaną tu docierać. Program nie połączy się sam od nowa.',
       { tak: 'Odłącz', groznie: true })) return;
@@ -633,7 +633,7 @@ function podepnijTrasex(pole) {
    kierowca po każdym restarcie trafiałby na nowy — i zostawiał komplet zdjęć
    z placu pod starym, bez żadnej drogi powrotu.
 
-   Od D42 jest jedna strona wszystkich aplikacji GK, a wysyła ją Panel Kierownika
+   Od D42 jest jedna strona wszystkich aplikacji GK, a wysyła ją Panel Zarządczy GK
    (hub na tym samym komputerze) jednym tokenem. Program podaje mu adres tunelu
    i wersję — tu nic się nie ustawia, karta mówi tylko, co leży na Pages.      */
 function sekcjaGithub(u) {
@@ -651,7 +651,7 @@ function sekcjaGithub(u) {
         <span class="plakietka ${klasa}">${escHtml(opis)}</span></div>
 
       <div class="wstega info">Kierowcy dostają <b>jeden adres na zawsze</b>, który
-        działa z każdej sieci. <b>Adres dla telefonów publikuje Panel Kierownika</b>
+        działa z każdej sieci. <b>Adres dla telefonów publikuje Panel Zarządczy GK</b>
         na tym komputerze, tym samym tokenem co aplikacje hali: program podaje mu adres
         tunelu i swoją wersję, Panel wysyła je na GitHub sam. Na Pages leży sam wygląd
         aplikacji — dane zostają tutaj.<br>
@@ -673,9 +673,9 @@ function sekcjaGithub(u) {
    program i czy adres danych jest bieżący. */
 function stanPages(p, tunel) {
   if (!p || !p.adres) return '';
-  if (!p.lokalne) return `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Kierownika
+  if (!p.lokalne) return `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Zarządczemu GK
     (kopia testowa albo druga kopia na innym porcie).</div>`;
-  if (!p.hub_odpisal) return `<div class="wstega uwaga">Panel Kierownika jeszcze się nie odezwał.
+  if (!p.hub_odpisal) return `<div class="wstega uwaga">Panel Zarządczy GK jeszcze się nie odezwał.
     Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>`;
   const bezUkosnika = a => String(a || '').replace(/\/+$/, '');
   const staryAdres = !!tunel && !!p.adres_api && bezUkosnika(p.adres_api) !== bezUkosnika(tunel);
@@ -685,8 +685,8 @@ function stanPages(p, tunel) {
       <span class="male">Wysłano: <b>${escHtml(polskaData(p.opublikowano))} ${escHtml(samaGodzina(p.opublikowano))}</b> ·
         wersja na Pages <code>${escHtml(p.wersja_pages || '?')}</code>,
         programu <code>${escHtml(p.wersja_programu || '?')}</code></span>
-    </div>` : '<div class="wstega uwaga">Panel Kierownika jeszcze nie wysłał aplikacji na Pages.</div>'}
-    ${p.adres_blad ? `<div class="wstega blad">Panel Kierownika nie wysłał adresu na GitHub:
+    </div>` : '<div class="wstega uwaga">Panel Zarządczy GK jeszcze nie wysłał aplikacji na Pages.</div>'}
+    ${p.adres_blad ? `<div class="wstega blad">Panel Zarządczy GK nie wysłał adresu na GitHub:
       ${escHtml(p.adres_blad)} Panel ponawia sam — szczegóły w Panelu → Administracja →
       Ustawienia → Dostęp z telefonów.</div>`
       : staryAdres ? `<div class="wstega uwaga">Na Pages jest jeszcze poprzedni adres

@@ -46,7 +46,7 @@ EKRANY.zaproszenie = {
         <b>Sama aplikacja otworzy się wszędzie, ale dane są tylko w firmowym wifi.</b>
         Kierowca spod domu zobaczy ekran logowania i nic więcej. Włącz tunel
         w <b>Administracji → Ustawienia → Zaawansowane → Adres HTTPS dla kierowców</b> — nowy adres wpisze na GitHub sam
-        Panel Kierownika na tym komputerze.
+        Panel Zarządczy GK na tym komputerze.
         </div>` : ''}
 
       ${tunelowy && !z.adres_trwaly ? `<div class="wstega uwaga">
@@ -54,7 +54,7 @@ EKRANY.zaproszenie = {
         wtedy, gdy program sam uruchomi nowy tunel, bo stary przestał odpowiadać
         (strażnik tunelu). Tunel działa w trybie szybkim. Nie drukuj tego kodu
         ani nie rozsyłaj go na stałe — do tego służy GitHub Pages (aplikację wysyła tam
-        Panel Kierownika na tym komputerze; stan w <b>Administracji → Ustawienia → Zaawansowane → Stały adres dla
+        Panel Zarządczy GK na tym komputerze; stan w <b>Administracji → Ustawienia → Zaawansowane → Stały adres dla
         kierowców</b>) albo tryb stały z własnym adresem. Telefony z aplikacją z GitHub Pages
         znajdą nowy adres tunelu same.
         </div>` : ''}
@@ -113,7 +113,7 @@ EKRANY.zaproszenie = {
 
         <div class="wstega info">Kierowca loguje się imieniem i nazwiskiem
         (albo loginem) i swoim PIN-em — tak samo jak w innych aplikacjach GK.
-        Konto zakładasz w zakładce <b>Konta</b> (albo w Panelu Kierownika, gdy
+        Konto zakładasz w zakładce <b>Konta</b> (albo w Panelu Zarządczym GK, gdy
         konta przychodzą z Panelu).</div>${naGithubie ? `
 
         <div class="wstega info"><b>Ten krok robi się raz na zawsze.</b>

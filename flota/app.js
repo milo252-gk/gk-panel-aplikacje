@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-0d3e575e39eb';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-0a20edb7f486';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -1868,7 +1868,7 @@ function pokazLogowanie() {
   pokazInfoKont();
 }
 
-/* „Konto zakłada administrator w Panelu Kierownika → Administracja.” — tylko
+/* „Konto zakłada administrator w Panelu Zarządczym GK → Administracja.” — tylko
    gdy konta naprawdę przychodzą z Panelu. Pyta /api/zyje (bez logowania);
    brak odpowiedzi = brak linii, logowanie na to nie czeka. */
 async function pokazInfoKont() {
@@ -2218,7 +2218,7 @@ function stempelWersji() {
         arkusz w przeglądarce: <code>${escHtml(arkusz)}</code>
       </div>
       ${doPublikacji && osobno ? `<div class="male" style="margin-top:6px">
-        Aplikację na GitHub Pages wysyła Panel Kierownika — sprawdź
+        Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź
         Administracja → Ustawienia → Zaawansowane → <b>Stały adres dla kierowców</b>.</div>` : ''}
       ${naprawialne ? `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>` : ''}
@@ -2265,7 +2265,7 @@ async function sprawdzSpojnoscWersji() {
     // i dostałby ostrzeżenie, z którym nie ma co zrobić.
     if (osobneAdresy && znanyDysk && dysk !== skrypt && jestBiuro()) {
       komunikat('Kierowcy mają starszą wersję aplikacji niż program w biurze. '
-        + 'Aplikację na GitHub Pages wysyła Panel Kierownika — sprawdź Administracja → Ustawienia → Zaawansowane → Stały adres dla kierowców.', 'blad');
+        + 'Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź Administracja → Ustawienia → Zaawansowane → Stały adres dla kierowców.', 'blad');
     }
     return;
   }
@@ -2320,7 +2320,7 @@ async function odswiezProgram() {
 }
 
 /* Zasada nowego PIN-u w jednym miejscu — okno konta i okno słabego PIN-u mówią
-   to samo co serwer. Konto z Panelu Kierownika ma PIN wspólny dla wszystkich
+   to samo co serwer. Konto z Panelu Zarządczego GK ma PIN wspólny dla wszystkich
    aplikacji GK: kierowca 4–8 cyfr (aplikacje hali mają klawiaturę cyfrową),
    biuro hasło od 8 znaków (GK-KONTA.md, punkt 1). Pola PIN-u są bez
    inputmode="numeric": na telefonie z klawiaturą cyfrową hasła biura nie
@@ -2366,7 +2366,7 @@ function pokazKolejkeWKoncie(pole) {
 
    Ten sam przycisk i to samo okno co w aplikacjach hali (STYL-GK §3, hala:
    konto.js → aplikacjeNaTelefon): aplikacje osoby z kodem QR, „🖨 Drukuj kod”
-   przy aplikacji i „🖨 Drukuj wszystkie”. Listę daje Panel Kierownika (hub,
+   przy aplikacji i „🖨 Drukuj wszystkie”. Listę daje Panel Zarządczy GK (hub,
    GK-KONTA.md §3.6) przez program — tylko konto z Panelu (zrodlo 'gk'). Kody
    rysuje serwer programu (qr_svg), więc okno działa bez biblioteki QR.     */
 function naKomputerze() {
@@ -3236,6 +3236,7 @@ async function wejdzDoAplikacji() {
   document.getElementById('ekran-logowania').classList.add('ukryty');
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
+  document.getElementById('menu-rola').textContent = NAZWA_ROLI[stan.uz.rola] || stan.uz.rola || '';   // 2026-11-23: rola pod imieniem, program stały
   menuDlaRoli();
   odswiezBanerDzwieku();
   // Zanim cokolwiek narysujemy: czy przeglądarka na pewno ma komplet plików
