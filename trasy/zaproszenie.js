@@ -28,7 +28,7 @@ EKRANY.zaproszenie = {
         <b>Ten adres działa tylko w firmowym wifi.</b> Kierowca spod domu ani z trasy
         się nie połączy. Żeby aplikacja otwierała się z dowolnej sieci, administrator
         włącza tunel w <b>Ustawieniach → Zaawansowane → Dostęp z internetu</b> — aplikację na GitHub Pages
-        wyśle wtedy sam Panel Kierownika na tym komputerze.</div>` : ''}
+        wyśle wtedy sam Panel Zarządczy GK na tym komputerze.</div>` : ''}
 
       ${naGithubie && daneWSwiat ? `<div class="wstega ok">
         <b>Ten adres jest stały i działa w każdej sieci.</b> Kod można wydrukować
@@ -42,8 +42,8 @@ EKRANY.zaproszenie = {
         GK Trasy jeszcze raz).</div>` : ''}
 
       ${naGithubie && daneWSwiat && z.pages && !z.pages.adres_aktualny ? `<div class="wstega uwaga">
-        Panel Kierownika jeszcze nie wpisał nowego adresu tunelu na GitHub Pages — zwykle
-        trwa to chwilę po starcie. Jeśli to nie minie, Szef GK Trasy sprawdza
+        Panel Zarządczy GK jeszcze nie wpisał nowego adresu tunelu na GitHub Pages — zwykle
+        trwa to chwilę po starcie. Jeśli to nie minie, Szef Sprzedaży sprawdza
         <b>Ustawienia → Zaawansowane → Adres dla telefonów</b> i Panel → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
       ${naGithubie && z.pages && z.pages.starsza && admin ? `<div class="wstega uwaga">
@@ -53,8 +53,8 @@ EKRANY.zaproszenie = {
       ${tunelowy && !z.adres_trwaly ? `<div class="wstega uwaga">
         <b>Ten adres zmieni się po ponownym uruchomieniu programu.</b> Nie drukuj tego
         kodu ani nie rozsyłaj go na stałe. Stały adres daje aplikacja na GitHub Pages — wysyła ją
-        Panel Kierownika na tym komputerze sam${admin ? '; stan widać w <b>Ustawieniach → Zaawansowane → Adres dla telefonów</b>.'
-                : '; jeśli to nie minie, powiedz Szefowi GK Trasy.'}</div>` : ''}
+        Panel Zarządczy GK na tym komputerze sam${admin ? '; stan widać w <b>Ustawieniach → Zaawansowane → Adres dla telefonów</b>.'
+                : '; jeśli to nie minie, powiedz Szefowi Sprzedaży.'}</div>` : ''}
 
       ${tunelowy && z.adres_trwaly ? `<div class="wstega ok">
         Adres jest stały (tunel stały). Ten kod można wydrukować i powiesić w szatni.</div>` : ''}

@@ -1,4 +1,4 @@
-/* GK Trasy — ekran „RCP” (2026-11-19, D93): czas pracy kierowców i biura. TE SAME funkcje i ten sam układ co w Panelu Kierownika → RCP.
+/* GK Trasy — ekran „RCP” (2026-11-19, D93): czas pracy kierowców i biura. TE SAME funkcje i ten sam układ co w Panelu Zarządczym GK → RCP.
 
    Wzór: panel/web/rcp.js (+ czyste funkcje W.rcp* z panel/web/widok.js — tu skopiowane niżej, bo Trasy nie ładują widok.js Panelu).
    Odbicia robi terminal na hali; tu administrator GK Trasy widzi dni swoich ludzi, zatwierdza je albo poprawia, układa grafik zmian,
@@ -102,7 +102,7 @@ EKRANY.rcp = {
     async function wczytaj() {
       tresc.textContent = '';
       if (!stan.uz || stan.uz.zrodlo !== 'gk') {
-        S.blad = 'Czas pracy czytamy z Panelu Kierownika, a to konto jest tylko w tym programie. Zaloguj się kontem z Panelu.';
+        S.blad = 'Czas pracy czytamy z Panelu Zarządczego GK, a to konto jest tylko w tym programie. Zaloguj się kontem z Panelu.';
         S.brakDostepu = true;
         rysujTresc();
         return;

@@ -79,9 +79,16 @@ async function pobierzTraseNaJutro(wymus) {
    zasięgu znikały przy pierwszym odświeżeniu listy — kierowca widział znowu
    „0 z 3" i robił wszystko drugi raz. */
 async function nalozKolejke(trasa) {
-  const czekajace = (await Kolejka.lista())
-    .filter(o => (o.typ === 'dostawa' || o.typ === 'zaladunek')
-                 && (!stan.uz || o.uzytkownik === stan.uz.id));
+  const wszystkie = (await Kolejka.lista()).filter(o => !stan.uz || o.uzytkownik === stan.uz.id);
+  // Uwaga zgłoszona bez zasięgu ma być na liście od razu, nie dopiero po wysłaniu (serwer da ją sam, bez dubla).
+  const uwagi = wszystkie.filter(o => o.typ === 'uwaga_trasy' && o.trasa === trasa.id);
+  if (uwagi.length) {
+    trasa.uwagi_trasy = (trasa.uwagi_trasy || []).filter(u => !u.czeka_na_wyslanie).concat(uwagi.map(o => ({
+      id: 'k-' + o.uuid, powod: o.powod, powod_nazwa: nazwaPowoduUwagi(o.powod), notatka: o.notatka || '',
+      czas_serwera: (o.czas || '').replace('T', ' '), czeka_na_wyslanie: true,
+    })));
+  }
+  const czekajace = wszystkie.filter(o => o.typ === 'dostawa' || o.typ === 'zaladunek');
   if (!czekajace.length) return trasa;
   const wgId = Object.fromEntries(trasa.przystanki.map(p => [p.id, p]));
   for (const o of czekajace) {
@@ -136,6 +143,16 @@ function nastepnyPrzystanek(trasa) {
 }
 
 /* Rodzaj czynności i wymogi w NASZYM punkcie ustawia biuro. Puste = zwykły postój (jak dotąd). */
+/* Powody uwagi z trasy (te same kody co POWODY_UWAG_TRASY w trasex.py; nazwy po polsku — słownik Tras). */
+const POWODY_UWAG_TRASY = [
+  ['objazd', 'Objazd'], ['dlugi_zaladunek', 'Długi załadunek lub rozładunek'],
+  ['awaria', 'Awaria'], ['korek', 'Korek'], ['inne', 'Inne'],
+];
+function nazwaPowoduUwagi(kod) {
+  const w = POWODY_UWAG_TRASY.find(x => x[0] === kod);
+  return w ? w[1] : kod;
+}
+
 const NAPISY_RODZAJU = { dostawa: 'Dostawa', odbior: 'Odbiór', oba: 'Dostawa i odbiór' };
 function wymogiPunktu(p) {
   return p && p.nasze ? String(p.wymogi || '').split(',').filter(Boolean) : [];
@@ -260,6 +277,11 @@ EKRANY.moja = {
           <i class="nie" style="width:${l.wszystkie ? l.nieudane / l.wszystkie * 100 : 0}%"></i>
         </div>
         ${mojaTrasa.uwagi ? `<div class="wstega info" style="margin-top:12px">${ikonka('pinezka')}${escHtml(mojaTrasa.uwagi)}</div>` : ''}
+        ${(mojaTrasa.uwagi_trasy || []).length ? `<div class="male slaby" style="margin-top:10px" id="uwagi-zgloszone">
+            ${ikonka('ostrzezenie')}Zgłoszone biuru: ${(mojaTrasa.uwagi_trasy || []).slice(0, 3).map(u =>
+              `${escHtml(u.powod_nazwa || nazwaPowoduUwagi(u.powod))} ${escHtml(samaGodzina(u.czas_serwera))}${
+                u.czeka_na_wyslanie ? ' (wyślę, gdy wróci zasięg)' : ''}`).join(', ')}${
+            mojaTrasa.uwagi_trasy.length > 3 ? '…' : ''}</div>` : ''}
         ${(mojaTrasa.inne_trasy_dnia || []).length ? `<div class="wstega uwaga" style="margin-top:10px">
             Masz dziś jeszcze ${mojaTrasa.inne_trasy_dnia.length}
             ${odmiana(mojaTrasa.inne_trasy_dnia.length, 'trasę', 'trasy', 'tras')}:
@@ -270,6 +292,8 @@ EKRANY.moja = {
           ${mojaTrasa.status === 'planowana' ? ('<button class="glowny" id="btn-start">' + ikonka('odtworz') + 'Rozpocznij trasę</button>') : ''}
           ${zrobione === l.wszystkie && l.wszystkie && mojaTrasa.status !== 'zakonczona'
         ? ('<button class="zielony" id="btn-koniec">' + ikonka('haczyk') + 'Zakończ trasę</button>') : ''}
+          ${mojaTrasa.status !== 'odwolana' && mojaTrasa.data <= dzisiaj()
+        ? ('<button id="btn-uwaga">' + ikonka('ostrzezenie') + 'Uwaga w trasie</button>') : ''}
           <button id="btn-mapa-link">${ikonka('mapa')}Cała trasa w Google Maps</button>
           <button id="btn-polozenie">${sledzenieWlaczone() ? (ikonka('znacznik-miejsca') + 'Wyłącz położenie') : (ikonka('znacznik-miejsca') + 'Udostępniaj położenie')}</button>
         </div>
@@ -309,6 +333,8 @@ EKRANY.moja = {
       if (window.ReakcjeTras) { try { ReakcjeTras.poKoncuTrasy(mojaTrasa); } catch (e) { /* bez reakcji */ } }
     };
     pole.querySelector('#btn-polozenie').onclick = przelaczSledzenie;
+    const btnUwaga = pole.querySelector('#btn-uwaga');
+    if (btnUwaga) btnUwaga.onclick = () => oknoUwagiTrasy(mojaTrasa, nastepny);
     const wstegaOdrzuconych = pole.querySelector('#w-odrzucone');
     if (wstegaOdrzuconych) wstegaOdrzuconych.onclick = oknoKonta;
     pole.querySelector('#btn-mapa-link').onclick = () => oknoLinkuDoMap(mojaTrasa.id, true);
@@ -444,6 +470,8 @@ function oknoPrzystanku(id) {
          style="display:block;text-align:center;padding:15px;border-radius:10px;
                 background:var(--granat);color:var(--na-marce);text-decoration:none;font-weight:600;margin-top:8px">
         ${ikonka('mapa')}${p.nasze ? 'Nawiguj do magazynu' : 'Nawiguj do klienta'}</a>
+      ${mojaTrasa && mojaTrasa.pojazd_typ === 'ciezarowe' ? '<div class="male slaby" style="margin-top:6px">Zwykła nawigacja '
+        + 'osobowa — trasę ciężarową daje odnośnik od biura.</div>' : ''}
       ${p.nasze ? '' : '<button class="maly" id="btn-uwaga" style="margin-top:10px">'
         + (ikonka('pinezka') + 'Dopisz uwagę o dojeździe</button>')}`,
     przyciski: zamkniety ? [{ napis: 'Zamknij', klik: z => z() }] : [
@@ -516,6 +544,64 @@ function oknoUwagiDojazdowej(p) {
           'Dopisane do kartoteki');
       } },
     ],
+  });
+}
+
+/* „Uwaga w trasie”: objazd, długi załadunek, awaria — w dowolnej chwili, także bez zasięgu (kolejka jak przy dostawie).
+   To informacja dla biura; plan trasy i godziny same się nie zmieniają. Czas zgłoszenia zapisuje serwer. */
+function oknoUwagiTrasy(trasa, nastepny) {
+  const zdjecia = [];
+  let powod = '';
+  const otwarte = trasa.przystanki.filter(p => p.status === 'oczekuje');
+  okno({
+    tytul: 'Uwaga w trasie',
+    ikona: 'ostrzezenie',
+    tresc: `
+      <label>Co się dzieje? <span style="color:var(--czerwony)">*</span></label>
+      <div class="chipy" id="uw-powody">
+        ${POWODY_UWAG_TRASY.map(x => `<button type="button" class="chip" data-powod="${x[0]}">${escHtml(x[1])}</button>`).join('')}
+      </div>
+      <label style="margin-top:10px">Przy którym punkcie jesteś?
+        <select id="uw-punkt">
+          <option value="">— w drodze, poza punktem —</option>
+          ${otwarte.map(p => `<option value="${p.id}"${nastepny && p.id === nastepny.id ? ' selected' : ''}>${
+            escHtml(p.klient_nazwa)}</option>`).join('')}
+        </select>
+      </label>
+      <label>Notatka <span class="slaby">(nieobowiązkowa — np. ile to potrwa)</span>
+        <textarea id="uw-notatka" maxlength="500" placeholder="np. zamknięty most, jadę przez Kórnik, ok. 40 minut dłużej"></textarea>
+      </label>
+      <label>Zdjęcie <span class="slaby">(nieobowiązkowe)</span></label>
+      ${przyciskAparatu('uw-zdjecia')}
+      <div class="miniatury" id="uw-miniatury"></div>`,
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: 'Wyślij do biura', ikona: 'ostrzezenie', klasa: 'glowny', klik: async z => {
+        if (!powod) { komunikat('Wybierz, co się dzieje', 'blad'); return; }
+        const punkt = document.getElementById('uw-punkt').value;
+        const notatka = document.getElementById('uw-notatka').value.trim();
+        z();
+        await doKolejki({
+          typ: 'uwaga_trasy', trasa: trasa.id, przystanek: punkt ? Number(punkt) : null, powod, notatka,
+          zdjecie: zdjecia[0] || null, czas: czasTeraz(),
+        }, 'Biuro dostało uwagę');
+        // Ekran i kopia trasy w telefonie pokazują zgłoszenie od razu, serwer da prawdziwy wpis po wysłaniu.
+        await nalozKolejke(trasa);
+        await Kolejka.zapamietaj('moja-trasa-' + trasa.data, trasa);
+        pokazEkran('moja', { data: trasa.data, zPamieci: true });
+      } },
+    ],
+    poOtwarciu: pole => {
+      pole.querySelectorAll('[data-powod]').forEach(b => b.onclick = () => {
+        pole.querySelectorAll('[data-powod]').forEach(x => x.classList.remove('wybrany'));
+        b.classList.add('wybrany');
+        powod = b.dataset.powod;
+      });
+      pole.querySelector('#uw-zdjecia').onchange = e => {
+        zdjecia.length = 0;
+        dodajZdjecia(Array.from(e.target.files).slice(0, 1), zdjecia, pole.querySelector('#uw-miniatury'), e.target);
+      };
+    },
   });
 }
 
@@ -858,6 +944,77 @@ function oproznijBuforPozycji() {
 
 /* --------------------------------------------------------- raport pracy */
 
+/* Podział godzin dnia pod formularzem raportu (decyzja właściciela 2026-11-23): razem, w tym trasy, inna praca
+   i pozostały czas (czekanie, postój). Liczy serwer; przerwa z formularza zmienia tylko „razem” i „pozostały czas”. */
+function htmlPodzialuDnia(pz, czekajace, przerwa) {
+  let wynik = '<b>Czas pracy w ciągu dnia</b>';
+  if (!pz) {
+    wynik += '<div class="male slaby">Brak połączenia — podział czasu pokaże się po odzyskaniu sieci.</div>';
+  } else if (pz.brak) {
+    wynik += '<div class="male slaby">Trasy tego dnia nie mają jeszcze startu. Załadunek, przygotowanie auta lub rozładunek '
+      + 'po powrocie dopisz jako inną pracę — wlicza się do godzin.</div>';
+  } else if (pz.razem_min == null) {
+    wynik += '<div class="male" style="color:var(--czerwony)">Godziny dnia nie dają sensownej sumy (przerwa dłuższa niż dzień '
+      + 'albo ponad 24 h) — sprawdź wpisy i przerwę.</div>';
+  } else {
+    const razem = Math.max(0, pz.rozpietosc_min - przerwa);
+    const pozostale = Math.max(0, razem - pz.trasy_min - pz.inna_min);
+    wynik += `<div>Razem w pracy: <b>${godzinyMinuty(razem)}</b>
+        <span class="male slaby">(${escHtml(pz.start)}–${escHtml(pz.koniec)}${przerwa ? ', minus przerwa ' + przerwa + ' min' : ''})</span></div>
+      <div class="male">w tym trasy ${godzinyMinuty(pz.trasy_min)} · inna praca ${godzinyMinuty(pz.inna_min)} ·
+        pozostały czas ${godzinyMinuty(pozostale)}${pz.w_toku ? ' · <span class="slaby">trasa trwa, koniec dnia jeszcze nie jest znany</span>' : ''}</div>`;
+  }
+  const wpisy = (pz && pz.wpisy) || [];
+  wynik += wpisy.map(x => `<div class="male" style="display:flex; align-items:center; gap:8px; margin-top:6px">
+      <span style="flex:1">${escHtml(x.nazwa)} ${escHtml(x.od)}–${escHtml(x.do)}${x.notatka ? ' · ' + escHtml(x.notatka) : ''}</span>
+      <button type="button" class="maly" data-usun-wpis="${x.id}" aria-label="Usuń wpis">${ikonka('zamknij')}</button></div>`).join('');
+  wynik += (czekajace || []).map(x => `<div class="male slaby" style="margin-top:6px">${escHtml(NAZWY_INNEJ_PRACY[x.rodzaj] || 'Inna praca')}
+      ${escHtml(x.od)}–${escHtml(x.do)} — wyślę, gdy wróci zasięg (suma przeliczy się po wysłaniu)</div>`).join('');
+  return wynik + `<button type="button" id="r-dodaj-prace" style="margin-top:10px">${ikonka('plus')}Dodaj inną pracę</button>`;
+}
+
+const NAZWY_INNEJ_PRACY = { zaladunek: 'Załadunek', przygotowanie_auta: 'Przygotowanie auta',
+  rozladunek: 'Rozładunek po powrocie', inne: 'Inna praca' };
+
+/* Wpis „inna praca” jednym oknem: rodzaj, od, do. Idzie kolejką telefonu, więc działa bez zasięgu. */
+function oknoInnejPracy(data, poZapisie) {
+  let rodzaj = '';
+  okno({
+    tytul: 'Inna praca',
+    ikona: 'plus',
+    tresc: `
+      <label>Co robiłeś? <span style="color:var(--czerwony)">*</span></label>
+      <div class="chipy" id="ip-rodzaje">
+        ${Object.keys(NAZWY_INNEJ_PRACY).map(k => `<button type="button" class="chip" data-rodzaj="${k}">${
+          escHtml(NAZWY_INNEJ_PRACY[k])}</button>`).join('')}
+      </div>
+      <div class="dwie">
+        <label>Od<input type="time" id="ip-od"></label>
+        <label>Do<input type="time" id="ip-do" value="${godzinaTeraz()}"></label>
+      </div>
+      <label>Notatka <span class="slaby">(nieobowiązkowa)</span>
+        <input id="ip-notatka" maxlength="200" placeholder="np. awaria wózka, czekanie na dokumenty">
+      </label>`,
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: 'Dodaj', ikona: 'plus', klasa: 'glowny', klik: async z => {
+        const od = document.getElementById('ip-od').value, doGodz = document.getElementById('ip-do').value;
+        if (!rodzaj) { komunikat('Wybierz, co robiłeś', 'blad'); return; }
+        if (!od || !doGodz || od === doGodz) { komunikat('Wpisz godziny od i do', 'blad'); return; }
+        z();
+        await doKolejki({ typ: 'praca_inna', data, od, do: doGodz, rodzaj,
+          notatka: document.getElementById('ip-notatka').value.trim(), czas: czasTeraz() }, 'Dopisane do czasu pracy');
+        await poZapisie();
+      } },
+    ],
+    poOtwarciu: pole => pole.querySelectorAll('[data-rodzaj]').forEach(b => b.onclick = () => {
+      pole.querySelectorAll('[data-rodzaj]').forEach(x => x.classList.remove('wybrany'));
+      b.classList.add('wybrany');
+      rodzaj = b.dataset.rodzaj;
+    }),
+  });
+}
+
 EKRANY.raporty = {
   tytul: 'Raport pracy',
   async rysuj(pole, param) {
@@ -889,6 +1046,7 @@ EKRANY.raporty = {
       _podpowiedziane: true,
     };
     const busy = stan.pojazdy.filter(p => p.aktywny);
+    let podzial = await API.get('/api/raporty/podzial?data=' + data).catch(() => null);
 
     pole.innerHTML = `
       <div class="karta">
@@ -939,6 +1097,7 @@ EKRANY.raporty = {
           <textarea id="r-uwagi" placeholder="np. korek na obwodnicy, klient przesunął dostawę">${escHtml(w.uwagi || '')}</textarea>
         </label>
         <div id="r-podsumowanie" class="wstega info"></div>
+        <div id="r-podzial" class="karta scisla"></div>
         <button class="glowny duzy" id="r-zapisz">Zapisz raport</button>
       </div>`;
 
@@ -967,6 +1126,39 @@ EKRANY.raporty = {
     ['#r-start', '#r-koniec', '#r-km-start', '#r-km-koniec', '#r-przerwa']
       .forEach(s => pole.querySelector(s).oninput = licz);
     licz();
+
+    // Podział dnia: trasy, inna praca (wpisy kierowcy) i pozostały czas. Tylko informacja — zapisują się pola formularza.
+    let wpisyCzekajace = [];
+    const rysujPodzial = () => {
+      const przerwa = Number(pole.querySelector('#r-przerwa').value) || 0;
+      pole.querySelector('#r-podzial').innerHTML = htmlPodzialuDnia(podzial, wpisyCzekajace, przerwa);
+      pole.querySelectorAll('[data-usun-wpis]').forEach(b => b.onclick = async () => {
+        if (!await potwierdz('Usunąć ten wpis?', 'Czas pracy dnia policzy się od nowa.')) return;
+        await doKolejki({ typ: 'praca_inna', usun: Number(b.dataset.usunWpis) }, 'Wpis usunięty');
+        await odswiezPodzial();
+      });
+      pole.querySelector('#r-dodaj-prace').onclick = () => oknoInnejPracy(data, odswiezPodzial);
+    };
+    // Podpowiedź godzin jest z całego dnia: po dopisaniu pracy zmieniamy tylko pola, których kierowca nie ruszył.
+    const sugestia = { start: w.start_o || '', koniec: w.koniec_o || '' };
+    const odswiezPodzial = async () => {
+      wpisyCzekajace = (await Kolejka.lista()).filter(o => o.typ === 'praca_inna' && !o.usun && o.data === data
+        && (!stan.uz || o.uzytkownik === stan.uz.id));
+      podzial = await API.get('/api/raporty/podzial?data=' + data).catch(() => podzial);
+      const nowa = w._podpowiedziane
+        ? await API.get('/api/raporty/podpowiedz?data=' + data).catch(() => null) : null;
+      if (nowa) {
+        const s = pole.querySelector('#r-start'), k = pole.querySelector('#r-koniec');
+        if (s.value === sugestia.start) s.value = nowa.start_o || '';
+        if (k.value === sugestia.koniec) k.value = nowa.koniec_o || '';
+        sugestia.start = nowa.start_o || '';
+        sugestia.koniec = nowa.koniec_o || '';
+      }
+      licz();
+      rysujPodzial();
+    };
+    pole.querySelector('#r-przerwa').addEventListener('input', rysujPodzial);
+    odswiezPodzial();
 
     pole.querySelector('#r-data').onchange = e => pokazEkran('raporty', { data: e.target.value });
     pole.querySelector('#r-teraz-start').onclick = () => {

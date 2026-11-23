@@ -2,7 +2,7 @@
 
    Wzór: Wskaźniki w GK Panel Kierownika (panel/web/wskazniki.js) — okresy „Dziś / Wczoraj / Ostatnie 7 dni / Ten miesiąc /
    Zakres”, zakres zapamiętany do końca dnia, kafelki liczb, paski i tabele pod spodem, przy każdym kafelku i nagłówku „i”
-   z definicją (miary.js). Tylko odczyt: liczby z GET /api/wskazniki (biuro i administrator), nic nie zapisujemy.
+   z definicją (miary.js). Tylko odczyt: liczby z GET /api/wskazniki (biuro i administrator; podział na kierowców tylko administrator), nic nie zapisujemy.
    Liczy serwer (a_wskazniki w trasex.py); tu tylko rysujemy. */
 
 EKRANY.wskazniki = {
@@ -82,14 +82,14 @@ EKRANY.wskazniki = {
             </table></div>` : `<p class="pusto ok">${d.punkty ? 'Żaden klient nie miał nieudanej dostawy' : 'Brak danych'}</p>`}
           </section>
         </div>
-        <section class="karta">${naglowek('kierowcy')}
+        ${d.podzial_na_kierowcow === false ? '' : `<section class="karta">${naglowek('kierowcy')}
           ${d.kierowcy.length ? `<div class="tabela-przewijana"><table class="tabela-wsk">
             <thead><tr><th>Kierowca</th><th>Tras</th><th>Punktów</th><th>Dostarczone</th><th>Nieudane</th><th>Za pierwszym razem</th></tr></thead>
             <tbody>${d.kierowcy.map(k => `<tr><td>${escHtml(k.imie)}</td><td>${k.trasy}</td><td>${k.punkty}</td><td>${k.dostarczone}</td>
               <td class="${k.nieudane ? 'zle' : ''}">${k.nieudane}</td>
               <td class="${k.proc_za_pierwszym === null ? '' : k.proc_za_pierwszym >= 80 ? 'dobrze' : 'zle'}">${proc(k.proc_za_pierwszym)}</td></tr>`).join('')}</tbody>
           </table></div>` : '<p class="pusto">Brak punktów w tym zakresie</p>'}
-        </section>`;
+        </section>`}`;
     }
 
     pole.querySelectorAll('#w-okresy .chip').forEach(b => b.onclick = () => {

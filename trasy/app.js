@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-ef0b3c830b77';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-906f52ee5aef';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -850,7 +850,7 @@ function oznaczSerwer(odpowiada) {
 const PAMIEC_ODPOWIEDZI = 'odp:';
 const MAKS_ODPOWIEDZI = 2 * 1024 * 1024;        // znaków JSON-a
 const MAKS_ODPOWIEDZI_OSOBY = 300;
-const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|kopie|alarmy|blokady|gk\/|eksport|szukaj|raporty\/podpowiedz|ikol\/|rcp\/)|\/mapa-link$/;
+const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|kopie|alarmy|blokady|gk\/|eksport|szukaj|raporty\/podpowiedz|raporty\/podzial|ikol\/|rcp\/)|\/mapa-link$/;
 const KODY_BEZ_PROGRAMU = [502, 503, 504, 530];
 const ODSTEP_PROBY_PROGRAMU_MS = 30 * 1000;
 
@@ -1367,7 +1367,7 @@ async function rysujPowiadomienia(pole) {
 /* Adres z powiadomienia („#moja”, „#trasa=12”, „#raporty”) → ekran aplikacji. */
 function otworzAdres(adres) {
   const m = /^#([a-z]+)(?:=(\d+))?$/.exec(String(adres || ''));
-  if (!m || !EKRANY[m[1]] || !stan.uz) return false;
+  if (!m || !(EKRANY[m[1]] || STARE_EKRANY[m[1]]) || !stan.uz) return false;
   pokazEkran(m[1], m[2] ? { id: Number(m[2]) } : {});
   return true;
 }
@@ -1872,7 +1872,7 @@ function pokazLogowanie() {
   pokazInfoKont();
 }
 
-/* „Konto zakłada Szef GK Trasy albo Menedżer (Panel Kierownika → Administracja).” — tylko
+/* „Konto zakłada Szef Sprzedaży albo Menedżer (Panel Zarządczy GK → Administracja).” — tylko
    gdy konta naprawdę przychodzą z Panelu. Pyta /api/zyje (bez logowania);
    brak odpowiedzi = brak linii, logowanie na to nie czeka. Ta sama odpowiedź
    mówi, czy konta są już w D43 (hasło + PIN) — wtedy pole sekretu pisze
@@ -2069,9 +2069,9 @@ async function poZalogowaniuPonownie(poprzedni, ekran) {
 
 // Z wielkiej litery, jak role w oknie konta aplikacji hali (STYL-GK §3).
 /* Nazwy ról widoczne w Moim koncie (decyzja właściciela 2026-11-19) — kody ról bez zmian. `admin` programu pochodzi z roli
-   huba trasy_admin (Szef GK Trasy) albo admin huba (Menedżer). Uprawnienia te same; nazwę KONTA podaje serwer
-   (`etykieta_roli`: „Menedżer GK Trasy” dla Menedżera z Panelu). Bez niej (starszy serwer, profil sprzed zmiany) — ta lista. */
-const NAZWA_ROLI = { admin: 'Szef GK Trasy', biuro: 'Biuro GK Trasy', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd GK Trasy' };
+   huba trasy_admin (Szef Sprzedaży) albo admin huba (Menedżer). Uprawnienia te same; nazwę KONTA podaje serwer
+   (`etykieta_roli`: „Menedżer” dla Menedżera z Panelu). Bez niej (starszy serwer, profil sprzed zmiany) — ta lista. */
+const NAZWA_ROLI = { admin: 'Szef Sprzedaży', biuro: 'Biuro', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd' };
 function etykietaRoli(u) {
   return (u && u.etykieta_roli) || NAZWA_ROLI[u && u.rola] || (u && u.rola) || '';
 }
@@ -2138,7 +2138,14 @@ function menuDlaRoli() {
   pasek.querySelector('[data-wiecej]').onclick = otworzMenu;
 }
 
+/* Ekrany, które przeniesiono do innego (stare hasze i zakładki): nazwa → [ekran, parametry]. */
+const STARE_EKRANY = { planowanie: ['raporty', { sekcja: 'planowanie' }] };
+
 async function pokazEkran(nazwa, parametry) {
+  if (STARE_EKRANY[nazwa]) {          // „Terminowość planowania” jest sekcją Raportu pracy (2026-11-23)
+    parametry = Object.assign({}, parametry, STARE_EKRANY[nazwa][1]);
+    nazwa = STARE_EKRANY[nazwa][0];
+  }
   // Stary adres ekranu „ustawienia” (hasz #ustawienia, wstęgi „Pokaż”, alarmy z pulpitu): administrator ma te
   // ustawienia teraz w Administracji → Ustawienia; biuro dalej na ekranie „Ustawienia firmy”.
   if (nazwa === 'ustawienia' && jestAdministratorem()) {
@@ -2314,7 +2321,7 @@ function stempelWersji() {
         warstwa okna: <code id="stempel-warstwa">…</code>
       </div>
       ${pagesStarsze ? `<div class="male" style="margin-top:6px">Na GitHub Pages jest inna wersja
-        aplikacji niż program w biurze. Nową wersję wysyła sam Panel Kierownika — stan:
+        aplikacji niż program w biurze. Nową wersję wysyła sam Panel Zarządczy GK — stan:
         Ustawienia → Zaawansowane → Adres dla telefonów (GitHub Pages).</div>` : ''}
       ${zgodne ? '' : `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>`}
@@ -2348,7 +2355,7 @@ async function sprawdzSpojnoscWersji() {
     // nie ma dostępu do Ustawień i dostałby ostrzeżenie bez wyjścia.
     if (osobneAdresy && dysk !== skrypt && jestAdministratorem()) {
       komunikat('Na GitHub Pages jest inna wersja aplikacji niż program w biurze. '
-        + 'Nową wersję wysyła sam Panel Kierownika — stan: Ustawienia → Zaawansowane → Adres dla telefonów '
+        + 'Nową wersję wysyła sam Panel Zarządczy GK — stan: Ustawienia → Zaawansowane → Adres dla telefonów '
         + '(GitHub Pages).', 'blad');
     }
     return;
@@ -2423,7 +2430,7 @@ function pokazKolejkeWKoncie(pole) {
 
    Ten sam przycisk i to samo okno co w aplikacjach hali (STYL-GK §3, hala:
    konto.js → aplikacjeNaTelefon): aplikacje osoby z kodem QR, „🖨 Drukuj kod”
-   przy aplikacji i „🖨 Drukuj wszystkie”. Listę daje Panel Kierownika (hub,
+   przy aplikacji i „🖨 Drukuj wszystkie”. Listę daje Panel Zarządczy GK (hub,
    GK-KONTA.md §3.6) przez program — tylko konto z Panelu (zrodlo 'gk'). Kody
    rysuje serwer programu (qr_svg), więc okno działa bez biblioteki QR.     */
 function naKomputerze() {
@@ -2814,7 +2821,7 @@ function trescZmianySekretu(zmien) {
   }
   return `<div><button type="button" id="btn-pokaz-zmiane">${zmien}</button></div>
       <fieldset id="zmiana-pinu" class="ukryty"><legend>${zmien}</legend>
-        ${pinZPanelu() ? `<p class="konto-drobne">Konto z Panelu (GK Panel Kierownika) —
+        ${pinZPanelu() ? `<p class="konto-drobne">Konto z Panelu Zarządczego GK —
           ${kontoBiura() ? 'nowe hasło działa' : 'nowy PIN działa'} we wszystkich aplikacjach GK.</p>` : ''}
         <label>${kontoBiura() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
                inputmode="${trybKlawiaturyPinu()}" autocomplete="current-password" maxlength="128"></label>
@@ -3165,6 +3172,7 @@ async function wejdzDoAplikacji() {
   document.getElementById('ekran-logowania').classList.add('ukryty');
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
+  document.getElementById('menu-rola').textContent = etykietaRoli(stan.uz);   // 2026-11-23: rola pod imieniem, program stały
   menuDlaRoli();
   // Zanim cokolwiek narysujemy: czy przegladarka na pewno ma komplet plikow
   // z jednej wersji. Gdy nie — funkcja sama przeladuje aplikacje.

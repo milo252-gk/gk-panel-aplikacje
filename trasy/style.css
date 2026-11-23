@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-ef0b3c830b77';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-906f52ee5aef';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -379,6 +379,8 @@ button.ikona-btn{border:0; background:none; font-size:20px; padding:0 10px; line
 /* Ikony liniowe GKIkony (gk-ikony.js, STYL-GK §8) w menu bocznym: 20 px, currentColor — biel menu; tak samo jak „Wyloguj”. */
 .menu .ikona-menu{display:inline-flex; justify-content:center}
 .menu .ikona-menu svg{display:block}
+/* 2026-11-23: linia z nazwą roli pod imieniem (nazwa programu pod nią zostaje jak była). Poza blokiem wspólnym z GK Flota. */
+.menu-rola.menu-rola-osoby{font-size:13px; opacity:.85; text-transform:none; letter-spacing:0; margin:1px 0 3px}
 /* Menu dłuższe niż okno (10–11 pozycji, 2026-11-18): przewijane cienkim paskiem, a „Wyloguj” przylepione na dole.
    Poza blokiem wspólnym z GK Flota. Na komputerze w niskim oknie pozycje są gęstsze, ale nadal 44 px (telefon bez zmian). */
 .menu{overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-width:thin;
@@ -901,6 +903,17 @@ body.okno-otwarte .mapa{visibility:hidden}
 .filtry-pasek input,.filtry-pasek select{width:100%; min-width:0; display:block; font-size:14px}
 .filtry-pasek label:first-child{flex-basis:210px; max-width:260px}      /* Sortowanie: etykieta „Domyślnie (najstarsze pierwsze)” jest dłuższa */
 .filtry-pasek label.filtr-aktywny select,.filtry-pasek label.filtr-aktywny input{border-color:var(--akcent); box-shadow:0 0 0 2px var(--pomarancz-tlo)}
+/* Unifikacja E3 (2026-11-23): na komputerze JEDEN zwarty rząd — pola po lewej, „N z M”, plakietka i „Wyczyść” po prawej w tej samej linii;
+   aktywne pola mają pomarańczową obwódkę, więc podsumowanie tekstem jest zbędne. Telefon: bez zmian (jeden przewijany rząd). */
+@media (min-width:821px){
+  .filtry-listy{display:flex; flex-wrap:wrap; align-items:flex-end; gap:6px 12px}
+  .filtry-pasek{order:1; flex:1 1 0; min-width:0}
+  .filtry-gora{display:contents}
+  .filtry-gora .filtry-licznik,.filtry-gora .filtry-plakietka,.filtry-gora .filtry-wyczysc{order:2; align-self:center; white-space:nowrap}
+  .filtry-gora .filtry-podsumowanie{display:none}
+  .filtry-gora .filtry-uwaga{order:3; flex:1 1 100%}
+  .filtry-wyczysc{margin-left:0}
+}
 @media (max-width:820px){
   .filtry-podsumowanie{display:none}
   .filtry-uwaga{display:none}
@@ -1107,7 +1120,7 @@ body.okno-otwarte .mapa{visibility:hidden}
 /* „📎 N” na kafelku trasy w toku (Pulpit) otwiera galerię dowodów — mały przycisk w linii tekstu. */
 .dowody-zywo{min-height:0; padding:1px 8px; font-size:13px; vertical-align:baseline}
 
-/* RCP (D93, ekran rcp.js): pasek zakresu, formularze, wiersze dni — układ jak w Panelu Kierownika → RCP. */
+/* RCP (D93, ekran rcp.js): pasek zakresu, formularze, wiersze dni — układ jak w Panelu Zarządczym GK → RCP. */
 .rcp-pasek,.rcp-korekta,.rcp-eksport,.rcp-karta-formularz{display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; margin:0 0 10px}
 .rcp-pasek label,.rcp-korekta label,.rcp-eksport label,.rcp-karta-formularz label{display:grid; gap:4px; font-size:13px; color:var(--tekst-slaby)}
 .rcp-wybor{display:flex!important; align-items:center; gap:8px}

@@ -29,6 +29,7 @@ EKRANY.pulpit = {
       // Lista „Do zatwierdzenia” obejmuje dostawy ze wszystkich dni, więc kafelek bierze liczbę z niej (niżej, po jej
       // wczytaniu). Konto „podgląd” tej listy nie dostaje — ma liczbę dnia z pulpitu.
       doPrzyjecia: podglad ? p.trasy.reduce((s, t) => s + (t.ile_do_przyjecia || 0), 0) : 0,
+      uwagi: podglad ? 0 : p.trasy.reduce((s, t) => s + (t.ile_uwag || 0), 0),
       dzisiaj: data === dzisiaj(), podglad, data,
       // Trasa bez kierowcy to codzienna kontrola biura; w dniach minionych nie ma już czego przydzielać.
       bezKierowcy: data >= dzisiaj() ? p.trasy.filter(t => !t.kierowca_imie && t.status === 'planowana').length : 0,
@@ -423,6 +424,10 @@ function kafelkiPulpitu(s) {
     kod: 'nieudane', etykieta: 'Nieudane', liczba: s.nieudane, klasa: 'uwaga', idzie: 'nieudane',
     opis: 'Dostawy, których nie udało się zrobić — do decyzji niżej.',
   });
+  if (s.uwagi) lista.push({
+    kod: 'uwagi-trasy', etykieta: 'Uwagi w trasie', liczba: s.uwagi, klasa: 'uwaga', idzie: null,
+    opis: 'Kierowcy zgłosili objazd, awarię albo dłuższy załadunek — szczegóły na karcie trasy.',
+  });
   if (s.doPrzyjecia) lista.push({
     kod: 'do-zatwierdzenia', etykieta: 'Do zatwierdzenia', liczba: s.doPrzyjecia, klasa: 'uwaga',
     idzie: s.podglad ? null : 'przyjecie', opis: 'Dostawy zamknięte przez kierowców czekają na Twoją decyzję.',
@@ -565,7 +570,7 @@ EKRANY.trasy = {
       </div>
       ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
-          Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Konta' : 'Ustawieniach → Konta kierowców'}.</div>`}
+          Nie masz jeszcze żadnego konta kierowcy. Załóż je w ${jestAdministratorem() ? 'Administracji → Pracownicy' : 'Ustawieniach → Konta kierowców'}.</div>`}
       ${widoczne.length ? kartyTrasWgAuta(widoczne)
         : `<div class="karta"><div class="pusto"><span class="duza-ikona">${GKIkony.html('mapa', 38)}</span>
              ${!bezFiltrow && trasy.length ? `Na ${polskaData(data)} żadna trasa nie pasuje do wybranych filtrów.
@@ -1150,7 +1155,7 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
 }
 
 /* „Do zatwierdzenia”: biuro ma ocenić dostawę bez otwierania punktu, więc przy każdej widzi to, co kierowca
-   zebrał — kto odebrał, numer dokumentu, notatkę, podpis i zdjęcia (miniatury jak w Panelu Kierownika,
+   zebrał — kto odebrał, numer dokumentu, notatkę, podpis i zdjęcia (miniatury jak w Panelu Zarządczym GK,
    dotknięcie powiększa). Czego punkt wymaga, a kierowca nie dał, jest podpisane na czerwono. */
 const WYMOGI_ETYKIETY = { odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', dokument: 'numer dokumentu' };
 
@@ -1435,6 +1440,7 @@ function kartaTrasyZPrzydzialem(t) {
           <option value="">— nie wybrano —</option>
           ${auta.map(b => opcjaBusa(b, t.pojazd === b.id)).join('')}
         </select></label>
+        ${ostrzezenieCiezarowki(t.pojazd)}
       </div>
     </div>`;
 }
@@ -1484,10 +1490,45 @@ function kartaTrasy(t) {
           ${t.pojazd_nazwa ? ' · ' + escHtml(t.pojazd_nazwa) : ''}</span>
         <span class="dopisek">${t.ile_ok} ${odmiana(t.ile_ok, 'dostarczona', 'dostarczone', 'dostarczonych')}${
           t.ile_nie ? ', ' + t.ile_nie + ' ' + odmiana(t.ile_nie, 'nieudana', 'nieudane', 'nieudanych') : ''}
-          z ${t.ile}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">${ikonka('klepsydra')}${t.ile_do_przyjecia + ' do zatwierdzenia'}</b>` : ''}</span>
+          z ${t.ile}${t.ile_uwag ? ` · <b style="color:var(--zolty)">${ikonka('ostrzezenie')}Uwagi w trasie: ${t.ile_uwag}</b>` : ''}${t.ile_do_przyjecia ? ` · <b style="color:var(--zolty)">${ikonka('klepsydra')}${t.ile_do_przyjecia + ' do zatwierdzenia'}</b>` : ''}</span>
       </span>
       <span class="prawo"><span class="plakietka p-${t.status}">${escHtml(etykietaStatusuTrasy(t.status))}</span></span>
     </button>`;
+}
+
+/* Biuro dopisuje uwagę za kierowcę (np. po telefonie): ten sam zapis co z telefonu kierowcy, ale od razu na serwerze. */
+function oknoDopisaniaUwagi(t) {
+  let powod = '';
+  okno({
+    tytul: 'Dopisz uwagę do trasy',
+    ikona: 'ostrzezenie',
+    tresc: `
+      <div class="chipy">
+        ${POWODY_UWAG_TRASY.map(x => `<button type="button" class="chip" data-powod="${x[0]}">${escHtml(x[1])}</button>`).join('')}
+      </div>
+      <label style="margin-top:10px">Punkt
+        <select id="du-punkt"><option value="">— poza punktem —</option>
+          ${t.przystanki.filter(p => p.status !== 'odwolany').map(p => `<option value="${p.id}">${escHtml(p.klient_nazwa)}</option>`).join('')}
+        </select></label>
+      <label>Notatka<textarea id="du-notatka" maxlength="500" placeholder="np. kierowca dzwonił: zamknięty most"></textarea></label>`,
+    przyciski: [
+      { napis: 'Anuluj', klik: z => z() },
+      { napis: 'Dopisz', klasa: 'glowny', klik: async z => {
+        if (!powod) { komunikat('Wybierz powód', 'blad'); return; }
+        const punkt = document.getElementById('du-punkt').value;
+        const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/uwagi`, {
+          powod, przystanek: punkt ? Number(punkt) : null, notatka: document.getElementById('du-notatka').value.trim(),
+          czas: czasTeraz(),
+        }), 'Uwaga dopisana');
+        if (w) { z(); pokazEkran('trasa', { id: t.id }); }
+      } },
+    ],
+    poOtwarciu: pole => pole.querySelectorAll('[data-powod]').forEach(b => b.onclick = () => {
+      pole.querySelectorAll('[data-powod]').forEach(x => x.classList.remove('wybrany'));
+      b.classList.add('wybrany');
+      powod = b.dataset.powod;
+    }),
+  });
 }
 
 /* Wyłącznie osoby, które faktycznie jeżdżą. Konto biura na liście „Kierowca"
@@ -1523,6 +1564,20 @@ function powodyFlotexu(f) {
   if (!f) return '';
   const lista = !f.sprawny ? (f.powody || []) : (f.uwagi || []);
   return lista.length ? `<div class="male slaby">${lista.map(escHtml).join('<br>')}</div>` : '';
+}
+
+/* Ciężarówkę liczymy profilem ciężarowym OpenRouteService; bez klucza mapa pokazuje trasę osobową, więc mówimy o tym
+   wprost przy aucie (serwer ustawia `brak_klucza_ors` tylko przy aucie ciężarowym). */
+const OSTRZEZENIE_BEZ_KLUCZA_ORS = 'Trasa liczona dla osobowego — brak klucza OpenRouteService; dla ciężarówki może być nieprawdziwa.';
+
+function ostrzezenieCiezarowki(idAuta) {
+  const b = idAuta && (stan.pojazdy || []).find(x => x.id === Number(idAuta));
+  return b && b.brak_klucza_ors
+    ? `<div class="wstega uwaga">${ikonka('ostrzezenie')}${OSTRZEZENIE_BEZ_KLUCZA_ORS}</div>` : '';
+}
+
+function wstegiOstrzezen(lista) {
+  return (lista || []).map(o => `<div class="wstega uwaga">${ikonka('ostrzezenie')}${escHtml(o)}</div>`).join('');
 }
 
 function opcjaBusa(b, wybrany) {
@@ -1613,6 +1668,7 @@ EKRANY.trasa = {
         ${t.flotex && !t.flotex.sprawny ? `<div class="wstega blad">${ikonka('ostrzezenie')}GK Flota: auto
           ${escHtml(t.rejestracja || t.pojazd_nazwa || '')} jest niesprawne —
           ${escHtml((t.flotex.powody || []).join('; ') || 'bez podanego powodu')}.</div>` : ''}
+        ${ostrzezenieCiezarowki(t.pojazd)}
         <!-- UI etap 3: na wierzchu tylko to, co biuro zmienia co dzień (dzień,
              kierowca, auto) — punkty trasy mają być widać bez przewijania.
              Reszta (nazwa, godzina, baza, układ, uwagi, rzadkie przyciski) leży
@@ -1674,6 +1730,19 @@ EKRANY.trasa = {
         ${t.uwagi ? `<div class="wstega info" style="margin:10px 0 0">${ikonka('pinezka')}${escHtml(t.uwagi)}</div>` : ''}
       </div>`}
 
+      ${(t.uwagi_trasy || []).length || admin ? `<div class="karta" id="tr-uwagi">
+        <div class="karta-gora"><h2>Uwagi w trasie (${(t.uwagi_trasy || []).length})</h2>
+          ${admin ? '<button class="maly" id="tr-uwaga-dopisz">' + ikonka('plus') + 'Dopisz uwagę</button>' : ''}
+        </div>
+        ${(t.uwagi_trasy || []).map(u => `<div class="wstega uwaga" style="margin:6px 0">
+          <b>${escHtml(samaGodzina(u.czas_serwera))} · ${escHtml(u.powod_nazwa || u.powod)}</b>${
+            u.klient_nazwa ? ' · ' + escHtml(u.klient_nazwa) : ''}${u.notatka ? '<br>' + escHtml(u.notatka) : ''}${
+            u.autor_imie && u.autor_imie !== t.kierowca_imie ? `<br><span class="male slaby">dopisał(a): ${escHtml(u.autor_imie)}</span>` : ''}${
+            u.zdjecie ? ` <a href="#" data-uwaga-zdjecie="${escHtml(u.zdjecie)}">${ikonka('aparat')}zdjęcie</a>` : ''}</div>`).join('')
+          || '<div class="pusto">Kierowca nie zgłosił uwag na tej trasie.</div>'}
+        <div class="male slaby">Informacja dla biura — plan i godziny trasy same się nie zmieniają.</div>
+      </div>` : ''}
+
       <div class="karta">
         <div class="karta-gora">
           <h2>Punkty (${t.przystanki.length})</h2>
@@ -1710,6 +1779,8 @@ EKRANY.trasa = {
             ${godzinyMinuty(t.szacunek.minuty_zaladunkow)}` : ''}${
             t.szacunek.minuty_przerw ? ` · przerwy kierowcy
             ${godzinyMinuty(t.szacunek.minuty_przerw)} (${t.szacunek.ile_przerw})` : ''}.
+          ${t.pojazd_typ === 'ciezarowe' ? '<br><span class="slaby">Czas i kilometry liczone średnią prędkością '
+            + 'i linią prostą, nie profilem ciężarowym.</span>' : ''}
           ${t.szacunek.powrot_do_bazy ? '' : '<br><span class="slaby">Trasa kończy się '
             + 'u ostatniego punktu — powrotu do bazy nie doliczam.</span>'}
           ${t.szacunek.start_w_bazie ? '' : '<br><span class="slaby">Liczę od pierwszego '
@@ -1744,6 +1815,12 @@ EKRANY.trasa = {
       </div>`;
 
     pole.querySelector('#tr-wroc').onclick = () => pokazEkran('trasy', { data: t.data });
+    pole.querySelectorAll('[data-uwaga-zdjecie]').forEach(a => a.onclick = async e => {
+      e.preventDefault();
+      window.open(adresPliku(a.dataset.uwagaZdjecie, await tokenDoPlikow()), '_blank', 'noopener');
+    });
+    const btnDopisz = pole.querySelector('#tr-uwaga-dopisz');
+    if (btnDopisz) btnDopisz.onclick = () => oknoDopisaniaUwagi(t);
 
     if (admin) {
       // Szkic formularza trasy (dzień, kierowca, auto, nazwa, uwagi…) — wraca po odświeżeniu strony / powrocie programu.
@@ -1890,6 +1967,9 @@ EKRANY.trasa = {
       try {
         let w = await sprobuj(() => API.post(`/api/trasy/${t.id}/przebieg`));
         if (!w) return;
+        const ostrzezenia = wstegiOstrzezen(w.ostrzezenia);
+        // Ciężarówka, a ORS nie dał trasy: osobowej nie podstawiamy — mapa zostaje przy liniach prostych.
+        if (w.zrodlo === 'brak') { info.innerHTML = ostrzezenia; return; }
         // Bez klucza OpenRouteService serwer odsyła same punkty, a kształt po
         // drogach dorysowuje przeglądarka — dzięki temu działa to bez żadnej
         // rejestracji i tak samo na Macu jak na Windowsie.
@@ -1897,7 +1977,7 @@ EKRANY.trasa = {
         if (!w) return;
         Mapa.rysujTrase(mapaBiura, t.przystanki,
           { bazaStart, bazaKoniec, bazaNazwa: t.baza_nazwa, linia: w.linia });
-        info.innerHTML =
+        info.innerHTML = ostrzezenia +
           `Po drogach: <b>${liczbaPl(w.km)} km</b> · około <b>${w.minuty} min</b> jazdy (bez postojów u klientów).`;
       } catch (e) {
         info.innerHTML = '<span style="color:var(--zolty)">Nie udało się pobrać przebiegu po drogach '
@@ -2168,6 +2248,7 @@ async function zaproponujKolejnosc(t) {
         : w.z_bazy ? ', ze startem w bazie, bez powrotu'
         : w.z_powrotem ? ', bez startu w bazie, z powrotem do bazy'
         : ', bez bazy — same punkty'}.</p>
+      ${wstegiOstrzezen(w.ostrzezenia)}
       ${w.km != null ? `<div class="wstega info">Szacunkowo <b>${liczbaPl(w.km)} km</b>${
         w.minuty != null ? `, około <b>${w.minuty} min</b> jazdy` : ''}${
         w.z_powrotem ? ' — razem z powrotem do bazy' : ''}.</div>` : ''}
@@ -3189,7 +3270,67 @@ function kafelekZPodpisem(napis, wartosc, podpis) {
     </div>`;
 }
 
+/* Raport pracy biura (decyzje właściciela 2026-11-23). Szef Sprzedaży i Menedżer: godziny, kilometry i paliwo wszystkich
+   kierowców oraz sekcja „Terminowość planowania” (wynik pracy biura). Biuro: tylko „Do sprawdzenia” (praca operacyjna)
+   i dostawy do Excela — serwer odmawia reszty (403), tu tych widoków po prostu nie ma. */
 async function rysujRaportyBiura(pole, param) {
+  if (!jestAdministratorem()) return rysujDoSprawdzenia(pole, param);
+  const planowanie = param.sekcja === 'planowanie';
+  pole.innerHTML = `
+    <div class="chipy" id="rb-sekcje" role="group" aria-label="Sekcja raportu">
+      <button type="button" class="chip${planowanie ? '' : ' wybrany'}" aria-pressed="${!planowanie}" data-sekcja="praca">Godziny i kilometry</button>
+      <button type="button" class="chip${planowanie ? ' wybrany' : ''}" aria-pressed="${planowanie}" data-sekcja="planowanie">Terminowość planowania</button>
+    </div>
+    <div id="rb-sekcja"></div>`;
+  pole.querySelectorAll('#rb-sekcje [data-sekcja]').forEach(b => b.onclick = () => {
+    if ((b.dataset.sekcja === 'planowanie') !== planowanie) pokazEkran('raporty', { sekcja: b.dataset.sekcja });
+  });
+  const sekcja = pole.querySelector('#rb-sekcja');
+  return planowanie ? rysujTerminowoscPlanowania(sekcja) : rysujPraceKierowcow(sekcja, param);
+}
+
+/* Adres pobrania trafia do historii przeglądarki, więc nie wkładamy w niego tokenu sesji — bierzemy osobny, ważny
+   pięć minut i tylko do pobierania. adresDanych(): z GitHub Pages plik CSV wydaje program w biurze, nie Pages. */
+async function pobierzCsv(nazwa, od, doDnia, kierowcaId) {
+  const w = await sprobuj(() => API.post('/api/eksport/token', { zakres: 'eksport' }));
+  if (!w) return;
+  const link = document.createElement('a');
+  link.href = adresDanych(`/api/eksport/${nazwa}.csv?od=${od}&do=${doDnia}`
+    + (nazwa === 'raport-pracy-pelny' && kierowcaId ? '&kierowca=' + kierowcaId : '')
+    + `&t=${encodeURIComponent(w.token)}`);
+  link.download = '';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function rysujDoSprawdzenia(pole, param) {
+  const od = param.od || przesunDate(dzisiaj(), -13);
+  const doDnia = param.do || dzisiaj();
+  pole.innerHTML = `
+    <div class="pasek-narzedzi">
+      <label>Od<input type="date" id="rb-od" value="${od}"></label>
+      <label>Do<input type="date" id="rb-do" value="${doDnia}"></label>
+      <button id="rb-14">Ostatnie 14 dni</button>
+      <button id="rb-miesiac">Ten miesiąc</button>
+      <button data-eksport="dostawy">${ikonka('pobierz')}Dostawy do Excela</button>
+    </div>
+    <div class="wstega info" style="margin-bottom:12px">Godziny, kilometry i paliwo wszystkich kierowców oglądają
+      Szef Sprzedaży i Menedżer.</div>
+    <div id="rb-braki"></div>`;
+  pole.querySelector('[data-eksport]').onclick = () => pobierzCsv('dostawy', od, doDnia);
+  rysujBraki(pole.querySelector('#rb-braki'), od, doDnia);
+  const odswiez = (o, d) => pokazEkran('raporty', { od: o, do: d });
+  pole.querySelector('#rb-od').onchange = () => odswiez(pole.querySelector('#rb-od').value, pole.querySelector('#rb-do').value);
+  pole.querySelector('#rb-do').onchange = () => odswiez(pole.querySelector('#rb-od').value, pole.querySelector('#rb-do').value);
+  pole.querySelector('#rb-14').onclick = () => odswiez(przesunDate(dzisiaj(), -13), dzisiaj());
+  pole.querySelector('#rb-miesiac').onclick = () => {
+    const d = new Date();
+    odswiez(dataLokalna(new Date(d.getFullYear(), d.getMonth(), 1)), dzisiaj());
+  };
+}
+
+async function rysujPraceKierowcow(pole, param) {
   const od = param.od || przesunDate(dzisiaj(), -13);
   const doDnia = param.do || dzisiaj();
   const kierowcaId = param.kierowca ? String(param.kierowca) : '';
@@ -3218,7 +3359,10 @@ async function rysujRaportyBiura(pole, param) {
         <span class="male slaby" style="display:block">${escHtml(d.zrodlo_godzin || '')}${
           d.najdluzsza_przerwa_min != null ? ` · najdłuższa przerwa między zamknięciami ${
             godzinyMinuty(d.najdluzsza_przerwa_min)}` : ''}</span>` : '—'}</td>
-      <td>${r ? `${escHtml(r.start_o || '—')}–${escHtml(r.koniec_o || '—')}<br>
+      <td>${d.podzial && !d.podzial.brak && d.podzial.razem_min != null ? `<span class="male">dzień ${escHtml(d.podzial.start)}–${
+        escHtml(d.podzial.koniec)}: <b>${godzinyMinuty(d.podzial.razem_min)}</b></span><br><span class="male slaby">trasy ${
+        godzinyMinuty(d.podzial.trasy_min)} · inna praca ${godzinyMinuty(d.podzial.inna_min)} · pozostały ${
+        godzinyMinuty(d.podzial.pozostale_min)}</span><br>` : ''}${r ? `${escHtml(r.start_o || '—')}–${escHtml(r.koniec_o || '—')}<br>
         <span class="male">przerwa ${r.przerwa_min || 0} min</span><br><b>${godz(r.godziny)}</b>`
         : d.bez_startu ? '<span class="slaby">trasa bez startu</span>'
         : d.w_toku ? '<span class="plakietka p-w_toku">w toku</span>'
@@ -3233,6 +3377,10 @@ async function rysujRaportyBiura(pole, param) {
           ${r && r.paliwo_pln != null ? '<br>' + liczbaPl(r.paliwo_pln.toFixed(2)) + ' zł' : ''}</td>
       <td class="male">${r && r.usterki ? ('<b style="color:var(--czerwony)">' + ikonka('ostrzezenie')) + escHtml(r.usterki) + '</b><br>' : ''}
           ${r ? escHtml(r.uwagi || '') : ''}
+          ${(d.uwagi_trasy || []).map(u => `<br><span style="color:var(--zolty)">${ikonka('ostrzezenie')}${escHtml(u.godzina)} ${
+            escHtml(u.powod_nazwa)}${u.klient_nazwa ? ' · ' + escHtml(u.klient_nazwa) : ''}${u.notatka ? ': ' + escHtml(u.notatka) : ''}</span>`).join('')}
+          ${(d.podzial && d.podzial.wpisy || []).map(x => `<br><span class="slaby">${escHtml(x.nazwa)} ${escHtml(x.od)}–${escHtml(x.do)}${
+            x.notatka ? ' · ' + escHtml(x.notatka) : ''}</span>`).join('')}
           ${d.trasy && d.trasy.length ? `<br><a href="#" data-trasa-raport="${d.trasy[0]}">trasa</a>` : ''}</td>
     </tr>`;
   };
@@ -3296,23 +3444,8 @@ async function rysujRaportyBiura(pole, param) {
       ostatniego zamknięcia punktu). Kilometry z GPS są liczone ze śladu w linii prostej, więc wychodzą nieco niższe
       niż z licznika; ślad starszy niż ${wynik.retencja_gps_dni || 30} dni program kasuje.</div>`;
 
-  // Adres pobrania trafia do historii przeglądarki, więc nie wkładamy w niego
-  // tokenu sesji — bierzemy osobny, ważny pięć minut i tylko do pobierania.
-  pole.querySelectorAll('[data-eksport]').forEach(przycisk => przycisk.onclick = async () => {
-    const w = await sprobuj(() => API.post('/api/eksport/token', { zakres: 'eksport' }));
-    if (!w) return;
-    // adresDanych(): z GitHub Pages plik CSV wydaje program w biurze, nie Pages.
-    const adres = adresDanych(`/api/eksport/${przycisk.dataset.eksport}.csv`
-      + `?od=${od}&do=${doDnia}`
-      + (przycisk.dataset.eksport === 'raport-pracy-pelny' && kierowcaId ? '&kierowca=' + kierowcaId : '')
-      + `&t=${encodeURIComponent(w.token)}`);
-    const link = document.createElement('a');
-    link.href = adres;
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  });
+  pole.querySelectorAll('[data-eksport]').forEach(przycisk =>
+    przycisk.onclick = () => pobierzCsv(przycisk.dataset.eksport, od, doDnia, kierowcaId));
 
   rysujBraki(pole.querySelector('#rb-braki'), od, doDnia);
 
@@ -3355,10 +3488,10 @@ function godzinyMinuty(minuty) {
 /* ============================================================ USTAWIENIA */
 
 /* Nazwy ról jak w Moim koncie (NAZWA_ROLI w app.js, NAZWY_ROL w trasex.py; decyzja właściciela 2026-11-19). Kody ról
-   bez zmian. Rola programu `admin` = Szef GK Trasy (z roli huba trasy_admin) albo Menedżer (admin całego GK) — uprawnienia
-   te same, ale konto Menedżera z Panelu serwer opisuje `etykieta_roli` = „Menedżer GK Trasy” („Rozróżnij w Trasach”,
+   bez zmian. Rola programu `admin` = Szef Sprzedaży (z roli huba trasy_admin) albo Menedżer (admin całego GK) — uprawnienia
+   te same, ale konto Menedżera z Panelu serwer opisuje `etykieta_roli` = „Menedżer” („Rozróżnij w Trasach”,
    2026-11-19). Bez tego pola (starszy serwer) — nazwa roli z tej listy, jak dotąd. */
-const OPIS_ROLI = { admin: 'Szef GK Trasy', biuro: 'Biuro GK Trasy', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd GK Trasy' };
+const OPIS_ROLI = { admin: 'Szef Sprzedaży', biuro: 'Biuro', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd' };
 function nazwaRoliKonta(x) {
   return (x && x.etykieta_roli) || OPIS_ROLI[x && x.rola] || (x && x.rola) || '';
 }
@@ -3459,10 +3592,9 @@ function kartaGodzinUst(ustawienia) {
         ${jestAdministratorem() ? `<label>Terminowość planowania — termin (pełna godzina, 0–23)
             <input type="number" id="u-plan-termin" min="0" max="23" step="1"
                    value="${escHtml(ustawienia.plan_termin_godz || '17')}">
-            <span class="male slaby">Raport „Terminowość planowania”: trasa jest w terminie, gdy zaplanowano ją najpóźniej o tej
-              godzinie poprzedniego dnia roboczego przed dniem jazdy. Zmienia tylko administrator.</span></label>`
-          : `<p class="male slaby">Raport „Terminowość planowania”: termin to godzina ${escHtml(ustawienia.plan_termin_godz || '17')}:00
-            poprzedniego dnia roboczego przed dniem jazdy (zmienia administrator).</p>`}
+            <span class="male slaby">Sekcja „Terminowość planowania” w Raporcie pracy: trasa jest w terminie, gdy zaplanowano ją
+              najpóźniej o tej godzinie poprzedniego dnia roboczego przed dniem jazdy. Zmienia i ogląda tylko Szef Sprzedaży
+              albo Menedżer.</span></label>` : ''}
         <button class="glowny zapisz-ustawienia">Zapisz ustawienia</button>`)}`;
 }
 
@@ -3534,7 +3666,7 @@ function kartaKontKierowcow(ustawienia, konta) {
     <div class="karta-gora"><h2>Konta kierowców</h2>
       ${mozna ? '<button class="maly glowny" id="u-nowy-kierowca">+ Dodaj kierowcę</button>' : ''}</div>
     <div class="wstega info">${mozna
-      ? 'Kierowcę zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby we wszystkich aplikacjach GK. Hasło startowe: <b>haslo123</b>.'
+      ? 'Kierowcę zakładasz tutaj — konto powstaje w <b>Panelu Zarządczym GK</b>, jedno dla osoby we wszystkich aplikacjach GK. Hasło startowe: <b>haslo123</b>.'
       : powod === 'awaryjny' ? 'Kierowców zakłada osoba z kontem z Panelu — zaloguj się swoim kontem z Panelu.'
         : 'Teraz kierowców zakłada się w <b>Panelu → Administracja</b> (brak połączenia z Panelem).'}</div>
     ${blokKierowcowZablokowanych(konta)}
@@ -3571,7 +3703,7 @@ async function rysujUstawieniaBiura(pole) {
   pole.innerHTML = `
     <p class="male slaby" style="margin:0 0 10px">Tu ustawiasz, jak program liczy trasy
       i pilnuje kierowców oraz zakładasz konta kierowców. Klucze, pocztę, kopie zapasowe
-      i konta biura zmienia Szef GK Trasy.</p>
+      i konta biura zmienia Szef Sprzedaży.</p>
     ${kartaFirmyUst(ustawienia)}
     ${kartaGodzinUst(ustawienia)}
     ${kartaPrzerwUst(ustawienia)}
@@ -3667,7 +3799,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
   stan.pojazdy = await API.get('/api/pojazdy');
 
 
-  // Zakładka „Konta” (Administracja): ta sama tabela kont i ta sama karta „Konta GK (Panel Kierownika)”, co dotąd
+  // Zakładka „Konta” (Administracja): ta sama tabela kont i ta sama karta „Konta GK (Panel Zarządczy GK)”, co dotąd
   // w Ustawieniach (Konta + Zaawansowane → Konta GK) — ten sam render i te same endpointy, tylko wejście na wierzchu.
   if (naKontach) {
     pole.innerHTML = `
@@ -3691,7 +3823,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
         <thead><tr><th>Nazwa</th><th>Rejestracja</th>
           ${(ustawienia.flotex_stan || {}).polaczony ? '<th>GK Flota</th>' : ''}<th>Uwagi</th><th></th></tr></thead>
         <tbody>${stan.pojazdy.length ? stan.pojazdy.map(b => `<tr style="${b.aktywny ? '' : 'opacity:.5'}">
-          <td><b>${escHtml(b.nazwa)}</b></td><td>${escHtml(b.rejestracja || '')}</td>
+          <td><b>${escHtml(b.nazwa)}</b>${b.typ === 'ciezarowe' ? ' <span class="plakietka p-planowana">ciężarowe</span>' : ''}</td><td>${escHtml(b.rejestracja || '')}</td>
           ${(ustawienia.flotex_stan || {}).polaczony ? `<td>${b.flotex
             ? znacznikFlotexu(b.flotex) + powodyFlotexu(b.flotex)
             : '<span class="male slaby">nie ma w GK Flota</span>'}</td>` : ''}
@@ -3803,7 +3935,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       <p class="male">Najprościej: menu <b>${ikonka('zaproszenie')}Zaproś kierowcę</b> — kierowca skanuje kod QR
         aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
         (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
-        a gdy Panel Kierownika jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
+        a gdy Panel Zarządczy GK jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
       <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i PIN-em,
         a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego”</b>. Od tej pory
         aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}
@@ -4036,19 +4168,19 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
 function kartaKontAdmina(ustawienia, u) {
   return `
       <div class="karta">
-        <div class="karta-gora"><h2>Konta</h2>
+        <div class="karta-gora"><h2>Pracownicy</h2>
           ${!ustawienia.konta_z_panelu
-            ? '<button class="maly glowny" id="u-nowe-konto">+ Nowe konto</button>'
-            : kontaZespolu(ustawienia) ? '<button class="maly glowny" id="u-nowe-konto">+ Dodaj konto</button>' : ''}</div>
+            ? '<button class="maly glowny" id="u-nowe-konto">+ Dodaj osobę</button>'
+            : kontaZespolu(ustawienia) ? '<button class="maly glowny" id="u-nowe-konto">+ Dodaj osobę</button>' : ''}</div>
         ${!ustawienia.konta_z_panelu ? '' : kontaZespolu(ustawienia) ? `<div class="wstega info">Kierowców
-          i biuro zakładasz tutaj — konto powstaje w <b>Panelu</b> (GK Panel Kierownika), jedno dla osoby
+          i biuro zakładasz tutaj — konto powstaje w <b>Panelu Zarządczym GK</b>, jedno dla osoby
           we wszystkich aplikacjach GK. Kierowników, Menedżerów i osoby z innymi rolami zmienia się
           w <b>Panelu → Administracja</b>. Konta tutejsze (np. awaryjne „admin”) działają dalej.</div>`
           : `<div class="wstega info">Konta zakłada się teraz
-          w <b>Panelu → Administracja</b> (GK Panel Kierownika) — jedno konto osoby we wszystkich
+          w <b>Panelu → Administracja</b> — jedno konto osoby we wszystkich
           aplikacjach GK. Tutaj ustawisz tylko bazę wyjazdową. Konta tutejsze (np. awaryjne
           „admin”) działają dalej.${(ustawienia.konta_zespolu || {}).powod === 'awaryjny'
-            ? ' Kierowców i biuro może tu zakładać Szef GK Trasy z kontem z Panelu — zaloguj się nim.' : ''}</div>`}
+            ? ' Kierowców i biuro może tu zakładać Szef Sprzedaży z kontem z Panelu — zaloguj się nim.' : ''}</div>`}
         ${wstegaLogowaniaZInternetu(ustawienia.logowanie_z_internetu)}
         <div class="tabela-przewijana"><table>
           <thead><tr><th>Imię</th><th>Login</th><th>Rola</th><th>Telefon</th><th></th></tr></thead>
@@ -4081,20 +4213,22 @@ function kartaKontAdmina(ustawienia, u) {
    to samo okno (oknoCzyszczeniaTras, /api/czyszczenie-tras), kody QR — to samo okno co w „Moje konto”. Stare wejścia
    (#ustawienia, wstęgi alarmów) trafiają tu przez pokazEkran. Biuro nie ma tego ekranu — ma swoje „Ustawienia firmy”. */
 const ZAKLADKI_ADMINISTRACJI = [
-  { id: 'konta', napis: 'Konta' },
+  { id: 'konta', napis: 'Pracownicy' },
   { id: 'dane', napis: 'Dane i czyszczenie' },
   { id: 'kody', napis: 'Kody QR' },
+  // Unifikacja E7 (2026-11-23): „Role i uprawnienia” jako chip-drzwi administratora (jak w Panelu) — otwiera to samo okno co „Moje konto”.
+  { id: 'role', napis: 'Role i uprawnienia', drzwi: true },
   { id: 'ustawienia', napis: 'Ustawienia' },
 ];
 
 function kartaKodowQRAdmina() {
   return `<div class="karta" id="a-kody-qr-karta">
     <h2>Kody QR aplikacji</h2>
-    <p class="male slaby">Kody do zeskanowania aparatem telefonu: aplikacje hali, GK Trasy i GK Flota, z drukiem arkusza A4.
+    <p class="male slaby">Kody do zeskanowania aparatem telefonu: aplikacje hali, Panel Zarządczy SP i GK Flota, z drukiem arkusza A4.
       To samo okno co w „Moje konto” — tu jest na wierzchu.</p>
     ${maKodyQR()
       ? `<div class="przyciski"><button class="glowny" id="a-kody-qr">${napisKodowQR()}</button></div>`
-      : `<div class="wstega info">Kody QR są dla kont z Panelu Kierownika. Zalogowano kontem awaryjnym tego programu —
+      : `<div class="wstega info">Kody QR są dla kont z Panelu Zarządczego GK. Zalogowano kontem awaryjnym tego programu —
           zaloguj się swoim kontem z Panelu (imię i nazwisko), żeby je zobaczyć.</div>`}
   </div>`;
 }
@@ -4103,7 +4237,7 @@ EKRANY.administracja = {
   tytul: 'Administracja',
   tylkoAdministrator: true,
   async rysuj(pole, param) {
-    const zakladka = ZAKLADKI_ADMINISTRACJI.some(z => z.id === (param || {}).zakladka) ? param.zakladka : 'konta';
+    const zakladka = ZAKLADKI_ADMINISTRACJI.some(z => !z.drzwi && z.id === (param || {}).zakladka) ? param.zakladka : 'konta';
     stan.adminZakladka = zakladka;
     pole.innerHTML = `<div class="chipy" role="tablist" aria-label="Administracja">
         ${ZAKLADKI_ADMINISTRACJI.map(z => `<button type="button" class="chip ${z.id === zakladka ? 'wybrany' : ''}"
@@ -4111,7 +4245,13 @@ EKRANY.administracja = {
       </div>
       <div id="admin-tresc"><div class="pusto">Wczytuję…</div></div>`;
     pole.querySelectorAll('[data-zakladka]').forEach(b =>
-      b.onclick = () => { if (b.dataset.zakladka !== stan.adminZakladka) pokazEkran('administracja', { zakladka: b.dataset.zakladka }); });
+      b.onclick = () => {
+        if (b.dataset.zakladka === 'role') {       // drzwi: okno, bez zmiany zakładki; „Wróć” i zamknięcie zostają na tej samej zakładce
+          otworzRole(() => pokazEkran('administracja', { zakladka: stan.adminZakladka })).catch(e => komunikat(poLudzku(e), 'blad'));
+          return;
+        }
+        if (b.dataset.zakladka !== stan.adminZakladka) pokazEkran('administracja', { zakladka: b.dataset.zakladka });
+      });
     const tresc = pole.querySelector('#admin-tresc');
     if (zakladka === 'dane') {
       tresc.innerHTML = kartaCzyszczeniaTras();
@@ -4176,11 +4316,11 @@ function oknoKonta_admin(k) {
   const zPanelu = !nowe && k.zrodlo === 'gk' && !!(stan.ustawienia || {}).konta_z_panelu;
   const blok = zPanelu ? 'disabled' : '';
   okno({
-    tytul: nowe ? 'Nowe konto' : 'Konto: ' + k.imie,
+    tytul: nowe ? 'Dodaj osobę' : 'Konto: ' + k.imie,
     tresc: `
-      ${zPanelu ? `<div class="wstega info">Konto z Panelu (GK Panel Kierownika). Imię, rolę,
+      ${zPanelu ? `<div class="wstega info">Konto z Panelu Zarządczego GK. Imię, rolę,
         telefon, PIN i wyłączenie konta zmienia się w <b>Panelu → Administracja</b>.${zespol
-          ? ' Ta osoba ma też role spoza GK Trasy (np. kierownik albo Menedżer) — dlatego nie tutaj.' : ''}</div>` : ''}
+          ? ' Ta osoba ma też role spoza Panelu Zarządczego SP (np. kierownik albo Menedżer) — dlatego nie tutaj.' : ''}</div>` : ''}
       <label>Imię i nazwisko<input id="ko-imie" value="${escHtml(k.imie)}" autocapitalize="words" ${blok}></label>
       <label>Login ${nowe ? '' : '<span class="slaby">(nie da się zmienić)</span>'}
         <input id="ko-login" value="${escHtml(k.login)}" ${nowe ? '' : 'disabled'}
@@ -4188,9 +4328,9 @@ function oknoKonta_admin(k) {
       <label>Rola
         <select id="ko-rola" ${blok}>
           <option value="kierowca" ${k.rola === 'kierowca' ? 'selected' : ''}>Kierowca GK Trasy — tylko swoje trasy i swój raport pracy</option>
-          <option value="biuro" ${k.rola === 'biuro' ? 'selected' : ''}>Biuro GK Trasy — cała codzienna robota, bez Ustawień i kont</option>
-          <option value="admin" ${k.rola === 'admin' ? 'selected' : ''}>Szef GK Trasy — to co biuro, plus konta i Ustawienia</option>
-          <option value="podglad" ${k.rola === 'podglad' ? 'selected' : ''}>Podgląd GK Trasy — tylko ogląda plan, niczego nie zmienia</option>
+          <option value="biuro" ${k.rola === 'biuro' ? 'selected' : ''}>Biuro — cała codzienna robota, bez Ustawień i kont</option>
+          <option value="admin" ${k.rola === 'admin' ? 'selected' : ''}>Szef Sprzedaży — to co biuro, plus konta i Ustawienia</option>
+          <option value="podglad" ${k.rola === 'podglad' ? 'selected' : ''}>Podgląd — tylko ogląda plan, niczego nie zmienia</option>
         </select></label>
       <div class="male slaby" style="margin:-4px 0 10px">
         Biuro widzi trasy, klientów, dowody dostaw, ślady GPS i raporty pracy — może więc
@@ -4237,8 +4377,8 @@ function oknoKontaZespolu(k) {
   const nowe = !k;
   k = k || { imie: '', telefon: '', aktywny: 1, role_zespolu: ['trasy_kierowca'] };
   const role = (stan.ustawienia.konta_zespolu || {}).role
-    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca GK Trasy' }, { kod: 'trasy_biuro', nazwa: 'Biuro GK Trasy' },
-        { kod: 'trasy_podglad', nazwa: 'Podgląd GK Trasy' }];
+    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca GK Trasy' }, { kod: 'trasy_biuro', nazwa: 'Biuro' },
+        { kod: 'trasy_podglad', nazwa: 'Podgląd' }];
   const opisRoli = {
     trasy_kierowca: 'swoje trasy i raport pracy',
     trasy_biuro: 'cała codzienna robota, bez Ustawień i kont',
@@ -4247,10 +4387,10 @@ function oknoKontaZespolu(k) {
   const zaznaczone = new Set(k.role_zespolu || []);
   const imie = escHtml(k.imie || '');
   okno({
-    tytul: nowe ? 'Dodaj konto' : 'Konto: ' + k.imie,
+    tytul: nowe ? 'Dodaj osobę' : 'Konto: ' + k.imie,
     tresc: `
       <div class="wstega info">${nowe
-        ? 'Konto powstaje w Panelu (GK Panel Kierownika) — to samo we wszystkich aplikacjach GK.'
+        ? 'Konto powstaje w Panelu Zarządczym GK — to samo we wszystkich aplikacjach GK.'
         : 'Konto z Panelu — zmiana zapisuje się w Panelu i we wszystkich aplikacjach GK.'}</div>
       <div class="wstega blad" id="kz-blad" hidden></div>
       <label>Imię i nazwisko<input id="kz-imie" value="${imie}" autocapitalize="words"
@@ -4301,7 +4441,7 @@ function oknoKontaZespolu(k) {
           `${k.imie} dostanie PIN startowy 1234 — przy pierwszym logowaniu ustawi nowy. Hasło się nie zmienia.`,
           'Resetuj PIN'],
         wyloguj_wszedzie: [`Wylogować wszędzie?`,
-          `Wszystkie urządzenia osoby ${k.imie} (GK Trasy i inne aplikacje GK) zostaną wylogowane — `
+          `Wszystkie urządzenia osoby ${k.imie} (Panel Zarządczy SP i inne aplikacje GK) zostaną wylogowane — `
           + 'następne logowanie hasłem.',
           'Wyloguj wszędzie'],
       };
@@ -4328,7 +4468,7 @@ function oknoKontaZespolu(k) {
     },
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
-      { napis: nowe ? 'Dodaj konto' : 'Zapisz', klasa: 'glowny', klik: async z => {
+      { napis: nowe ? 'Dodaj osobę' : 'Zapisz', klasa: 'glowny', klik: async z => {
         const pole = document.getElementById('okno-tresc');
         const blad = pole.querySelector('#kz-blad');
         const pokazBlad = tekst => { blad.textContent = tekst; blad.hidden = !tekst; };
@@ -4339,7 +4479,7 @@ function oknoKontaZespolu(k) {
           baza: (document.getElementById('kz-baza') || {}).value || null,
         };
         if (!dane.nazwa) { pokazBlad('Podaj imię i nazwisko.'); return; }
-        if (!wybrane.length) { pokazBlad('Zaznacz rolę: Kierowca GK Trasy albo Biuro GK Trasy.'); return; }
+        if (!wybrane.length) { pokazBlad('Zaznacz rolę: Kierowca GK Trasy albo Biuro.'); return; }
         if (!nowe) dane.aktywny = document.getElementById('kz-aktywny').checked;
         // Zmieniona sama baza wyjazdowa — Panel nie ma tu nic do zapisania.
         const tylkoBaza = !nowe && dane.nazwa === k.imie && dane.telefon === (k.telefon || '')
@@ -4377,6 +4517,21 @@ function oknoBusa(b) {
       <label>Nazwa <span class="slaby">(np. „Ducato”, „Auto 1”)</span>
         <input id="bu-nazwa" value="${escHtml(b.nazwa)}"></label>
       <label>Rejestracja<input id="bu-rej" value="${escHtml(b.rejestracja || '')}"></label>
+      <label>Rodzaj auta
+        <select id="bu-typ">
+          ${[['osobowe', 'Osobowe'], ['dostawcze', 'Dostawcze'], ['ciezarowe', 'Ciężarowe']].map(([k, n]) =>
+            `<option value="${k}" ${(b.typ || 'osobowe') === k ? 'selected' : ''}>${n}</option>`).join('')}
+        </select></label>
+      <div id="bu-wymiary" ${b.typ === 'ciezarowe' ? '' : 'class="ukryty"'}>
+        <p class="male slaby" style="margin:0 0 8px">Trasy tego auta liczymy dla ciężarówki. Wymiary nie są obowiązkowe —
+          z nimi mapa omija miejsca, w których auto się nie zmieści (niskie wiadukty, mosty z limitem masy).</p>
+        <div class="dwie">
+          ${[['bu-wys', 'wys_m', 'Wysokość (m)'], ['bu-masa', 'masa_t', 'Masa całkowita (t)'],
+             ['bu-dlug', 'dlug_m', 'Długość (m)'], ['bu-szer', 'szer_m', 'Szerokość (m)'],
+             ['bu-os', 'os_t', 'Nacisk na oś (t)']].map(([id, pole, n]) =>
+            `<label>${n}<input id="${id}" inputmode="decimal" value="${b[pole] != null ? escHtml(String(b[pole]).replace('.', ',')) : ''}"></label>`).join('')}
+        </div>
+      </div>
       <label>Uwagi<textarea id="bu-uwagi">${escHtml(b.uwagi || '')}</textarea></label>
       <label class="plaska"><input type="checkbox" id="bu-czas-pracy"
         ${b.czas_pracy == null || Number(b.czas_pracy) ? 'checked' : ''}>
@@ -4393,6 +4548,8 @@ function oknoBusa(b) {
           id: b.id, nazwa: val('bu-nazwa'), rejestracja: val('bu-rej'), uwagi: val('bu-uwagi'),
           aktywny: nowy ? 1 : (document.getElementById('bu-aktywny').checked ? 1 : 0),
           czas_pracy: document.getElementById('bu-czas-pracy').checked ? 1 : 0,
+          typ: val('bu-typ'), wys_m: val('bu-wys'), masa_t: val('bu-masa'), dlug_m: val('bu-dlug'),
+          szer_m: val('bu-szer'), os_t: val('bu-os'),
         };
         // Edycja istniejącego auta może poczekać w komputerze; nowe auto — nie (numer nadaje program).
         const w = await sprobuj(() => nowy ? API.post('/api/pojazdy', dane)
@@ -4403,6 +4560,10 @@ function oknoBusa(b) {
         if (w) { _autaDoFiltra = null; z(); wrocDoUstawien(); }
       } },
     ],
+    poOtwarciu: pole => {
+      const typ = pole.querySelector('#bu-typ');
+      typ.onchange = () => pole.querySelector('#bu-wymiary').classList.toggle('ukryty', typ.value !== 'ciezarowe');
+    },
   });
 }
 
@@ -4493,7 +4654,7 @@ function kartaKopii(u) {
       punkt 15.</p>`, 'u-kopie');
 }
 
-/* Czyszczenie tras (administrator, 2026-11-04): jak „Czyszczenie zleceń” w Panelu Kierownika — wybór konkretnych tras
+/* Czyszczenie tras (administrator, 2026-11-04): jak „Czyszczenie zleceń” w Panelu Zarządczym GK — wybór konkretnych tras
    z listy i usunięcie ich na stałe (z punktami, zdjęciami i podpisami). Serwer przed usunięciem robi kopię bazy. */
 function kartaCzyszczeniaTras() {
   // Zakładka Administracja → Dane i czyszczenie: przycisk na wierzchu (nie w zwijanej sekcji pod „Zaawansowane”).
@@ -4623,7 +4784,7 @@ function kartaTunelu(u) {
     <label class="plaska"><input type="radio" name="tunel" value="szybki" ${tryb === 'szybki' ? 'checked' : ''}>
       <span><b>Szybki</b><br><span class="male slaby">Działa od razu, bez konta i bez
         domeny. <b>Adres zmienia się po każdym uruchomieniu programu</b> — dlatego
-        telefony otwierają stały adres aplikacji na GitHub Pages, a Panel Kierownika
+        telefony otwierają stały adres aplikacji na GitHub Pages, a Panel Zarządczy GK
         (na tym komputerze) sam wpisuje tam bieżący adres tunelu (karta niżej).</span></span></label>
 
     <label class="plaska"><input type="radio" name="tunel" value="staly" ${tryb === 'staly' ? 'checked' : ''}>
@@ -4641,7 +4802,7 @@ function kartaTunelu(u) {
       <input id="u-tunel-adres" value="${escHtml(u.tunel_adres || '')}"
              placeholder="np. https://trasy.twojafirma.pl"></label>
     <div class="male slaby">Tylko w trybie stałym: ten sam adres, który ustawiono w panelu
-      Cloudflare. Program podaje go Panelowi Kierownika, a Panel wpisuje go aplikacji na GitHub Pages.</div>
+      Cloudflare. Program podaje go Panelowi Zarządczemu GK, a Panel wpisuje go aplikacji na GitHub Pages.</div>
 
     <details style="margin-top:12px">
       <summary class="male" style="cursor:pointer">Jak zdobyć token tunelu stałego</summary>
@@ -4674,7 +4835,7 @@ function zmienionoTunel(poprzednie) {
 
 /* Telefony otwierają STAŁY adres na jednej stronie wszystkich aplikacji GK
    (GitHub Pages, katalog trasy/). Tam leży sam wygląd aplikacji, a dane wydaje
-   ten program pod adresem tunelu. Od D42 na GitHub wysyła je Panel Kierownika
+   ten program pod adresem tunelu. Od D42 na GitHub wysyła je Panel Zarządczy GK
    (hub na tym samym komputerze, jeden token): program podaje mu tylko adres
    tunelu i wersję. Tu nic się nie ustawia — karta mówi, co leży na Pages.  */
 function kartaPages(u) {
@@ -4688,19 +4849,19 @@ function kartaPages(u) {
   const kiedy = t => escHtml(czasNaEkran(t));
   return zwin('Adres dla telefonów (GitHub Pages)', plakietka, `
     <p class="male slaby">Stały adres aplikacji dla telefonów — ten sam po każdym restarcie
-      komputera w biurze. <b>Adres dla telefonów publikuje Panel Kierownika</b> na tym
+      komputera w biurze. <b>Adres dla telefonów publikuje Panel Zarządczy GK</b> na tym
       komputerze, tym samym tokenem co aplikacje hali: program podaje mu adres tunelu i swoją
       wersję, Panel wysyła je na GitHub sam. Na GitHubie leży sam wygląd, bez żadnych danych firmy.</p>
 
-    ${p.adres ? `<div class="wstega info">Adres dla telefonów publikuje Panel Kierownika:<br>
+    ${p.adres ? `<div class="wstega info">Adres dla telefonów publikuje Panel Zarządczy GK:<br>
         <a href="${escHtml(p.adres)}" target="_blank" rel="noopener"
            style="font-size:15px;word-break:break-all"><b>${escHtml(p.adres)}</b></a></div>` : ''}
 
-    ${!p.lokalne ? `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Kierownika (kopia
+    ${!p.lokalne ? `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Zarządczemu GK (kopia
         testowa albo druga kopia na innym porcie).</div>` : ''}
-    ${p.lokalne && !p.hub_odpisal ? `<div class="wstega uwaga">Panel Kierownika jeszcze się nie odezwał.
+    ${p.lokalne && !p.hub_odpisal ? `<div class="wstega uwaga">Panel Zarządczy GK jeszcze się nie odezwał.
         Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>` : ''}
-    ${p.blad ? `<div class="wstega uwaga">Panel Kierownika nie wysłał adresu na GitHub:
+    ${p.blad ? `<div class="wstega uwaga">Panel Zarządczy GK nie wysłał adresu na GitHub:
         ${escHtml(p.blad)} Panel ponawia sam; szczegóły w Panelu → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
     <table class="male" style="margin-bottom:10px">
@@ -4958,7 +5119,7 @@ function kartaKontGK(u) {
     : s.blad ? ('<span class="plakietka p-nieudane">' + ikonka('zamknij') + 'błąd</span>')
     : s.kiedy ? ('<span class="plakietka p-dostarczone">' + ikonka('haczyk') + 'połączony</span>')
     : '<span class="plakietka p-w_toku">łączy się</span>';
-  return zwin('Konta GK (Panel Kierownika)', plakietka, `
+  return zwin('Konta GK (Panel Zarządczy GK)', plakietka, `
     <p class="male slaby">Konta wszystkich aplikacji GK zakłada się w jednym miejscu:
       <b>Panel → Administracja</b>. Osoba loguje się wszędzie imieniem i nazwiskiem i tym
       samym PIN-em. Program pobiera konta z Panelu co 5 minut i trzyma ich kopię — logowanie
@@ -5001,7 +5162,7 @@ function kartaKontGK(u) {
         : s.blad ? `<div class="wstega uwaga" style="margin-top:12px">${escHtml(s.blad)}</div>` : ''}
       <div class="male" style="margin-top:10px">${s.kiedy && !s.blad
         ? `Ostatnio pobrane ${escHtml(czasNaEkran(s.kiedy))}: ${w.konta || 0}
-           ${odmiana(w.konta || 0, 'osoba', 'osoby', 'osób')} z rolą GK Trasy
+           ${odmiana(w.konta || 0, 'osoba', 'osoby', 'osób')} z rolą Panelu Zarządczego SP
            (nowe ${w.dodane || 0}, połączone ${w.polaczone || 0}, zmienione ${w.zmienione || 0},
            wyłączone ${w.wylaczone || 0}).`
         : s.kiedy ? `Ostatnia próba ${escHtml(czasNaEkran(s.kiedy))}.` : 'Jeszcze nie pobrane — pójdą za chwilę.'}
@@ -5019,7 +5180,7 @@ function kartaKontGK(u) {
       <h3 style="margin-top:18px">Przenieś konta do Panelu</h3>
       <p class="male slaby">Jednorazowo: konta założone dotąd tutaj trafiają do Panelu razem
         z PIN-ami (jadą tylko skróty — nikt nie musi zmieniać PIN-u). Osoba, która już jest
-        w Panelu pod tym samym imieniem i nazwiskiem, dostaje tylko rolę GK Trasy. Najpierw
+        w Panelu pod tym samym imieniem i nazwiskiem, dostaje tylko rolę Panelu Zarządczego SP. Najpierw
         popraw w kontach <b>pełne imię i nazwisko</b> — to w Panelu jest login. Konto awaryjne
         „admin” zostaje tutaj. Powtórne przeniesienie niczego nie dubluje.</p>
       <button id="u-hub-przenies">Przenieś konta do Panelu</button>
@@ -5277,6 +5438,10 @@ async function oknoLinkuDoMap(trasaId, tylkoOtwarte) {
           więc trasa jest podzielona na ${w.czesci.length}
           ${odmiana(w.czesci.length, 'część', 'części', 'części')} — każda zaczyna się tam,
           gdzie kończy poprzednia.` : ''}</p>
+      ${w.ciezarowe ? `${wstegiOstrzezen(w.ciezarowe.ostrzezenia)}${w.ciezarowe.punkty_posrednie ? `<div class="wstega info">
+        Trasa ciężarowa: odnośnik ma ${w.ciezarowe.punkty_posrednie}
+        ${odmiana(w.ciezarowe.punkty_posrednie, 'punkt pośredni', 'punkty pośrednie', 'punktów pośrednich')}
+        z kształtu trasy dla ciężarówki, żeby Google pokazał tę samą drogę. Google może pokazać je jako punkty pośrednie — to nie są dostawy, kierowca tylko je mija.</div>` : ''}` : ''}
       ${w.czesci.map((c, i) => `
         <div class="karta scisla">
           <div class="male"><b>${w.czesci.length > 1 ? `Część ${i + 1}: ` : ''}${

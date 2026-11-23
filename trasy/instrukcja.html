@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>GK Trasy — instrukcja</title>
+<title>Panel Zarządczy SP — instrukcja</title>
 <!-- Instrukcja do czytania w telefonie (przycisk „Instrukcja” w Moim koncie). Leży w web/, więc trafia na GitHub Pages
      razem z aplikacją i otwiera się także tam; sw.js trzyma jej kopię na brak zasięgu. Pełna instrukcja do wydruku to
      Instrukcja.pdf w folderze programu na komputerze w biurze. Bez skryptów i bez danych. -->
@@ -31,14 +31,14 @@
 <body>
 <header>
   <img src="logo-gkf.png" alt="GK Factory" width="57" height="32">
-  <h1>GK Trasy — instrukcja</h1>
+  <h1>Panel Zarządczy SP — instrukcja</h1>
   <a href="./">Wróć do aplikacji</a>
 </header>
 <main>
 
 <section>
 <h2>Do czego służy</h2>
-<p>Biuro układa w GK Trasy trasy dostaw, a kierowcy w telefonach odhaczają każdą dostawę zdjęciem i podpisem klienta. Dzięki temu biuro na bieżąco widzi, co jest rozwiezione, a raport pracy kierowcy wypełnia się sam.</p>
+<p>Biuro układa w Panelu Zarządczym SP trasy dostaw, a kierowcy w telefonach odhaczają każdą dostawę zdjęciem i podpisem klienta. Dzięki temu biuro na bieżąco widzi, co jest rozwiezione, a raport pracy kierowcy wypełnia się sam.</p>
 </section>
 
 <section>
@@ -47,27 +47,28 @@
   <li><b>Moja trasa</b> — lista punktów na dziś w kolejności jazdy; przy każdym adres, telefon do klienta i przycisk nawigacji.</li>
   <li><b>Załadunek</b> — przed wyjazdem sprawdź numer zamówienia przy każdej pozycji (zdjęcie ładunku jest nieobowiązkowe).</li>
   <li><b>Dostawa</b> — po rozładunku zrób zdjęcie, weź podpis i wybierz „Dostarczone”. Jeśli się nie udało, wybierz „Nieudane” i powód.</li>
-  <li><b>Raport pracy</b> — start, koniec, przerwa, licznik i tankowanie; część pól program podpowiada sam.</li>
+  <li><b>Uwaga w trasie</b> — objazd, długi załadunek, awaria: dotknij przycisku na trasie, wybierz powód, biuro dostaje wiadomość (działa też bez zasięgu).</li>
+  <li><b>Raport pracy</b> — start, koniec, przerwa, licznik i tankowanie; godziny podpowiadają się z całego dnia, a załadunek lub rozładunek poza trasą dopisz przyciskiem „Dodaj inną pracę”.</li>
 </ol>
 <p><b>Bez zasięgu</b> aplikacja działa dalej: zapisy czekają w telefonie (pasek u góry pokazuje ile) i same się wysyłają, gdy wróci internet. Nie kasuj danych aplikacji, zanim pasek nie pokaże, że wszystko poszło.</p>
 </section>
 
 <section>
-<h2>Biuro GK Trasy: codzienna praca</h2>
+<h2>Biuro: codzienna praca</h2>
 <ul>
   <li><b>Pulpit</b> — kafelki liczb dnia (zaległe, odrzucone zapisy, do zatwierdzenia, nieudane), trasy w toku i mapa aut. Przy kafelkach jest <b>„i”</b> — dotknij, a zobaczysz, jak ta liczba jest liczona.</li>
   <li><b>Trasy</b> — plan na dzień, tydzień albo listę; „+ Nowa trasa”, przenoszenie punktów, kopiowanie tras, wczytywanie planu z Excela.</li>
   <li><b>Kalendarz</b> — miesiąc tras: w kratce liczba tras i punktów dnia, czerwona liczba to nieudane dostawy. Dotknięcie dnia otwiera ten dzień w Trasach.</li>
   <li><b>Do zatwierdzenia</b> — dostawy zamknięte przez kierowców czekają na decyzję biura: zatwierdź albo zwróć do poprawy. Gdy ręcznie wyzerujesz tę listę, raz dziennie pojawi się krótka buźka.</li>
   <li><b>Zaległe dostawy</b> — punkty z minionych dni, które nie dojechały; zaznacz je i wyznacz nadrobienie.</li>
-  <li><b>Wskaźniki</b> — ile dostaw udało się za pierwszym razem, które nie wyszły i dlaczego (powód, kierowca, klient). Okres: Dziś, Wczoraj, Ostatnie 7 dni, Ten miesiąc albo własny zakres; wybrany okres zostaje do końca dnia.</li>
-  <li><b>Raport pracy</b> — dzień po dniu z tras i raportów kierowców; eksport do Excela.</li>
+  <li><b>Wskaźniki</b> — ile dostaw udało się za pierwszym razem, które nie wyszły i dlaczego (powód, klient; podział na kierowców ma tylko Szef Sprzedaży i Menedżer). Okres: Dziś, Wczoraj, Ostatnie 7 dni, Ten miesiąc albo własny zakres; wybrany okres zostaje do końca dnia.</li>
+  <li><b>Raport pracy</b> — „Do sprawdzenia” i dostawy do Excela. Godziny, kilometry i terminowość planowania wszystkich kierowców oglądają tylko Szef Sprzedaży i Menedżer.</li>
 </ul>
 </section>
 
 <section>
 <h2>Role</h2>
-<p><b>Kierowca GK Trasy</b> widzi swoje trasy. <b>Biuro GK Trasy</b> układa trasy, zatwierdza dostawy, prowadzi klientów i kierowców. <b>Szef GK Trasy</b> ma jeszcze konta biura, ustawienia techniczne, kopie i kasowanie na stałe (to samo ma tu Menedżer — administrator całego systemu GK). Konto <b>Podgląd GK Trasy</b> tylko ogląda plan. Pełną tabelę „kto co może” znajdziesz w <b>Moje konto → Role i uprawnienia</b> (dla biura i Szefa).</p>
+<p><b>Kierowca GK Trasy</b> widzi swoje trasy. <b>Biuro</b> układa trasy, zatwierdza dostawy, prowadzi klientów i kierowców. <b>Szef Sprzedaży</b> ma jeszcze konta biura, ustawienia techniczne, kopie i kasowanie na stałe (to samo ma tu Menedżer — administrator całego systemu GK). Konto <b>Podgląd</b> tylko ogląda plan. Pełną tabelę „kto co może” znajdziesz w <b>Moje konto → Role i uprawnienia</b> (dla biura i Szefa).</p>
 </section>
 
 <section>

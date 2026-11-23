@@ -2,7 +2,7 @@
    Trzyma kopie samego programu (HTML, style, skrypty, mapa). Danych nie
    buforuje tutaj — od tego jest IndexedDB w kolejka.js.                      */
 
-const WERSJA = 'trasex-ef0b3c830b77';
+const WERSJA = 'trasex-906f52ee5aef';
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
    kopia nie ma jak zostać podana. Poprzednio wystarczyło, że przeglądarka
@@ -136,11 +136,11 @@ self.addEventListener('push', e => {
     if (okna.some(o => o.visibilityState === 'visible' && new URL(o.url).pathname.startsWith(zakres))) return;
 
     if (!wiadomosci.length) {
-      wiadomosci = [{ tytul: 'GK Trasy', tresc: 'Coś się zmieniło — otwórz aplikację.', tag: 'gk-trasy', adres: '' }];
+      wiadomosci = [{ tytul: 'Panel Zarządczy SP', tresc: 'Coś się zmieniło — otwórz aplikację.', tag: 'gk-trasy', adres: '' }];
     }
     // Ikona PNG: SVG w powiadomieniu nie każda przeglądarka rysuje (Android), PNG — każda.
     const ikona = new URL('./ikona-192.png', self.registration.scope).href;
-    await Promise.all(wiadomosci.map(w => self.registration.showNotification(w.tytul || 'GK Trasy', {
+    await Promise.all(wiadomosci.map(w => self.registration.showNotification(w.tytul || 'Panel Zarządczy SP', {
       body: w.tresc || '', tag: w.tag || 'gk-trasy', renotify: true, requireInteraction: !!w.pilne,
       icon: ikona, badge: ikona, vibrate: w.pilne ? [300, 150, 300, 150, 300] : [200],
       data: { adres: w.adres || '' } })));
@@ -175,7 +175,7 @@ self.addEventListener('sync', e => {
     if (!ile) return;
     const slowo = ile === 1 ? 'zapis czeka' : (ile % 10 >= 2 && ile % 10 <= 4 && !(ile % 100 >= 12 && ile % 100 <= 14)) ? 'zapisy czekają' : 'zapisów czeka';
     const ikona = new URL('./ikona-192.png', self.registration.scope).href;
-    await self.registration.showNotification('GK Trasy', { body: `${ile} ${slowo} — otwórz aplikację, żeby je wysłać.`,
+    await self.registration.showNotification('Panel Zarządczy SP', { body: `${ile} ${slowo} — otwórz aplikację, żeby je wysłać.`,
       tag: 'gk-trasy-kolejka', icon: ikona, badge: ikona, data: { adres: '' } });
   })());
 });

@@ -38,7 +38,7 @@ const MiaryTras = (() => {
       tekst: 'Do dziesięciu klientów z największą liczbą nieudanych dostaw w zakresie dat, z liczbą wszystkich ich punktów.' },
     // ---- Kafelki Pulpitu
     'p-alarm': { nazwa: 'Alarm',
-      tekst: 'Ostrzeżenie dla Szefa GK Trasy: kopia zapasowa, adres na Pages albo mało miejsca na dysku. Dotknięcie otwiera ustawienie, które to naprawia.' },
+      tekst: 'Ostrzeżenie dla Szefa Sprzedaży: kopia zapasowa, adres na Pages albo mało miejsca na dysku. Dotknięcie otwiera ustawienie, które to naprawia.' },
     'p-zalegle': { nazwa: 'Zaległe dostawy',
       tekst: 'Punkty z minionych dni (z ostatnich dni wg ustawienia), które nie zostały dostarczone: nieudane albo niezamknięte. Odwołane przez biuro się nie liczą.' },
     'p-odrzucone': { nazwa: 'Odrzucone zapisy z telefonów',
@@ -49,6 +49,8 @@ const MiaryTras = (() => {
       tekst: 'Dostawy i nieudane próby zamknięte przez kierowców, których biuro jeszcze nie przyjęło — ze wszystkich dni.' },
     'p-bez-kierowcy': { nazwa: 'Trasy bez kierowcy',
       tekst: 'Trasy wybranego dnia (od dziś), które jeszcze nie mają kierowcy i nie są zakończone. Dotknięcie otwiera listę tych tras — kierowcę wybierzesz wprost na karcie trasy.' },
+    'p-uwagi-trasy': { nazwa: 'Uwagi w trasie',
+      tekst: 'Zgłoszenia kierowców z trasy wybranego dnia: objazd, długi załadunek lub rozładunek, awaria, korek. Szczegóły z godziną, powodem i zdjęciem są na karcie trasy; plan i szacunek godzin się od tego nie zmieniają.' },
     'p-braki': { nazwa: 'Do sprawdzenia',
       tekst: 'Rozbieżności w danych, np. niezgodny licznik albo spalanie. Dotknięcie otwiera raport pracy z tym zakresem.' },
     'p-punkty': { nazwa: 'Punkty dnia',

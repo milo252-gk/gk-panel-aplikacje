@@ -144,7 +144,7 @@ async function wydrukPotwierdzenia(przystanekId) {
     ${zdjecia.length ? `<p style="margin-top:16px"><b>Zdjęcia z dostawy</b></p>
       <div class="zdjecia">${zdjecia.map(z =>
         `<img src="${adresPliku(z.plik, token)}" alt="zdjęcie">`).join('')}</div>` : ''}
-    <div class="stopka">Wydrukowano ${escHtml(czasTeraz())} z programu GK Trasy.</div>
+    <div class="stopka">Wydrukowano ${escHtml(czasTeraz())} z Panelu Zarządczego SP.</div>
     <p class="nodruku" style="margin-top:20px">
       <button onclick="window.print()" style="padding:10px 18px;font-size:14px">Drukuj</button></p>
     </body></html>`);
