@@ -1,4 +1,4 @@
-/* Panel Kierownika — edytor pozycji checklisty (D67; 2026-10-27 część okna „Zapisane zlecenie”).
+/* Panel Zarządczy GK — edytor pozycji checklisty (D67; 2026-10-27 część okna „Zapisane zlecenie”).
 
    Checklista = zapisane zlecenie z pozycjami (słownik zlecenia_stale). Hub robi z niej na każdą wybraną zmianę JEDNO
    zlecenie z pozycjami do odhaczenia (godziny tej zmiany) — dział odhacza je w Zleceniach, lider także na ekranie Zmiana.

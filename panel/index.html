@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#4E4E4E">
 <!-- Motyw przed arkuszami — inaczej wybrany ciemny motyw mignie bielą przy każdym otwarciu. -->
 <script src="../wspolne/motyw.js"></script>
-<title>GK Panel Kierownika</title>
+<title>Panel Zarządczy GK</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="ikona.svg" type="image/svg+xml">
 <!-- iPhone: ikona PNG (SVG nie bierze), pełny ekran z ekranu początkowego, krótka nazwa pod ikoną.
@@ -26,7 +26,7 @@
 <main id="logowanie" class="hala-logowanie" hidden>
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
-    <h1>GK Panel Kierownika</h1>
+    <h1>Panel Zarządczy GK</h1>
     <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko
@@ -39,7 +39,7 @@
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
-    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Kierownika → Administracja.</p>
+    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja.</p>
   </div>
 </main>
 
@@ -56,11 +56,14 @@
     <div class="hala-menu-naglowek">
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
-      <div class="hala-menu-kto" id="menu-aplikacja">GK Panel Kierownika</div>
+      <div class="hala-menu-rola" id="menu-rola"></div>
+      <div class="hala-menu-kto" id="menu-aplikacja">Panel Zarządczy GK</div>
     </div>
-    <button type="button" role="tab" data-widok="na-zywo" aria-selected="true"><span class="ikona" data-ikona="pulpit" aria-hidden="true"></span><span>Pulpit</span></button>
-    <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span><span>Zlecenia</span><span id="plakietka-zlecen" class="plakietka" hidden></span></button>
+    <button type="button" role="tab" data-widok="na-zywo" aria-selected="true"><span class="ikona" data-ikona="pulpit" aria-hidden="true"></span><span>Pulpit</span><span id="plakietka-zlecen" class="plakietka" hidden title="Zlecenia do odbioru"></span></button>
+    <button type="button" role="tab" data-widok="zlecenia" aria-selected="false"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span><span>Zlecenia</span></button>
     <button type="button" role="tab" data-widok="wskazniki" class="w-wiecej" aria-selected="false"><span class="ikona" data-ikona="wskazniki" aria-hidden="true"></span><span>Wskaźniki</span></button>
+    <!-- Wyniki (D98): kierownik zakładu, Menedżer i kierownik działu (swój dział) — panel.js: pokazAnalityke. -->
+    <button type="button" role="tab" data-widok="wyniki" class="w-wiecej" aria-selected="false" hidden><span class="ikona" data-ikona="trend" aria-hidden="true"></span><span>Wyniki</span></button>
     <button type="button" role="tab" data-widok="raporty" class="w-wiecej" aria-selected="false"><span class="ikona" data-ikona="raporty" aria-hidden="true"></span><span>Raporty</span></button>
     <!-- RCP (2026-11-19): tylko kierownik zakładu i admin (panel.js: pokazAnalityke); jak Wskaźniki i Raporty — `.w-wiecej`, na telefonie schowane
          (zatwierdzanie godzin robi się przy komputerze; terminal na hali to osobna strona terminal.html). -->
@@ -87,8 +90,21 @@
     </div>
     <!-- Właściciel 2026-11-18: sekcji „Jakość i BHP” i kafelka jakości już nie ma (BHP i jakość są w checklistach); kolejność Pulpitu: liczby → Obchody → Awarie (zwarty pasek).
          D87 (właściciel 2026-11-17): odbiór checklisty jest w karcie obchodu (panel.js: rysujKafelki → „Do odbioru”), nie w osobnej sekcji. -->
-    <section class="obchody" aria-labelledby="t-obchody">
-      <h2 id="t-obchody">Obchody</h2>
+    <!-- Właściciel 2026-11-23: jedna sekcja „Zlecenia w toku” w układzie dawnych Obchodów — karty checklist (obchody) i karty zleceń działów
+         (zlecenia, zgłoszenia, narzędzia, BHP) w jednej siatce, z tymi samymi akcjami (Przyjmij/Odbierz/Zwróć/Historia/Zmień) i jednym rzędem filtrów.
+         D87: odbiór checklisty jest w jej karcie (panel.js: rysujKafelki → „Do odbioru”); karty zleceń dokłada rysujBiezace. Konto „ekran” (monitor)
+         nie ma filtrów, liczników ani kart zleceń — jego Pulpit zostaje bez zmian. -->
+    <section class="obchody" id="pulpit-zlecenia" aria-labelledby="t-biezace">
+      <h2 id="t-biezace">Zlecenia w toku <span class="licznik" id="biezace-liczniki"></span></h2>
+      <form class="filtry-biezace" id="filtry-biezace" autocomplete="off">
+        <label>Dział<select name="dzial"><option value="">wszystkie</option></select></label>
+        <label>Osoba<select name="osoba"><option value="">wszyscy</option></select></label>
+        <label>Rodzaj<select name="rodzaj"><option value="">wszystkie</option></select></label>
+        <label id="biezace-linia">Linia<select name="linia"><option value="">wszystkie</option></select></label>
+        <label id="biezace-maszyna">Maszyna<select name="maszyna"><option value="">wszystkie</option></select></label>
+        <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
+        <button type="button" id="biezace-czysc" class="maly" hidden>Wyczyść filtry</button>
+      </form>
       <div id="kafelki" class="kafelki"></div>
     </section>
     <section class="awarie" aria-labelledby="t-awarie">
@@ -115,14 +131,16 @@
       <!-- D60 (właściciel 2026-10-14): jedna lista zadań — zlecenia, zapisane/stałe, checklisty zadań, zadania kierownika,
            zgłoszenia, narzędzia i BHP razem, ze znacznikiem rodzaju i filtrem „Rodzaj”; obok wszystkie wzory (Zapisane). -->
       <div class="chipy tryb-zlecen" id="tryb-zlecen" role="group" aria-label="Zlecenia albo zapisane">
-        <button type="button" class="chip" data-tryb="biezace" aria-pressed="true">Zlecenia</button>
-        <button type="button" class="chip" data-tryb="stale" aria-pressed="false"><span class="ik" data-ikona="zapisane" data-rozmiar="16"></span>Zapisane</button>
-        <button type="button" class="chip" data-tryb="kalendarz" aria-pressed="false"><span class="ik" data-ikona="kalendarz" data-rozmiar="16"></span>Kalendarz</button>
+        <button type="button" class="chip" data-tryb="biezace" aria-pressed="true">Zlecenia odebrane</button>
+        <button type="button" class="chip" data-tryb="stale" aria-pressed="false"><span class="ik" data-ikona="zapisane" data-rozmiar="16"></span>Zlecenia zapisane</button>
+        <button type="button" class="chip" data-tryb="kalendarz" aria-pressed="false"><span class="ik" data-ikona="kalendarz" data-rozmiar="16"></span>Kalendarz zleceń</button>
       </div>
       <div id="zlecenia-biezace" class="zlecenia-czesc">
         <!-- UI etap 2 (właściciel 2026-10-12): trzy filtry. Po terminie (⏰), zaplanowane i przepadłe to znaczniki na
              wierszach — „W toku” ma spóźnione na górze i zaplanowane na dole, „Zamknięte” ma przepadłe (W.chipyZlecen). -->
-        <div class="chipy" id="filtr-zlecen" role="group" aria-label="Które zlecenia">
+        <!-- Unifikacja E4 (właściciel 2026-11-23): „W toku” i „Do odbioru” przeszły na Pulpit (sekcja „Zlecenia w toku”); ten ekran
+             to historia — zawsze „Odebrane”. Chipy zostają w DOM (ukryte), bo logika filtra i liczniki z nich korzystają. -->
+        <div class="chipy" id="filtr-zlecen" role="group" aria-label="Które zlecenia" hidden>
           <button type="button" class="chip" data-filtr="otwarte" aria-pressed="true">W toku</button>
           <button type="button" class="chip" data-filtr="do-zamkniecia" aria-pressed="false">Do odbioru</button>
           <button type="button" class="chip" data-filtr="zamkniete" aria-pressed="false">Odebrane</button>
@@ -133,19 +151,24 @@
           <label>Dział<select name="dzial"><option value="">wszystkie</option></select></label>
           <label>Osoba<select name="osoba"><option value="">wszyscy</option></select></label>
           <label>Rodzaj<select name="rodzaj"><option value="">wszystkie</option></select></label>
-          <label id="filtr-okres">Okres<select name="okres">
-            <option value="2">2 dni</option><option value="7">7 dni</option><option value="30">30 dni</option><option value="90">90 dni</option>
-          </select></label>
-          <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
           <!-- Filtry i sortowanie (właściciel 2026-11-17; 2026-11-18: NA WIERZCHU, bez zwijania): status, linia, maszyna, zakres dat
                (po dacie zlecenia) i kolejność obok Działu, Osoby i Rodzaju. Na telefonie jeden poziomo przewijany rząd. Pod spodem: „N z M”,
                plakietka liczby aktywnych, co jest aktywne, „Wyczyść filtry”. Pamięć: hala.panel.filtry.<id> (osobno dla każdej osoby). -->
               <label>Status<select name="status"><option value="">wszystkie</option></select></label>
-              <label id="filtr-linia">Linia<select name="linia"><option value="">wszystkie</option></select></label>
-              <label id="filtr-maszyna">Maszyna<select name="maszyna"><option value="">wszystkie</option></select></label>
-              <label>Od dnia<input type="date" name="od"></label>
-              <label>Do dnia<input type="date" name="doDnia"></label>
               <label>Kolejność<select name="sort"></select></label>
+          <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
+          <!-- Unifikacja E3 (właściciel 2026-11-23): JEDEN zwarty rząd — najczęstsze pola widoczne, rzadkie (okres, linia, maszyna,
+               daty) za małym „Więcej” w tym samym rzędzie (na telefonie wszystko w jednym przewijanym rzędzie, bez „Więcej”). -->
+          <button type="button" id="filtry-wiecej" class="maly filtry-wiecej" aria-expanded="false" aria-controls="filtry-rzadkie">Więcej <span class="ik" data-ikona="szewron-dol" data-rozmiar="14"></span></button>
+          <span class="filtry-rzadkie" id="filtry-rzadkie">
+            <label id="filtr-okres">Okres<select name="okres">
+              <option value="2">2 dni</option><option value="7">7 dni</option><option value="30">30 dni</option><option value="90">90 dni</option>
+            </select></label>
+            <label id="filtr-linia">Linia<select name="linia"><option value="">wszystkie</option></select></label>
+            <label id="filtr-maszyna">Maszyna<select name="maszyna"><option value="">wszystkie</option></select></label>
+            <label>Od dnia<input type="date" name="od"></label>
+            <label>Do dnia<input type="date" name="doDnia"></label>
+          </span>
           </div>
           <div class="filtry-stan" id="filtry-stan">
             <span id="filtry-licznik" class="licznik" aria-live="polite"></span>
@@ -214,6 +237,13 @@
     </section>
   </div>
 
+  <div id="wyniki" class="administracja-widok" hidden>
+    <section aria-labelledby="t-wyniki">
+      <h2 id="t-wyniki">Wyniki</h2>
+      <div id="wyniki-tresc"></div>
+    </section>
+  </div>
+
   <div id="administracja" class="administracja-widok" hidden>
     <section aria-labelledby="t-administracja">
       <h2 id="t-administracja">Administracja</h2>
@@ -226,21 +256,22 @@
            zmian to „Progi i godziny” (kod: ustawienia). Etykiety QR drukuje przycisk w Maszynach. STYL-GK §8 (2026-11-04): „Dane”
            (czyszczenie zleceń) i „Kody QR” to wejścia do okien Zlecenia → 🧹 i okna kodów QR (kody.js). -->
       <div class="chipy" id="admin-chipy" role="group" aria-label="Część administracji">
+        <!-- Unifikacja E7 (2026-11-23): stały rdzeń Administracji (STYL §7): Pracownicy · Dane i czyszczenie · Kody QR · Role i uprawnienia · Nie wysłane · Ustawienia; potem dodatki Panelu
+             (Urlopy, Maszyny, Plan zmian, Progi i godziny, Logowania); Wskaźniki, Wyniki i Raporty — chipy tylko na telefonie (na komputerze są w menu po lewej). -->
         <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true">Pracownicy</button>
-        <button type="button" class="chip" data-czesc="urlopy" aria-pressed="false"><span class="ik" data-ikona="urlop" data-rozmiar="16"></span>Urlopy</button>
-        <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
-        <button type="button" class="chip" data-czesc="dane" aria-pressed="false">Dane</button>
-        <button type="button" class="chip" data-czesc="logowania" aria-pressed="false">Logowania</button>
-        <!-- Kolejność i ikony jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia, Nie wysłane. Wskaźniki i Raporty: chip
-             otwiera ten sam widok co pozycja menu (na komputerze jej nie dublujemy — .chip-telefon znika); Role i Nie wysłane otwierają te same okna. -->
-        <button type="button" class="chip chip-telefon" data-czesc="wskazniki" aria-pressed="false"><span class="ik" data-ikona="wskazniki" data-rozmiar="16"></span>Wskaźniki</button>
-        <button type="button" class="chip chip-telefon" data-czesc="raporty" aria-pressed="false"><span class="ik" data-ikona="raporty" data-rozmiar="16"></span>Raporty</button>
+        <button type="button" class="chip" data-czesc="dane" aria-pressed="false">Dane i czyszczenie</button>
         <button type="button" class="chip" data-czesc="kody" aria-pressed="false"><span class="ik" data-ikona="kody" data-rozmiar="16"></span>Kody QR</button>
         <button type="button" class="chip" data-czesc="role" aria-pressed="false"><span class="ik" data-ikona="konta" data-rozmiar="16"></span>Role i uprawnienia</button>
         <button type="button" class="chip" data-czesc="niewyslane" id="chip-niewyslane" aria-pressed="false"><span class="ik" data-ikona="powtarzaj" data-rozmiar="16"></span><span id="chip-niewyslane-tekst">Nie wysłane</span></button>
+        <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Ustawienia</button>
+        <button type="button" class="chip" data-czesc="urlopy" aria-pressed="false"><span class="ik" data-ikona="urlop" data-rozmiar="16"></span>Urlopy</button>
+        <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
         <button type="button" class="chip" data-czesc="plan" aria-pressed="false">Plan zmian</button>
         <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false">Progi i godziny</button>
-        <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Ustawienia</button>
+        <button type="button" class="chip" data-czesc="logowania" aria-pressed="false">Logowania</button>
+        <button type="button" class="chip chip-telefon" data-czesc="wskazniki" aria-pressed="false"><span class="ik" data-ikona="wskazniki" data-rozmiar="16"></span>Wskaźniki</button>
+        <button type="button" class="chip chip-telefon" data-czesc="wyniki" aria-pressed="false"><span class="ik" data-ikona="trend" data-rozmiar="16"></span>Wyniki</button>
+        <button type="button" class="chip chip-telefon" data-czesc="raporty" aria-pressed="false"><span class="ik" data-ikona="raporty" data-rozmiar="16"></span>Raporty</button>
       </div>
       <div id="admin-tresc" class="admin-tresc"></div>
     </section>
@@ -382,7 +413,7 @@
           <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
         </div>
       </div>
-      <label class="zaznacz" id="inst-wzorzec"><input type="checkbox" name="inst_wzorzec"> Zapisz też w zapisanych — kolejne zlecenia będą już ze zmianą</label>
+      <p class="slaby" id="inst-wzorzec">Zmiana zapisze się też w zapisanym zleceniu — kolejne zlecenia będą już ze zmianą.</p>
     </fieldset>
     <fieldset id="stale-kiedy" data-krok="2"><legend>Kiedy</legend>
       <label class="stale-rytm">Powtarzaj<select name="rodzaj">
@@ -627,8 +658,8 @@
     <fieldset id="osoba-konto" hidden><legend>Hasło i dostęp</legend>
       <p class="slaby konto-drobne" id="osoba-stan-hasla"></p>
       <div class="konto-akcje">
-        <button type="button" id="osoba-reset">Ustaw hasło startowe</button>
-        <button type="button" id="osoba-resetuj-pin">Resetuj PIN</button>
+        <button type="button" id="osoba-reset">Resetuj tylko hasło</button>
+        <button type="button" id="osoba-resetuj-pin">Resetuj tylko PIN</button>
         <button type="button" id="osoba-wyloguj">Wyloguj wszędzie</button>
         <button type="button" id="osoba-usun" class="czerwony">Usuń osobę</button>
       </div>
@@ -759,12 +790,14 @@
 <script src="../wspolne/konto.js"></script>
 <script src="../wspolne/eksport.js"></script>
 <script src="../wspolne/miary.js"></script>
+<script src="../wspolne/wyniki.js"></script>
 <script src="../wspolne/zespol.js"></script>
 <!-- Skaner QR (przegląd 2026-10-14): zadanie kierownika z „▣ Wymagaj skanu QR maszyny” — bez skanera nie dało się go zamknąć. -->
 <script src="../wspolne/skaner.js"></script>
 <script src="../wspolne/gk-ikony.js"></script>
 <script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/reakcje.js"></script>
+<script src="../wspolne/okna-x.js"></script>
 <script src="../wspolne/kolejka-ui.js"></script>
 <script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>
@@ -778,6 +811,7 @@
 <script src="czyszczenie.js"></script>
 <script src="wykresy.js"></script>
 <script src="wskazniki.js"></script>
+<script src="wyniki-widok.js"></script>
 <script src="administracja.js"></script>
 <script src="checklisty.js"></script>
 <datalist id="podpowiedzi-czynnosci"></datalist>

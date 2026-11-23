@@ -1,4 +1,4 @@
-/* Panel Kierownika — ekran administracji (rola admin; D49: kierownik zakładu, kierownik UR i KJ — tylko Pracownicy
+/* Panel Zarządczy GK — ekran administracji (rola admin; D49: kierownik zakładu, lider UR i kierownik KJ — tylko Pracownicy
    ze swoim zespołem, zakres z huba, wspolne/klient/zespol.js). 2026-09-28: login to imię i nazwisko (D26),
    więc pracowników, PIN-y i karty prowadzi się tutaj, a nie tylko plikiem wspolne/narzedzia/zaladuj.py.
 
@@ -322,7 +322,7 @@
         <div class="akcje">
           ${p.zablokowany ? '<button type="button" class="maly glowny" data-akcja="odblokuj">Odblokuj</button>' : ''}
           ${zeSkanem.has(p.id) ? `<button type="button" class="maly" data-akcja="identyfikator" title="Drukuj identyfikator QR" aria-label="Drukuj identyfikator QR">${P.ik('drukuj')}</button>` : ''}
-          ${uprawnienia(lista.find(x => x.id === p.id)).resetPinu ? '<button type="button" class="maly" data-akcja="resetuj-pin" title="PIN startowy 1234 — osoba ustawi nowy przy logowaniu">Resetuj PIN</button>' : ''}
+          ${uprawnienia(lista.find(x => x.id === p.id)).resetKonta ? '<button type="button" class="maly" data-akcja="resetuj-konto" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>' : ''}
           <button type="button" class="maly" data-akcja="edytuj">Zmień</button>
         </div>
       </article>`).join('') || '<p class="pusto">Nikogo nie znaleziono</p>';
@@ -369,14 +369,14 @@
     fp.nazwa.focus();
   }
 
-  /* D43: człowiek — hasło startowe (nowa osoba; pole zostaje do „Ustaw hasło startowe”) i PIN 4 cyfry (nieobowiązkowy);
+  /* D43: człowiek — hasło startowe (nowa osoba; pole zostaje do „Resetuj tylko hasło”) i PIN 4 cyfry (nieobowiązkowy);
      konto samego ekranu — jeden PIN 4–8 cyfr, bez hasła. Pola i podpisy idą za zaznaczonymi rolami. */
   function polePinu() {
     const role = [...fp.querySelectorAll('input[name="role"]:checked')].map(x => x.value);
     const ekran = role.length === 1 && role[0] === 'ekran';
     // D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie — podpowiedź przy liniach, gdy ma tę rolę.
     $('osoba-linie-mistrz').hidden = !role.includes('mistrz');
-    // D46 (właściciel 2026-10-08): administrator nie wpisuje nikomu PIN-u — tylko „Resetuj PIN” (startowy 1234).
+    // D46 (właściciel 2026-10-08): administrator nie wpisuje nikomu PIN-u — tylko „Resetuj tylko PIN” (startowy 1234).
     // Pole zostaje wyłącznie dla konta ekranu (monitor), które ma jeden sekret 4–8 cyfr.
     const u = uprawnienia(edytowany);
     $('osoba-pin-pole').hidden = !ekran || !u.pin;
@@ -392,49 +392,57 @@
     // D46: konto ekranu nie ma PIN-u osoby; własny PIN administrator zmienia w Moim koncie (reset wylogowałby go od razu).
     $('osoba-resetuj-pin').hidden = ekran || !u.resetPinu;
     $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jeden PIN — bez hasła i bez PIN-u osoby.'
-      : edytowany ? 'Hasło zmienia sama osoba (Moje konto). „Ustaw hasło startowe” niżej — gdy zapomniała hasła.'
+      : edytowany ? 'Hasło zmienia sama osoba (Moje konto). Niżej zresetujesz tylko hasło albo tylko PIN; oba naraz — „Resetuj hasło” na liście.'
         : u.haslo ? 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.'
           : 'Hasło startowe: haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.';
   }
   $('osoba-role').addEventListener('change', polePinu);
 
-  /* „Ustaw hasło startowe” (D43 §3a) = reset konta: haslo123 albo wpisane w polu, PIN skasowany, sesje i zaufanie
-     urządzeń zakończone. Osoba przy następnym logowaniu ustawi nowe hasło i PIN. */
+  /* „Resetuj tylko hasło” (D43 §3a, D96-reset): haslo123 albo wpisane w polu „Hasło startowe”, PIN osoby zostaje, sesje i zaufanie
+     urządzeń zakończone, blokada zdjęta. Osoba przy następnym logowaniu wpisze hasło i ustawi nowe, potem znów loguje się PIN-em. */
   $('osoba-reset').addEventListener('click', async () => {
     const o = edytowany;
     if (!o) return;
     const wlasne = uprawnienia(o).haslo ? fp.haslo.value.trim() : '';
     const w = W.pracownikZFormularza({ nazwa: o.nazwa, role: o.role, linie: o.linie, aktywny: o.aktywny !== false, telefon: o.telefon,
-                                       haslo: wlasne, haslo_startowe: true }, o, lista);
+                                       haslo: wlasne, haslo_startowe: true, zachowaj_pin: true }, o, lista);
     const blad = fp.querySelector('.blad');
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
-    if (!(await P.potwierdz('Ustawić hasło startowe?', `${o.nazwa} dostanie hasło ${wlasne ? 'wpisane w polu „Hasło startowe”' : '„haslo123”'}, `
-          + 'PIN zostanie skasowany, a wszystkie urządzenia wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło i PIN.', 'Ustaw'))) return;
+    if (!(await P.potwierdz('Zresetować tylko hasło?', `${o.nazwa} dostanie hasło ${wlasne ? 'wpisane w polu „Hasło startowe”' : '„haslo123”'}, `
+          + 'PIN zostaje, ale na każdym urządzeniu najpierw zaloguje się hasłem (przy wycieku albo zgubionym telefonie użyj „Resetuj hasło” — zmienia też PIN). Urządzenia zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe hasło.', 'Resetuj tylko hasło'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/pracownik', w.dane);
       $('okno-osoby').close();
-      P.komunikat(`${o.nazwa}: hasło startowe ${wlasne ? 'ustawione' : '„haslo123”'} — przy logowaniu ustawi nowe hasło i PIN.`, 'ok');
+      P.komunikat(`${o.nazwa}: hasło startowe ${wlasne ? 'ustawione' : '„haslo123”'}, PIN bez zmian — przy logowaniu ustawi nowe hasło.`, 'ok');
       await wczytajPracownikow();
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  /* „Resetuj PIN” (D46): PIN startowy 1234 — osoba ustawia nowy przy pierwszym logowaniu. Nikt nie zna niczyjego PIN-u.
-     Dwa wejścia, to samo pytanie i ten sam zapis: przycisk w oknie osoby i skrót w wierszu listy (właściciel 2026-11-10 —
-     trzy kliknięcia zamiast pięciu). Skrót widzi ten, komu `uprawnienia(osoba).resetPinu` pozwala, jak przycisk w oknie. */
-  async function resetujPin(o, zOkna) {
-    if (!o || !(await P.potwierdz('Zresetować PIN?', `${o.nazwa} dostanie PIN startowy 1234 — przy pierwszym logowaniu `
-          + 'ustawi nowy.', 'Resetuj PIN'))) return;
+  /* „Resetuj tylko PIN” (D46): PIN startowy 1234 — osoba ustawia nowy przy pierwszym logowaniu, hasło zostaje. Nikt nie zna
+     niczyjego PIN-u. */
+  $('osoba-resetuj-pin').addEventListener('click', async () => {
+    const o = edytowany;
+    if (!o || !(await P.potwierdz('Zresetować tylko PIN?', `${o.nazwa} dostanie PIN startowy 1234, hasło zostaje. Wszystkie sesje zostaną `
+          + 'zakończone, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowy PIN.', 'Resetuj PIN'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: o.id });
-      if (zOkna) $('okno-osoby').close();
-      P.komunikat(`${o.nazwa}: PIN startowy 1234 — przy logowaniu ustawi nowy.`, 'ok');
+      $('okno-osoby').close();
+      P.komunikat(`${o.nazwa}: PIN startowy 1234, hasło bez zmian — przy logowaniu ustawi nowy PIN.`, 'ok');
       await wczytajPracownikow();         // znacznik „PIN startowy” na liście
-    } catch (e) {
-      if (zOkna) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
-      else P.komunikat(P.komunikatBledu(e), 'blad');
-    }
+    } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
+  });
+
+  /* „Resetuj hasło” w wierszu listy (właściciel 2026-11-23, D96-reset): hasło startowe i PIN startowy jednym zapisem w hubie
+     (resetuj-konto) — najprostsza droga dla kierownika, gdy ktoś zapomniał logowania. Tylko tam, gdzie wolno oba resety. */
+  async function resetujKonto(o) {
+    if (!o || !(await P.potwierdz('Zresetować hasło i PIN?', `${o.nazwa} dostanie hasło „haslo123” i PIN 1234, wszystkie urządzenia `
+          + 'zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło'))) return;
+    try {
+      await hala.admin('POST', '/api/v1/admin/resetuj-konto', { pracownik: o.id });
+      P.komunikat(`${o.nazwa}: hasło „haslo123” i PIN 1234 — przy logowaniu ustawi nowe.`, 'ok');
+      await wczytajPracownikow();
+    } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   }
-  $('osoba-resetuj-pin').addEventListener('click', () => resetujPin(edytowany, true));
 
   /* „Wyloguj wszędzie” (D43 §2): wszystkie sesje i zaufanie urządzeń tej osoby — następne logowanie wszędzie hasłem. */
   $('osoba-wyloguj').addEventListener('click', async () => {
@@ -488,7 +496,7 @@
     ev.preventDefault();
     const wybrane = n => [...fp.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
     const u = uprawnienia(edytowany);
-    // Hasło z pola idzie przy zapisie tylko dla nowej osoby — u istniejącej wysyła je „Ustaw hasło startowe” (reset).
+    // Hasło z pola idzie przy zapisie tylko dla nowej osoby — u istniejącej wysyła je „Resetuj tylko hasło”.
     // D49: zarządzający zespołem nie wysyła hasła, PIN-u ani karty (pola są ukryte; hub odrzuciłby je 403).
     const w = W.pracownikZFormularza({ nazwa: fp.nazwa.value, role: wybrane('role'), linie: wybrane('linie'),
                                        pin: u.pin ? fp.pin.value : '', haslo: edytowany || !u.haslo ? '' : fp.haslo.value,
@@ -1248,6 +1256,7 @@
      Nie wysłane (okno odrzuconych zapisów, to samo co pasek połączenia). Zaznaczona zostaje poprzednia część. */
   const DRZWI = {
     wskazniki: () => { const z = document.querySelector('.zakladki [data-widok="wskazniki"]'); if (z) z.click(); },
+    wyniki: () => { const z = document.querySelector('.zakladki [data-widok="wyniki"]'); if (z) z.click(); },
     raporty: () => { const z = document.querySelector('.zakladki [data-widok="raporty"]'); if (z) z.click(); },
     role: () => { if (P.widoki.role) P.widoki.role.otworz(); },
     niewyslane: () => { if (P.pokazOdrzucone) P.pokazOdrzucone(); },
@@ -1271,7 +1280,7 @@
     const akcja = b.dataset.akcja, id = (b.closest('[data-id]') || {}).dataset?.id;
     try {
       if (akcja === 'edytuj') otworzOsobe(lista.find(p => p.id === id));
-      if (akcja === 'resetuj-pin') await resetujPin(lista.find(p => p.id === id), false);
+      if (akcja === 'resetuj-konto') await resetujKonto(lista.find(p => p.id === id));
       if (akcja === 'odblokuj') {
         await hala.admin('POST', '/api/v1/admin/odblokuj', { pracownik: id });
         await wczytajPracownikow();

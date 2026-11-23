@@ -1,6 +1,6 @@
 /* GK Panel Kierownika — „Mój zespół” (D49, właściciel 2026-10-08: „Pozwól adminom GK Trasy, Lidera, UR itp. tworzyć konta
-   dla swoich pracowników”). Kierownik zakładu, kierownik UR i kierownik KJ zakładają i zmieniają konta SWOICH ludzi:
-   kierownik UR — mechaników, kierownik KJ — kontrolerów, kierownik zakładu — mistrzów, kierowników UR/KJ, liderów,
+   dla swoich pracowników”). Kierownik zakładu, lider UR i kierownik KJ zakładają i zmieniają konta SWOICH ludzi:
+   lider UR — mechaników, kierownik KJ — kontrolerów, kierownik zakładu — mistrzów, liderów UR i kierowników KJ, liderów,
    mechaników i kontrolerów. D76 (2026-10-19): mistrz nie jest przełożonym lidera — od tej decyzji nie ma zespołu
    (wcześniej: liderzy jego linii). Kto kogo — jedna reguła w hubie
    (hala.py → ZESPOLY, blad_uprawnienia_konta; kopia w kontrakcie stale.zespoly); hub przy każdym zapisie sprawdza sam
@@ -12,7 +12,7 @@
      - GK Lider → Moje konto → „Mój zespół” (kierownik zakładu na telefonie): okno z listą i formularzem osoby —
        HalaZespol.otworz(hala, { komunikat }).
    Zarządzający nie wpisuje nikomu hasła, PIN-u ani karty („nikt nie zna niczyjego PIN-u”, D46) — tylko „Ustaw hasło
-   startowe” (haslo123), „Resetuj PIN” (1234), „Wyloguj wszędzie”, „Odblokuj”. Usuwa osobę administrator; tu — wyłączenie.
+   startowe” → „Resetuj hasło” (haslo123 i PIN 1234 naraz), w oknie osoby „Resetuj tylko hasło” i „Resetuj tylko PIN”, „Wyloguj wszędzie”, „Odblokuj”. Usuwa osobę administrator; tu — wyłączenie.
    Okna to <dialog class="hala-okno"> w warstwie górnej (hala.css) — jak „Moje konto” (konto.js). Bez sieci zmian nie ma
    (hub musi sprawdzić zakres) — mówimy to wprost. */
 
@@ -38,7 +38,7 @@
      osoby o nich nie mówią. Linie wracają, gdy słownik ma dwie albo więcej (jak Panel: widok.js → wieleLinii). */
   const wieleLinii = slowniki => Object.keys((slowniki && slowniki.linie) || {}).length > 1;
 
-  /* Czy ktoś z tymi rolami prowadzi zespół (kontrakt stale.zespoly: kierownik, mistrz, kierownik UR/KJ, administratorzy
+  /* Czy ktoś z tymi rolami prowadzi zespół (kontrakt stale.zespoly: kierownik, mistrz, lider UR i kierownik KJ, administratorzy
      programów GK). Rola admin tu się nie liczy — ma pełną Administrację w Panelu. */
   function rolaZespolu(role, stale) {
     const zespoly = (stale && stale.zespoly) || {};
@@ -52,7 +52,7 @@
 
   /* Co okno osoby pokazuje — według zakresu z huba (GET /admin/pracownicy → zakres; null = administrator). Rola admin:
      wszystko jak dotąd. Zarządzający: bez pól sekretów (hasło startowe do wpisania, PIN, karta), bez „Usuń osobę”, z resetami
-     i „Wyloguj wszędzie”. Własne konto: bez „Resetuj PIN” (swój PIN — Moje konto; reset wylogowałby od razu). */
+     i „Wyloguj wszędzie”. Własne konto: bez „Resetuj tylko PIN” i bez skrótu „Resetuj hasło” (swój PIN — Moje konto; reset wylogowałby od razu). */
   function uprawnieniaOsoby(zakres, osoba, jaId) {
     const admin = !zakres || zakres.admin !== false;
     const ja = !!(osoba && jaId && osoba.id === jaId);
@@ -66,6 +66,7 @@
       usun: admin && !!osoba && !ja,
       resetHasla: !!osoba && !ekran && (admin || !ja),
       resetPinu: !!osoba && !ekran && !ja,
+      resetKonta: !!osoba && !ekran && !ja,     // skrót „Resetuj hasło” (hasło i PIN naraz) — oba resety naraz
       wyloguj: !!osoba && (admin || !ja),
       linie: admin || !zakres.linie ? null : zakres.linie.slice(),
       role: admin ? null : (zakres.role || []).slice(),
@@ -87,6 +88,8 @@
      stanHasla), bez konta ekranu (zarządzający go nie widzi). */
   function stanHasla(p) {
     if (!p) return { znacznik: '', opis: '' };
+    if (p.haslo_do_zmiany && p.pin_do_zmiany && p.ma_pin) return { znacznik: 'hasło i PIN startowe',
+      opis: `Hasło i PIN startowe (${HASLO_STARTOWE}, ${PIN_STARTOWY}) — przy pierwszym logowaniu osoba ustawi oba.` };
     if (p.haslo_do_zmiany) return { znacznik: 'hasło startowe',
       opis: 'Hasło startowe — przy pierwszym logowaniu osoba ustawi własne hasło' + (p.ma_pin ? ' (PIN już jest).' : ' i PIN.') };
     if (!p.ma_pin) return { znacznik: 'bez PIN-u', opis: 'Hasło ustawione, PIN-u jeszcze nie ma — osoba ustawi go przy logowaniu.' };
@@ -202,6 +205,8 @@
                   : p.zablokowany ? '<span class="hala-zespol-stan alarm">Zablokowane po złych PIN-ach</span>'
                   : p.stan.znacznik ? `<span class="hala-zespol-stan">${esc(p.stan.znacznik)}</span>` : ''}</span>
               <span class="hala-zespol-akcje">${p.zablokowany ? '<button type="button" data-a="odblokuj">Odblokuj</button>' : ''}
+                ${uprawnieniaOsoby(zakres, p, hala.pracownik && hala.pracownik.id).resetKonta
+                  ? '<button type="button" data-a="konto" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>' : ''}
                 <button type="button" data-a="zmien">Zmień</button></span>
             </div>`).join('') || '<p class="hala-konto-drobne">Nie masz jeszcze nikogo w zespole.</p>'}</div>` : ''}
           ${blad && lista ? `<p class="hala-okno-blad" role="alert">${esc(blad)}</p>` : ''}
@@ -219,6 +224,16 @@
       const osoba = id && (lista || []).find(p => p.id === id);
       if (b.dataset.a === 'dodaj') osobaOkno(null);
       if (b.dataset.a === 'zmien' && osoba) osobaOkno(osoba);
+      if (b.dataset.a === 'konto' && osoba) {
+        try {
+          if (await potwierdz('Zresetować hasło i PIN?', `${osoba.nazwa} dostanie hasło „${HASLO_STARTOWE}” i PIN ${PIN_STARTOWY}, wszystkie urządzenia `
+              + 'zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło')) {
+            await hala.admin('POST', '/api/v1/admin/resetuj-konto', { pracownik: osoba.id });
+            powiedz(`${osoba.nazwa}: hasło „${HASLO_STARTOWE}” i PIN ${PIN_STARTOWY} — przy logowaniu ustawi nowe.`, 'ok');
+          }
+        } catch (e) { blad = tekstBledu(e); }
+        await wczytaj();
+      }
       if (b.dataset.a === 'odblokuj' && osoba) {
         try { await hala.admin('POST', '/api/v1/admin/odblokuj', { pracownik: osoba.id }); powiedz(`${osoba.nazwa}: odblokowane.`, 'ok'); }
         catch (e) { blad = tekstBledu(e); }
@@ -252,8 +267,8 @@
           ${osoba ? `<fieldset><legend>Hasło i dostęp</legend>
               <p class="hala-konto-drobne">${esc(stanHasla(osoba).opis)}</p>
               <div class="hala-zespol-wybor">
-                ${u.resetHasla ? '<button type="button" data-a="haslo">Ustaw hasło startowe</button>' : ''}
-                ${u.resetPinu ? '<button type="button" data-a="pin">Resetuj PIN</button>' : ''}
+                ${u.resetHasla ? '<button type="button" data-a="haslo">Resetuj tylko hasło</button>' : ''}
+                ${u.resetPinu ? '<button type="button" data-a="pin">Resetuj tylko PIN</button>' : ''}
                 ${u.wyloguj ? '<button type="button" data-a="wyloguj">Wyloguj wszędzie</button>' : ''}
               </div></fieldset>`
             : `<p class="hala-konto-drobne">Hasło startowe: ${HASLO_STARTOWE}. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.</p>`}
@@ -281,17 +296,17 @@
         const b = ev.target.closest('button[data-a]');
         if (!b || !osoba) return;
         try {
-          if (b.dataset.a === 'haslo' && await potwierdz('Ustawić hasło startowe?', `${osoba.nazwa} dostanie hasło „${HASLO_STARTOWE}”, `
-              + 'PIN zostanie skasowany, a wszystkie urządzenia wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło i PIN.', 'Ustaw')) {
-            // Zapis jak w Panelu: obecne dane osoby + „haslo_startowe” — hub nie przyjmie od zarządzającego wpisanego hasła.
+          if (b.dataset.a === 'haslo' && await potwierdz('Zresetować tylko hasło?', `${osoba.nazwa} dostanie hasło „${HASLO_STARTOWE}”, `
+              + 'PIN zostaje, ale na każdym urządzeniu najpierw zaloguje się hasłem (przy wycieku albo zgubionym telefonie użyj „Resetuj hasło” — zmienia też PIN). Urządzenia zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe hasło.', 'Resetuj tylko hasło')) {
+            // Zapis jak w Panelu: obecne dane osoby + „haslo_startowe” i „zachowaj_pin” — hub nie przyjmie od zarządzającego wpisanego hasła.
             await hala.admin('POST', '/api/v1/admin/pracownik', { id: osoba.id, nazwa: osoba.nazwa, role: osoba.role, linie: osoba.linie,
-                                                                  telefon: osoba.telefon || '', aktywny: osoba.aktywny !== false, haslo_startowe: true });
-            await poZmianie(`${osoba.nazwa}: hasło startowe „${HASLO_STARTOWE}” — przy logowaniu ustawi nowe hasło i PIN.`);
+                                                                  telefon: osoba.telefon || '', aktywny: osoba.aktywny !== false, haslo_startowe: true, zachowaj_pin: true });
+            await poZmianie(`${osoba.nazwa}: hasło startowe „${HASLO_STARTOWE}”, PIN bez zmian — przy logowaniu ustawi nowe hasło.`);
           }
-          if (b.dataset.a === 'pin' && await potwierdz('Zresetować PIN?', `${osoba.nazwa} dostanie PIN startowy ${PIN_STARTOWY} — `
-              + 'przy pierwszym logowaniu ustawi nowy.', 'Resetuj PIN')) {
+          if (b.dataset.a === 'pin' && await potwierdz('Zresetować tylko PIN?', `${osoba.nazwa} dostanie PIN startowy ${PIN_STARTOWY}, hasło zostaje. Wszystkie sesje zostaną `
+              + 'zakończone, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowy PIN.', 'Resetuj PIN')) {
             await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: osoba.id });
-            await poZmianie(`${osoba.nazwa}: PIN startowy ${PIN_STARTOWY} — przy logowaniu ustawi nowy.`);
+            await poZmianie(`${osoba.nazwa}: PIN startowy ${PIN_STARTOWY}, hasło bez zmian — przy logowaniu ustawi nowy PIN.`);
           }
           if (b.dataset.a === 'wyloguj' && await potwierdz('Wylogować wszędzie?', TEKSTY.wylogujPytanie(osoba.nazwa), 'Wyloguj wszędzie')) {
             await hala.admin('POST', '/api/v1/admin/wyloguj-wszedzie', { pracownik: osoba.id });

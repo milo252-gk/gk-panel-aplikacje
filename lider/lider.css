@@ -1,6 +1,6 @@
 /* Aplikacja Lidera — standard GK (D22): kolory WYŁĄCZNIE tokenami GK Flota z ../wspolne/hala.css,
    żadnego koloru na sztywno (pilnuje tego lider/testy/testuj.py). Zielony na pasku lidera ma być
-   tym samym zielonym co kafelek na Panelu Kierownika.
+   tym samym zielonym co kafelek na Panelu Zarządczym GK.
    Układ na telefon (jedna kolumna), na tablecie wyśrodkowany do 720 px.
    Pola dotyku min. var(--dotyk) = 52 px, bo lider bywa w rękawicach.                          */
 

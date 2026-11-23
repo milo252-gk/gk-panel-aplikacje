@@ -430,7 +430,7 @@
   async function zaproponujPartie(idProby, proba, podpowiedz) {
     const w = await KJ.okno({
       tytul: podpowiedz ? `Braki ${W.procent(podpowiedz.proc)} % — oznaczyć partię jako brakową?` : 'Oznaczyć partię jako brakową?',
-      tresc: `${podpowiedz ? `<p>Próg to ${esc(W.procent(podpowiedz.prog))} %. Partia pojawi się na Panelu Kierownika.</p>` : ''}
+      tresc: `${podpowiedz ? `<p>Próg to ${esc(W.procent(podpowiedz.prog))} %. Partia pojawi się na Panelu Zarządczym GK.</p>` : ''}
         <label>Powód<textarea name="powod" rows="3" maxlength="2000">${esc(W.powodPartii(proba, hala.slowniki))}</textarea></label>
         <label>Numer partii <span class="slaby">(opcjonalnie)</span><input name="partia"></label>
         <label>Ilość w partii, szt. <span class="slaby">(opcjonalnie)</span><input name="ilosc" inputmode="numeric" autocomplete="off"></label>`,

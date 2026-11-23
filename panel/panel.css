@@ -47,17 +47,19 @@
   /* Właściciel 2026-11-18: liczby → Obchody (zajmują całe wolne miejsce) → Awarie (zwarty pasek); sekcji „Jakość i BHP” już nie ma. */
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "liczby" "obchody" "awarie";
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   flex: 1;
 }
+body.tryb-ekran .na-zywo { grid-template-areas: "liczby" "obchody" "awarie"; }
+@media (min-width: 901px) { body.tryb-ekran .na-zywo { grid-template-rows: auto minmax(0, 1fr) auto; } }
 /* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. Pokazujemy tylko kafelki z liczbą
    (W.kafelkiDoPokazania), więc kolumny stałej szerokości (auto-fill): dwa kafelki nie rozjeżdżają się na cały ekran. */
 /* Kafelki i przycisk „+ Nowe zlecenie” (tylko ten, kto zleca) w jednym rzędzie Pulpitu; na wąskim ekranie przycisk schodzi pod kafelki. */
 .pulpit-gora { grid-area: liczby; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
 .pulpit-gora > .kafelki-liczb { flex: 1 1 320px; min-width: 0; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .pulpit-gora > #pulpit-nowe-zlecenie { flex: 0 0 auto; }
-/* Telefon: główne działanie Pulpitu na całą szerokość i w pomarańczu — grafitowy przycisk w ciemnym motywie wyglądał na wyłączony (audyt 2026-11-21). */
-@media (max-width: 600px) { .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; background: var(--pomarancz); border-color: var(--pomarancz); color: var(--na-pomarancz); } }
+/* Telefon: główne działanie Pulpitu na całą szerokość; kolor grafitowy jak każdy przycisk główny (STYL §1; decyzja właściciela 2026-11-23 — pomarańcz tylko akcent; w ciemnym motywie jaśniejszy grafit z hala.css). */
+@media (max-width: 600px) { .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; } }
 /* Same zera — jedno spokojne zdanie zamiast kafelków. */
 .kafelki-liczb > .spokoj { grid-column: 1 / -1; margin: 0; background: none; padding: 4px 8px; text-align: left;
   color: var(--zielony); font-weight: 600; }
@@ -67,6 +69,20 @@
 /* UI etap 3: „1 do odbioru” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
 .kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
+/* Filtry sekcji „Zlecenia w toku i do odbioru”: jeden zwarty rząd (komputer) / jeden przewijany rząd (telefon). */
+.filtry-biezace { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin: 0 0 10px; }
+.filtry-biezace label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.filtry-biezace label.zaznacz { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; color: var(--tekst); min-height: var(--dotyk); white-space: nowrap; }
+.filtry-biezace select { min-width: 0; width: 132px; }
+.biezace-grupa { margin: 8px 0 4px; font-size: 14px; font-weight: 700; color: var(--tekst-slaby); display: flex; gap: 8px; align-items: center; }
+.biezace-liczniki-chip { font-weight: 700; }
+@media (max-width: 600px) {
+  .filtry-biezace { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .filtry-biezace::-webkit-scrollbar { display: none; }
+  .filtry-biezace > label { flex: none; width: 140px; }
+  .filtry-biezace > label.zaznacz { width: auto; }
+  .filtry-biezace select { width: 100%; }
+}
 .awarie { grid-area: awarie; }
 section { background: var(--karta); box-shadow: var(--obrys-gorny), var(--cien); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 section h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--tekst); }
@@ -100,13 +116,15 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .rcp-siatka select { min-height: 34px; max-width: 128px; }
 .wczesniej { margin: 8px 0 0; font-size: .85em; color: var(--tekst-slaby); }
 
-/* Na szerokim ekranie całość mieści się w oknie (monitor bez myszy nie przewinie strony). */
+/* Unifikacja E2 (2026-11-23): jedno przewijanie — strona. Sekcje mają naturalną wysokość. Wyjątek: konto „ekran” (monitor
+   bez myszy nie przewinie strony — całość mieści się w oknie, listy przewijają się same co 12 s). */
 @media (min-width: 1100px) and (min-height: 600px) {
-  .aplikacja { height: 100vh; min-height: 0; overflow: hidden; }
-  .na-zywo, .raporty, .zlecenia-widok { overflow: hidden; min-height: 0; }
+  body.tryb-ekran .aplikacja { height: 100vh; min-height: 0; overflow: hidden; }
+  body.tryb-ekran .na-zywo, body.tryb-ekran .raporty, body.tryb-ekran .zlecenia-widok { overflow: hidden; min-height: 0; }
 }
 @media (max-width: 900px) {
   .na-zywo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "liczby" "obchody" "awarie"; grid-template-rows: auto; }
+  body.tryb-ekran .na-zywo { grid-template-areas: "liczby" "obchody" "awarie"; }
   .kafelki-liczb { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 }
 /* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
@@ -129,6 +147,8 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 
 /* ---------------------------------------------------------------- kafelki obchodów */
 
+.obchody > .filtry-biezace[hidden], .licznik[hidden] { display: none; }
+.kafelek.zlecenia-dzialu .lista { overflow: visible; }
 .kafelki { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .kafelek {
   border: 1px solid var(--ramka); border-top: 8px solid var(--kolor); border-radius: var(--promien);
@@ -173,7 +193,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 .kafelek-odbior { margin-top: 8px; border-top: 1px solid var(--ramka); padding-top: 4px; }
 .kafelek-odbior > summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; gap: 8px; }
 .kafelek-odbior > .lista { margin-top: 6px; overflow: visible; }
-@media (min-width: 1100px) and (min-height: 600px) { .obchody #kafelki { max-height: 55vh; overflow: auto; } }
+@media (min-width: 1100px) and (min-height: 600px) { body.tryb-ekran .obchody #kafelki { max-height: 55vh; overflow: auto; } }
 .opoznione { margin: 6px 0 0; padding: 0; list-style: none; font-size: .85em; color: var(--czerwony); font-weight: 600; }
 
 /* ---------------------------------------------------------------- awarie */
@@ -555,6 +575,25 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .hala-zlecenie-gora > .slaby { white-space: nowrap; }
 .filtry-pola { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; width: 100%; }
 .filtry-pola input[type="date"] { min-width: 150px; }
+/* Unifikacja E3 (2026-11-23): zwarty rząd — rzadkie pola za „Więcej” w tym samym rzędzie (komputer); telefon: wszystko w jednym przewijanym rzędzie. */
+.filtry-pola > label.zaznacz { min-height: var(--dotyk); }
+.filtry-pola .filtry-wiecej { align-self: end; min-height: var(--dotyk); display: inline-flex; align-items: center; gap: 4px; }
+.filtry-pola .filtry-wiecej[aria-expanded="true"] .ik { transform: rotate(180deg); }
+/* Komputer: pola węższe, żeby najczęstsze (dział, osoba, rodzaj, status, kolejność) + „tylko spóźnione” + „Więcej” mieściły się w JEDNYM rzędzie. */
+@media (min-width: 821px) {
+  #filtry-pola { gap: 6px 10px; }
+  #filtry-pola select { min-width: 0; width: 122px; }
+  #filtry-pola label:has(select[name="sort"]) select { width: 160px; }
+  #filtry-pola > label.zaznacz { font-size: 14px; white-space: nowrap; }
+}
+.filtry-rzadkie { display: none; flex-wrap: wrap; gap: 8px 14px; align-items: end; flex-basis: 100%; }
+.filtry-rzadkie.otwarte { display: flex; }
+@media (max-width: 600px) {
+  .filtry-pola .filtry-wiecej { display: none; }
+  .filtry-rzadkie, .filtry-rzadkie.otwarte { display: contents; }
+  /* Czyszczenie danych na telefonie nie stoi przy liście — Administracja → Dane (decyzja 2026-11-23, Q07). */
+  #zlecenia-czysc { display: none; }
+}
 .filtry-stan { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; width: 100%; margin-top: 6px; }
 .filtry-stan .licznik { font-weight: 700; }
 .wskazniki-osoby { margin-top: 18px; }
@@ -809,7 +848,7 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 .awarie.bez-awarii { flex-direction: row; align-items: center; gap: 12px; padding: 6px 14px; }
 .awarie.bez-awarii h2 { margin: 0; font-size: 16px; }
 .awarie.bez-awarii .pusto { margin: 0; font-size: .95em; }
-.awarie #lista-awarii { max-height: 30vh; overflow-y: auto; display: grid; gap: 6px; align-content: start; }
+.awarie #lista-awarii { display: grid; gap: 6px; align-content: start; }
 /* Przy awariach: zwarty wiersz — licznik, maszyna + status + mechanik w jednej linii, miniatura 48 px, numer. */
 .awaria.zwarta { grid-template-columns: auto minmax(0, 1fr) auto auto; padding: 4px 10px; gap: 8px; border-left-width: 6px; }
 .awaria.zwarta .licznik-przestoju { font-size: 1.15em; min-width: 5.6em; }
@@ -823,8 +862,9 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 @media (max-width: 600px) {
   .awaria.zwarta { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "licznik numer numer" "opis opis zdj"; }
   .awaria.zwarta .zdjecia { grid-area: zdj; }
-  .awarie #lista-awarii { max-height: 40vh; }
 }
+body.tryb-ekran .awarie #lista-awarii { max-height: 30vh; overflow-y: auto; }
+@media (max-width: 600px) { body.tryb-ekran .awarie #lista-awarii { max-height: 40vh; } }
 /* 1.33.0: pozycja zamknięta „z tym, co jest” — nie zrobiona (czerwony znak), do odbioru nie podlega. */
 .pozycje-zlecenia .niewykonana > .poz-wiersz { color: var(--czerwony); }
 .pozycje-zlecenia .niewykonana > .poz-wiersz > span:first-child { color: var(--czerwony); font-weight: 700; }

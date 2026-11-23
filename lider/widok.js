@@ -249,19 +249,6 @@
              opis: brakuje ? `Niezrobione: ${brakuje} z ${poz.length}.` : '' };
   }
 
-  /* Nazwa aplikacji WEWNĄTRZ po zalogowaniu (właściciel 2026-11-16): „GK Mistrz” tylko dla roli mistrz bez roli kierownik i admin
-     (mistrz z rolą lider też); kierownik i admin zawsze „GK Lider” — nawet z dodatkową rolą mistrz. To tylko napis:
-     manifest, ekran logowania, <title> przed logowaniem, push i kontrakt zostają „GK Lider”.
-     D92 (2026-11-19): Lider SP (kod brygadzista_sp) → „GK Lider SP”; Magazyn (Kierownik MAG, Pracownik MAG bez ról produkcji)
-     → „GK Magazyn”. */
-  function nazwaAplikacji(pracownik) {
-    const role = (pracownik && pracownik.role) || [];
-    if (profilMagazynu(pracownik)) return 'GK Magazyn';
-    if (role.includes('kierownik') || role.includes('admin')) return 'GK Lider';
-    if (role.includes('mistrz')) return 'GK Mistrz';
-    return role.includes(ROLA_BRYGADZISTY) ? 'GK Lider SP' : 'GK Lider';
-  }
-
   /* Jedno zdanie, gdy ktoś chce odhaczyć pozycję przed „Przyjmuję zadania” (ekran Zmiana i karta zlecenia). */
   const NAJPIERW_PRZYJMIJ = 'Najpierw dotknij „Przyjmuję zlecenia” na ekranie Moja zmiana';
 
@@ -806,7 +793,7 @@
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
-    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, nazwaAplikacji, profilMagazynu, ukryteEkrany, ekranStartowy, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
+    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, profilMagazynu, ukryteEkrany, ekranStartowy, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,

@@ -59,7 +59,7 @@
           ${UR.mozna('przeglad.zaplanowany') && kart ? '<button type="button" id="zaplanuj">+ Zaplanuj</button>' : ''}</div>
         <div class="wybor filtr" id="filtr-przegladow">${[['wszystkie', 'Wszystkie'], ['moje', 'Moje']].map(([kod, n]) =>
           `<button type="button" data-filtr="${kod}" aria-pressed="${f === kod}">${n}</button>`).join('')}</div>
-        ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">planie przeglądów</a>.' : ' Poproś kierownika UR o plan przeglądów.'}</p>` : ''}
+        ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">planie przeglądów</a>.' : ' Poproś lidera UR o plan przeglądów.'}</p>` : ''}
         ${sekcja('Po terminie', g.opoznione, 'tekst-alarm')}
         ${sekcja('W trakcie', g.wTrakcie)}
         ${sekcja('Dziś', g.dzis, '', 'Na dziś nic nie zaplanowano')}
@@ -160,7 +160,7 @@
     const licznik = hala.obiekt('licznik_maszyny', d.maszyna);
     let akcje = '';
     if (p.status === 'zaplanowany' && UR.mozna('przeglad.rozpoczety')) akcje += `<button type="button" class="glowny szeroki duzy wlasny-skan" id="zacznij">${UR.ik('skan', 20)}Skanuj maszynę i zacznij</button>`;
-    // Etap 3: „W trakcie” też da się usunąć (kierownik UR) — przegląd porzucony w połowie nie wisi w planie na zawsze;
+    // Etap 3: „W trakcie” też da się usunąć (lider UR) — przegląd porzucony w połowie nie wisi w planie na zawsze;
     // usunięty po terminie liczy się w % planu jako niewykonany (W.wykonaniePlanu).
     if ((p.status === 'zaplanowany' || p.status === 'w_trakcie') && UR.mozna('przeglad.anulowany') && W.dozwolonyZ(hala.kontrakt, 'przeglad.anulowany', p.status))
       akcje += '<button type="button" class="szeroki" id="anuluj" style="margin-top:10px">Usuń z planu</button>';
@@ -184,7 +184,7 @@
           <div class="slaby">Punkty: ${w.postep.zrobione}/${w.postep.wszystkie}${w.postep.niezgodne.length ? ` · <span class="tekst-alarm">niezgodne: ${w.postep.niezgodne.length}</span>` : ''}</div>` : ''}
       </section>
       ${akcje ? `<div style="margin:12px 0">${akcje}</div>` : ''}
-      ${!karta ? '<p class="pusto blad">Karty tego przeglądu nie ma w słowniku (usunięta?). Poproś kierownika UR o poprawkę planu.</p>' : ''}
+      ${!karta ? '<p class="pusto blad">Karty tego przeglądu nie ma w słowniku (usunięta?). Poproś lidera UR o poprawkę planu.</p>' : ''}
       ${karta && p.status !== 'zaplanowany' ? `<h2>Punkty kontrolne</h2><div class="lista" id="punkty">${(karta.punkty || []).map(pk => rysujPunkt(pk, wyniki[pk.id], edycja)).join('')}</div>` : ''}
       ${karta && p.status === 'zaplanowany' ? `<h2>Punkty kontrolne (${(karta.punkty || []).length})</h2><ol>${(karta.punkty || []).map(pk => `<li>${esc(pk.nazwa)}${W.zakres(pk) ? ` <span class="slaby">(${esc(W.zakres(pk))})</span>` : ''}</li>`).join('')}</ol>` : ''}
       ${edycja ? '<button type="button" class="glowny szeroki duzy" id="zakoncz" style="margin-top:14px">Zakończ przegląd</button>' : ''}

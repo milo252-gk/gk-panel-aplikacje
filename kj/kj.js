@@ -272,7 +272,8 @@
     const z = hala.zmianaTeraz();
     // D64: „Poza zmianą” jak w Liderze; w nagłówku sama ikona konta (STYL-GK §3) — imię tylko w menu na komputerze.
     $('zmiana').innerHTML = z ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '<span>Poza zmianą</span>';
-    $('menu-kto').textContent = hala.pracownik ? hala.pracownik.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
+    $('menu-kto').textContent = hala.pracownik ? hala.pracownik.nazwa : '';   // nagłówek menu na komputerze, jak w Panelu Zarządczym SP
+    $('menu-rola').textContent = hala.pracownik ? global.Hala.nazwaRoliMenu(hala.pracownik, hala.kontrakt, 'kj') : '';   // 2026-11-23: rola pod imieniem, program stały
   }
 
   // ------------------------------------------------------------ logowanie
@@ -408,6 +409,9 @@
   // Etap 6a: awarie i nieprawidłowości zgłoszone przez tę osobę, ze statusem (wspolne/dzialania.js); w menu podświetla „Więcej”.
   KJ.ekran('zgloszenia', { zakladka: 'wiecej', rysuj: el => global.HalaDzialania.mojeZgloszenia(el, hala) });
 
+  // D98: terminowość i liczba zleceń tej osoby (wspolne/wyniki.js — ten sam ekran w Liderze i UR; w Panelu pełny raport).
+  KJ.ekran('wyniki', { zakladka: 'wiecej', rysuj: el => global.HalaWyniki.rysuj(el, hala, { tryb: 'moje', klucz: 'kj-wyniki', tytul: 'Moje wyniki' }) });
+
   // STYL-GK §8: dolny pasek telefonu ma najwyżej 4 ekrany + Więcej, więc Reklamacje (menu `.w-wiecej`) są na telefonie tutaj;
   // adres #reklamacje i powiadomienia nic nie zmieniają — ekran ten sam, tylko podświetla „Więcej” (hala.css → :has).
   KJ.ekran('wiecej', {
@@ -419,6 +423,7 @@
           <a class="przycisk" href="#partie">Partie brakowe</a>
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
+          <a class="przycisk" href="#wyniki">Moje wyniki</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
         <p class="slaby">Powiadomienia, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;

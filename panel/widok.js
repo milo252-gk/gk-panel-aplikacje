@@ -1,4 +1,4 @@
-/* Panel Kierownika — co pokazać (bez rysowania).
+/* Panel Zarządczy GK — co pokazać (bez rysowania).
 
    Czyste funkcje: dostają obiekty ze stanu huba (hala.obiekty…), słowniki i
    „teraz”, a oddają gotowe wiersze do narysowania. Nie dotykają DOM ani sieci,
@@ -15,20 +15,7 @@
   const H = () => global.Hala;
   const MIN = 60000;
 
-  /* Kto faktycznie pracował nad zleceniem (właściciel 2026-11-20): przy checkliście to osoba, która odhaczyła NAJWIĘCEJ pozycji
-     (wykonane + pominięte, pole `autor` wpisu) — nie ten, kto kliknął na końcu („Nie mogę”, „Zrobione” po zmianie, auto-zatwierdzenie).
-     Bez odhaczonych pozycji: wykonał → przyjął → wykonawca → odrzucił (ta sama kolejność w hala.py → kto_pracowal). Remis rozstrzyga pierwsza osoba w kolejności zapisu. */
-  const ktoPracowal = d => {
-    d = d || {};
-    const licz = new Map();
-    for (const mapa of [d.wykonane, d.pominiete]) {
-      if (!mapa || typeof mapa !== 'object') continue;
-      for (const w of Object.values(mapa)) if (w && w.autor) licz.set(w.autor, (licz.get(w.autor) || 0) + 1);
-    }
-    let kto = null, ile = 0;
-    for (const [id, n] of licz) if (n > ile) { kto = id; ile = n; }
-    return kto || d.wykonal || d.przyjal || d.wykonawca || d.odrzucil || null;
-  };
+  const ktoPracowal = d => H().ktoPracowal(d);      // jedna osoba dla „Zlecenia na osobę” i „Wyniki” (reguła: Hala.ktoPracowal)
   const nazwaPracownika = (pracownicy, id) => {
     if (!id) return null;
     const p = (pracownicy || []).find(x => x.id === id);
@@ -114,7 +101,7 @@
   const DZIALY_OBCHODOW = [['mistrz', 'Checklista Mistrza GK', 'Mistrz GK'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
                            ['brygadzista-sp', 'Checklista Lidera SP', 'Lider SP']];
   function obchodyMistrza(arg) { return obchodyDzialow(Object.assign({}, arg, { tylko: ['mistrz'] })); }
-  /* Karty obchodów działów innych niż lider. `ja` + `stale`: kierownik UR/KJ widzi tylko kartę swojego działu (Hala.dzialyKierownika),
+  /* Karty obchodów działów innych niż lider. `ja` + `stale`: lider UR i kierownik KJ widzą tylko kartę swojego działu (Hala.dzialyKierownika),
      kierownik zakładu i admin wszystkie. `tylko` — zawężenie kodów (test, mistrz). */
   function obchodyDzialow({ pracownicy, zmiana, teraz, prog, zlecenia, ja, stale, tylko }) {
     if (!zmiana) return [];
@@ -416,7 +403,7 @@
      Po terminie, przepadłe i zaplanowane to znaczniki na wierszu, nie osobne listy: kierownik widzi je tam, gdzie i tak
      patrzy. Kolejność: po terminie (najdłużej spóźnione) na górze — tam prowadzi kafelek „Zlecenia po terminie” i push —
      potem przepadłe, pilne, najstarsze; zaplanowane na samym dole, od najbliższego startu.
-     ja = zalogowana osoba: moznaAnulowac — zlecenia kierownika zakładu nie anuluje kierownik UR/KJ (D45, Hala.moznaAnulowacZlecenie). */
+     ja = zalogowana osoba: moznaAnulowac — zlecenia kierownika zakładu nie anuluje lider UR i kierownik KJ (D45, Hala.moznaAnulowacZlecenie). */
   function zlecenia({ zlecenia: lista, slowniki, pracownicy, stale, teraz, filtr, ja }) {
     const dzialy = new Map(((stale && stale.dzialy) || []).map(d => [d.kod, d.nazwa]));
     const maszyny = (slowniki && slowniki.maszyny) || {};
@@ -522,7 +509,7 @@
         zdjeciaKierownika: [].concat(d.zdjecia || []),
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
-        // R2 (2026-11-09, D82): kierownik UR/KJ przyjmuje, zamyka i zwraca tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
+        // R2 (2026-11-09, D82): lider UR i kierownik KJ przyjmują, zamykają i zwracają tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
         prawoOdbioru, moznaOdebrac: prawoOdbioru && !koniecOdbioru,
         // D88 (właściciel 2026-11-18): zwrot zlecenia zmianowego (całego i pozycji) tylko do końca zmiany — w karencji tylko Odbierz.
         // Hub też odrzuci (koniec_zwrotu_zmianowego); panel.js chowa „Zwróć”, gdy z.zwrotDozwolony === false.
@@ -540,7 +527,7 @@
         moznaZmienic: zaplanowane && zZakladu,
         czas: d.czas_zlecenia || d.czas_zaplanowania || z.zmieniono, terminMs: isNaN(termin) ? null : termin,
         // D76: do kierownika działu, rozdział (komu i ile zrobione), „Przekaż” / „Rozdziel” dla kierownika działu,
-        // kto zlecił (filtr „Mój dział i moje” kierownika UR/KJ).
+        // kto zlecił (filtr „Mój dział i moje” lidera UR i kierownika KJ).
         // „Do rozdzielenia” znika, gdy kierownik wziął zlecenie na siebie („Biorę” → przyjęte): już nie czeka na przekazanie.
         doKierownika: d.do_kierownika === true && !d.wykonawca && z.status === 'nowe',
         rozdzielone: z.status === 'rozdzielone',
@@ -576,7 +563,7 @@
   }
 
   /* Pusta lista zleceń: nie samo „nic nie ma”, tylko dokąd spojrzeć. Dwa częste powody pustki, których kierownik inaczej nie widzi:
-     (1) filtr (dział, osoba, rodzaj, „tylko spóźnione”, u kierownika UR/KJ domyślnie jego dział) chowa zadania, (2) „W toku” jest
+     (1) filtr (dział, osoba, rodzaj, „tylko spóźnione”, u lidera UR i kierownika KJ domyślnie jego dział) chowa zadania, (2) „W toku” jest
      puste, ale coś czeka na odbiór w drugim filtrze. chipy = wynik chipyZlecen (liczby z napisów „Do odbioru · 4”). */
   function pustaListaZlecen(filtr, chipy, filtryAktywne) {
     const PUSTE = { otwarte: 'Żadne zlecenie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na odbiór',
@@ -670,7 +657,7 @@
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
   /* D78: „Urządzenia z niewysłanymi zapisami” (GET /api/v1/panel/urzadzenia — telefony meldują swoją kolejkę): jedna linia
      na urządzenie, po ludzku. lista: [{urzadzenie, aplikacja, oczekuje, zglosil, najstarszy, czas, osoby: [{nazwa, ile}]}]. */
-  const NAZWY_APLIKACJI = { lider: 'GK Lider', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'GK Panel Kierownika' };
+  const NAZWY_APLIKACJI = { lider: 'GK Lider', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'Panel Zarządczy GK' };
   function opisUrzadzen(lista, teraz) {
     const t = teraz === undefined ? Date.now() : teraz;
     const kiedy = c => (c ? `${dataKrotka(c) === dataKrotka(t) ? '' : dataKrotka(c) + ' '}${godzina(c)}` : '—');
@@ -698,7 +685,7 @@
     return [
       { kod: 'stoi', etykieta: naMaszyny ? MASZYNA_STOI : 'Stoi linii', liczba: stoi, klasa: klasa(stoi, 'pilne') },
       { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'pilne') },
-      { kod: 'obchody', etykieta: 'Opóźnione obchody', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
+      { kod: 'obchody', etykieta: 'Opóźnione checklisty', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
       // Właściciel 2026-11-18: BHP i jakości nie ma na Pulpicie (są w checklistach); zgłoszenia BHP są w Zlecenia → rodzaj „BHP”.
       // „do odbioru” — tak samo jak chip w Zleceniach (kierownik odbiera albo zwraca); dwie nazwy jednej listy myliły.
       // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO ODBIORU” łamało się w wąskim kafelku.
@@ -832,7 +819,7 @@
   /* D76 / P18 (właściciel 2026-10-19: „Tak, stałe też przez kierownika”): działy zapisanego, w których hub da wystąpienie
      kierownikowi działu (do_kierownika) — autor (s.autor: kierownik zakładu albo admin), tryb „dział” bez osoby, dział
      z kierownikiem (UR, KJ). Ta sama reguła co hub (do_kierownika w _zlec_wystapienie ↔ Hala.doKierownika).
-     [{ kod, nazwa, kierownik }] — kierownik = nazwa roli („Kierownik UR”). */
+     [{ kod, nazwa, kierownik }] — kierownik = nazwa roli („Lider UR”). */
   function kierownicyStalego(s, stale, pracownicy) {
     const x = s || {};
     if (x.kazdy === true || x.wykonawca || (Array.isArray(x.wykonawcy) && x.wykonawcy.length)) return [];
@@ -846,7 +833,7 @@
   }
 
   /* „Dla kogo” jednym zdaniem: „Wszystkie działy · każdy osobno”, „UR, KJ · po jednym zleceniu na dział”,
-     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”, D76: „Utrzymanie Ruchu → Kierownik UR”. */
+     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”, D76: „Utrzymanie Ruchu → Lider UR”. */
   function dlaKogoPoLudzku(s, stale, pracownicy) {
     const zwykle = dlaKogoBezKierownika(s, stale, pracownicy);
     const k = kierownicyStalego(s, stale, pracownicy);
@@ -1681,13 +1668,14 @@
     }
     // Hub nie zna długości hasła sprzed D43 (import z programu) — rola biura dochodzi tylko z hasłem startowym.
     if (biuroTransportu(role) && istniejacy && !startowe && !istniejacy.dlugie_haslo)
-      bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — kliknij „Ustaw hasło startowe”.');
+      bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — kliknij „Resetuj tylko hasło”.');
     const telefon = String(f.telefon || '').trim();
     if (!/^[0-9+()\- ]{0,30}$/.test(telefon)) bledy.push('Telefon: cyfry, spacje, + i myślnik, np. 600 100 200.');
     const dane = { id, nazwa, role, linie: [].concat(f.linie || []).filter(Boolean), aktywny: f.aktywny !== false, telefon };
     if (pin) dane.pin = pin;
     if (startowe && haslo) dane.haslo = haslo;
     if (istniejacy && startowe) dane.haslo_startowe = true;
+    if (istniejacy && startowe && f.zachowaj_pin === true) dane.zachowaj_pin = true;     // „Resetuj tylko hasło”: PIN osoby zostaje
     const karta = String(f.karta || '').trim();
     if (karta) dane.karta = karta; else if (f.usun_karte) dane.usun_karte = true;
     return { bledy, dane };
@@ -1710,6 +1698,8 @@
     if (!p) return { znacznik: '', klasa: '', opis: '' };
     if (p.ekran) return p.ma_pin ? { znacznik: '', klasa: '', opis: 'Konto ekranu — jeden PIN (4–8 cyfr).' }
       : { znacznik: 'bez PIN-u', klasa: 'tekst-alarm', opis: 'Konto ekranu bez PIN-u — wpisz go i zapisz.' };
+    if (p.haslo_do_zmiany && p.pin_do_zmiany && p.ma_pin) return { znacznik: 'hasło i PIN startowe', klasa: 'slaby',
+      opis: 'Hasło i PIN startowe (haslo123, 1234) — przy pierwszym logowaniu osoba ustawi oba.' };
     if (p.haslo_do_zmiany) return { znacznik: 'hasło startowe', klasa: 'slaby',
       opis: 'Hasło startowe — przy pierwszym logowaniu osoba ustawi własne hasło' + (p.ma_pin ? ' (PIN już jest).' : ' i PIN.') };
     if (!p.ma_pin) return { znacznik: 'bez PIN-u', klasa: 'slaby', opis: 'Hasło ustawione, PIN-u jeszcze nie ma — osoba ustawi go przy logowaniu.' };
@@ -1960,9 +1950,9 @@
                              szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
   // Nazwy funkcji (D92, 2026-11-19 — tylko napisy; kody ról bez zmian). Kody bez słownika kontraktu (biuro, kierowca, kierownik-ur…)
   // przychodzą z dziennika logowań programów.
-  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik', biuro: 'Biuro GK Trasy', lider: 'Lider GK', mistrz: 'Mistrz GK', brygadzista_sp: 'Lider SP', mechanik: 'Pracownik UR',
-                              kontroler: 'Pracownik KJ', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Kierownik UR', 'kierownik-kj': 'Kierownik KJ',
-                              kierownik_ur: 'Kierownik UR', kierownik_kj: 'Kierownik KJ', kierownik_mag: 'Kierownik MAG', pracownik_mag: 'Pracownik MAG' };
+  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik', biuro: 'Biuro', lider: 'Lider GK', mistrz: 'Mistrz GK', brygadzista_sp: 'Lider SP', mechanik: 'Pracownik UR',
+                              kontroler: 'Pracownik KJ', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Lider UR', 'kierownik-kj': 'Kierownik KJ',
+                              kierownik_ur: 'Lider UR', kierownik_kj: 'Kierownik KJ', kierownik_mag: 'Kierownik MAG', pracownik_mag: 'Pracownik MAG' };
   function logowania(odp) {
     const o = odp || {};
     if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.', startowe: [], startowePodsumowanie: '', niespojnosci: [] };
@@ -2524,17 +2514,17 @@
   /* Liczba z ułamkiem po polsku: 3.6 → „3,6” (Wskaźniki, raporty zmian). Kropka w „3.6 %” to zapis angielski. */
   const procent = n => (n === null || n === undefined ? '—' : String(n).replace('.', ','));
 
-  /* Nazwa pozycji menu i nagłówka: kierownik UR / KJ i mistrz mają w „Administracji” tylko urlopy swoich ludzi — „Administracja”
+  /* Nazwa pozycji menu i nagłówka: lider UR i kierownik KJ i mistrz mają w „Administracji” tylko urlopy swoich ludzi — „Administracja”
      obiecywała więcej, niż jest w środku. Wszystkie inne zestawy części (kierownik zakładu, administrator) zostają „Administracją”. */
   function nazwaAdministracji(czesci) {
-    return (czesci || []).length === 1 && czesci[0] === 'urlopy' ? 'Urlopy' : 'Administracja';
+    return (czesci || []).filter(c => c !== 'wyniki').join() === 'urlopy' ? 'Urlopy' : 'Administracja';
   }
 
   /* Części Administracji dla tej osoby, w kolejności chipów. Checklisty (szablony obchodów lidera) zeszły z górnego menu
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
      admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Logowania, Kody QR, Progi i godziny, Ustawienia); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; maszyny (R10, kontrakt: zapis
      słownika maszyn — kierownik zakładu) — Maszyny; szablony (kontrakt: zapis szablony_checklist) — Checklisty. */
-  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny, kody, analityka, plan } = {}) {
+  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny, kody, analityka, plan, wyniki } = {}) {
     const c = [];
     if (admin || zespol) c.push('pracownicy');
     if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
@@ -2546,11 +2536,13 @@
     // Właściciel 2026-11-17: kierownik zakładu ma też „Kody QR” (okno kody.js: kierownik albo administrator).
     if (admin) c.push('maszyny', 'dane', 'logowania');
     // Panel bez „☰ Więcej” (2026-11-17, decyzja właściciela: „tylko dla obecnych ról Administracji”): Wskaźniki, Raporty (na telefonie),
-    // „Role i uprawnienia” i „Nie wysłane” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Kierownik UR/KJ
+    // „Role i uprawnienia” i „Nie wysłane” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Lider UR i Kierownik KJ
     // i konto ekranu zostają bez nich (UR/KJ — przy samych Urlopach; „Nie wysłane” mają w pasku połączenia). Chipy Wskaźniki/Raporty
     // ukrywa CSS na komputerze (są w menu po lewej).
     // Kolejność jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia, Nie wysłane.
-    if (admin || analityka) c.push('wskazniki', 'raporty');
+    if (admin || analityka) c.push('wskazniki');
+    if (wyniki) c.push('wyniki');          // D98: także lider UR i kierownik KJ (swój dział)
+    if (admin || analityka) c.push('raporty');
     if (admin || kody) c.push('kody');
     if (admin || analityka) c.push('role', 'niewyslane');
     if (admin || plan) c.push('plan');                    // D95: plan zmian zakładu — Menedżer i Kierownik (kontrakt: slowniki.plan_zmian.zapis)
@@ -2582,7 +2574,7 @@
     // Filtry z 2026-11-17: status, linia, maszyna i zakres dat. Wiersze innych rodzajów (zgłoszenie, narzędzia, BHP) nie mają
     // statusu zlecenia, linii ani maszyny — przy takim filtrze ich nie pokazujemy (to nie zlecenia tej linii/maszyny).
     const zakres = zakresDat(od, doDnia);
-    // D76: dzial === MOJE_DZIALY — kierownik UR/KJ: zlecenia jego działu(ów) i to, co sam zlecił albo robi (domyślny filtr,
+    // D76: dzial === MOJE_DZIALY — lider UR i kierownik KJ: zlecenia jego działu(ów) i to, co sam zlecił albo robi (domyślny filtr,
     // nie blokada — „wszystkie” pokazuje resztę zakładu jak dotąd).
     const moje = z => (mojeDzialy || []).includes(z.dzial) || (!!ja && (z.zlecilId === ja || (z.osoby || []).includes(ja)));
     return (wiersze || []).filter(z => (!dzial || (dzial === MOJE_DZIALY ? moje(z) : z.dzial === dzial)) && (!osoba || (z.osoby || []).includes(osoba))
@@ -2600,7 +2592,7 @@
      znacznik, liczba, nawigacja } — nawigacja mówi Panelowi, dokąd przejść: { filtr: otwarte|do-zamkniecia|zamkniete, dzial,
      osoba, maszyna, linia, zlecenie }. Pisownia bez znaczenia: wielkość liter, polskie znaki, kropki i myślniki (loginZNazwy);
      wszystkie słowa frazy muszą pasować (w dowolnym polu tej samej pozycji).
-     Role (R2): kierownik UR/KJ (Hala.dzialyKierownika ≠ null) widzi zlecenia swojego działu i te, które sam zlecił albo robi,
+     Role (R2): lider UR i kierownik KJ (Hala.dzialyKierownika ≠ null) widzi zlecenia swojego działu i te, które sam zlecił albo robi,
      oraz osoby swojego działu — jak filtr „Mój dział i moje”; przejście ustawia ten sam filtr (nawigacja.dzial = MOJE_DZIALY).
      Konto ekranu nie szuka (monitor bez klawiatury) — zwraca []. */
   const MIN_ZNAKOW_SZUKANIA = 2;
@@ -2633,7 +2625,7 @@
         liczba: 1, nawigacja: { filtr: chip([z]), dzial: dzialNav, zlecenie: z.id } });
     }
 
-    // Osoby: tylko te, po których da się filtrować Zlecenia (mają rolę jakiegoś działu) — w swoim zakresie dla kierownika UR/KJ.
+    // Osoby: tylko te, po których da się filtrować Zlecenia (mają rolę jakiegoś działu) — w swoim zakresie dla lidera UR i kierownika KJ.
     const rolyZakresu = wZakresie ? dz.filter(x => wZakresie.includes(x.kod)).flatMap(x => x.role || []) : null;
     const rolyDzialow = new Set(dz.flatMap(x => x.role || []));
     for (const p of (pracownicy || [])) {
@@ -2735,7 +2727,7 @@
     if (x.sort) wynik.push(`kolejność: ${(SORTOWANIA.find(([k]) => k === x.sort) || [0, x.sort])[1]}`);
     return wynik;
   }
-  /* Czy filtry różnią się od stanu wyjściowego (u kierownika UR/KJ wyjściowy dział to „mój dział i moje”). Okres to nie
+  /* Czy filtry różnią się od stanu wyjściowego (u lidera UR i kierownika KJ wyjściowy dział to „mój dział i moje”). Okres to nie
      filtr — mówi tylko, ile Zamkniętych dociągnąć z serwera. */
   const filtryAktywne = (f, domyslnyDzial) => { const x = f || {};
     return (x.dzial || '') !== (domyslnyDzial || '') || !!(x.osoba || x.rodzaj || x.status || x.linia || x.maszyna || x.od || x.doDnia || x.spoznione || x.sort); };
@@ -2751,7 +2743,7 @@
   /* D76: „Nowe zlecenie” → dane zleceń do zapisu (po jednym na adresata). Pierwszy dział: każda zaznaczona osoba osobno
      (D55); bez osób — jedno zlecenie, a od kierownika zakładu dla działu z kierownikiem (UR, KJ) — „do kierownika działu”
      (do_kierownika: on je przekaże albo rozdzieli). „Też dla” — każdy kolejny dział dostaje swoje, bez osób (osoby wybiera
-     się w jednym dziale). Działy spoza zakresu kierownika UR/KJ pomijamy (hub i tak odrzuca, 403). */
+     się w jednym dziale). Działy spoza zakresu lidera UR i kierownika KJ pomijamy (hub i tak odrzuca, 403). */
   function zleceniaDzialow(dane, { dzialy, osoby, role, stale }) {
     const dozwolone = new Set(dzialyDoZlecania(stale, role).map(d => d.kod));
     const lista = [...new Set([].concat(dzialy || []).filter(d => dozwolone.has(d)))];
@@ -2893,7 +2885,7 @@
                opis: stan === 'trwa' ? 'Trwa' : stan === 'minal' ? 'Minął' : 'Zaplanowany' };
     }).sort((a, b) => ((a.stan === 'minal') - (b.stan === 'minal')) || a.od.localeCompare(b.od) || a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
-  /* R5 (2026-11-09, D82): kto może dostać urlop od tej osoby — kierownik zakładu i admin: wszyscy z działami hali; kierownik UR/KJ:
+  /* R5 (2026-11-09, D82): kto może dostać urlop od tej osoby — kierownik zakładu i admin: wszyscy z działami hali; lider UR i kierownik KJ:
      tylko osoby z jego działu (hub: blad_urlopu_osoby). Lista i formularz Urlopów pokazują tylko te osoby. */
   function osobyDoUrlopow(pracownicy, ja, dzialy) {
     const wDzialach = (p) => (p.role || []).some(r => (dzialy || []).some(d => (d.role || []).includes(r)));
@@ -3226,7 +3218,7 @@
   /* D87 (właściciel 2026-11-17, doprecyzowanie tego samego dnia): odbiór checklisty jest W KARCIE obchodu na Pulpicie („Checklista
      mistrza”, „Checklista lidera”/linia), nie w osobnej sekcji. Wiersze „do odbioru” tej karty: zlecenia-checklisty (z pozycjami)
      danego działu i linii, przypisane do bieżącej zmiany (tak samo jak H().checklistaZmiany — w tym „Nie mogę”, których karta nie
-     liczy do postępu), które ta osoba może odebrać (kierownik UR/KJ — własny dział, R2/D82) albo które są już tylko do wglądu
+     liczy do postępu), które ta osoba może odebrać (lider UR i kierownik KJ — własny dział, R2/D82) albo które są już tylko do wglądu
      (D88: po końcu zmiany + karencji — bez przycisków, z napisem). dzial 'mistrz' = jedna kopia listy „każda linia osobno”
      (bezKopiiLiniiMistrza), linia pomijana; dzial 'produkcja' (lider) — linia karty. Te same wiersze co w Zlecenia → Do odbioru
      (zlecenia() z filtrem 'do-zamkniecia'), więc te same dowody i przyciski. Zmiana zlecenia jak H().zlecenieZmiany (wazne_do
@@ -3252,7 +3244,7 @@
   /* Karty obchodów na Pulpicie — JEDNA KARTA NA KAŻDĄ CHECKLISTĘ (właściciel 2026-11-18): tytuł = nazwa checklisty (tytuł zlecenia z huba),
      pod nim podpis działu („Mistrz”, „Lider · Linia 1”, „Brygadzista SP”, „UR”, „KJ”). Kolejność: mistrz, lider (linie jak dotąd), brygadzista SP,
      UR, KJ; w obrębie działu wg najwcześniejszego terminu pozycji i nazwy. Linia lidera bez żadnej checklisty zostaje jedną kartą jak dawniej
-     (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Kierownik UR/KJ widzi z kart działów tylko swój. */
+     (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Lider UR i Kierownik KJ widzą z kart działów tylko swój. */
   const KOLEJNOSC_KART = ['mistrz', 'produkcja', 'brygadzista-sp', 'ur', 'kj'];
   function obchodyKarty({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia, ja }) {
     if (!zmiana) return [];
@@ -3307,7 +3299,7 @@
      tylko postęp i „+N więcej”, a notatek i zdjęć zrobionych pozycji nie dało się obejrzeć, dopóki lider nie oddał listy). Te same
      wiersze co odbiorObchodu (zlecenie → pozycje z `szczegoly`: kto, kiedy, notatka, zdjęcia, powód pominięcia), ale checklisty
      jeszcze OTWARTE (nowe/przyjęte/rozdzielone) bieżącej zmiany; oddane są w „Do odbioru”. Pozycja czekająca po swoim terminie ma
-     `spozniona`. Uprawnienia jak wgląd w dowody (prawoOdbioru: kierownik zakładu, admin, kierownik UR/KJ swój dział). Tylko odczyt. */
+     `spozniona`. Uprawnienia jak wgląd w dowody (prawoOdbioru: kierownik zakładu, admin, lider UR i kierownik KJ swój dział). Tylko odczyt. */
   /* Filtr pozycji w rozwiniętej karcie obchodu (właściciel 2026-11-18): Wszystkie / Do zrobienia (czeka, jeszcze w terminie) / Spóźnione
      (czeka po terminie) / Zrobione / Pominięte. Czysta funkcja — p to pozycja z W.pozycjeObchodu. */
   const FILTRY_POZYCJI = [['wszystkie', 'Wszystkie'], ['do-zrobienia', 'Do zrobienia'], ['spoznione', 'Spóźnione'], ['zrobione', 'Zrobione'], ['pominiete', 'Pominięte']];
@@ -3360,13 +3352,6 @@
   function czyZamknacPoOdbiorze(zlecenie) {
     const d = (zlecenie && zlecenie.dane) || {};
     return !!zlecenie && zlecenie.status === 'wykonane' && H().odbiorPozycji(d).pelne;
-  }
-
-  /* Nazwa aplikacji WEWNĄTRZ po zalogowaniu (właściciel 2026-11-17, wzór: „GK Mistrz” w GK Lider): administrator widzi „GK Panel
-     Menedżera”, kierownik zakładu i reszta — „GK Panel Kierownika”. To tylko napis: manifest, ekran logowania, ikona, push i
-     kontrakt zostają „GK Panel Kierownika”. */
-  function nazwaAplikacji(pracownik) {
-    return ((pracownik && pracownik.role) || []).includes('admin') ? 'GK Panel Menedżera' : 'GK Panel Kierownika';
   }
 
   function maszynyPostepZlecenia(d) {
@@ -3459,7 +3444,7 @@
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        zmianyDniZMacierzy, obslugujeZmianyWgDni, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
-                       zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, czyZamknacPoOdbiorze, nazwaAplikacji, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
+                       zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, czyZamknacPoOdbiorze, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        planDoFormularza, planZeStanu, planZmianZapisy, skutkiPlanu, zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,

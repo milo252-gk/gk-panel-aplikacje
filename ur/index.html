@@ -42,7 +42,7 @@
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
-    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Kierownika → Administracja.</p>
+    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja.</p>
   </div>
 </main>
 
@@ -60,12 +60,13 @@
     <div class="hala-menu-naglowek">
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
+      <div class="hala-menu-rola" id="menu-rola"></div>
       <div class="hala-menu-kto">GK Utrzymanie Ruchu</div>
     </div>
     <a href="#pulpit" data-ekran="pulpit"><span class="ikona" data-ikona="pulpit" aria-hidden="true"></span>Pulpit</a>
     <a href="#awarie" data-ekran="awarie"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awarie<b id="licznik-nowych" class="plakietka" hidden></b></a>
     <a href="#przeglady" data-ekran="przeglady"><span class="ikona" data-ikona="przeglady" aria-hidden="true"></span>Przeglądy<b id="licznik-opoznionych" class="plakietka" hidden></b></a>
-    <!-- Plan tylko dla kierownika UR (UI etap 2), KPI tylko dla kierownika zakładu i administratora (R3, 2026-11-09) — mechanik ma w pasku Awarie, Przeglądy, Zlecenia i Więcej.
+    <!-- Plan tylko dla lidera UR (UI etap 2), KPI tylko dla kierownika zakładu i administratora (R3, 2026-11-09) — mechanik ma w pasku Awarie, Przeglądy, Zlecenia i Więcej.
          STYL-GK §8 (2026-11-04): na telefonie najwyżej 4 ekrany + Więcej — Plan (`.w-wiecej`) jest tam tylko w „Więcej”,
          na komputerze zostaje w menu bocznym. -->
     <a href="#kpi" data-ekran="kpi" class="tylko-kpi w-wiecej"><span class="ikona" data-ikona="kpi" aria-hidden="true"></span>KPI</a>
@@ -86,9 +87,11 @@
 <script src="../wspolne/konto.js"></script>
 <script src="../wspolne/eksport.js"></script>
 <script src="../wspolne/miary.js"></script>
+<script src="../wspolne/wyniki.js"></script>
 <script src="../wspolne/gk-ikony.js"></script>
 <script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/reakcje.js"></script>
+<script src="../wspolne/okna-x.js"></script>
 <script src="../wspolne/kolejka-ui.js"></script>
 <script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>

@@ -362,12 +362,8 @@
     $('logowanie').hidden = z;
     $('aplikacja').hidden = !z;
     if (!z) {
-      // Przed logowaniem: nazwa ostatnio zalogowanej osoby na tym telefonie (D92 — telefon magazynu pokazuje „GK Magazyn”),
-      // bez wpisu — „GK Lider” ze statycznego manifestu. Nowy klucz hala.lider.nazwa (tylko napis, nic poza tym).
-      const nazwa = pamiec.czytaj('nazwa') === 'GK Magazyn' ? 'GK Magazyn' : 'GK Lider';
-      document.title = nazwa;
-      const h1 = document.querySelector('#logowanie h1');
-      if (h1) h1.textContent = nazwa;
+      // 2026-11-23: nazwa programu jest STAŁA („GK Lider”) — ekran logowania i karta zostają ze statycznego HTML i manifestu
+      // (dawny klucz hala.lider.nazwa z nazwą „GK Magazyn” przestał być czytany i zapisywany; stare wpisy nic nie psują).
       $('blokada').hidden = true;
       if (Lider.oknoOtwarte()) { $('okno').hidden = true; document.body.classList.remove('z-oknem'); }
       rysujCzekajace();
@@ -388,7 +384,6 @@
     const ukryte = W.ukryteEkrany(hala.pracownik);
     for (const b of document.querySelectorAll('.dolny [data-ekran]')) b.hidden = ukryte.includes(b.dataset.ekran);
     document.body.classList.toggle('profil-magazyn', Lider.magazyn());
-    pamiec.zapisz('nazwa', W.nazwaAplikacji(hala.pracownik));
     if (ukryte.includes(Lider.stan.ekran)) Lider.pokazEkran(W.ekranStartowy(hala.pracownik), { bezHistorii: true });
   }
 
@@ -596,11 +591,9 @@
     const p = hala.pracownik;
     // Przycisk „Moje konto” to sama ikona osoby (index.html, STYL-GK §3 runda 2) — bez „Anna N.” obok, jak w UR, KJ i Panelu.
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
-    // Nazwa zależy od profilu, tylko po zalogowaniu: mistrz → „GK Mistrz”, reszta → „GK Lider” (manifest i logowanie bez zmian).
-    const nazwaApki = W.nazwaAplikacji(p);
-    const menuApka = $('menu-aplikacja');
-    if (menuApka) menuApka.textContent = nazwaApki;
-    document.title = nazwaApki;
+    // 2026-11-23: pod imieniem NAZWA ROLI (Mistrz GK, Lider GK, Lider SP, Kierownik, Menedżer, Kierownik/Pracownik MAG…),
+    // pod nią stała nazwa programu „GK Lider” (index.html) — bez wariantów „GK Mistrz”, „GK Magazyn”, „GK Lider SP”.
+    $('menu-rola').textContent = p ? Hala.nazwaRoliMenu(p, hala.kontrakt, 'lider') : '';
   }
 
   function rysujWezwania() {
@@ -645,7 +638,7 @@
     if (nazwa !== Lider.stan.ekran && !(opcje && opcje.bezHistorii)) wHistorii(nazwa);
     Lider.stan.ekran = nazwa;
     // Ekrany schowane w „Więcej” (D74) podświetlają w menu „Więcej”.
-    const wMenu = nazwa === 'koniec' || nazwa === 'moje' ? 'wiecej' : nazwa;
+    const wMenu = nazwa === 'koniec' || nazwa === 'moje' || nazwa === 'wyniki' ? 'wiecej' : nazwa;
     for (const b of document.querySelectorAll('.dolny [data-ekran]')) {
       if (b.dataset.ekran === wMenu) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
@@ -717,17 +710,21 @@
         <nav class="menu-wiecej">
           ${mag ? '' : '<button type="button" class="glowny" data-a="koniec">Raport zmiany</button>'}
           <button type="button" data-a="moje">Moje zgłoszenia</button>
+          <button type="button" data-a="wyniki">Moje wyniki</button>
           <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>
         </nav>
         <p class="slaby">${esc(opisKonta.charAt(0).toUpperCase() + opisKonta.slice(1))} — w Moim koncie (ikona osoby u góry).</p>`;
       const koniec = el.querySelector('[data-a=koniec]');
       if (koniec) koniec.addEventListener('click', () => Lider.pokazEkran('koniec'));
       el.querySelector('[data-a=moje]').addEventListener('click', () => Lider.pokazEkran('moje'));
+      el.querySelector('[data-a=wyniki]').addEventListener('click', () => Lider.pokazEkran('wyniki'));
       el.querySelector('[data-a=niewyslane]').addEventListener('click', () => pokazOdrzucone());
     },
   };
   // Etap 6a: awarie i nieprawidłowości zgłoszone przez tę osobę, ze statusem (wspolne/dzialania.js).
   Lider.ekrany.moje = { rysuj: el => HalaDzialania.mojeZgloszenia(el, hala) };
+  // D98: terminowość i liczba zleceń tej osoby (wspolne/wyniki.js — ten sam ekran w UR i KJ; w Panelu pełny raport).
+  Lider.ekrany.wyniki = { rysuj: el => HalaWyniki.rysuj(el, hala, { tryb: 'moje', klucz: 'lider-wyniki', tytul: 'Moje wyniki' }) };
   Lider.poRysowaniu.push(() => Lider.plakietka('wiecej', ((Lider.stan.kolejka || {}).odrzucone || 0) + ((Lider.stan.kolejka || {}).plikiOdrzucone || 0)));
   Lider.poRysowaniu.push(() => Lider.plakietka('zlecenia', HalaZlecenia.doZrobienia(hala, Lider.dzialZlecen())));
   // D56: „Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.

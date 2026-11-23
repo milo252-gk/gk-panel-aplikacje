@@ -283,7 +283,7 @@
     return H.zLokalnego(l.rok, l.miesiac, l.dzien, 0, 0);
   }
 
-  // D55: kierownicy widzą zlecenia osobiste całego działu (np. kierownik UR — zadania swoich mechaników).
+  // D55: kierownicy widzą zlecenia osobiste całego działu (np. lider UR — zadania swoich mechaników).
   const ROLE_WIDZA_WSZYSTKO = ['kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'admin'];   // D92: + Kierownik MAG
   function dzisiaj(H, teraz) {
     if (!H || !H.lokalny) return null;

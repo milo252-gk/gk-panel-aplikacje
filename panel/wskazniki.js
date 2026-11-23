@@ -1,4 +1,4 @@
-/* Panel Kierownika — wskaźniki (2026-09-28, decyzja właściciela): awarie, przestój na linię, MTTR, MTBF (D44) i czas reakcji,
+/* Panel Zarządczy GK — wskaźniki (2026-09-28, decyzja właściciela): awarie, przestój na linię, MTTR, MTBF (D44) i czas reakcji,
    braki w próbach i najczęstsze wady, zlecenia — za bieżącą zmianę, dziś, wczoraj albo dowolny zakres dni (D47, „Zakres”).
    Liczy widok.js (W.wskazniki — testowane) jedną regułą Hala.wskaznikiOkresu: krótkie okresy z danych, które Panel trzyma
    w pamięci (2 doby — działa też bez sieci), dłuższy zakres — hub tą samą regułą (GET /api/v1/panel/wskazniki,

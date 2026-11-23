@@ -1,4 +1,4 @@
-/* Panel Kierownika — wykresy do Wskaźników (właściciel 2026-10-27: „dodaj wykresy, słupki, koła”).
+/* Panel Zarządczy GK — wykresy do Wskaźników (właściciel 2026-10-27: „dodaj wykresy, słupki, koła”).
 
    Czyste funkcje: dane → tekst SVG/HTML (bez DOM, bez sieci), więc da się je testować w widok-testy.js. Kolory tylko z tokenów
    hala.css (jasny i ciemny motyw sam się zgadza). Kolory statusów (zielony = w terminie, czerwony = po terminie) są zarezerwowane

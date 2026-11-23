@@ -250,7 +250,7 @@
     if (st === 'przyjeta' || st === 'zgloszona') lista = lista.filter(k => k.typ !== 'awaria.zakonczona_ur');
     // Awarię prowadzi kolega: „Na miejscu” przejęłoby ją bez słowa (kontrakt nadpisuje mechanika) —
     // krok zostaje, ale nie jako główny i z pytaniem „przejąć?” (pole przejmuje = kto prowadzi).
-    // „Jadę” też: kierownik UR przypisał zgłoszoną awarię koledze, a awaria.przyjeta wpisuje mechanikiem autora
+    // „Jadę” też: lider UR przypisał zgłoszoną awarię koledze, a awaria.przyjeta wpisuje mechanikiem autora
     // (recenzja 2026-10-05).
     const prowadzi = ((awaria.dane || {}).mechanik) || null;
     const cudza = !!prowadzi && prowadzi !== pracownik.id;
@@ -276,12 +276,12 @@
     return wierzch.length ? { wierzch, wiecej } : { wierzch: wiecej, wiecej: [] };
   }
 
-  /* Kierownik UR (albo admin) — Plan i KPI. Mechanik KPI nie ogląda (UI etap 2): liczby są dla tego, kto rozlicza dział. */
+  /* Lider UR (albo admin) — Plan i KPI. Mechanik KPI nie ogląda (UI etap 2): liczby są dla tego, kto rozlicza dział. */
   const kierownikUR = p => !!p && (p.role || []).some(r => r === 'kierownik_ur' || r === 'admin');
 
-  /* R3 (właściciel 2026-11-09): KPI i zestawienia CSV ma TYLKO kierownik zakładu i administrator — także w UR. Kierownik UR
-     i mechanik KPI nie widzą (wcześniej: kierownik UR; kierownik zakładu nie widział go w UR, choć hub mu pozwalał). Plan
-     przeglądów zostaje przy kierowniku UR (kierownikUR). Serwer: tryb „tylko loguj” (HALA_KPI_CSV_TYLKO_KIEROWNIK=1 = odmowa). */
+  /* R3 (właściciel 2026-11-09): KPI i zestawienia CSV ma TYLKO kierownik zakładu i administrator — także w UR. Lider UR
+     i mechanik KPI nie widzą (wcześniej: lider UR; kierownik zakładu nie widział go w UR, choć hub mu pozwalał). Plan
+     przeglądów zostaje przy liderze UR (kierownikUR). Serwer: tryb „tylko loguj” (HALA_KPI_CSV_TYLKO_KIEROWNIK=1 = odmowa). */
   const mozeKpi = p => !!p && (p.role || []).some(r => r === 'kierownik' || r === 'admin');
 
   /* Gotowe opisy naprawy — mechanik w rękawicach dotyka, a nie pisze (instrukcja §7). */
@@ -362,7 +362,7 @@
     return { ok, kod: k.kod, blad, qr };
   }
 
-  /* Komu można przekazać awarię: mechanicy i kierownik UR, bez mnie. */
+  /* Komu można przekazać awarię: mechanicy i lider UR, bez mnie. */
   function mechanicy(pracownicy, ja) {
     return (pracownicy || []).filter(p => p.aktywny !== false && p.id !== ja &&
       (p.role || []).some(r => r === 'mechanik' || r === 'kierownik_ur'))
@@ -586,7 +586,7 @@
     return g;
   }
 
-  /* D5: pulpit startowy UR — kafelki liczb jak w Panelu Kierownika (tylko niezerowe; same zera → „Wszystko w porządku”). Klik w kafelek
+  /* D5: pulpit startowy UR — kafelki liczb jak w Panelu Zarządczym GK (tylko niezerowe; same zera → „Wszystko w porządku”). Klik w kafelek
      prowadzi do listy (adres z #). przeglady — obiekty „przeglad”, awarie — obiekty „awaria”, zlecenia — liczba zleceń działu UR do
      zrobienia (HalaZlecenia.doZrobienia, liczy to samo co plakietka). Awarie liczymy jak plakietki (aktywna; „zgłoszona” = czeka na przyjęcie). */
   function pulpit({ przeglady, awarie, zlecenia, slowniki, pracownicy, teraz, ja }) {
@@ -696,7 +696,7 @@
   }
   const kluczPrzegladu = (maszyna, karta, dzien) => `${maszyna}/${karta}/${dzien}`;
 
-  // ------------------------------------------------------------ plan (kierownik UR): karty i harmonogram
+  // ------------------------------------------------------------ plan (lider UR): karty i harmonogram
 
   const INTERWALY = [
     { kod: 'dzien', nazwa: 'Dni', jedn: ['dzień', 'dni', 'dni'] }, { kod: 'tydzien', nazwa: 'Tygodnie', jedn: ['tydzień', 'tygodnie', 'tygodni'] },
@@ -776,7 +776,7 @@
 
   /* Przykładowe karty: wzór dla typów maszyn zakładu (pilarka, wiertarka, CNC, okleiniarka — D51) i danych testowych,
      karta „<Typ> — przegląd miesięczny” dla każdego innego typu i ogólna karta dla maszyn bez typu.
-     Kierownik UR wstawia je jednym dotknięciem i poprawia pod swoje maszyny. */
+     Lider UR wstawia je jednym dotknięciem i poprawia pod swoje maszyny. */
   const OK = (nazwa) => ({ nazwa, rodzaj: 'ok_nok' });
   const POMIAR = (nazwa, jednostka, min, max) => Object.assign({ nazwa, rodzaj: 'pomiar', jednostka }, min !== null ? { min } : {}, max !== null ? { max } : {});
   const WZORY_KART = {

@@ -149,7 +149,7 @@ pre { white-space: pre-wrap; font-size: .85em; background: var(--tlo); padding: 
 
 .tylko-kierownik { display: none !important; }
 body.kierownik-ur .tylko-kierownik { display: flex !important; }
-/* R3 (2026-11-09): KPI — kierownik zakładu i administrator (nie kierownik UR); jak .tylko-kierownik, osobna klasa na <body>. */
+/* R3 (2026-11-09): KPI — kierownik zakładu i administrator (nie lider UR); jak .tylko-kierownik, osobna klasa na <body>. */
 .tylko-kpi { display: none !important; }
 body.kpi-ur .tylko-kpi { display: flex !important; }
 

@@ -1,4 +1,4 @@
-/* Panel Kierownika — etykiety QR do druku (2026-09-28). Bez naklejek z kodami HALA:L/S/M na liniach, stanowiskach
+/* Panel Zarządczy GK — etykiety QR do druku (2026-09-28). Bez naklejek z kodami HALA:L/S/M na liniach, stanowiskach
    i maszynach nie ruszą obchody ze skanem ani zgłoszenia awarii ze skanu, więc drukuje je administrator z Panelu.
 
    Kod QR robi koder z biblioteki ZXing (wspolne/klient/skaner-zxing.js — ta sama, która je czyta; licencja Apache-2.0),

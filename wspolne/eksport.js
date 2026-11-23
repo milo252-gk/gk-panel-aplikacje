@@ -1,7 +1,7 @@
 /* GK Panel Kierownika — wspólny pasek „Pobierz CSV” (D32: zestawienia do Excela dla kierowników).
 
    Panel (Raporty), UR (KPI) i KJ (Pareto) rysują ten sam pasek. R3 (właściciel 2026-11-09): zestawienia CSV ma tylko
-   kierownik zakładu i administrator — kierownik UR i KJ ich nie pobierają (pasek się nie rysuje; hub na razie tylko
+   kierownik zakładu i administrator — lider UR i kierownik KJ ich nie pobierają (pasek się nie rysuje; hub na razie tylko
    loguje, hala.py → polityka_kpi_csv):
        HalaEksport.rysuj(el, hala, { rodzaje: ['awarie'], komunikat })   // rodzaje: podzbiór HalaEksport.RODZAJE
    Rodzaje, których osoba nie może pobrać, pasek pomija (HalaEksport.dlaRol) — hub i tak sprawdza rolę (403).
@@ -14,7 +14,7 @@
   'use strict';
 
   // R3 (2026-11-09): wszystkie rodzaje tylko dla kierownika zakładu (admin może wszystko). Hub (EKSPORTY w hala.py) na
-  // razie przepuszcza też kierowników UR/KJ — tylko z ostrzeżeniem w dzienniku (starsze telefony); aplikacje ich już nie pytają.
+  // razie przepuszcza też liderów UR i kierowników KJ — tylko z ostrzeżeniem w dzienniku (starsze telefony); aplikacje ich już nie pytają.
   const RODZAJE = {
     awarie: { nazwa: 'Awarie', role: ['kierownik'] },
     zlecenia: { nazwa: 'Zlecenia', role: ['kierownik'] },

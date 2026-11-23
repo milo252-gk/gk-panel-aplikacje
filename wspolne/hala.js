@@ -120,7 +120,7 @@
   }
 
   /* D78: kto może wysłać zapisy innej osoby zostawione na tym telefonie (kierownik zakładu i administrator — każdego,
-     kierownik UR/KJ — swojego zespołu, kontrakt stale.zespoly). Tylko podpowiedź dla ekranu — decyduje hub
+     lider UR i kierownik KJ — swojego zespołu, kontrakt stale.zespoly). Tylko podpowiedź dla ekranu — decyduje hub
      (bliźniak: hala.py → blad_przekazania). */
   function mozePrzekazac(rolePrzekazujacego, roleAutora, zespoly) {
     const rp = [].concat(rolePrzekazujacego || []), ra = [].concat(roleAutora || []);
@@ -140,6 +140,7 @@
   }
 
   function przesuniecieZakladu(ms) {                  // Europe/Warsaw, reguła UE
+    if (!isFinite(ms)) return 3600000;                // NaN dawał nieskończoną pętlę w ostatniaNiedziela
     const rok = new Date(ms).getUTCFullYear();
     const letni = ostatniaNiedziela(rok, 3) <= ms && ms < ostatniaNiedziela(rok, 10);
     return (letni ? 2 : 1) * 3600000;
@@ -728,6 +729,36 @@
      Nazwy (linie, działy, osoby) i procenty dokłada ekran.                                                              */
   const liczbaPola = v => (typeof v === 'number' && isFinite(v) ? v : 0);
   const poKodzie = (a, b) => (a.kod < b.kod ? -1 : a.kod > b.kod ? 1 : 0);
+  /* Terminowość jednego zlecenia (reguła z komentarza wyżej; bliźniak: pętla w wskazniki_okresu): true — w terminie, false — po
+     terminie, null — nie liczy się (bez terminu, otwarte przed terminem, „nie może”, przepadłe z braku łączności). Używa jej
+     też HalaWyniki (Panel → Wyniki, „Moje wyniki”), żeby jedna reguła liczyła wszędzie. */
+  function terminowoscZlecenia(z, teraz) {
+    const d = (z && z.dane) || {}, t = msChwili(d.termin || null), wyk = msChwili(d.czas_wykonania || null);
+    if (t === null || isNaN(t)) return null;
+    if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) return wyk <= t && !(Array.isArray(d.niewykonane) && d.niewykonane.length);   // 1.33.0: zamknięte z niewykonanymi nie jest „w terminie”
+    const dzis = msChwili(teraz) === null ? Date.now() : msChwili(teraz);
+    if ((z.status === 'nowe' || z.status === 'przyjete' || z.status === 'rozdzielone') && t < dzis) return false;
+    // D78: przepadłe „z braku łączności” (hub albo tunel nie działał w czasie zadania) nie obniża terminowości.
+    if (z.status === 'przepadlo' && d.bez_lacznosci !== true) return false;
+    return null;
+  }
+
+  /* Kto faktycznie pracował nad zleceniem (właściciel 2026-11-20): przy checkliście to osoba, która odhaczyła NAJWIĘCEJ pozycji
+     (wykonane + pominięte, pole `autor` wpisu) — nie ten, kto kliknął na końcu („Nie mogę”, „Zrobione” po zmianie, auto-zatwierdzenie).
+     Bez odhaczonych pozycji: wykonał → przyjął → wykonawca → odrzucił. Remis rozstrzyga pierwsza osoba w kolejności zapisu.
+     Bliźniak: kto_pracowal w hala.py. Panel → „Zlecenia na osobę” i „Wyniki” liczą po tej samej osobie. */
+  function ktoPracowal(d) {
+    d = d || {};
+    const licz = new Map();
+    for (const mapa of [d.wykonane, d.pominiete]) {
+      if (!mapa || typeof mapa !== 'object') continue;
+      for (const w of Object.values(mapa)) if (w && w.autor) licz.set(w.autor, (licz.get(w.autor) || 0) + 1);
+    }
+    let kto = null, ile = 0;
+    for (const [id, n] of licz) if (n > ile) { kto = id; ile = n; }
+    return kto || d.wykonal || d.przyjal || d.wykonawca || d.odrzucil || null;
+  }
+
   function wskaznikiOkresu(dane, opcje) {
     const o = opcje || {}, d0 = dane || {};
     const od = msChwili(o.od), do_ = msChwili(o.do);
@@ -751,13 +782,7 @@
       if (wynik) g.wTerminie++; else g.poTerminie++;
     };
     for (const z of zl) {
-      const d = z.dane || {}, t = msChwili(d.termin || null), wyk = msChwili(d.czas_wykonania || null);
-      if (t === null || isNaN(t)) continue;
-      let wynik = null;
-      if ((z.status === 'wykonane' || z.status === 'zamkniete') && wyk !== null && !isNaN(wyk)) wynik = wyk <= t && !(Array.isArray(d.niewykonane) && d.niewykonane.length);   // 1.33.0: zamknięte z niewykonanymi nie jest „w terminie”
-      else if ((z.status === 'nowe' || z.status === 'przyjete' || z.status === 'rozdzielone') && t < teraz) wynik = false;
-      // D78: przepadłe „z braku łączności” (hub albo tunel nie działał w czasie zadania) nie obniża terminowości.
-      else if (z.status === 'przepadlo' && d.bez_lacznosci !== true) wynik = false;
+      const d = z.dane || {}, wynik = terminowoscZlecenia(z, teraz);
       if (wynik === null) continue;
       if (wynik) ogolem.wTerminie++; else ogolem.poTerminie++;
       dolicz(dzialy, d.dzial, wynik);
@@ -782,7 +807,7 @@
   }
 
   /* D45 (O9, decyzja właściciela 2026-10-07): zlecenie wydane przez kierownika zakładu (rola `kierownik`) albo admina
-     anuluje tylko kierownik albo admin — kierownik UR/KJ nie (hub i tak odrzuci: ODMOWA_ANULOWANIA). Role tego, kto zlecił,
+     anuluje tylko kierownik albo admin — lider UR i kierownik KJ nie (hub i tak odrzuci: ODMOWA_ANULOWANIA). Role tego, kto zlecił,
      z hala.pracownicy (także osoba usunięta). Tylko reguła „kto” — status (nowe/przyjęte) sprawdza ekran. Bliźniak:
      blad_anulowania_zlecenia w hala.py. */
   const ROLE_ZAKLADU = ['kierownik', 'admin'];
@@ -796,7 +821,7 @@
   /* D76 (właściciel 2026-10-19): „Kierownik zakładu wyznacza zadania (…) kierownikom innych działów. Kierownicy innych
      działów rozdzielają je między siebie i swoich podwładnych.” Kierownik działu = stale.dzialy[].rola_kierownika.
      dzialyKierownika — działy, którym osoba zleca i w których przekazuje / rozdziela: null = wszystkie (kierownik zakładu,
-     admin), kierownik UR → ['ur']… Bliźniak: dzialy_kierownika w hala.py (hub odrzuca resztę, 403). */
+     admin), lider UR → ['ur']… Bliźniak: dzialy_kierownika w hala.py (hub odrzuca resztę, 403). */
   function dzialyKierownika(role, dzialyKontraktu) {
     const r = [].concat(role || []);
     if (r.some(x => ROLE_ZAKLADU.includes(x))) return null;
@@ -873,7 +898,7 @@
   }
 
   /* Nowe zlecenie: czy idzie „do kierownika działu” (pole do_kierownika). Tylko kierownik zakładu (i admin), dział
-     z kierownikiem (UR, KJ), bez wybranej osoby. Kierownik UR dla swojego działu zleca wprost — jest tym kierownikiem.
+     z kierownikiem (UR, KJ), bez wybranej osoby. Lider UR dla swojego działu zleca wprost — jest tym kierownikiem.
      Bliźniak: do_kierownika w hala.py — ta sama reguła dla wystąpień zapisanych z harmonogramu (P18, 2026-10-19). */
   function doKierownika(dane, rolaAutora, dzialyKontraktu) {
     const d = dane || {};
@@ -881,7 +906,7 @@
     return (dzialyKontraktu || []).some(x => x && x.kod === d.dzial && x.rola_kierownika);
   }
 
-  /* D55: awarię anuluje tylko UR (mechanik, kierownik UR), administrator albo osoba, która ją zgłosiła (pomyłka);
+  /* D55: awarię anuluje tylko UR (mechanik, lider UR), administrator albo osoba, która ją zgłosiła (pomyłka);
      R7 (2026-11-09, D80): także kierownik zakładu (fałszywy alarm widoczny w Panelu).
      Status (zgłoszona/przyjęta) sprawdza ekran. Bliźniak: blad_anulowania_awarii w hala.py. */
   const ROLE_ANULUJACE_AWARIE = ['mechanik', 'kierownik_ur', 'kierownik', 'admin'];
@@ -971,6 +996,29 @@
     return role.includes('admin') || (spec.role || []).some(r => role.includes(r));
   }
 
+  /* Nagłówek menu (właściciel 2026-11-23): pod imieniem osoby stoi NAZWA ROLI, a pod nią stała nazwa programu. Rola = etykieta z
+     kontraktu (stale.role, bez nawiasu na końcu: „Ekran”, nie „Ekran (konto urządzenia…)”). Osoba z kilkoma rolami: najwyższa
+     z kolejności NAJWYZSZA_ROLA, ale tylko spośród ról, które dana aplikacja przyjmuje (kontrakt.aplikacje.<kod>.role) — mechanik
+     z dodatkową rolą lidera w GK Utrzymanie Ruchu pokazuje „Pracownik UR”. Bez ról — pusty napis. Tylko napis, nic nie egzekwuje. */
+  const NAJWYZSZA_ROLA = ['admin', 'kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'mistrz', 'lider', 'brygadzista_sp', 'mechanik', 'kontroler', 'pracownik_mag', 'ekran'];
+  /* Gdy kontraktu jeszcze nie ma (pierwszy start bez sieci i bez kopii) — te same nazwy co stale.role w zdarzenia.json. */
+  const NAZWY_ROL_AWARYJNE = { admin: 'Menedżer', kierownik: 'Kierownik', kierownik_ur: 'Lider UR', kierownik_kj: 'Kierownik KJ', kierownik_mag: 'Kierownik MAG',
+    mistrz: 'Mistrz GK', lider: 'Lider GK', brygadzista_sp: 'Lider SP', mechanik: 'Pracownik UR', kontroler: 'Pracownik KJ', pracownik_mag: 'Pracownik MAG', ekran: 'Ekran' };
+  /* Nagłówek menu ma miejsce na pełną nazwę (właściciel 2026-11-23): Lider UR pokazuje się tam jako „Lider Utrzymania Ruchu”; skrót „Lider UR”
+     zostaje w ciasnych miejscach (chipy, tabele, dolny pasek) — tam stale.role z kontraktu. */
+  const NAZWY_ROL_W_MENU = { kierownik_ur: 'Lider Utrzymania Ruchu' };
+  function nazwaRoliMenu(pracownik, kontrakt, aplikacja) {
+    const role = [].concat((pracownik && pracownik.role) || []);
+    if (!role.length) return '';
+    const wApce = ((((kontrakt || {}).aplikacje || {})[aplikacja] || {}).role) || null;
+    const kandydaci = wApce ? role.filter(r => wApce.includes(r)) : [];
+    const lista = kandydaci.length ? kandydaci : role;
+    const rangi = r => { const i = NAJWYZSZA_ROLA.indexOf(r); return i < 0 ? 99 : i; };
+    const kod = lista.slice().sort((a, b) => rangi(a) - rangi(b))[0];
+    const nazwy = (((kontrakt || {}).stale || {}).role) || {};
+    return String(NAZWY_ROL_W_MENU[kod] || nazwy[kod] || NAZWY_ROL_AWARYJNE[kod] || kod).split(' (')[0];
+  }
+
   /* Etap 6c: czy po tej czynności na zleceniu pokazać „Cofnij”. `przed` = zlecenie PRZED czynnością (jego status wraca). Zgodnie z kontraktem
      1.25.0: czynność jest na liście stale.cofniecia, status sprzed niej jest dozwolony, zlecenie nie jest częścią rozdzielonego, hub zna
      zlecenie.cofniete (nowy klient przy starym hubie nie obiecuje nic, czego serwer nie zrobi), a rola ma prawo do cofanej czynności
@@ -991,14 +1039,14 @@
     return (dzialyKontraktu || []).filter(d => d && ((d.role || []).some(x => r.includes(x)))).map(d => d.kod);
   }
 
-  /* R2: kierownik UR/KJ zamyka i zwraca (Odbierz / Zamknij / Zwróć) tylko zlecenia swojego działu; kierownik zakładu i admin —
+  /* R2: lider UR i kierownik KJ zamykają i zwracają (Odbierz / Zamknij / Zwróć) tylko zlecenia swojego działu; kierownik zakładu i admin —
      wszystkie. Ekran pokazuje przyciski tylko wtedy; hub: blad_odbioru_zlecenia (najpierw „tylko loguj”, potem 403). */
   function mozeOdebracZlecenie(zlecenie, pracownik, dzialyKontraktu) {
     const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
     return zakres === null || zakres.includes(((zlecenie && zlecenie.dane) || {}).dzial);
   }
 
-  /* R5: urlop osobie wpisuje kierownik UR/KJ tylko z działu, którym kieruje; kierownik zakładu i admin — każdej.
+  /* R5: urlop osobie wpisuje lider UR i kierownik KJ tylko z działu, którym kieruje; kierownik zakładu i admin — każdej.
      Bliźniak: blad_urlopu_osoby w hala.py. */
   function mozeUrlopOsoby(osoba, pracownik, dzialyKontraktu) {
     const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
@@ -1675,6 +1723,9 @@
     /* Etap 6a: zgłoszenia zalogowanej osoby z serwera (awarie i nieprawidłowości, otwarte + zamknięte z ostatnich dni).
        Tylko z siecią; serwer oddaje wyłącznie własne. Ekran łączy to z widokiem telefonu (Hala.wierszeMoichZgloszen). */
     h.mojeZgloszenia = async dni => (await api('GET', `/api/v1/ja/zgloszenia${dni ? `?dni=${encodeURIComponent(dni)}` : ''}`)).zgloszenia || [];
+    /* D98: „Moje wyniki” — zlecenia tej osoby od `od` (ISO) z serwera: {zlecenia, ucieto, razem, pokazano}. Serwer oddaje wyłącznie
+       zlecenia, nad którymi pracowała zalogowana osoba, i tylko pola potrzebne do liczenia (HalaWyniki). Tylko z siecią. */
+    h.mojeZlecenia = od => api('GET', `/api/v1/ja/zlecenia?od=${encodeURIComponent(od)}`);
     /* D57: aplikacje osoby z adresami do kodów QR (Moje konto → 📱 Aplikacje na telefon). */
     h.aplikacje = () => api('GET', '/api/v1/aplikacje');
     /* Trasy administracji huba (/api/v1/admin/…: pracownicy, odblokowanie konta) — ekran administracji w Panelu.
@@ -2864,7 +2915,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, minutyPytaniaZamkniecia, pozycjeBezWykonania, oknoZamknieciaZmiany, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, zmianyPlanowe, zmianyDnia, planDnia, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, nazwaRoliMenu, NAJWYZSZA_ROLA, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu, terminowoscZlecenia, ktoPracowal,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
     mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec, limitZapytania, pilnujBledow, opisBledu, NIE_ZAPISANO,
   };

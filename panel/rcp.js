@@ -1,4 +1,4 @@
-/* Panel Kierownika — zakładka RCP (rejestracja czasu pracy). Tylko kierownik zakładu i admin (serwer też odmawia: 403).
+/* Panel Zarządczy GK — zakładka RCP (rejestracja czasu pracy). Tylko kierownik zakładu i admin (serwer też odmawia: 403).
 
    Odbicia robi terminal na hali (terminal.html, konto „ekran”); tu kierownik widzi dni, zatwierdza je albo poprawia, przypisuje
    breloki i pobiera plik dla płac. Godziny liczy SERWER (gk_rcp.py) — Panel nic nie liczy, tylko pokazuje i woła

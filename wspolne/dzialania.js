@@ -289,7 +289,7 @@
 
   // ================================================================ D76: kierownik działu przekazuje i rozdziela
   // Właściciel 2026-10-19: „Kierownicy innych działów rozdzielają je [zadania od kierownika zakładu] między siebie i swoich
-  // podwładnych.” Te same okna w GK Utrzymanie Ruchu, GK Kontrola Jakości (ekran Zleceń) i w Panelu (kierownik UR/KJ).
+  // podwładnych.” Te same okna w GK Utrzymanie Ruchu, GK Kontrola Jakości (ekran Zleceń) i w Panelu (lider UR i kierownik KJ).
 
   /* Osoby działu zlecenia (aktywne, z rolą działu): kierownicy działu na górze — „między siebie” — potem reszta, alfabetycznie. */
   function osobyDzialu(hala, kodDzialu) {

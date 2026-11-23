@@ -1,4 +1,4 @@
-/* Panel Kierownika — 📅 Kalendarz zleceń (D71, właściciel 2026-10-15: „Dodaj do aplikacji kalendarz, żeby móc też
+/* Panel Zarządczy GK — 📅 Kalendarz zleceń (D71, właściciel 2026-10-15: „Dodaj do aplikacji kalendarz, żeby móc też
    wybierać dni zleceń”).
 
    Miesiąc: co dnia zlecą zapisane stałe (te same reguły co hub — Hala.wystapieniaStale) i co jest zaplanowane na później

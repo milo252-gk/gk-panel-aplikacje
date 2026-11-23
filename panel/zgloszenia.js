@@ -1,4 +1,4 @@
-/* Panel Kierownika — zgłoszenia nieprawidłowości, zużyte narzędzia, zgłoszenia BHP i zadania samego kierownika zakładu
+/* Panel Zarządczy GK — zgłoszenia nieprawidłowości, zużyte narzędzia, zgłoszenia BHP i zadania samego kierownika zakładu
    jako wiersze JEDNEJ listy Zleceń (D60, właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie —
    wszystko z tego jest zadaniem”). Wcześniej każde miało osobną zakładkę (D55, D59).
 

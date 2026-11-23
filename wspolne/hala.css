@@ -317,10 +317,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
   .hala-uklad > .hala-menu .ikona svg { display: block; width: 20px; height: 20px; }
   /* Plakietka z liczbą (nowe awarie, zlecenia) — do prawej krawędzi menu, nie nad ikoną jak na telefonie. */
   .hala-uklad > .hala-menu .plakietka { position: static; margin-left: auto; transform: none; }
-  /* Nagłówek menu jak w GK Trasy: znak GK w bieli na 150 px, pod nim osoba i rola (aplikacja). */
+  /* Nagłówek menu jak w GK Trasy: znak GK w bieli na 150 px, pod nim osoba, jej rola i stała nazwa programu (2026-11-23). */
   .hala-menu-naglowek { display: block; padding: 20px 18px 14px; margin: 0; border-bottom: 1px solid var(--menu-kreska); }
   .hala-menu-logo { display: block; width: 150px; height: auto; margin-bottom: 14px; filter: brightness(0) invert(1); opacity: .92; }
   .hala-menu-nazwa { font-weight: 700; font-size: 16px; }
+  .hala-menu-rola { font-size: 13px; opacity: .85; margin: 1px 0 3px; }
   .hala-menu-kto { font-size: 12px; opacity: .65; text-transform: uppercase; letter-spacing: .6px; }
   /* „Wyloguj” na dole menu (STYL-GK §3, runda 2): zwykły wiersz menu z ikoną, w kolorze tekstu menu — nie goły
      pomarańczowy napis. Kreska nad nim oddziela go od ekranów aplikacji. */
@@ -895,3 +896,39 @@ body.hala-ma-skan :is(.hala-zlecenie-formularz, .hala-pozycja-panel) { padding-b
 .szukaj-tekst b { overflow-wrap: anywhere; }
 .szukaj-wynik .znacznik { flex: none; }
 .znalezione { outline: 3px solid var(--pomarancz); outline-offset: 2px; }
+
+/* Wyniki pracy (wyniki.js): Panel → Wyniki i „Moje wyniki” w Liderze, UR i KJ — ten sam układ na telefonie i komputerze. */
+.wyniki-chipy { display: flex; gap: 8px; margin: 0 0 10px; overflow-x: auto; scrollbar-width: none; }
+.wyniki-chipy button { flex: none; min-height: var(--dotyk); border-radius: 999px; padding: 0 16px; }
+.wyniki-chipy button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+.wyniki-filtry { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 10px; }
+.wyniki-filtry label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.wyniki-filtry select { width: auto; min-height: var(--dotyk); }
+.wyniki-opis { margin: 0 0 8px; }
+.wyniki-tytul { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); }
+.wyniki-uwaga { margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--czerwony-tlo); color: var(--czerwony); font-weight: 600; }
+.wyniki .hala-kafelki small { display: block; font-size: 12px; color: var(--tekst-slaby); margin-top: 2px; }
+.wyniki-karty { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.wyniki-karta { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien, 12px); padding: 12px 14px; display: grid; gap: 8px; }
+.wyniki-karta header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.wyniki-proc { margin-left: auto; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--tekst-slaby); }
+.wyniki-proc.dobrze { color: var(--zielony); }
+.wyniki-proc.zle { color: var(--czerwony); }
+.wyniki-pasek { display: block; height: 10px; border-radius: 5px; background: var(--ramka); overflow: hidden; }
+.wyniki-pasek i { display: block; height: 100%; background: var(--czerwony); }
+.wyniki-pasek i.dobrze { background: var(--zielony); }
+.wyniki-karta dl { margin: 0; display: grid; gap: 2px 12px; grid-template-columns: 1fr 1fr; font-size: 13px; }
+.wyniki-karta dl div { display: flex; flex-direction: column; }
+.wyniki-karta dt { color: var(--tekst-slaby); }
+.wyniki-karta dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wyniki-eksport { margin: 14px 0 0; }
+.wyniki-eksport button { min-height: var(--dotyk); }
+
+/* Unifikacja E8 (2026-11-23): przycisk X w nagłówku okien <dialog> — dopisuje go okna-x.js przy showModal(). Okno modalne jest position:fixed,
+   więc X kotwiczy się w jego prawym górnym rogu; tytuł dostaje odstęp, żeby nie wchodził pod X. */
+dialog .okno-x { position: absolute; top: 6px; right: 6px; z-index: 3; width: 44px; height: 44px; min-height: 0; padding: 0; margin: 0;
+  display: inline-grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--tekst); box-shadow: none; cursor: pointer; }
+dialog .okno-x:hover { background: var(--ramka); filter: none; }
+dialog .okno-x:focus-visible { outline: 2px solid var(--akcent); outline-offset: 1px; }
+dialog.ma-x :is(h2, h3):first-of-type { padding-right: 44px; }
+@media print { dialog .okno-x { display: none; } }

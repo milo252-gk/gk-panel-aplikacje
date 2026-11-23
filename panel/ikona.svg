@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <!-- Ikona Panelu Kierownika. Standard GK jak GK Flota, GK Trasy i KJ: grafitowy kwadrat,
+  <!-- Ikona Panelu Zarządczego GK. Standard GK jak GK Flota, GK Trasy i KJ: grafitowy kwadrat,
        biały piktogram, pomarańczowy akcent. Tu monitor w biurze z wykresem, a pomarańczowa
        kropka to „na żywo” — Panel niczego nie zapisuje, tylko patrzy. Rozpoznawalne w 32 px. -->
   <rect width="192" height="192" rx="34" fill="#4E4E4E"/>

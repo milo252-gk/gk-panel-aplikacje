@@ -25,9 +25,9 @@
 
   UR.ja = () => (hala.pracownik ? hala.pracownik.id : null);
   UR.mozna = (typ, slownik) => W.mozna(hala.kontrakt, hala.pracownik, typ, slownik);
-  // Plan przeglądów: kierownik UR (UI etap 2) — jedna reguła w widok.js (W.kierownikUR, testowana).
+  // Plan przeglądów: lider UR (UI etap 2) — jedna reguła w widok.js (W.kierownikUR, testowana).
   UR.kierownikUR = () => W.kierownikUR(hala.pracownik);
-  // R3 (2026-11-09): KPI i CSV tylko kierownik zakładu i administrator (W.mozeKpi) — nie kierownik UR ani mechanik.
+  // R3 (2026-11-09): KPI i CSV tylko kierownik zakładu i administrator (W.mozeKpi) — nie lider UR ani mechanik.
   UR.mozeKpi = () => W.mozeKpi(hala.pracownik);
   UR.stale = () => (hala.kontrakt && hala.kontrakt.stale) || {};
   UR.kontekst = () => ({ slowniki: hala.slowniki, pracownicy: hala.pracownicy, stale: UR.stale(), teraz: hala.teraz(),
@@ -380,7 +380,8 @@
     const z = hala.zmianaTeraz();
     // D64: „Poza zmianą” jak w Liderze; w nagłówku sama ikona konta (STYL-GK §3) — imię tylko w menu na komputerze.
     $('zmiana').innerHTML = z ? `<b>${esc(z.nazwa)}</b> <span>${esc(W.godzina(z.od))}–${esc(W.godzina(z.do))}</span>` : '<span>Poza zmianą</span>';
-    $('menu-kto').textContent = hala.pracownik ? hala.pracownik.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
+    $('menu-kto').textContent = hala.pracownik ? hala.pracownik.nazwa : '';   // nagłówek menu na komputerze, jak w Panelu Zarządczym SP
+    $('menu-rola').textContent = hala.pracownik ? global.Hala.nazwaRoliMenu(hala.pracownik, hala.kontrakt, 'ur') : '';   // 2026-11-23: rola pod imieniem, program stały
   }
 
   /* Plakietki na zakładkach: ile awarii czeka na przyjęcie i ile przeglądów jest opóźnionych. */
@@ -400,7 +401,7 @@
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
-    if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo kierownika UR.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo lidera UR.';
     // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Złe imię i nazwisko albo PIN”, blokada na 5 min).
     return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i PIN.';
   }
@@ -490,7 +491,7 @@
     // Tuż po otwarciu strumień dopiero się łączy — bez okresu łaski każde odświeżenie mignęłoby „Brak sieci”.
     const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
     // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia); tylko zapisy zalogowanej osoby (moje).
-    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska, zadzwon: 'do kierownika UR',
+    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska, zadzwon: 'do lidera UR',
                                             komputer: !global.matchMedia('(max-width: 820px)').matches });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
@@ -537,6 +538,9 @@
   // Etap 6a: awarie i nieprawidłowości zgłoszone przez tę osobę, ze statusem (wspolne/dzialania.js); w menu podświetla „Więcej”.
   UR.ekran('zgloszenia', { zakladka: 'wiecej', rysuj: el => global.HalaDzialania.mojeZgloszenia(el, hala) });
 
+  // D98: terminowość i liczba zleceń tej osoby (wspolne/wyniki.js — ten sam ekran w Liderze, KJ; w Panelu pełny raport).
+  UR.ekran('wyniki', { zakladka: 'wiecej', rysuj: el => global.HalaWyniki.rysuj(el, hala, { tryb: 'moje', klucz: 'ur-wyniki', tytul: 'Moje wyniki' }) });
+
   // STYL-GK §8: Plan (menu `.w-wiecej`) jest na telefonie tylko tutaj (dolny pasek: najwyżej 4 ekrany + Więcej); #plan działa jak dawniej.
   UR.ekran('wiecej', {
     rysuj(el) {
@@ -546,6 +550,7 @@
           ${UR.mozeKpi() ? '<a class="przycisk" href="#kpi">KPI: wskaźniki UR</a>' : ''}
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
+          <a class="przycisk" href="#wyniki">Moje wyniki</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
         <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;

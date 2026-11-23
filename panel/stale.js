@@ -1,4 +1,4 @@
-/* Panel Kierownika — zlecenia stałe (D31, prośba właściciela 2026-10-01: „jak w GK Trasy”).
+/* Panel Zarządczy GK — zlecenia stałe (D31, prośba właściciela 2026-10-01: „jak w GK Trasy”).
 
    Zlecenie stałe = zadanie + dział (linia, maszyna, osoba) + harmonogram + termin + wymagane zdjęcie/notatka.
    Zapis: slownik.zapisany / slownik.usuniety w słowniku zlecenia_stale (kierownicy i admin — kontrakt). Zleceń
@@ -155,7 +155,7 @@
     P.pokazSkan(f);
   }
   const dzis = () => W.dzienZakladu(hala.teraz());
-  // D76: kierownik UR/KJ zapisuje zlecenia tylko dla swojego działu (hub odrzuca resztę) — okno pokazuje tylko jego.
+  // D76: lider UR i kierownik KJ zapisuje zlecenia tylko dla swojego działu (hub odrzuca resztę) — okno pokazuje tylko jego.
   const dzialyKontraktu = () => P.dzialyZlecajacego();
   /* Zmiany z okna: jedna lista dla wszystkich dni albo — po włączeniu „Różne zmiany w różne dni” — osobna dla każdego dnia
      (zapis: najczęstsza w `zmiany`, wyjątki w `zmiany_wg_dni`). */
@@ -237,7 +237,7 @@
 
   /* Opis tego, co robi okno, nad formularzem: dwie drogi „Zmień” mają różny skutek. */
   function opisTrybu() {
-    if (instancja) return 'Zmieniasz dzisiejsze zlecenie — tylko to jedno. Wzorzec zmieni się, gdy zaznaczysz „Zapisz też w zapisanych”.';
+    if (instancja) return 'Zmieniasz dzisiejsze zlecenie — zmiana zapisze się też w zapisanym zleceniu, więc kolejne zlecenia będą już ze zmianą.';
     if (edytowanyKod) return 'Zmieniasz wzorzec — dotyczy kolejnych zleceń. Trwające dostaną nową treść i pozycje, a dni i godziny dopiero od następnych.';
     return '';
   }
@@ -580,7 +580,7 @@
     if (zd.zdjecia !== undefined) r.dane.zdjecia = zd.zdjecia;
     await hala.zapisz('zlecenie.edytowane', instancja.id, r.dane);
     const wzorzec = instancja.kod && ((hala.slowniki || {}).zlecenia_stale || {})[instancja.kod];
-    const dowzorca = !!wzorzec && !$('inst-wzorzec').hidden && f.inst_wzorzec.checked;
+    const dowzorca = !!wzorzec && !$('inst-wzorzec').hidden;      // właściciel 2026-11-23: zmiana z checklisty zawsze zapisuje się też w zapisanej
     let reszta = { ile: 0, bledy: [] };
     if (dowzorca) {
       const nowy = W.wzorzecZInstancji(wzorzec, r.dane, hala.pracownik.id);

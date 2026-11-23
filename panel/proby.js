@@ -1,4 +1,4 @@
-/* Panel Kierownika — próby jakościowe (D56, właściciel 2026-10-13: „dodaj widoczność prób jakościowych dla admina /
+/* Panel Zarządczy GK — próby jakościowe (D56, właściciel 2026-10-13: „dodaj widoczność prób jakościowych dla admina /
    kierownika zakładu”). Raporty → 🔬 Próby jakościowe: próby liderów i KJ od najnowszej — miejsce (maszyna ze skanu
    albo stanowisko), kto, sprawdzone, braki, %, wady, zdjęcia, wnioski. Dziś i wczoraj z pamięci Panelu (2 doby),
    dłuższy okres z serwera (GET /api/v1/stan/proba?od=). Czysta funkcja: W.listaProb (widok.js). */

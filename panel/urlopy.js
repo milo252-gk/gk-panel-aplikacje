@@ -1,4 +1,4 @@
-/* Panel Kierownika — urlopy pracowników (D55, właściciel 2026-10-13: „opcja dodania urlopu dla pracownika — żeby nie
+/* Panel Zarządczy GK — urlopy pracowników (D55, właściciel 2026-10-13: „opcja dodania urlopu dla pracownika — żeby nie
    psuć mu statystyk i tymczasowo zawiesić jego zadania”). Administracja → 🏖 Urlopy.
 
    Zapis: słownik `urlopy` ({osoba, od, do, uwagi?} — `do` włącznie). Skutki: hub nie zleca tej osobie zadań stałych (zlecenie „Podsumuj zmianę” serwer
@@ -10,7 +10,7 @@
   const P = window.Panel;
   const { hala, W, esc } = P;
 
-  // R5 (2026-11-09, D82): kierownik UR/KJ widzi i wpisuje urlopy tylko osób ze swojego działu; kierownik zakładu i admin — wszystkich.
+  // R5 (2026-11-09, D82): lider UR i kierownik KJ widzą i wpisują urlopy tylko osób ze swojego działu; kierownik zakładu i admin — wszystkich.
   const dzialyHali = () => ((hala.kontrakt.stale || {}).dzialy || []);
   const osobyHali = () => W.osobyDoUrlopow(hala.pracownicy, hala.pracownik, dzialyHali());
 
