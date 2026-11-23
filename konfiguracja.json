@@ -1,6 +1,6 @@
 {
   "hub": "https://stage-itunes-assess-market.trycloudflare.com",
-  "zmieniono": "2026-11-23T21:54:32.607Z",
+  "zmieniono": "2026-11-23T21:55:26.565Z",
   "wersje": {
     "wspolne": "wspolne-bbc4ccfed8c4",
     "panel": "panel-142b141f68b3",
@@ -9,6 +9,7 @@
     "kj": "kj-00aa9628a83e"
   },
   "programy": {
-    "szkolenia": "https://construction-views-conscious-beginners.trycloudflare.com"
+    "szkolenia": "https://construction-views-conscious-beginners.trycloudflare.com",
+    "wycena": "https://moderators-wallet-killing-douglas.trycloudflare.com"
   }
 }
