@@ -390,7 +390,9 @@ async function rozpocznijZlecenie(trasa, data) {
       mojaTrasa = trasa;
       komunikat('Czas pracy liczy się. Wyjazd po potwierdzeniu załadunku.', 'ok');
     } else {
-      komunikat(tekstNiepotwierdzonych(zostalo), 'blad');
+      // Czas pracy już leci — to podpowiedź, co jeszcze zostało do wyjazdu, a nie błąd (bez czerwieni).
+      komunikat('Czas pracy już liczy się. Do wyjazdu brakuje numeru zamówienia przy '
+        + zostalo + ' ' + odmiana(zostalo, 'pozycji', 'pozycjach', 'pozycjach') + '.', 'uwaga');
     }
     pokazEkran('zaladunek', { data });
     return;

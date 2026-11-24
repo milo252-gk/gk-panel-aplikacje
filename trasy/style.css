@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-ebaee6dd1726';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-b86606799d03';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -758,7 +758,10 @@ body.okno-otwarte .mapa{visibility:hidden}
 
 /* Przystanek, ktory jest naszym miejscem — inny pasek z lewej i delikatne tlo,
    zeby kierowca poznal go, nie czytajac. */
-.przystanek.nasze{background:var(--nasze-tlo)}
+/* Tlo „naszego” tylko dla punktu NIEZAMKNIETEGO: wczesniej ta regula (pozniej w pliku niz .s-dostarczone)
+   przemalowywala zalatwiony i zatwierdzony punkt na pomaranczowo-brazowo, wiec kierowca widzial „najpierw
+   zatwierdza, a pozniej jest na pomaranczowo” (2026-11-24). Zamkniety zostaje zielony / czerwony. */
+.przystanek.nasze:not(.s-dostarczone):not(.s-nieudane){background:var(--nasze-tlo)}
 .przystanek.nasze .numer{background:var(--granat); border-radius:8px}
 
 .wstega{padding:11px 14px; border-radius:10px; font-size:13px; margin-bottom:14px; font-weight:600}

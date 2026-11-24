@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-ebaee6dd1726';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-b86606799d03';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -2959,6 +2959,7 @@ async function rysujOdrzucone(pole) {
       <b>${lista.length} ${odmiana(lista.length, 'zapis nie przeszedł', 'zapisy nie przeszły',
         'zapisów nie przeszło')}.</b> Nic nie zostało skasowane — leżą w tym urządzeniu.
       Pokaż to biuru; gdy usuną przyczynę, dotknij „Spróbuj ponownie”.
+      ${lista.length > 1 ? '<div class="przyciski" style="margin-top:8px"><button class="maly" id="ponow-wszystkie">Spróbuj ponownie wszystkie</button></div>' : ''}
     </div>
     ${lista.map(o => `<div class="karta scisla" style="margin-bottom:8px">
         <div class="male"><b>${escHtml(opis(o))}</b></div>
@@ -2970,6 +2971,14 @@ async function rysujOdrzucone(pole) {
         </div>
       </div>`).join('')}`;
 
+  // Jedno dotknięcie dla wszystkich (np. 15 zapisów po braku załadunku): ponawia je po kolei, nic nie porzuca.
+  const wszystkie = pole.querySelector('#ponow-wszystkie');
+  if (wszystkie) wszystkie.onclick = async () => {
+    for (const o of lista) await Kolejka.ponow(o.uuid);
+    await odswiezStanSieci();
+    await rysujOdrzucone(pole);
+    synchronizuj(false);
+  };
   pole.querySelectorAll('[data-ponow]').forEach(b => b.onclick = async () => {
     await Kolejka.ponow(b.dataset.ponow);
     await odswiezStanSieci();

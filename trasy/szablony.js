@@ -251,6 +251,10 @@ EKRANY.zaladunek = {
               ${gotowe} z ${pozycje.length}</span></div>
           <div class="postep"><i class="ok" style="width:${
             pozycje.length ? gotowe / pozycje.length * 100 : 0}%"></i></div>
+          ${trasa.status === 'planowana' && trasa.start_o && gotowe < pozycje.length ? `
+            <div class="wstega info" style="margin-top:10px">Czas pracy już liczy się (od
+              ${escHtml(samaGodzina(trasa.start_o))}). Do wyjazdu brakuje numeru zamówienia
+              przy ${pozycje.length - gotowe} ${odmiana(pozycje.length - gotowe, 'pozycji', 'pozycjach', 'pozycjach')}.</div>` : ''}
           ${niezgodne ? `<div class="wstega blad" style="margin-top:10px">
               ${niezgodne === 1 ? 'Jedna pozycja ma'
                 : `${niezgodne} ${odmiana(niezgodne, 'pozycja ma', 'pozycje mają', 'pozycji ma')}`}
