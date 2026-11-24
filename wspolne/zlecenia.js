@@ -599,7 +599,7 @@
     s.wiecej = null;
     try {
       if (b.dataset.akcja === 'historia' && DZ) return DZ.historia(hala, 'zlecenie', id);
-      // Aplikacja może wymagać przyjęcia checklisty przed odhaczaniem (GK Lider: „Przyjmuję zadania”) — opcja zwraca tekst albo null.
+      // Aplikacja może wymagać przyjęcia checklisty przed odhaczaniem (GK Produkcja: „Przyjmuję zadania”) — opcja zwraca tekst albo null.
       if (b.dataset.akcja === 'pozycja' && o.najpierwPrzyjmij) { const t = o.najpierwPrzyjmij(hala.obiekt('zlecenie', id)); if (t) return info(t); }
       if (b.dataset.akcja.startsWith('pozycja')) return akcjaPozycji(b, el, hala, o, id);
       // D76: okna „Przekaż” i „Rozdziel” są wspólne z Panelem (dzialania.js).
@@ -742,7 +742,7 @@
      Pozycje jedna pod drugą: ✓ zrobione, – pominięte, ○ do zrobienia (czerwone po godzinie). Dotknięcie otwiera pozycję
      w karcie: wymagania tej pozycji (📷 zdjęcie, 📝 notatka, ▣ skan QR maszyny), „✓ Odhacz”, „Pomiń” (z powodem
      w notatce), przy zrobionej — „Cofnij”. Czynność (obsada, próba, audyt BHP, przekazanie) — aplikacja, która ma jej
-     formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Lider); próba i przegląd
+     formularz, podaje opcje.czynnosc = { nazwy: {kod: napis}, wykonaj(zlecenie, pozycja) } (GK Produkcja); próba i przegląd
      odhaczają się też same (hub). Ostatnia pozycja wysyła „Zrobione” sama (odhaczPozycje → zakonczJesliGotowe). */
   const ZNAK_POZYCJI = { wykonana: '✓', pominieta: '–', niewykonana: '✗', 'po-terminie': '○', czeka: '○', przed: '⏳' };
   const OPIS_CZYNNOSCI = { obsada: 'Raport obsady', obchod: 'Obchód — skan QR', proba: 'Próba jakościowa',
@@ -867,7 +867,7 @@
     try { if (global.HalaReakcje) global.HalaReakcje.poZrobieniu(hala, id); } catch (e) { /* reakcja nie może zepsuć zapisu */ }
   }
 
-  /* Karta zlecenia z otwartą pozycją — GK Lider otwiera tak pozycję z wymaganym zdjęciem albo notatką z ekranu Zmiana. */
+  /* Karta zlecenia z otwartą pozycją — GK Produkcja otwiera tak pozycję z wymaganym zdjęciem albo notatką z ekranu Zmiana. */
   function otworzPozycje(el, hala, opcje, id, pozycja) {
     const s = stan(el);
     const z = wiersze([hala.obiekt('zlecenie', id)].filter(Boolean), kontekst(hala, Object.assign({}, opcje, { moje: null, zostaw: id })))[0];
@@ -880,7 +880,7 @@
     if (art && art.scrollIntoView) art.scrollIntoView({ block: 'center' });
   }
 
-  /* Odhaczenie pozycji z aplikacji (GK Lider po formularzu obsady, próby, BHP, przekazania). */
+  /* Odhaczenie pozycji z aplikacji (GK Produkcja po formularzu obsady, próby, BHP, przekazania). */
   async function odhaczPozycje(hala, id, pozycja, dane) {
     const zd = await hala.zapisz('zlecenie.pozycja_wykonana', id, Object.assign({ pozycja }, dane || {}));
     const koniec = await zakonczJesliGotowe(hala, id);

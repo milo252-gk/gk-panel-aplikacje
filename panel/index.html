@@ -139,8 +139,8 @@
         <!-- Wariant B (2026-11-24): zlecenia nie-checklistowe (zlecenia, zgłoszenia, narzędzia, BHP) są w jednym miejscu — Zlecenia → W toku / Do odbioru / Odebrane, z pełnymi akcjami; Pulpit pokazuje tylko karty checklist. -->
         <div class="chipy" id="filtr-zlecen" role="group" aria-label="Które zlecenia">
           <button type="button" class="chip" data-filtr="otwarte" aria-pressed="true">W toku</button>
-          <button type="button" class="chip" data-filtr="do-zamkniecia" aria-pressed="false">Do odbioru</button>
           <button type="button" class="chip" data-filtr="zamkniete" aria-pressed="false">Odebrane</button>
+          <button type="button" class="chip" data-filtr="przepadlo" aria-pressed="false">Przepadło</button>
         </div>
         <!-- D55: filtry — dział, osoba, okres (zamknięte starsze niż 2 dni dociągane z serwera), tylko spóźnione. -->
         <form class="filtry-zlecen" id="filtry-zlecen" autocomplete="off">
@@ -633,7 +633,7 @@
     <!-- Role w grupach (D32): hala oraz programy transportu — jedno konto we wszystkich aplikacjach GK (GK-KONTA.md). -->
     <div id="osoba-role" class="grupy-rol"></div>
     <fieldset class="pole-linii"><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div>
-      <!-- D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie; pokazywane, gdy zaznaczona rola mistrza. -->
+      <!-- D34 (2026-10-07): mistrz w GK Produkcja widzi tylko zaznaczone linie; pokazywane, gdy zaznaczona rola mistrza. -->
       <p class="slaby konto-drobne" id="osoba-linie-mistrz" hidden>Mistrz widzi tylko zaznaczone linie; bez zaznaczenia — wszystkie.</p></fieldset>
     <!-- D43: hasło (raz na 16 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
          tutaj) i przy pierwszym logowaniu ustawia własne hasło i PIN. Konto samego ekranu — jeden PIN 4–8 cyfr. -->
@@ -795,6 +795,7 @@
 <script src="../wspolne/gk-dzwieki.js"></script>
 <script src="../wspolne/reakcje.js"></script>
 <script src="../wspolne/okna-x.js"></script>
+<script src="../wspolne/naglowek.js"></script>
 <script src="../wspolne/kolejka-ui.js"></script>
 <script src="../wspolne/palec.js"></script>
 <script src="../wspolne/dzialania.js"></script>

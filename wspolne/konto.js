@@ -300,6 +300,8 @@
   function naKomputerze() {
     return typeof global.matchMedia === 'function' && global.matchMedia('(min-width:821px)').matches;
   }
+  // Imię i nazwisko / rola / nazwa aplikacji — te same trzy linie co w nagłówku menu na komputerze (2026-11-24; stała nazwa programu).
+  const NAZWY_PROGRAMOW = { panel: 'Panel Zarządczy GK', lider: 'GK Produkcja', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości' };
   const WYGLADY = [['auto', 'Jak w systemie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']];
 
   /* Treść okna (czysta funkcja — testy: reduktor-testy.js). dane: {nazwa, role: [nazwy], wyglad, komputer, czeka, cudze,
@@ -324,7 +326,7 @@
     const d = dane || {};
     return `<form method="dialog" autocomplete="off">
         <h2 id="hala-okno-konta-tytul">Moje konto</h2>
-        <p class="hala-konto-kto"><b>${esc(d.nazwa || '—')}</b>${(d.role || []).length ? `<span>${esc(d.role.join(', '))}</span>` : ''}</p>
+        <p class="hala-konto-kto"><b>${esc(d.nazwa || '—')}</b>${(d.role || []).length ? `<span>${esc(d.role.join(', '))}</span>` : ''}${d.program ? `<span class="hala-konto-program">${esc(d.program)}</span>` : ''}</p>
         <fieldset><legend>Wygląd</legend>
           <div class="hala-wybor" role="group" aria-label="Wygląd">${WYGLADY.map(([k, n]) =>
             `<button type="button" data-wyglad="${k}" aria-pressed="${d.wyglad === k}">${n}</button>`).join('')}</div>
@@ -361,7 +363,7 @@
     try { odrzucone = (await hala.odrzucone()).length; } catch (e) { /* bez IndexedDB — nic nie pokazujemy */ }
     const ekran = (p.role || []).length === 1 && p.role[0] === 'ekran';
     const motyw = global.HalaMotyw;
-    d.innerHTML = trescKonta({ nazwa: p.nazwa, role: (p.role || []).map(r => nazwyRol[r] || r), wyglad: motyw ? motyw.odczytaj() : 'auto',
+    d.innerHTML = trescKonta({ nazwa: p.nazwa, program: NAZWY_PROGRAMOW[o.aplikacja] || '', role: (p.role || []).map(r => nazwyRol[r] || r), wyglad: motyw ? motyw.odczytaj() : 'auto',
                                komputer: naKomputerze(), czeka: k.moje || 0, cudze: Math.max(0, (k.oczekuje || 0) - (k.moje || 0)), odrzucone,
                                zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran, instrukcja: o.instrukcja,
                                cudzeLista: hala.cudzeZapisy ? hala.cudzeZapisy() : [] });

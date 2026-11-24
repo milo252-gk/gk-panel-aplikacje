@@ -597,6 +597,16 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
   #admin-chipy::-webkit-scrollbar { display: none; }
   #admin-chipy .chip { flex: none; }
   .chip { padding: 0 12px; font-size: 14px; }
+  /* Zlecenia (zrzut z telefonu 2026-11-24): widoki (Zlecenia | Zapisane | Kalendarz) i statusy (W toku | Do odbioru | Odebrane) — po jednym
+     poziomo przewijanym rzędzie zamiast czterech zawiniętych; prawa krawędź blednie jako wskazówka przewijania. */
+  #tryb-zlecen, #filtr-zlecen { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin-bottom: 6px; padding-right: 28px;
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent); mask-image: linear-gradient(to right, black calc(100% - 36px), transparent); }
+  #tryb-zlecen::-webkit-scrollbar, #filtr-zlecen::-webkit-scrollbar { display: none; }
+  #tryb-zlecen .chip, #filtr-zlecen .chip { flex: none; white-space: nowrap; }
+  /* Filtry: podpis nad polem mniejszy i węższe pola — w rzędzie mieszczą się dwa i pół pola, reszta przewija się z wyraźną wskazówką. */
+  #filtry-pola > label, #filtry-rzadkie > label { width: 132px; font-size: 12px; }
+  #filtry-pola select, #filtry-pola input[type="date"] { font-size: 15px; }
+  .filtry-stan { margin-top: 2px; }
 }
 /* Filtry i sortowanie (2026-11-17; od 2026-11-18 na wierzchu, bez zwijania): pola w jednym zawijanym rzędzie + wiersz „N z M · aktywne · Wyczyść filtry”. */
 /* Numer zlecenia nie łamie się w środku („ZL-2026-/0001”). */

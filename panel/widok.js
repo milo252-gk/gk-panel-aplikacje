@@ -58,7 +58,7 @@
 
   // ------------------------------------------------------------ obchody liderów
 
-  /* „Przyjmuję zadania” w GK Lider (2026-11-16) = rozpoczęcie pracy na zmianie. Z zleceń checklisty (pola przyjal i czas_przyjecia
+  /* „Przyjmuję zadania” w GK Produkcja (2026-11-16) = rozpoczęcie pracy na zmianie. Z zleceń checklisty (pola przyjal i czas_przyjecia
      z zdarzenia zlecenie.przyjete — klient zna je bez zmian na hubie): { stan, tekst }; stan 'brak' (nikt jeszcze), 'czesc', 'przyjete'
      albo null (brak checklisty / zrobiona bez przyjęcia). Bliźniak: LiderWidok.przyjecieChecklisty. */
   function przyjecieListy(lista, pracownicy) {
@@ -399,7 +399,9 @@
   /* Wiersze zleceń. UI etap 2 (właściciel 2026-10-12) — trzy filtry zamiast sześciu:
      'otwarte' = „W toku” (dział jeszcze robi; także po terminie i zaplanowane na później — D47, dział ich jeszcze nie widzi)
      | 'do-zamkniecia' = „Do odbioru” (dział skończył albo nie może — kierownik odbiera albo zwraca)
-     | 'zamkniete' (także przepadłe zadania zmianowe — D35); inny filtr = wszystkie.
+     | 'zamkniete' = „Odebrane” (bez przepadłych) | 'przepadlo' = „Przepadło” (zlecenia i checklisty zmianowe, D35; właściciel 2026-11-24)
+     | 'w-toku' = lista „W toku” w Panelu: otwarte + zaplanowane + „do odbioru” (te z akcjami Odbierz/Zwróć, plakietka statusu „Do odbioru”);
+     inny filtr = wszystkie. 'otwarte' i 'do-zamkniecia' zostają osobno dla kart Pulpitu.
      Po terminie, przepadłe i zaplanowane to znaczniki na wierszu, nie osobne listy: kierownik widzi je tam, gdzie i tak
      patrzy. Kolejność: po terminie (najdłużej spóźnione) na górze — tam prowadzi kafelek „Zlecenia po terminie” i push —
      potem przepadłe, pilne, najstarsze; zaplanowane na samym dole, od najbliższego startu.
@@ -410,7 +412,9 @@
     const szablony = (slowniki && slowniki.zlecenia_stale) || {};
     const pasuje = z => filtr === 'otwarte' ? OTWARTE.has(z.status) || z.status === 'zaplanowane'
       : filtr === 'do-zamkniecia' ? DO_ZAMKNIECIA.has(z.status)
-      : filtr === 'zamkniete' ? !z.aktywny : true;
+      : filtr === 'w-toku' ? OTWARTE.has(z.status) || z.status === 'zaplanowane' || DO_ZAMKNIECIA.has(z.status)
+      : filtr === 'przepadlo' ? z.status === 'przepadlo'
+      : filtr === 'zamkniete' ? !z.aktywny && z.status !== 'przepadlo' : true;
     const zZakladu = ((ja && ja.role) || []).some(r => r === 'kierownik' || r === 'admin');
     const wszystkie = (lista || []).filter(Boolean);
     const zakresKier = H().dzialyKierownika ? H().dzialyKierownika(ja && ja.role, (stale && stale.dzialy) || []) : null;
@@ -539,6 +543,7 @@
     }).sort((a, b) => (a.zaplanowane - b.zaplanowane)
       || (a.zaplanowane && b.zaplanowane ? (a.zaplanowaneMs || 0) - (b.zaplanowaneMs || 0) : 0)
       || (b.poTerminie - a.poTerminie) || (a.poTerminie && b.poTerminie ? a.terminMs - b.terminMs : 0)
+      || (b.doZamkniecia - a.doZamkniecia)      // „do odbioru” w „W toku” (z Odbierz/Zwróć) tuż pod spóźnionymi — kierownik ma je pod ręką
       || (b.przepadlo - a.przepadlo)
       // Właściciel 2026-11-19: w obrębie grup (spóźnione, przepadłe, pilne na górze; zaplanowane na dole) od najnowszych.
       || (b.pilne - a.pilne) || String(b.czas).localeCompare(String(a.czas)));
@@ -555,10 +560,12 @@
     // otwarte pilne BHP (incydent) — chip na czerwono.
     const doOdbioru = l.filter(z => DO_ZAMKNIECIA.has(z.status)).length + ((inne && inne.czeka) || 0);
     const przepadlo = l.filter(z => z.status === 'przepadlo').length;
+    // Właściciel 2026-11-24: bez chipa „Do odbioru” — pozycje do odbioru są w „W toku” (z akcjami Odbierz/Zwróć), przepadłe mają własny chip.
+    const razem = wToku + doOdbioru;
     return [
-      { filtr: 'otwarte', napis: `W toku${wToku ? ` · ${wToku}` : ''}`, po, alarm: po > 0 },   // po — liczba po terminie; Panel rysuje ją z ikoną zegara
-      { filtr: 'do-zamkniecia', napis: `Do odbioru${doOdbioru ? ` · ${doOdbioru}` : ''}`, alarm: !!(inne && inne.alarm) },
-      { filtr: 'zamkniete', napis: `Odebrane${przepadlo ? ` · przepadło ${przepadlo}` : ''}`, alarm: przepadlo > 0 },
+      { filtr: 'otwarte', napis: `W toku${razem ? ` · ${razem}` : ''}`, po, doOdbioru, alarm: po > 0 || !!(inne && inne.alarm) },   // po — liczba po terminie; Panel rysuje ją z ikoną zegara
+      { filtr: 'zamkniete', napis: 'Odebrane', alarm: false },
+      { filtr: 'przepadlo', napis: `Przepadło${przepadlo ? ` · ${przepadlo}` : ''}`, alarm: przepadlo > 0 },
     ];
   }
 
@@ -567,11 +574,10 @@
      puste, ale coś czeka na odbiór w drugim filtrze. chipy = wynik chipyZlecen (liczby z napisów „Do odbioru · 4”). */
   function pustaListaZlecen(filtr, chipy, filtryAktywne) {
     const PUSTE = { otwarte: 'Żadne zlecenie nie jest w toku', 'do-zamkniecia': 'Nic nie czeka na odbiór',
-                    zamkniete: 'Brak odebranych zleceń w wybranym okresie' };
+                    zamkniete: 'Brak odebranych zleceń w wybranym okresie', przepadlo: 'Nic nie przepadło w wybranym okresie' };
     const baza = PUSTE[filtr] || 'Brak zleceń';
     if (filtryAktywne) return `${baza}. Filtry (Dział, Osoba, Rodzaj, Okres, spóźnione) mogą chować część zleceń — wyczyść je.`;
-    const doOdbioru = Number((/· (\d+)/.exec(((chipy || []).find(c => c.filtr === 'do-zamkniecia') || {}).napis || '') || [])[1] || 0);
-    return filtr === 'otwarte' && doOdbioru ? `${baza}. Czeka na odbiór: ${doOdbioru} — zobacz „Do odbioru”.` : baza;
+    return baza;
   }
 
   /* Czy w oknie „Nowe zlecenie” rozwinąć „Więcej opcji” (UI etap 2). Na co dzień zwinięte — kierownik wpisuje co, dział,
@@ -657,7 +663,7 @@
   /* Kafelki na górze „Na żywo” (jak pulpit GK Flota): liczba i kolor — co wymaga uwagi kierownika. */
   /* D78: „Urządzenia z niewysłanymi zapisami” (GET /api/v1/panel/urzadzenia — telefony meldują swoją kolejkę): jedna linia
      na urządzenie, po ludzku. lista: [{urzadzenie, aplikacja, oczekuje, zglosil, najstarszy, czas, osoby: [{nazwa, ile}]}]. */
-  const NAZWY_APLIKACJI = { lider: 'GK Lider', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'Panel Zarządczy GK' };
+  const NAZWY_APLIKACJI = { lider: 'GK Produkcja', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'Panel Zarządczy GK' };
   function opisUrzadzen(lista, teraz) {
     const t = teraz === undefined ? Date.now() : teraz;
     const kiedy = c => (c ? `${dataKrotka(c) === dataKrotka(t) ? '' : dataKrotka(c) + ' '}${godzina(c)}` : '—');
@@ -2614,7 +2620,7 @@
     const dzialNav = wZakresie ? MOJE_DZIALY : '';
     const mojeId = ja && ja.id;
     const widoczne = z => !wZakresie || wZakresie.includes(z.dzial) || (!!mojeId && (z.zlecilId === mojeId || (z.osoby || []).includes(mojeId)));
-    const chip = lista => (!lista.length || lista.some(z => z.otwarte || z.zaplanowane) ? 'otwarte' : lista.some(z => z.doZamkniecia) ? 'do-zamkniecia' : 'zamkniete');
+    const chip = lista => (!lista.length || lista.some(z => z.otwarte || z.zaplanowane) ? 'otwarte' : lista.some(z => z.doZamkniecia) ? 'otwarte' : lista.some(z => z.przepadlo) ? 'przepadlo' : 'zamkniete');
     const widocznaLista = (wiersze || []).filter(Boolean).filter(widoczne);
     const max = limit || 40;
     const wynik = [];
@@ -2927,7 +2933,7 @@
                zlecenie: d.zlecenie || null, stale: d.stale || null };
     }).sort((a, b) => (b.nowe - a.nowe) || String(b.kiedy).localeCompare(String(a.kiedy)));
   }
-  /* D59 (test właściciela 2026-10-13): zgłoszenia BHP z GK Lider (bhp.zgloszenie) — kierownik widział tylko liczbę
+  /* D59 (test właściciela 2026-10-13): zgłoszenia BHP z GK Produkcja (bhp.zgloszenie) — kierownik widział tylko liczbę
      „BHP 1” w raporcie zmiany, bez treści. Wiersze listy: otwarte na górze (pilne rodzaje — incydent, sytuacja
      potencjalnie wypadkowa, pole „pilne” w stałej rodzaje_bhp — przed odstępstwami), zamknięte niżej; w grupach od
      najnowszych (właściciel 2026-11-19 — dawniej otwarte od najstarszych). */

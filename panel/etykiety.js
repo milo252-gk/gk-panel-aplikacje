@@ -175,7 +175,7 @@
           podpis: `${p.etykiety.map(e => e.kod).join(', ')}${p.aktywny ? '' : ' · wstrzymane'}`, etykiety: p.etykiety })) },
       { kod: 'linie', nazwa: 'Linie', gdzie: '', elementy: wiele ? proste('linie', p => p.kod) : [] },
       { kod: 'stanowiska', nazwa: 'Stanowiska', gdzie: '', elementy: proste('stanowiska', p => [p.kod, p.liniaNazwa].filter(Boolean).join(' · ')) },
-      { kod: 'identyfikatory', nazwa: 'Identyfikatory osób', gdzie: 'Logowanie skanem w GK Lider, UR i KJ. Też: Administracja → Pracownicy',
+      { kod: 'identyfikatory', nazwa: 'Identyfikatory osób', gdzie: 'Logowanie skanem w GK Produkcja, UR i KJ. Też: Administracja → Pracownicy',
         elementy: identyfikatory(pracownicy, kontrakt).map(p => ({ klucz: `pracownicy/${p.kod}`, nazwa: p.nazwa, podpis: p.kod, etykiety: [p] })) },
     ];
     return lista.filter(k => k.elementy.length || k.wczytuje || k.blad);

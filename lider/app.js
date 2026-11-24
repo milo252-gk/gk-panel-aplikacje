@@ -85,7 +85,7 @@
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.kod === 403) return 'To konto nie ma dostępu do GK Lider. Poproś Kierownika o funkcję Lider GK, Mistrz GK, Lider SP albo Kierownik / Pracownik MAG.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Produkcja. Poproś Kierownika o funkcję Lider GK, Mistrz GK, Lider SP albo Kierownik / Pracownik MAG.';
     // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo PIN, blokada na 5 minut…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
   };
@@ -362,7 +362,7 @@
     $('logowanie').hidden = z;
     $('aplikacja').hidden = !z;
     if (!z) {
-      // 2026-11-23: nazwa programu jest STAŁA („GK Lider”) — ekran logowania i karta zostają ze statycznego HTML i manifestu
+      // 2026-11-23: nazwa programu jest STAŁA („GK Produkcja”) — ekran logowania i karta zostają ze statycznego HTML i manifestu
       // (dawny klucz hala.lider.nazwa z nazwą „GK Magazyn” przestał być czytany i zapisywany; stare wpisy nic nie psują).
       $('blokada').hidden = true;
       if (Lider.oknoOtwarte()) { $('okno').hidden = true; document.body.classList.remove('z-oknem'); }
@@ -592,7 +592,7 @@
     // Przycisk „Moje konto” to sama ikona osoby (index.html, STYL-GK §3 runda 2) — bez „Anna N.” obok, jak w UR, KJ i Panelu.
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
     // 2026-11-23: pod imieniem NAZWA ROLI (Mistrz GK, Lider GK, Lider SP, Kierownik, Menedżer, Kierownik/Pracownik MAG…),
-    // pod nią stała nazwa programu „GK Lider” (index.html) — bez wariantów „GK Mistrz”, „GK Magazyn”, „GK Lider SP”.
+    // pod nią stała nazwa programu „GK Produkcja” (index.html) — bez wariantów „GK Mistrz”, „GK Magazyn”, „GK Lider SP”.
     $('menu-rola').textContent = p ? Hala.nazwaRoliMenu(p, hala.kontrakt, 'lider') : '';
   }
 

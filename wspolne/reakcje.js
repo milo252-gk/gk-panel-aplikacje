@@ -1,4 +1,4 @@
-/* Reakcje przy zleceniach i pracy (D77; nowy wygląd D89, 2026-11-19). Jeden kod dla GK Lider, GK Utrzymanie Ruchu, GK Kontrola
+/* Reakcje przy zleceniach i pracy (D77; nowy wygląd D89, 2026-11-19). Jeden kod dla GK Produkcja, GK Utrzymanie Ruchu, GK Kontrola
    Jakości i Panelu (STYL-GK §6b); ten sam plik jest kopią 1:1 `web/gk-reakcje.js` w GK Trasy i GK Flota (`.github/spojnosc.py`).
 
      HalaReakcje.sledz(hala)              // zwrot i niewykonane — przy otwarciu, odświeżeniu, co ok. 12 s (HalaZlecenia.sledz woła sam)

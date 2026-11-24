@@ -2,7 +2,7 @@
    i odrzucone przez kierownika (właściciel 2026-11-23: „Raport pracy, brakuje mi…”, D98).
 
    JEDEN komponent dla Panelu (Wyniki: zakład, działy, osoby — kierownik zakładu, Menedżer i kierownik działu swój dział) i dla
-   GK Lider, UR i KJ („Moje wyniki” w Więcej — osoba widzi tylko siebie). Te same liczby, nazwy i układ na telefonie i komputerze:
+   GK Produkcja, UR i KJ („Moje wyniki” w Więcej — osoba widzi tylko siebie). Te same liczby, nazwy i układ na telefonie i komputerze:
        HalaWyniki.licz(zlecenia, opcje)        // czysta funkcja: miary zakładu, działów i osób (testy na obiektach)
        HalaWyniki.okno('miesiac', teraz)       // {od, do, nazwa} w czasie zakładu; dzien | tydzien | miesiac
        HalaWyniki.dostep(role, stale)          // {tryb: 'zarzad', dzialy: null | [kody]} albo {tryb: 'moje'}

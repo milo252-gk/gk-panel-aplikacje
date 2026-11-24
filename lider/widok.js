@@ -65,7 +65,7 @@
   }
 
   /* Linie mistrza (decyzja właściciela 2026-10-07, D34): mistrz z liniami zaznaczonymi w Panelu → Administracja widzi
-     w GK Lider TYLKO te linie — wybór linii, a za wybraną linią obchody (checklista), awarie i jakość — i tylko zlecenia
+     w GK Produkcja TYLKO te linie — wybór linii, a za wybraną linią obchody (checklista), awarie i jakość — i tylko zlecenia
      tych linii (albo bez linii). Bez zaznaczenia — wszystkie (null), jak dotąd. Lider i każdy inny → null: lider wybiera
      dowolną linię (przesunięcie) jak dotąd. Push hub kieruje tą samą regułą (na_linii w hala.py). Linie spoza słownika
      (usunięte) się nie liczą. */
@@ -79,7 +79,7 @@
   /* Magazyn (D92, właściciel 2026-11-19): Kierownik MAG i Pracownik MAG pracują w tej samej aplikacji, która dla nich nazywa się
      „GK Magazyn” — tylko zlecenia, checklisty i zgłoszenia działu „magazyn” (bez linii, ekranu Zmiana, raportu zmiany, jakości
      i awarii maszyn). Profil magazynu ma osoba z rolą MAG BEZ żadnej roli produkcji (lider, mistrz, Lider SP) ani kierownika
-     zakładu / admina — ci zostają w zwykłym „GK Lider” (kody ról bez zmian). Uprawnienia egzekwuje hub (kontrakt 1.31.0). */
+     zakładu / admina — ci zostają w zwykłym „GK Produkcja” (kody ról bez zmian). Uprawnienia egzekwuje hub (kontrakt 1.31.0). */
   const ROLE_MAGAZYNU = ['kierownik_mag', 'pracownik_mag'], DZIAL_MAGAZYNU = 'magazyn';
   const ROLE_GK_LIDER = ['lider', 'mistrz', ROLA_BRYGADZISTY, 'kierownik', 'admin'];
   function profilMagazynu(pracownik) {

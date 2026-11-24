@@ -689,11 +689,13 @@
   // ------------------------------------------------------------ zlecenia dla działów (kierownik)
 
   let filtrZlecen = 'otwarte', trybZlecen = 'biezace';
+  const wZamknietych = () => filtrZlecen === 'zamkniete' || filtrZlecen === 'przepadlo';   // Odebrane i Przepadło: okres, starsze z serwera
   /* Wybór filtra, trybu (biezace | stale) i rodzaju z zewnątrz (kafelek „Zlecenia po terminie” na pulpicie, push, BHP).
      Rodzaj podany — tylko ten (np. BHP); bez rodzaju — filtr rodzaju czyszczony, żeby kafelek pokazał wszystko. */
   Panel.pokazZlecenia = (filtr, tryb, rodzaj, zachowaj) => {
     // Wariant B (2026-11-24): „W toku” i „Do odbioru” wracają na ekran Zlecenia (pełne akcje); Pulpit ma tylko karty checklist.
-    if (filtr) filtrZlecen = filtr;
+    // Właściciel 2026-11-24: chipa „Do odbioru” nie ma — pozycje do odbioru (z Odbierz/Zwróć) są w „W toku”.
+    if (filtr) filtrZlecen = filtr === 'do-zamkniecia' ? 'otwarte' : filtr;
     if (tryb) trybZlecen = tryb;
     filtry.rodzaj = rodzaj || '';
     const fr = $('filtry-zlecen');
@@ -752,9 +754,7 @@
     return { d, wiersze: W.zlecenia({ zlecenia: wszystkie, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: 'wszystkie', ja: hala.pracownik }) };
   }
   const zaKrotkaFraza = fraza => String(fraza || '').trim().length < 2;
-  function rysujWynikiSzukania() {
-    const pole = $('szukaj-pole'), lista = $('szukaj-wyniki');
-    const fraza = pole.value;
+  function rysujWynikiSzukania(fraza, lista) {
     const { d, wiersze } = wierszeDoSzukania();
     szukajWyniki = W.szukaj({ fraza, zlecenia: wiersze, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, ja: hala.pracownik });
     if (!fraza.trim()) { lista.innerHTML = '<p class="slaby">Wpisz numer zlecenia (ZL-…), tytuł, osobę, maszynę, linię albo dział.</p>'; return; }
@@ -780,7 +780,7 @@
         <div id="szukaj-wyniki" class="szukaj-wyniki" aria-live="polite"></div>
         <div class="hala-okno-przyciski"><button type="submit">Zamknij</button></div></form>`;
       document.body.appendChild(o);
-      $('szukaj-pole').addEventListener('input', rysujWynikiSzukania);
+      $('szukaj-pole').addEventListener('input', () => rysujWynikiSzukania($('szukaj-pole').value, $('szukaj-wyniki')));
       $('szukaj-pole').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const p = document.querySelector('#szukaj-wyniki .szukaj-wynik'); if (p) p.click(); } });
       $('szukaj-wyniki').addEventListener('click', ev => {
         const b = ev.target.closest('.szukaj-wynik');
@@ -788,7 +788,7 @@
       });
     }
     $('szukaj-pole').value = '';
-    rysujWynikiSzukania();
+    rysujWynikiSzukania('', $('szukaj-wyniki'));
     if (!o.open) o.showModal();
     $('szukaj-pole').focus();
   }
@@ -800,11 +800,11 @@
     // Skrót: czyste filtry (osoba / maszyna / linia / dział z wyniku), bez zapisu do pamięci — patrz komentarz wyżej.
     Object.assign(filtry, { dzial: n.dzial || '', osoba: n.osoba || '', rodzaj: '', status: '', linia: n.linia || '', maszyna: n.maszyna || '',
                             od: '', doDnia: '', spoznione: false });
-    if (n.filtr === 'zamkniete' && filtry.okres < 7) filtry.okres = 7;
+    if ((n.filtr === 'zamkniete' || n.filtr === 'przepadlo') && filtry.okres < 7) filtry.okres = 7;
     zaznaczZlecenie = n.zlecenie || null;
-    if (n.filtr !== 'zamkniete') Object.assign(biezace, { dzial: n.dzial || '', osoba: n.osoba || '', rodzaj: '', linia: n.linia || '', maszyna: n.maszyna || '', spoznione: false });
+    if (n.filtr !== 'zamkniete' && n.filtr !== 'przepadlo') Object.assign(biezace, { dzial: n.dzial || '', osoba: n.osoba || '', rodzaj: '', linia: n.linia || '', maszyna: n.maszyna || '', spoznione: false });
     Panel.pokazZlecenia(n.filtr || 'otwarte', 'biezace', '', true);
-    if (n.filtr === 'zamkniete' && okresDni() > 2) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
+    if ((n.filtr === 'zamkniete' || n.filtr === 'przepadlo') && okresDni() > 2) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
   }
   /* Po narysowaniu listy Zleceń: zlecenie wybrane w „Szukaj” dostaje ramkę i przewija się na ekran (raz). */
   function zaznaczZnalezione() {
@@ -820,8 +820,15 @@
     setTimeout(() => el.classList.remove('znalezione'), 6000);
   }
   $('szukaj').addEventListener('click', otworzSzukanie);
+  // E5: na komputerze stałe pole w nagłówku (wyniki w panelu pod nim, te same co w oknie); lupa i okno zostają na telefonie.
+  const szukajStale = window.HalaNaglowek ? window.HalaNaglowek.stalePole(document.querySelector('.naglowek .kto'), {
+    znak: 'Szukaj: zlecenie, osoba, maszyna, dział', aria: 'Szukaj: zlecenie, osoba, maszyna, linia, dział',
+    rysuj: rysujWynikiSzukania, wybierz: b => przejdzDoWyniku(szukajWyniki[+b.dataset.n]) }) : null;
   document.addEventListener('keydown', ev => {
-    if (ev.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target || {}).tagName || '') && !document.querySelector('dialog[open]')) { ev.preventDefault(); otworzSzukanie(); }
+    if (ev.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target || {}).tagName || '') && !document.querySelector('dialog[open]')) {
+      ev.preventDefault();
+      if (!(szukajStale && hala.zalogowany() && !document.body.classList.contains('tryb-ekran') && szukajStale.fokus())) otworzSzukanie();
+    }
   });
 
   function klasaZlecenia(status) {
@@ -953,7 +960,7 @@
   }
   Panel.zleceniaOkresu = async dni => { await wczytajStarsze(dni); return starsze.lista; };
   function listaZOkresem(lista) {
-    if (filtrZlecen !== 'zamkniete' || okresDni() <= 2 || !starsze.od) return lista;
+    if (!wZamknietych() || okresDni() <= 2 || !starsze.od) return lista;
     const od = hala.teraz() - okresDni() * 86400000;
     const jest = new Set(lista.map(z => z.id));
     return lista.concat(starsze.lista.filter(z => !jest.has(z.id) && Date.parse(z.zmieniono || (z.dane || {}).czas_zlecenia) >= od));
@@ -978,7 +985,7 @@
     if (f.osoba.dataset.html !== noweO) { f.osoba.innerHTML = noweO; f.osoba.dataset.html = noweO; f.osoba.value = filtry.osoba; if (f.osoba.value !== filtry.osoba) filtry.osoba = ''; }
     // Osoba ustawiona z zewnątrz (wynik „Szukaj”) — pole ma pokazać to samo, co filtruje; nieznana na liście wraca do „wszyscy”.
     if (f.osoba.value !== filtry.osoba) { f.osoba.value = filtry.osoba; if (f.osoba.value !== filtry.osoba) filtry.osoba = ''; }
-    $('filtr-okres').hidden = filtrZlecen !== 'zamkniete';
+    $('filtr-okres').hidden = !wZamknietych();
     const noweR = '<option value="">wszystkie</option>' + W.RODZAJE_ZADAN.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join('');
     if (f.rodzaj.dataset.html !== noweR) { f.rodzaj.innerHTML = noweR; f.rodzaj.dataset.html = noweR; }
     f.rodzaj.value = filtry.rodzaj;
@@ -1031,7 +1038,7 @@
     $('filtry-aktywne').textContent = opis.length === 1 ? '1 filtr' : `Filtry: ${opis.length}`;
     $('filtry-czysc').hidden = !aktywne;
     // Rzadkie pola (okres, linia, maszyna, daty): aktywny filtr nie może siedzieć w schowanym miejscu — „Więcej” otwiera się samo.
-    const rzadkieAktywne = !!(filtry.linia || filtry.maszyna || filtry.od || filtry.doDnia || (filtrZlecen === 'zamkniete' && okresDni() > 2));
+    const rzadkieAktywne = !!(filtry.linia || filtry.maszyna || filtry.od || filtry.doDnia || (wZamknietych() && okresDni() > 2));
     ustawRzadkie(rzadkieOtwarte || rzadkieAktywne);
   }
   let rzadkieOtwarte = false;
@@ -1051,7 +1058,7 @@
     // Zmiana linii zdejmuje maszynę z innej linii (lista maszyn jest zawężona do wybranej linii).
     if (ev.target === f.linia && filtry.linia && filtry.maszyna && ((hala.slowniki.maszyny || {})[filtry.maszyna] || {}).linia !== filtry.linia) filtry.maszyna = '';
     zapiszFiltry();
-    if (filtrZlecen === 'zamkniete' && okresDni() > 2) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
+    if (wZamknietych() && okresDni() > 2) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
     narysuj();
   });
   $('filtry-zlecen').addEventListener('submit', ev => ev.preventDefault());
@@ -1069,8 +1076,25 @@
   function pustaListaZlecenTekst(chipy) {
     const filtryAktywne = !!(filtry.dzial || filtry.osoba || filtry.rodzaj || filtry.spoznione || filtry.status || filtry.linia || filtry.maszyna || filtry.od || filtry.doDnia);
     const tekst = W.pustaListaZlecen(filtrZlecen, chipy, filtryAktywne);
-    return filtrZlecen === 'otwarte' && !filtryAktywne && !/Czeka na odbiór/.test(tekst) && mozeWyslac('zlecenie.utworzone')
+    return filtrZlecen === 'otwarte' && !filtryAktywne && mozeWyslac('zlecenie.utworzone')
       ? `${tekst}. Dodasz je przyciskiem „Nowe zlecenie”.` : tekst;
+  }
+  /* Rozwinięcia sekcji <details> w wierszach listy Zleceń (Pozycje, Części, Nie mogę): klucz = id zlecenia + klasa sekcji. Zapisuje tylko to,
+     co zrobiła osoba (klik w summary); domyślne otwarcie („Do odbioru” ma pozycje rozwinięte) działa jak dotąd, dopóki osoba nie zmieni. */
+  const rozwiniecia = new Map();
+  const kluczRozwiniecia = det => { const w = det.closest('[data-id]'); return w ? `${w.dataset.id}|${det.className}` : ''; };
+  $('lista-zlecen').addEventListener('click', ev => {
+    const sum = ev.target.closest('summary');
+    const det = sum && sum.parentElement;
+    if (!det || det.tagName !== 'DETAILS') return;
+    const k = kluczRozwiniecia(det);
+    if (k) rozwiniecia.set(k, !det.open);          // klik jeszcze nie przestawił `open` — stan po kliknięciu to przeciwieństwo
+  });
+  function przywrocRozwiniecia(korzen) {
+    for (const det of korzen.querySelectorAll('details')) {
+      const k = kluczRozwiniecia(det);
+      if (k && rozwiniecia.has(k)) det.open = rozwiniecia.get(k);
+    }
   }
   function rysujZlecenia(d, lista) {
     for (const b of document.querySelectorAll('#tryb-zlecen [data-tryb]')) b.setAttribute('aria-pressed', String(b.dataset.tryb === trybZlecen));
@@ -1095,15 +1119,16 @@
     }
     rysujFiltry(d);
     const zlecenia = W.zlecenia({ zlecenia: listaZOkresem(lista), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
-                                  teraz: d.teraz, filtr: filtrZlecen, ja: hala.pracownik }).map(z => Object.assign(z, { html: wierszZlecenia(z) }));
-    const inne = ZG ? ZG.wiersze(d, filtrZlecen) : [];
+                                  teraz: d.teraz, filtr: filtrZlecen === 'otwarte' ? 'w-toku' : filtrZlecen, ja: hala.pracownik }).map(z => Object.assign(z, { html: wierszZlecenia(z) }));
+    // Zgłoszenia, narzędzia i BHP czekające na kierownika (dawny „Do odbioru”) są teraz w „W toku”; Przepadło ich nie dotyczy.
+    const inne = !ZG ? [] : filtrZlecen === 'otwarte' ? ZG.wiersze(d, 'do-zamkniecia') : filtrZlecen === 'zamkniete' ? ZG.wiersze(d, 'zamkniete') : [];
     const fm = Object.assign({}, filtry, { mojeDzialy: mojeDzialy() || [], ja: hala.pracownik && hala.pracownik.id });
     // „Więcej filtrów”: sortowanie wybrane przez osobę zastępuje kolejność domyślną całej listy; M = wszystko w tej zakładce.
     const nazwyFiltrow = rysujFiltryDodatkowe(d, zlecenia);
     const wiersze = W.sortujWgDaty(W.polaczZadania(W.filtrujZlecenia(zlecenia, fm), W.filtrujZlecenia(inne, fm)), filtry.sort);
     rysujStanFiltrow(nazwyFiltrow, wiersze.length, zlecenia.length + inne.length);
     // Zamknięte starsze niż 2 dni (Okres albo „Od dnia”) — dociągamy raz; po błędzie nie ponawiamy w pętli rysowania.
-    if (filtrZlecen === 'zamkniete' && okresDni() > 2 && okresDni() > probaStarszych) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
+    if (wZamknietych() && okresDni() > 2 && okresDni() > probaStarszych) { probaStarszych = okresDni(); wczytajStarsze(okresDni()); }
     // Liczby na chipach — kierownik widzi od razu, ile jest w toku (⏰ ile po terminie) i ile czeka na niego (także
     // zgłoszenia, narzędzia i BHP). Po terminie, przepadłe (D35) i pilne BHP — chip na czerwono.
     const chipy = W.chipyZlecen(lista, d.teraz, ZG ? ZG.liczby() : null);
@@ -1117,10 +1142,18 @@
     }
     zlecBufor = new Map(zlecenia.map(z => [z.id, z]));
     if (okPoz.open) rysujPozycje();                      // okno pozycji odświeża się razem z listą (zlecenie odebrane → zamyka się)
-    $('lista-zlecen').innerHTML = wiersze.map(w => w.html).join('')
-      || `<p class="pusto">${esc(pustaListaZlecenTekst(chipy))}</p>`;
-    // Zdjęcie: lokalny plik (jeszcze w kolejce) albo z huba — adres daje hala.js.
-    ladujZdjeciaLeniwie($('lista-zlecen'));
+    // Właściciel 2026-11-24: rozwinięta historia/pozycje checklisty nie może się zwijać przy odświeżeniu listy (co kilka sekund, zdarzenia
+    // na żywo). Stan rozwinięcia pamiętamy po id zlecenia i rodzaju sekcji (rozwinął/zwinął osoba — kliknięcie w summary) i przywracamy po rysowaniu.
+    // Lista bez zmian nie jest rysowana od nowa (bez migotania i bez gubienia przewinięcia wewnątrz wiersza).
+    const htmlListy = wiersze.map(w => w.html).join('') || `<p class="pusto">${esc(pustaListaZlecenTekst(chipy))}</p>`;
+    const listaEl = $('lista-zlecen');
+    if (listaEl.dataset.html !== htmlListy) {
+      listaEl.innerHTML = htmlListy;
+      listaEl.dataset.html = htmlListy;
+      przywrocRozwiniecia(listaEl);
+      // Zdjęcia ładują się leniwie tylko po faktycznym przerysowaniu (obrazki z zachowanego DOM już mają src).
+      ladujZdjeciaLeniwie(listaEl);
+    }
     zaznaczZnalezione();
   }
 

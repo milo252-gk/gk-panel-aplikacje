@@ -295,7 +295,7 @@
         <div class="admin-pasek">
           <input id="admin-szukaj" type="search" placeholder="Szukaj osoby (imię, login)" aria-label="Szukaj osoby: imię, nazwisko albo login" value="${esc(szukaj)}">
           <label class="zaznacz"><input type="checkbox" id="admin-nieaktywni" ${nieaktywni ? 'checked' : ''}> Pokaż wyłączone</label>
-          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Lider, UR, KJ)">${P.ik('drukuj')}Identyfikatory</button>
+          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Produkcja, UR, KJ)">${P.ik('drukuj')}Identyfikatory</button>
           <button type="button" class="glowny" id="admin-dodaj">+ Dodaj osobę</button>
         </div>
         <div id="admin-lista" class="lista"></div>`;
@@ -374,7 +374,7 @@
   function polePinu() {
     const role = [...fp.querySelectorAll('input[name="role"]:checked')].map(x => x.value);
     const ekran = role.length === 1 && role[0] === 'ekran';
-    // D34 (2026-10-07): mistrz w GK Lider widzi tylko zaznaczone linie — podpowiedź przy liniach, gdy ma tę rolę.
+    // D34 (2026-10-07): mistrz w GK Produkcja widzi tylko zaznaczone linie — podpowiedź przy liniach, gdy ma tę rolę.
     $('osoba-linie-mistrz').hidden = !role.includes('mistrz');
     // D46 (właściciel 2026-10-08): administrator nie wpisuje nikomu PIN-u — tylko „Resetuj tylko PIN” (startowy 1234).
     // Pole zostaje wyłącznie dla konta ekranu (monitor), które ma jeden sekret 4–8 cyfr.
@@ -1241,7 +1241,7 @@
     await window.PanelEtykiety.drukuj(lista, kod ? `Etykieta QR ${kod}` : 'Etykiety QR maszyn');
   }
 
-  /* Identyfikatory osób (HALA:P — logowanie skanem w GK Lider, UR i KJ): jednej osoby albo wszystkich z listy (z filtrem
+  /* Identyfikatory osób (HALA:P — logowanie skanem w GK Produkcja, UR i KJ): jednej osoby albo wszystkich z listy (z filtrem
      wyszukiwania i „Pokaż wyłączone” — PanelEtykiety.identyfikatory i tak pomija wyłączonych i konta bez aplikacji ze skanem). */
   function identyfikatoryListy(id) {
     const osoby = id ? (lista || []).filter(p => p.id === id)

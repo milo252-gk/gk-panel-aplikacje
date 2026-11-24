@@ -9,7 +9,7 @@
    Dwa miejsca:
      - Panel → Administracja → Pracownicy (administracja.js) — pełny ekran administratora; zarządzający widzi tam tylko swój
        zespół (te same czyste funkcje: zarzadzaKontami, uprawnieniaOsoby, opisZespolu);
-     - GK Lider → Moje konto → „Mój zespół” (kierownik zakładu na telefonie): okno z listą i formularzem osoby —
+     - GK Produkcja → Moje konto → „Mój zespół” (kierownik zakładu na telefonie): okno z listą i formularzem osoby —
        HalaZespol.otworz(hala, { komunikat }).
    Zarządzający nie wpisuje nikomu hasła, PIN-u ani karty („nikt nie zna niczyjego PIN-u”, D46) — tylko „Ustaw hasło
    startowe” → „Resetuj hasło” (haslo123 i PIN 1234 naraz), w oknie osoby „Resetuj tylko hasło” i „Resetuj tylko PIN”, „Wyloguj wszędzie”, „Odblokuj”. Usuwa osobę administrator; tu — wyłączenie.
@@ -73,7 +73,7 @@
     };
   }
 
-  /* Jedno zdanie nad listą zarządzającego — kogo widzi i co może. Ten sam tekst w Panelu i w GK Lider. */
+  /* Jedno zdanie nad listą zarządzającego — kogo widzi i co może. Ten sam tekst w Panelu i w GK Produkcja. */
   function opisZespolu(zakres, stale, slowniki) {
     if (!zakres || zakres.admin !== false) return '';
     const nazwy = (stale && stale.role) || {};
@@ -135,7 +135,7 @@
     return { bledy, dane };
   }
 
-  // ---------------------------------------------------------------- okna (GK Lider → Moje konto → Mój zespół)
+  // ---------------------------------------------------------------- okna (GK Produkcja → Moje konto → Mój zespół)
 
   function okno(id, klasa) {
     let o = document.getElementById(id);
@@ -177,7 +177,7 @@
 
   async function otworz(hala, opcje) {
     const o = Object.assign({ komunikat: null }, opcje || {});
-    // Wynik też w samym oknie: komunikat aplikacji (GK Lider) leży pod oknem modalnym i nie byłoby go widać.
+    // Wynik też w samym oknie: komunikat aplikacji (GK Produkcja) leży pod oknem modalnym i nie byłoby go widać.
     let info = '';
     const powiedz = (t, r) => { info = t; if (o.komunikat) o.komunikat(t, r); };
     const stale = (hala.kontrakt && hala.kontrakt.stale) || {};

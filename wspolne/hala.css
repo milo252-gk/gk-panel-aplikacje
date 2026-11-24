@@ -218,6 +218,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
   body .hala-polaczenie:not(.ok) { position: fixed; top: auto; left: 0; right: 0; width: auto; z-index: 46;
     bottom: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); padding: 3px 10px; line-height: 1.35; }
   body:has(.hala-polaczenie:not(.ok)) .hala-skan-fab { bottom: calc(var(--dol-wys) + 28px + env(safe-area-inset-bottom, 0px)); }
+  /* Zrzut z telefonu 2026-11-24: półprzezroczysty pasek nachodził na treść karty tuż nad dolnym menu. Tło pełne, a strona dostaje miejsce
+     na pasek (do dwóch linijek), więc koniec listy da się przewinąć nad niego. */
+  body .hala-polaczenie:not(.ok) { opacity: 1; }   /* przycisk bez akcji ma button:disabled { opacity: .5 } — pasek prześwitywał na treść */
+  body .hala-polaczenie.kolejka:not(.ok), body .hala-polaczenie.offline:not(.ok) { background: var(--marka-tlo); box-shadow: 0 -1px 0 var(--ramka-mocna); }
+  body:has(.hala-polaczenie:not(.ok)) { padding-bottom: 56px; }
 }
 
 /* ------------------------------------------------ ekran logowania (standard GK) */
@@ -574,6 +579,7 @@ dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; col
 .hala-konto-kto { margin: 0; display: grid; gap: 2px; }
 .hala-konto-kto b { font-size: 16px; font-weight: 600; }
 .hala-konto-kto span { font-size: 14px; color: var(--tekst-slaby); }
+.hala-konto-kto .hala-konto-program { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; opacity: .8; }
 .hala-konto-drobne { margin: 0; font-size: 12px; color: var(--tekst-slaby); }
 /* D78: zapisy innych osób na wspólnym telefonie — imię, liczba i „Wyślij” w jednej linii. */
 .hala-konto-cudze { display: grid; gap: 6px; margin-top: 6px; }
@@ -883,6 +889,31 @@ body.hala-ma-skan :is(.hala-zlecenie-formularz, .hala-pozycja-panel) { padding-b
 .hala-uklad > .naglowek .kto { display: flex; align-items: center; gap: 4px; margin-left: auto; color: var(--na-marce); white-space: nowrap; }
 .naglowek #szukaj .szukaj-napis { font-size: 14px; }
 @media (max-width: 600px) { .naglowek .szukaj-napis { display: none; } }
+/* E5 (standard UI §5): stałe pole „Szukaj” w nagłówku na komputerze, wyniki pogrupowane w panelu pod nim; na telefonie lupa (#szukaj) i okno.
+   Pole dodaje naglowek.js (HalaNaglowek.stalePole); na komputerze przycisk z lupą jest wtedy schowany. Konto „ekran” (monitor) nie ma Szukaj. */
+.szukaj-stale { display: none; }
+@media (min-width: 821px) {
+  .hala-uklad > .naglowek .kto:has(> .szukaj-stale) > #szukaj { display: none; }
+  body:not(.tryb-ekran) .szukaj-stale { display: block; position: relative; width: clamp(220px, 26vw, 400px); margin-right: 6px; }
+  .szukaj-stale > .ik { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); display: inline-flex; pointer-events: none; color: var(--na-marce); opacity: .8; }
+  .szukaj-stale > input { width: 100%; box-sizing: border-box; min-height: 40px; padding: 0 34px 0 38px; font-size: 15px; color: var(--na-marce);
+    background: rgba(255, 255, 255, .10); border: 1px solid rgba(255, 255, 255, .32); border-radius: 999px; }
+  .szukaj-stale > input::placeholder { color: rgba(255, 255, 255, .78); opacity: 1; }
+  .szukaj-stale > input:focus-visible { outline: 2px solid var(--na-marce); outline-offset: 2px; background: rgba(255, 255, 255, .16); }
+  .szukaj-stale > input::-webkit-search-cancel-button { display: none; }
+  .szukaj-klawisz { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); min-width: 18px; padding: 1px 5px; box-sizing: border-box; text-align: center;
+    font-size: 12px; font-weight: 600; line-height: 1.4; color: rgba(255, 255, 255, .78); border: 1px solid rgba(255, 255, 255, .32); border-radius: 5px; pointer-events: none; }
+  .szukaj-stale:focus-within .szukaj-klawisz { display: none; }
+  .hala-uklad > .naglowek:has(.szukaj-panel:not([hidden])) { z-index: 35; }
+  .szukaj-stale > .szukaj-panel { position: absolute; top: calc(100% + 8px); right: 0; width: min(520px, 90vw); margin: 0; padding: 10px; box-sizing: border-box; z-index: 40;
+    max-height: min(70vh, 560px); background: var(--karta); color: var(--tekst); border: 1px solid var(--ramka-mocna); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .28); text-align: left; white-space: normal; }
+  .szukaj-panel[hidden] { display: none; }
+  .hala-uklad > .naglowek .szukaj-panel .szukaj-wynik { display: flex; justify-content: space-between; min-height: 52px; padding: 8px 12px; font-size: 15px; font-weight: 400;
+    text-align: left; background: var(--karta); color: var(--tekst); border: 1px solid var(--ramka); border-radius: var(--promien, 10px); }
+  .hala-uklad > .naglowek .szukaj-panel .szukaj-wynik:is(:hover, :focus-visible) { background: var(--tlo); }
+  .hala-uklad > .naglowek .szukaj-panel .szukaj-wynik:focus-visible { outline: 2px solid var(--granat); outline-offset: 1px; }
+  .szukaj-panel .slaby, .szukaj-panel .pusto { color: var(--tekst-slaby); margin: 4px 2px; }
+}
 /* Okno „Szukaj” (nagłówek): pole, wyniki pogrupowane, znaleziony wiersz listy dostaje ramkę. */
 .okno-szukaj { width: min(560px, 94vw); }
 .okno-szukaj input[type="search"] { width: 100%; box-sizing: border-box; min-height: 48px; font-size: 17px; }

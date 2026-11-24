@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#4E4E4E">
 <!-- Motyw przed arkuszami — inaczej wybrany ciemny motyw mignie bielą przy każdym otwarciu. -->
 <script src="../wspolne/motyw.js"></script>
-<title>GK Lider</title>
+<title>GK Produkcja</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="ikona.svg" type="image/svg+xml">
 <!-- iPhone: ikona PNG (SVG nie bierze), pełny ekran z ekranu początkowego, krótka nazwa pod ikoną.
@@ -30,7 +30,7 @@
 <main id="logowanie" class="hala-logowanie" hidden>
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
-    <h1>GK Lider</h1>
+    <h1>GK Produkcja</h1>
     <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko (albo karta)
@@ -54,7 +54,7 @@
       </div>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
-    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja albo Kierownik (GK Lider → Moje konto → Mój zespół).</p>
+    <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja albo Kierownik (GK Produkcja → Moje konto → Mój zespół).</p>
     <p id="czeka-na" class="pod czeka-na" hidden></p>
   </div>
 </main>
@@ -87,11 +87,11 @@
       <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-menu-logo">
       <div class="hala-menu-nazwa" id="menu-kto"></div>
       <div class="hala-menu-rola" id="menu-rola"></div>
-      <div class="hala-menu-kto">GK Lider</div>
+      <div class="hala-menu-kto">GK Produkcja</div>
     </div>
     <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona" data-ikona="zmiana" aria-hidden="true"></span>Moja zmiana</button>
     <button type="button" data-ekran="jakosc"><span class="ikona" data-ikona="jakosc" aria-hidden="true"></span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>
-    <!-- Ikona awaria = awarie (zgłoszenie i lista) w GK Lider i GK Utrzymanie Ruchu; ikona przeglady to w UR przeglądy — jedna ikona, jedna rzecz.
+    <!-- Ikona awaria = awarie (zgłoszenie i lista) w GK Produkcja i GK Utrzymanie Ruchu; ikona przeglady to w UR przeglądy — jedna ikona, jedna rzecz.
          UI etap 2: jedna czerwona zakładka zamiast przycisku AWARIA i zakładki „Awarie” — zgłoszenie na górze, pod nim lista. -->
     <button type="button" data-ekran="awarie" class="awaria"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awarie<span class="plakietka" data-plakietka="awarie" hidden></span></button>
     <button type="button" data-ekran="zlecenia"><span class="ikona" data-ikona="zlecenia" aria-hidden="true"></span>Zlecenia<span class="plakietka" data-plakietka="zlecenia" hidden></span></button>

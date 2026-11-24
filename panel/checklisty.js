@@ -6,7 +6,7 @@
    zapisuje się to wszędzie” — pozycje edytuje się w tym samym oknie co dla kogo, kiedy, termin i opis (stale.js), a ten plik
    daje im wiersze: godzina od startu zmiany, nazwa, opis (co dokładnie zrobić) i pod „⋯” od godziny, maszyny, 📷 📝 ▣.
    D72: bez typów czynności — „Co zrobić” podpowiada gotowe czynności (raport obsady, obchód BHP…) z domyślnymi wymaganiami;
-   stara pozycja z czynnością (D67) zachowuje ją (data-czynnosc) — dalej zalicza się formularzem w GK Lider.
+   stara pozycja z czynnością (D67) zachowuje ją (data-czynnosc) — dalej zalicza się formularzem w GK Produkcja.
    Logika formularza: widok.js → pozycjeZFormularza / stalyZFormularza (testowane). */
 
 (() => {

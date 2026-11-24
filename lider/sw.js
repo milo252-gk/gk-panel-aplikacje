@@ -12,7 +12,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                     */
 
-const WERSJA = 'lider-add00e0c1a74';
+const WERSJA = 'lider-2977d40ca7e0';
 
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ. Dotknięcie też wspólne (jak KJ i Panel):
 // otwarte okno dostaje {typ:'otworz', adres} z data.adres (np. '#zlecenia'), a bez okna otwiera się ./#zlecenia —
