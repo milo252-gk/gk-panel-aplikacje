@@ -217,6 +217,37 @@
     return w;
   }
 
+  /* D104 (właściciel 2026-11-24): dział Magazyn ma własne zmiany (słownik `zmiany_magazyn`, 7–15 / 15–22 / 22–6); reszta zakładu wg `zmiany`.
+     Brak wpisów = dział pracuje wg zmian zakładu. Id zmiany działu ma dopisek „@dział”, żeby nie mylić jej ze zmianą zakładu o tym
+     samym numerze. Plan zmian zakładu (D95) daje Magazynowi dni pracy i święta, ale nie nadpisuje jego godzin. Bliźniak: hala.py →
+     zmiany_dzialu / zmiana_dzialu / plan_bez_godzin. */
+  const DZIALY_Z_WLASNYMI_ZMIANAMI = ['magazyn'];
+  function zmianyDzialu(slowniki, dzial) {
+    if (!DZIALY_Z_WLASNYMI_ZMIANAMI.includes(dzial)) return null;
+    const z = slowniki && slowniki['zmiany_' + dzial];
+    return z && typeof z === 'object' && Object.keys(z).length ? z : null;
+  }
+  function planBezGodzin(plan) {
+    const w = {};
+    for (const [k, v] of Object.entries(plan || {})) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) { const c = Object.assign({}, v); delete c.godziny; w[k] = c; } else w[k] = v;
+    }
+    return w;
+  }
+  function zmianaDzialu(chwila, slowniki, dzial) {
+    const zm = zmianyDzialu(slowniki, dzial);
+    if (!zm) return null;
+    const w = zmianaDla(chwila, zm, planBezGodzin(slowniki.plan_zmian));
+    return w ? Object.assign({}, w, { id: `${w.id}@${dzial}`, dzial }) : null;
+  }
+  /* Dział, wg którego zmian pracuje ta osoba: wszystkie jej działy mają własne zmiany i nie ma funkcji zakładu (kierownik, admin…). */
+  function dzialZmianOsoby(pracownik, slowniki, dzialyKontraktu) {
+    const role = [].concat((pracownik && pracownik.role) || []);
+    if (!role.length || role.some(r => ROLE_ZAKLADU.includes(r))) return null;
+    const dz = dzialyOsoby(role, dzialyKontraktu);
+    return dz.length && dz.every(d => zmianyDzialu(slowniki, d)) ? dz[0] : null;
+  }
+
   // ---------------------------------------------------------------- reduktor (bliźniak hala.py)
 
   function kluczMapy(regula, dane, meta) {
@@ -2794,7 +2825,11 @@
     }
     h.teraz = () => Date.now() + przesuniecieZegara;
     h.zegarZnany = () => zegarZnany;
-    h.zmianaTeraz = () => zmianaDla(h.teraz(), h.slowniki.zmiany, h.slowniki.plan_zmian);
+    // D104: osoba tylko z działu z własnymi zmianami (Magazyn) widzi „swoją” zmianę; reszta — zmianę zakładu jak dotąd.
+    h.zmianaTeraz = () => {
+      const dz = dzialZmianOsoby(h.pracownik, h.slowniki, (h.kontrakt && h.kontrakt.stale && h.kontrakt.stale.dzialy) || []);
+      return (dz && zmianaDzialu(h.teraz(), h.slowniki, dz)) || zmianaDla(h.teraz(), h.slowniki.zmiany, h.slowniki.plan_zmian);
+    };
     h.ustawienie = (klucz, domyslna) => {
       const w = (h.slowniki.ustawienia || {})[klucz];
       return w && w.wartosc !== undefined ? w.wartosc : domyslna;
@@ -2914,7 +2949,7 @@
   }
 
   const Hala = {
-    WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, przesuniecieZakladu, lokalny, zLokalnego,
+    WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, zmianyDzialu, zmianaDzialu, dzialZmianOsoby, planBezGodzin, DZIALY_Z_WLASNYMI_ZMIANAMI, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, minutyPytaniaZamkniecia, pozycjeBezWykonania, oknoZamknieciaZmiany, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, zmianyPlanowe, zmianyDnia, planDnia, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
     kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, nazwaRoliMenu, NAJWYZSZA_ROLA, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu, terminowoscZlecenia, ktoPracowal,

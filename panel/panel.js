@@ -397,23 +397,28 @@
     const odbiory = new Map(), podglady = new Map();
     for (const k of karty) {
       if (mozeOdbierac) {
-        const pg = W.pozycjeObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.dzial || 'produkcja', zlecenieId: k.zlecenieId,
+        const pg = W.pozycjeObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: W.zmianaKarty(d.zmiana, k.dzial, d.slowniki, d.teraz), linia: k.linia, dzial: k.dzial || 'produkcja', zlecenieId: k.zlecenieId,
                                       slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik });
         if (pg.length) podglady.set(k.klucz, pg);
       }
-      const w = mozeOdbierac ? W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: d.zmiana, linia: k.linia, dzial: k.dzial || 'produkcja', zlecenieId: k.zlecenieId,
+      const w = mozeOdbierac ? W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: W.zmianaKarty(d.zmiana, k.dzial, d.slowniki, d.teraz), linia: k.linia, dzial: k.dzial || 'produkcja', zlecenieId: k.zlecenieId,
                                                 slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik }) : [];
       if (w.length) odbiory.set(k.klucz, w);
     }
     // Karencja D88 (właściciel 2026-11-17): przez 15 min po końcu zmiany obok kart bieżącej stoją karty POPRZEDNIEJ zmiany z odbiorem
     // („Zmiana II — jeszcze 7 min na odbiór”); po karencji znikają, a serwer zatwierdza zlecenia sam. Karta tylko, gdy coś czeka.
-    const karencja = mozeOdbierac ? W.zmianaWKarencji({ zmiana: d.zmiana, slowniki: d.slowniki, stale: d.stale, teraz: d.teraz }) : null;
+    // D104: Magazyn ma własne zmiany — jego karencja i „poprzednia zmiana” liczą się z jego godzin; reszta zakładu jak dotąd.
+    const dzialyWlasne = (Hala.DZIALY_Z_WLASNYMI_ZMIANAMI || []).filter(x => Hala.zmianyDzialu(d.slowniki, x));
     const kartyKarencji = [];
-    if (karencja) {
+    const widziane = new Set();
+    const grupy = [{ dzial: null, zmiana: d.zmiana }].concat(dzialyWlasne.map(x => ({ dzial: x, zmiana: W.zmianaKarty(d.zmiana, x, d.slowniki, d.teraz) })));
+    for (const g of grupy) {
+      const karencja = mozeOdbierac ? W.zmianaWKarencji({ zmiana: g.zmiana, slowniki: d.slowniki, stale: d.stale, teraz: d.teraz, dzial: g.dzial }) : null;
+      if (!karencja) continue;
       // Po karencji też karta na checklistę: tytuł = nazwa checklisty, podpis działu (jak karty bieżącej zmiany).
-      const zrodla = W.DZIALY_OBCHODOW.map(([dzial, , podpis]) => ({ dzial, linia: null, podpis, klucz: dzial }))
-        .concat(karty.filter(k => k.dzial === 'produkcja').map(k => ({ dzial: 'produkcja', linia: k.linia, podpis: k.podpis, klucz: `produkcja/${k.linia}` })));
-      const widziane = new Set();
+      const zrodla = W.DZIALY_OBCHODOW.filter(([dzial]) => g.dzial ? dzial === g.dzial : !dzialyWlasne.includes(dzial))
+        .map(([dzial, , podpis]) => ({ dzial, linia: null, podpis, klucz: dzial }))
+        .concat(g.dzial ? [] : karty.filter(k => k.dzial === 'produkcja').map(k => ({ dzial: 'produkcja', linia: k.linia, podpis: k.podpis, klucz: `produkcja/${k.linia}` })));
       for (const k of zrodla) {
         const w = W.odbiorObchodu({ zlecenia: hala.obiekty('zlecenie'), zmiana: karencja.zmiana, linia: k.linia, dzial: k.dzial,
                                     slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, ja: hala.pracownik });
@@ -1619,7 +1624,7 @@
   function rysujZmianyZlecenia(wybrana) {
     const zm = hala.slowniki.zmiany || {};
     fz.na_zmiane.innerHTML = '<option value="">teraz (bez zmiany)</option>' + Object.keys(zm).map(nr => {
-      const z = W.naZmiane(nr, hala.slowniki, hala.teraz());
+      const z = W.naZmiane(nr, hala.slowniki, hala.teraz(), fz.dzial.value);
       // Późniejszą zmianę planuje tylko kierownik zakładu (D47) — liderzy UR i kierownicy KJ widzą tylko trwającą.
       return z && (z.biezaca || mozeWyslac('zlecenie.zaplanowane')) ? `<option value="${esc(nr)}">${esc(z.opis)}</option>` : '';
     }).join('');
@@ -1627,7 +1632,7 @@
     opisZmianyZlecenia();
   }
   function opisZmianyZlecenia() {
-    const z = fz.na_zmiane.value ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
+    const z = fz.na_zmiane.value ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz(), fz.dzial.value) : null;
     const p = $('zlecenie-zmiana-opis');
     p.hidden = !z;
     if (z) p.textContent = z.biezaca ? `Zlecenie od razu, termin — koniec zmiany (${W.godzina(z.koniec)}), chyba że wpiszesz inny.`
@@ -1724,6 +1729,7 @@
   fz.dzial.addEventListener('change', () => {
     fz.wykonawca.innerHTML = opcje(osobyDzialu(fz.dzial.value), '— cały dział —');
     rysujOsobyZlecenia([]);
+    rysujZmianyZlecenia(fz.na_zmiane.value);          // D104: zmiany Magazynu mają własne godziny
     rysujTezDzialy([...fz.querySelectorAll('input[name="tez_dzialy"]:checked')].map(x => x.value));
   });
   fz.na_zmiane.addEventListener('change', opisZmianyZlecenia);
@@ -1780,7 +1786,7 @@
         planPo = W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value);
         if (planPo.blad) { blad(planPo.blad); return; }
       }
-      const zm = fz.na_zmiane.value && !planNa ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz()) : null;
+      const zm = fz.na_zmiane.value && !planNa ? W.naZmiane(fz.na_zmiane.value, hala.slowniki, hala.teraz(), fz.dzial.value) : null;
       if (zm) dane.zmiana = fz.na_zmiane.value;
       if (wstepneZgloszenie) dane.zgloszenie = wstepneZgloszenie;
       if (zm && !zm.biezaca && !mozeWyslac('zlecenie.zaplanowane')) { blad('Na późniejszą zmianę zleca tylko kierownik — wybierz „teraz”.'); return; }

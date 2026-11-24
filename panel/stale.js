@@ -664,9 +664,11 @@
         P.komunikat('Automat włączony — serwer sam zleci ją na każdą zmianę', 'ok');
         return;
       }
+      // D104: „Zleć teraz” dla działu z własnymi zmianami (Magazyn) — bieżąca zmiana wg jego godzin, nie zakładu.
+      const zmianaStalego = st => (st.dzial && Hala.zmianyDzialu(hala.slowniki, st.dzial) && Hala.zmianaDzialu(hala.teraz(), hala.slowniki, st.dzial)) || hala.zmianaTeraz();
       if (b.dataset.akcja === 'zlec') {
         // „Zleć teraz” robi nowe zlecenie obok tego, które zlecił automat — pytamy, zanim je podwoi.
-        const juz = W.juzZleconeNaZmianie(kod, hala.obiekty('zlecenie'), hala.zmianaTeraz(), hala.teraz());
+        const juz = W.juzZleconeNaZmianie(kod, hala.obiekty('zlecenie'), zmianaStalego(s), hala.teraz());
         if (juz && !(await P.potwierdz('Już zlecone na tej zmianie', `„${s.tytul}” jest już zlecone (${juz.numer || 'w toku'}). Zlecić jeszcze raz?`, 'Zleć jeszcze raz'))) return;
       }
       if (b.dataset.akcja === 'zmien') otworz(W.stalyDoFormularza(s), kod);
@@ -683,7 +685,7 @@
         if (!cele.length) { P.komunikat('Nikt nie dostanie tego zlecenia — zaznacz osoby albo sprawdź urlopy.', 'blad'); return; }
         const n = cele.length;
         if (!(await P.potwierdz('Zlecić teraz?', `„${s.tytul}” — ${ile(n, 'zlecenie', 'zlecenia', 'zleceń')}, każdy adresat dostaje własne.`, 'Zleć'))) return;
-        const zmiana = hala.zmianaTeraz(), teraz = hala.teraz();
+        const zmiana = zmianaStalego(s), teraz = hala.teraz();
         for (const dane of W.zleceniaTeraz(kod, s, cele, zmiana, teraz, W.terminTeraz(s, zmiana, teraz))) {
           // D76: „Zleć teraz” kierownika zakładu dla UR/KJ bez osoby — jak „Nowe zlecenie”: do kierownika działu.
           if (Hala.doKierownika(dane, hala.pracownik.role, (hala.kontrakt.stale || {}).dzialy || [])) dane.do_kierownika = true;
@@ -692,14 +694,14 @@
         P.komunikat(`Zlecone: ${s.tytul} — ${ile(n, 'zlecenie', 'zlecenia', 'zleceń')}`, 'ok');
       } else if (b.dataset.akcja === 'zlec' && lista) {
         // Zlecenie z pozycjami od razu — okno „Nowe zlecenie” nie ma pozycji.
-        const dane = W.checklistaTeraz(kod, s, hala.zmianaTeraz(), hala.teraz(), W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz()));
+        const dane = W.checklistaTeraz(kod, s, zmianaStalego(s), hala.teraz(), W.terminTeraz(s, zmianaStalego(s), hala.teraz()));
         // D76 / P18: checklista od kierownika zakładu dla UR/KJ bez osoby — jak harmonogram huba: do kierownika działu.
         const doKier = Hala.doKierownika(dane, hala.pracownik.role, (hala.kontrakt.stale || {}).dzialy || []);
         if (doKier) dane.do_kierownika = true;
         await hala.zapisz('zlecenie.utworzone', hala.nowyId(), dane);
         P.komunikat(`Zlecone: ${s.tytul} — ${doKier ? 'kierownik działu dostał checklistę' : 'dział dostał checklistę'}`, 'ok');
       } else if (b.dataset.akcja === 'zlec') {
-        P.noweZlecenie(W.zlecenieZeStalego(kod, s, W.terminTeraz(s, hala.zmianaTeraz(), hala.teraz())));
+        P.noweZlecenie(W.zlecenieZeStalego(kod, s, W.terminTeraz(s, zmianaStalego(s), hala.teraz())));
       }
       if (b.dataset.akcja === 'wstrzymaj') {
         // Autor = kto zapisuje: od teraz hub zleca w imieniu tej osoby (kontrakt — hub to sprawdza).

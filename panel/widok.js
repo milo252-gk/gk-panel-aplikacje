@@ -2811,8 +2811,9 @@
 
   /* Zlecenie NA ZMIANĘ (nr ze słownika zmian): start tej zmiany — dziś, a gdy już się skończyła, jutro; trwająca zmiana =
      teraz (biezaca). { start, koniec, biezaca, opis } w ms; null — nie ma takiej zmiany. */
-  function naZmiane(nr, slowniki, teraz) {
-    const z = zmianySl(slowniki)[nr];
+  function naZmiane(nr, slowniki, teraz, dzial) {
+    // D104: dział z własnymi zmianami (Magazyn) — „na zmianę” wg jego godzin (te same numery I–III).
+    const z = ((dzial && H().zmianyDzialu && H().zmianyDzialu(slowniki, dzial)) || zmianySl(slowniki))[nr];
     if (!z) return null;
     const hm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? [+m[1], +m[2]] : null; };
     const od = hm(z.od), do_ = hm(z.do);
@@ -3258,6 +3259,9 @@
      UR, KJ; w obrębie działu wg najwcześniejszego terminu pozycji i nazwy. Linia lidera bez żadnej checklisty zostaje jedną kartą jak dawniej
      (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Lider UR i Kierownik KJ widzą z kart działów tylko swój. */
   /* 2026-11-24: + magazyn (D92) — bez niego aktywna checklista Magazyniera nie miała karty na Pulpicie. */
+  // D104: zmiana, wg której liczy się karta działu — Magazyn ma własne zmiany (słownik `zmiany_magazyn`), reszta zmianę zakładu.
+  const zmianaKarty = (zmiana, dzial, slowniki, teraz) => (H().zmianaDzialu && dzial && H().zmianyDzialu(slowniki, dzial)
+    && H().zmianaDzialu(teraz === undefined ? Date.now() : teraz, slowniki, dzial)) || zmiana;
   const KOLEJNOSC_KART = ['mistrz', 'produkcja', 'brygadzista-sp', 'ur', 'kj', 'magazyn'];
   function obchodyKarty({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia, ja }) {
     if (!zmiana) return [];
@@ -3270,8 +3274,11 @@
     const sortuj = lista => lista.slice().sort((a, b) => (najwczesniej(a) - najwczesniej(b)) || String((a.dane || {}).tytul || '').localeCompare(String((b.dane || {}).tytul || ''), 'pl'));
     const maPozycje = z => { const d = (z && z.dane) || {}; return Array.isArray(d.pozycje) && d.pozycje.length > 0; };
     const karta = (z, dzial, kodLinii, podpis, baza) => {
-      const lista = H().checklistaZmiany([z], kodLinii, zmiana, dzial);
+      const zmDzialu = zmianaKarty(zmiana, dzial, slowniki, teraz);
+      const lista = H().checklistaZmiany([z], kodLinii, zmDzialu, dzial);
       if (!lista.dane.pozycje.length) return null;
+      // D104: karta działu z własnymi zmianami (Magazyn) mówi, wg której zmiany jest liczona: „Magazyn · Zmiana I 07:00–15:00”.
+      if (zmDzialu && zmDzialu.dzial === dzial) podpis = `${podpis} · ${zmDzialu.nazwa} ${godzina(zmDzialu.od)}–${godzina(zmDzialu.do)}`;
       const k = H().kolorChecklisty(lista, teraz, prog);
       return Object.assign({}, baza || {}, {
         dzial, linia: kodLinii, zlecenieId: z.id, nazwa: podpis, podpis, klucz: `${dzial}/${kodLinii || '-'}/${z.id}`,
@@ -3348,13 +3355,15 @@
      POPRZEDNIEJ zmiany z odbiorem — po karencji znikają (serwer odrzuca odbiór i zatwierdza sam). Zwraca { zmiana (poprzednia),
      koniecMs (koniec zmiany + karencja), minut (ile jeszcze, zaokrąglone w górę), napis } albo null, gdy karencja minęła / nie ma
      poprzedniej zmiany. Poprzednia = zmiana, która kończy się o początku bieżącej (H().zmianaDla minutę wcześniej). */
-  function zmianaWKarencji({ zmiana, slowniki, stale, teraz }) {
+  function zmianaWKarencji({ zmiana, slowniki, stale, teraz, dzial }) {
     if (!zmiana) return null;
     const start = Date.parse(zmiana.od), now = teraz === undefined ? Date.now() : teraz;
     if (isNaN(start)) return null;
     const koniecMs = start + H().karencjaOdbioru(stale) * 60000;
     if (now >= koniecMs) return null;
-    const poprz = H().zmianaDla(start - 60000, zmianySl(slowniki), planSl(slowniki));
+    // D104: dział z własnymi zmianami (Magazyn) — poprzednia zmiana z jego godzin (id z dopiskiem „@dział”, jak zmiana bieżąca).
+    const poprz = dzial && H().zmianaDzialu && H().zmianyDzialu(slowniki, dzial) ? H().zmianaDzialu(start - 60000, slowniki, dzial)
+      : H().zmianaDla(start - 60000, zmianySl(slowniki), planSl(slowniki));
     if (!poprz || poprz.id === zmiana.id) return null;
     const minut = Math.max(1, Math.ceil((koniecMs - now) / MIN));
     return { zmiana: poprz, koniecMs, minut, napis: `${poprz.nazwa || 'Zmiana ' + poprz.nr} — jeszcze ${minut} min na odbiór` };
@@ -3457,7 +3466,7 @@
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
-                       zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, czyZamknacPoOdbiorze, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
+                       zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, zmianaKarty, czyZamknacPoOdbiorze, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        planDoFormularza, planZeStanu, planZmianZapisy, skutkiPlanu, zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,

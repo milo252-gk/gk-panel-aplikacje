@@ -650,6 +650,17 @@
         <button type="button" id="dodaj-zmiane">+ Dodaj zmianę</button>
         <p class="blad" role="alert" hidden></p>
         <div class="przyciski"><button class="glowny" type="submit">Zapisz godziny zmian</button></div>
+      </form>
+      <form id="formularz-zmian-mag" class="admin-ustawienia">
+        <h3>Godziny zmian Magazynu</h3>
+        <p class="slaby">Magazyn pracuje we własnych godzinach (domyślnie 07:00–15:00, 15:00–22:00, 22:00–06:00); reszta zakładu wg „Godziny zmian” wyżej.
+          Zlecenia stałe i checklisty Magazynu, ich termin, przepadanie i odbiór liczą się od tych godzin. Numery zmian (I, II, III) są te same co w zakładzie.
+          „Wróć do zmian zakładu” usuwa własne godziny Magazynu.</p>
+        <div class="naglowek-zmian" aria-hidden="true"><span>Nr</span><span>Nazwa</span><span>Od</span><span>Do</span><span></span></div>
+        <div id="wiersze-zmian-mag"></div>
+        <p class="blad" role="alert" hidden></p>
+        <div class="przyciski"><button class="glowny" type="submit">Zapisz godziny Magazynu</button>
+          <button type="button" id="zmiany-mag-zaklad">Wróć do zmian zakładu</button></div>
       </form>`;
     const wierszZmiany = (nr, z) => `<div class="wiersz-zmiany"><input name="nr" value="${esc(nr)}" aria-label="Numer zmiany" maxlength="4">
       <input name="nazwa" value="${esc((z && z.nazwa) || '')}" placeholder="Nazwa" aria-label="Nazwa zmiany">
@@ -680,6 +691,38 @@
         blad.hidden = false; blad.className = 'slaby'; blad.textContent = 'Zapisuję…';
         const w = W.wynikZapisu(await P.zapiszWHubie(zapisy));
         blad.className = w.klasa; blad.textContent = w.tekst;
+      } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
+    });
+    // D104: godziny zmian Magazynu (słownik zmiany_magazyn) — te same wiersze co zakład, numery I–III bez dodawania i usuwania.
+    const zmMag = (hala.slowniki && hala.slowniki.zmiany_magazyn) || {};
+    const nryMag = Object.keys(zmMag).length ? Object.keys(zmMag) : Object.keys(zm);
+    $('wiersze-zmian-mag').innerHTML = nryMag.map(nr => { const z = zmMag[nr] || zm[nr]; return `<div class="wiersz-zmiany-mag"><input name="nr" value="${esc(nr)}" aria-label="Numer zmiany" maxlength="4" readonly>
+      <input name="nazwa" value="${esc((z && z.nazwa) || '')}" aria-label="Nazwa zmiany">
+      <input name="od" value="${esc((z && z.od) || '')}" aria-label="Od magazyn ${esc(nr)}">
+      <input name="do" value="${esc((z && z.do) || '')}" aria-label="Do magazyn ${esc(nr)}"></div>`; }).join('');
+    $('formularz-zmian-mag').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const blad = ev.target.querySelector('p[role=alert]');
+      const wynik = W.zmianyZFormularza([...document.querySelectorAll('.wiersz-zmiany-mag')].map(w => ({ nr: w.querySelector('[name=nr]').value,
+        nazwa: w.querySelector('[name=nazwa]').value, od: w.querySelector('[name=od]').value, do: w.querySelector('[name=do]').value })));
+      if (wynik.bledy.length) { blad.hidden = false; blad.className = 'blad'; blad.textContent = wynik.bledy.join(' '); return; }
+      try {
+        const obecne = (hala.slowniki && hala.slowniki.zmiany_magazyn) || {};
+        const zapisy = wynik.zmiany.filter(z => JSON.stringify(obecne[z.nr]) !== JSON.stringify(z.wartosc))
+          .map(z => ['slownik.zapisany', `zmiany_magazyn/${z.nr}`, { slownik: 'zmiany_magazyn', klucz: z.nr, wartosc: z.wartosc }]);
+        blad.hidden = false; blad.className = 'slaby'; blad.textContent = 'Zapisuję…';
+        const w = W.wynikZapisu(await P.zapiszWHubie(zapisy));
+        blad.className = w.klasa; blad.textContent = w.tekst;
+      } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
+    });
+    $('zmiany-mag-zaklad').addEventListener('click', async () => {
+      const blad = $('formularz-zmian-mag').querySelector('p[role=alert]');
+      const obecne = Object.keys((hala.slowniki && hala.slowniki.zmiany_magazyn) || {});
+      if (!obecne.length) { blad.hidden = false; blad.className = 'slaby'; blad.textContent = 'Magazyn już pracuje wg zmian zakładu.'; return; }
+      if (!(await P.potwierdz('Wrócić do zmian zakładu?', 'Magazyn przestanie mieć własne godziny — nowe zlecenia i checklisty Magazynu będą liczone wg zmian zakładu (6–14, 14–22, 22–6). Istniejące zlecenia zostają bez zmian.', 'Wróć do zmian zakładu'))) return;
+      try {
+        const w = W.wynikZapisu(await P.zapiszWHubie(obecne.map(nr => ['slownik.usuniety', `zmiany_magazyn/${nr}`, { slownik: 'zmiany_magazyn', klucz: nr }])));
+        blad.hidden = false; blad.className = w.klasa; blad.textContent = w.tekst;
       } catch (e) { blad.hidden = false; blad.className = 'blad'; blad.textContent = P.komunikatBledu(e); }
     });
     if (lista === null) wczytajPracownikow();      // twoj_adres przychodzi z listą pracowników
