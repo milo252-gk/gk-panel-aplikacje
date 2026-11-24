@@ -43,6 +43,14 @@ async function halaPushHub() {
   return self.location.origin;
 }
 
+/* Tytuł powiadomienia, gdy hub nie podał własnego (albo nie odpowiedział): nazwa APLIKACJI po zakresie workera — GK Produkcja (/lider/),
+   GK Utrzymanie Ruchu (/ur/), GK Kontrola Jakości (/kj/), GK Panel Kierownika (/panel/ i każdy inny). Tylko napis; payload i endpointy bez zmian. */
+const HALA_PUSH_NAZWY = { lider: 'GK Produkcja', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'GK Panel Kierownika' };
+function halaPushNazwaAplikacji() {
+  const czesci = new URL(self.registration.scope).pathname.split('/').filter(Boolean);
+  return HALA_PUSH_NAZWY[czesci[czesci.length - 1]] || 'GK Panel Kierownika';
+}
+
 self.addEventListener('push', e => {
   e.waitUntil((async () => {
     let wiadomosci = [];
@@ -67,11 +75,11 @@ self.addEventListener('push', e => {
     const okna = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (okna.some(o => o.visibilityState === 'visible' && new URL(o.url).pathname.startsWith(zakres))) return;
 
-    if (!wiadomosci.length) wiadomosci = [{ tytul: 'GK Panel Kierownika', tresc: 'Nowe zdarzenie na hali — otwórz aplikację.', tag: 'hala', adres: '' }];
+    if (!wiadomosci.length) wiadomosci = [{ tytul: halaPushNazwaAplikacji(), tresc: 'Nowe zdarzenie na hali — otwórz aplikację.', tag: 'hala', adres: '' }];
     // Ikona PNG: SVG w powiadomieniu nie każda przeglądarka rysuje (Android), PNG — każda.
     const ikona = new URL('./ikona-192.png', self.registration.scope).href;
     const znaczek = new URL('./ikona.svg', self.registration.scope).href;
-    await Promise.all(wiadomosci.map(w => self.registration.showNotification(w.tytul || 'GK Panel Kierownika', {
+    await Promise.all(wiadomosci.map(w => self.registration.showNotification(w.tytul || halaPushNazwaAplikacji(), {
       body: w.tresc || '', tag: w.tag || 'hala', renotify: true, requireInteraction: !!w.pilne,
       icon: ikona, badge: znaczek, vibrate: w.pilne ? [300, 150, 300, 150, 300] : [200],
       data: { adres: w.adres || '' } })));

@@ -24,7 +24,7 @@
     .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const DO_ZROBIENIA = new Set(['nowe', 'przyjete']);
   const WYSLANE = new Set(['wykonane', 'odrzucone']);
-  const MAKS_ZDJEC = 8;                                // jak w GK Trasy — więcej i tak nikt nie obejrzy
+  const MAKS_ZDJEC = 9;                                // właściciel 2026-11-24: „Limit to 9 zdjęć” (hub nie limituje zdjęć wykonania)
 
   /* Przepadło (D35): hub już oznaczył albo minęło `wazne_do`, a dział nie zdążył. */
   // 2026-11-19 (właściciel): zadanie zmianowe, którego NIKT NIE PRZYJĄŁ (status „nowe”), wygasa 5 min przed końcem zmiany
@@ -368,8 +368,85 @@
 
   const miniatury = ids => ids.map(id => `<img class="hala-zlecenie-foto" data-plik="${esc(id)}" alt="Zdjęcie" loading="lazy">`).join('');
 
-  function zwolnij(f) {
-    for (const p of (f && f.pliki) || []) { try { URL.revokeObjectURL(p.url); } catch (e) { /* stara przeglądarka */ } }
+  /* Zdjęcia w formularzach (Zrobione / Nie mogę / pozycja) zapisują się do IndexedDB OD RAZU przy wyborze (hala.dodajPlik — zmniejszone do
+     1600 px), a formularz pamięta tylko ich id i adres podglądu (hala.adresPliku, zwalniany przez hala.js). Dzięki temu po powrocie z tła
+     (system zabił kartę) niewysłane zdjęcia i tekst wracają (przywrocSzkice) zamiast przepadać. Brudnopis trzyma same id (nie dane zdjęć).
+     zwolnij(f) = formularz zamknięty bez wysyłki albo po wysyłce: zdjęcia, których nie wskazuje żaden zapis w kolejce, znikają z telefonu
+     (hala.usunPlik odmawia dla tych z zapisu w kolejce i wysłanych), szkic wypada z brudnopisu. opcje.szkic === false: nie ruszaj szkicu
+     (inna osoba na tym samym telefonie). */
+  const KLUCZ_SZKICU = { formularz: 'zlecenia.formularz', poz: 'zlecenia.pozycja' };
+  const SZKIC_WAZNY_MS = 36 * 3600000;
+  let ostatniaHala = null;
+  const rodzajFormularza = f => (f && f.rodzaj !== undefined ? 'formularz' : 'poz');
+  function zwolnij(f, opcje) {
+    if (!f) return;
+    const hala = ostatniaHala;
+    for (const p of f.pliki || []) {
+      if (p && p.id && hala && hala.usunPlik) { try { Promise.resolve(hala.usunPlik(p.id)).catch(() => {}); } catch (e) { /* bez usuwania */ } }
+    }
+    if (hala && hala.brudnopis && !(opcje && opcje.szkic === false)) { try { hala.brudnopis.usun(KLUCZ_SZKICU[rodzajFormularza(f)]); } catch (e) { /* bez szkicu */ } }
+  }
+  function zapiszSzkic(hala, f, odrazu) {
+    if (!hala || !hala.brudnopis || !f) return Promise.resolve();
+    const klucz = KLUCZ_SZKICU[rodzajFormularza(f)];
+    try {
+      if (!String(f.tekst || '').trim() && !(f.pliki || []).length && !((f.skany || []).length)) return hala.brudnopis.usun(klucz);
+      const d = { id: f.id, tekst: f.tekst || '', zdjecia: (f.pliki || []).map(p => p.id), skan: f.skan || null, czas: Date.now() };
+      if (f.rodzaj !== undefined) { d.rodzaj = f.rodzaj; d.skany = f.skany || []; } else d.pozycja = f.pozycja;
+      return hala.brudnopis.zapisz(klucz, d, odrazu ? { odrazu: true } : undefined);
+    } catch (e) { return Promise.resolve(); }
+  }
+  /* Dodanie zdjęć wybranych w formularzu: po jednym (zmniejszanie jednego naraz — pamięć telefonu), każde od razu do IndexedDB i na listę
+     podglądów. Limit MAKS_ZDJEC; nadmiar — komunikat. Błąd zapisu (brak miejsca, brak pamięci) — komunikat po polsku, dotychczasowe zostają. */
+  async function dodajZdjeciaDoFormularza(el, hala, rodzaj, f, wybrane) {
+    const wolne = Math.max(0, MAKS_ZDJEC - f.pliki.length);
+    const biore = wybrane.slice(0, wolne);
+    f.blad = wybrane.length > biore.length ? `Limit to ${MAKS_ZDJEC} zdjęć — nadmiaru nie dodano.` : null;
+    for (const plik of biore) {
+      try {
+        const id = await hala.dodajPlik(plik);
+        const url = await hala.adresPliku(id);
+        if (stan(el)[rodzaj] !== f) { if (hala.usunPlik) hala.usunPlik(id).catch(() => {}); return; }      // formularz zamknięty w trakcie
+        f.pliki.push({ id, url });
+        await zapiszSzkic(hala, f, true);
+      } catch (e) { f.blad = (e && e.message) || 'Nie udało się zapisać zdjęcia. Spróbuj jeszcze raz.'; break; }
+      rysuj(el, hala, stan(el).opcje);
+    }
+    if (stan(el)[rodzaj] === f) rysuj(el, hala, stan(el).opcje);
+  }
+  /* Po powrocie do aplikacji (nowa karta po zabiciu poprzedniej) odtwarza otwarty formularz: tekst, skany i zdjęcia z IndexedDB. Szkic
+     starszy niż 36 h albo do zlecenia, którego już nie ma do zrobienia, jest sprzątany razem ze zdjęciami. Gdy lista zleceń jeszcze się nie
+     wczytała — próbujemy przy następnym rysowaniu (nie kasujemy szkicu „na ślepo”). */
+  async function przywrocSzkice(el, hala) {
+    const s = stan(el);
+    if (s.szkicWczytany || !hala.brudnopis || !hala.pracownik) return;
+    if (!hala.obiekty('zlecenie').length) return;
+    s.szkicWczytany = true;
+    let zmiana = false;
+    for (const rodzaj of ['formularz', 'poz']) {
+      let d = null;
+      try { d = await hala.brudnopis.odczytaj(KLUCZ_SZKICU[rodzaj]); } catch (e) { d = null; }
+      if (!d || typeof d !== 'object' || s[rodzaj]) continue;
+      const ids = Array.isArray(d.zdjecia) ? d.zdjecia.filter(x => typeof x === 'string') : [];
+      const sprzatnij = () => { for (const id of ids) if (hala.usunPlik) hala.usunPlik(id).catch(() => {}); try { hala.brudnopis.usun(KLUCZ_SZKICU[rodzaj]); } catch (e) { /* bez szkicu */ } };
+      const opcje = s.opcje || {};
+      const z = hala.obiekt('zlecenie', d.id);
+      const w = z ? wiersze([z], kontekst(hala, Object.assign({}, opcje, { moje: null, zostaw: d.id })))[0] : null;
+      const q = w && rodzaj === 'poz' ? w.pozycje.find(x => x.id === d.pozycja) : null;
+      if (!w || !w.doZrobienia || !d.czas || Date.now() - d.czas > SZKIC_WAZNY_MS || (rodzaj === 'poz' && !q)) { sprzatnij(); continue; }
+      const pliki = [];
+      for (const id of ids.slice(0, MAKS_ZDJEC)) {
+        try { const url = await hala.adresPliku(id); if (url && !/\/api\/v1\/pliki\//.test(url)) pliki.push({ id, url }); } catch (e) { /* zdjęcia już nie ma na telefonie */ }
+      }
+      if (s[rodzaj]) continue;
+      s[rodzaj] = rodzaj === 'formularz'
+        ? { id: d.id, rodzaj: d.rodzaj === 'odrzucone' ? 'odrzucone' : 'wykonane', tekst: String(d.tekst || ''), pliki, blad: null, skan: d.skan || null,
+            skany: Array.isArray(d.skany) ? d.skany : [], wymagania: wymaganiaZ(w, hala) }
+        : { id: d.id, pozycja: d.pozycja, tekst: String(d.tekst || ''), pliki, skan: d.skan || null, blad: null, wysyla: false, pracownicy: hala.pracownicy,
+            wymagania: wymaganiaPozycji(q, w, hala.slowniki) };
+      zmiana = true;
+    }
+    if (zmiana) rysuj(el, hala, s.opcje);
   }
 
   function formularz(f) {
@@ -450,9 +527,11 @@
   function rysuj(el, hala, opcje) {
     const s = stan(el);
     s.opcje = opcje;
+    ostatniaHala = hala;
     const ja = hala.pracownik && hala.pracownik.id;
     // Inna osoba na tym samym urządzeniu: nie dostaje cudzego filtra „Moje” ani cudzego otwartego formularza.
-    if (s.ja !== ja) { zwolnij(s.formularz); s.formularz = null; s.moje = false; s.ja = ja; }
+    if (s.ja !== ja) { zwolnij(s.formularz, { szkic: false }); s.formularz = null; s.moje = false; s.ja = ja; s.szkicWczytany = false; }
+    if (!s.szkicWczytany && ja) przywrocSzkice(el, hala).catch(() => {});
     const lista = wiersze(hala.obiekty('zlecenie'), kontekst(hala, Object.assign({}, opcje, { moje: s.moje ? ja : null,
                                                                                     zostaw: s.formularz ? s.formularz.id : null })));
     // Formularz do zlecenia, które zniknęło (np. kierownik je anulował) — zamykamy.
@@ -532,9 +611,9 @@
       el.dataset.halaZlecenia = '1';
       el.addEventListener('click', ev => { if (zNaszejTresci(ev, el)) akcja(ev, el, hala, stan(el).opcje); });
       el.addEventListener('input', ev => {
-        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pole]') && s.formularz) { s.formularz.tekst = ev.target.value; odswiezBlokade(el, s.formularz); }
+        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pole]') && s.formularz) { s.formularz.tekst = ev.target.value; odswiezBlokade(el, s.formularz); zapiszSzkic(hala, s.formularz); }
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-postep-pole]') && s.notatka) s.notatka.tekst = ev.target.value;
-        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-pole]') && s.poz) { s.poz.tekst = ev.target.value; s.poz.blad = null; odswiezPozycje(el, s.poz); }
+        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-pole]') && s.poz) { s.poz.tekst = ev.target.value; s.poz.blad = null; odswiezPozycje(el, s.poz); zapiszSzkic(hala, s.poz); }
       });
       el.addEventListener('change', async ev => {
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-postep-zdjecie]')) {
@@ -554,19 +633,15 @@
           return;
         }
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-zdjecie]') && s.poz) {
-          for (const plik of Array.from(ev.target.files || []).slice(0, MAKS_ZDJEC - s.poz.pliki.length))
-            s.poz.pliki.push({ plik, url: URL.createObjectURL(plik) });
+          const wybrane = Array.from(ev.target.files || []);
           ev.target.value = '';
-          s.poz.blad = null;
-          rysuj(el, hala, stan(el).opcje);
-          return;
+          return dodajZdjeciaDoFormularza(el, hala, 'poz', s.poz, wybrane);
         }
         if (!zNaszejTresci(ev, el) || !ev.target.matches('[data-zdjecie]') || !s.formularz) return;
-        // Podgląd z pliku w pamięci przeglądarki — do kolejki (hala.dodajPlik) trafia dopiero przy „Wyślij”.
-        for (const plik of Array.from(ev.target.files || []).slice(0, MAKS_ZDJEC - s.formularz.pliki.length))
-          s.formularz.pliki.push({ plik, url: URL.createObjectURL(plik) });
-        s.formularz.blad = null;
-        rysuj(el, hala, stan(el).opcje);
+        // Zdjęcie od razu do IndexedDB (zmniejszone) — po powrocie z tła formularz je odtworzy (przywrocSzkice).
+        const wybrane = Array.from(ev.target.files || []);
+        ev.target.value = '';
+        return dodajZdjeciaDoFormularza(el, hala, 'formularz', s.formularz, wybrane);
       });
     }
   }
@@ -650,13 +725,14 @@
         if (s.formularz !== f || tekst === null || tekst === undefined) return;     // anulowano albo formularz już zamknięty
         const w = skanMaszyny(tekst, f.wymagania.maszyny && f.wymagania.maszyny.length ? f.wymagania.maszyny : f.wymagania.maszyna,
                               hala.slowniki, global.Hala.odczytajKod);
-        if (w.kod) { f.skany = [...new Set([].concat(f.skany || [], [w.kod]))]; f.skan = w.kod; }
+        if (w.kod) { f.skany = [...new Set([].concat(f.skany || [], [w.kod]))]; f.skan = w.kod; zapiszSzkic(hala, f, true); }
         f.blad = w.blad || null;
         return rysuj(el, hala, s.opcje || opcje);
       }
       if (b.dataset.akcja === 'usun-zdjecie' && s.formularz) {
         const [p] = s.formularz.pliki.splice(+b.dataset.nr, 1);
-        zwolnij({ pliki: p ? [p] : [] });
+        if (p && p.id && hala.usunPlik) hala.usunPlik(p.id).catch(() => {});
+        zapiszSzkic(hala, s.formularz, true);
         return rysuj(el, hala, s.opcje || opcje);
       }
       if (b.dataset.akcja === 'anuluj-formularz') { zwolnij(s.formularz); s.formularz = null; return rysuj(el, hala, s.opcje || opcje); }
@@ -675,7 +751,7 @@
         } else {
           const dane = tekst ? { uwagi: tekst } : {};
           const zdjecia = [];
-          for (const p of f.pliki) zdjecia.push(await hala.dodajPlik(p.plik));
+          for (const p of f.pliki) zdjecia.push(p.id);               // zdjęcia już są w kolejce telefonu (dodajZdjeciaDoFormularza)
           if (zdjecia.length) dane.zdjecia = zdjecia;
           // Kilka maszyn zeskanowanych w formularzu: wszystkie oprócz ostatniej idą krokiem postępu, ostatnia — z „Zrobione”.
           const skany = (f.skany || []).filter(m => !((f.wymagania.juz || {}).skany || []).includes(m));
@@ -960,7 +1036,7 @@
         const dane = {};
         if (f.tekst.trim()) dane.uwagi = f.tekst.trim();
         const zdjecia = [];
-        for (const p of f.pliki) zdjecia.push(await hala.dodajPlik(p.plik));
+        for (const p of f.pliki) zdjecia.push(p.id);               // zdjęcia już są w kolejce telefonu (dodajZdjeciaDoFormularza)
         if (zdjecia.length) dane.zdjecia = zdjecia;
         if (f.skan) dane.skan = f.skan;
         const w = await odhaczPozycje(hala, id, q.id, dane);

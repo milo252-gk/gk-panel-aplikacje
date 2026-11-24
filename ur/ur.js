@@ -547,7 +547,7 @@
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu">
           <a class="przycisk" href="#liczniki">Liczniki maszyn (motogodziny, cykle)</a>
-          ${UR.mozeKpi() ? '<a class="przycisk" href="#kpi">KPI: wskaźniki UR</a>' : ''}
+          ${UR.mozeKpi() ? '<a class="przycisk" href="#kpi">KPI: wskaźniki Utrzymania Ruchu</a>' : ''}
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#wyniki">Moje wyniki</a>

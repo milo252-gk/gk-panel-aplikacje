@@ -67,7 +67,7 @@
           ${liderow.map(p => `${kartaProby(p)}<div class="akcje-proby">
             ${mogePartie ? `<button type="button" data-partia-proby="${esc(p.id)}">Partia brakowa</button>` : ''}
             <button type="button" data-pomin-probe="${esc(p.id)}">Pomiń</button></div>`).join('')}</section>` : ''}
-        <section class="grupa"><h2>Próby KJ na tej zmianie <span class="slaby">${moje.length}</span></h2>
+        <section class="grupa"><h2>Próby Kontroli Jakości na tej zmianie <span class="slaby">${moje.length}</span></h2>
           ${widoczne.widoczne.map(kartaProby).join('') || '<p class="pusto">Brak prób na tej zmianie. Zeskanuj maszynę, żeby zacząć pierwszą.</p>'}
           ${widoczne.ukryte ? `<button type="button" class="szeroki" id="wszystkie-proby">Pokaż wszystkie (${moje.length})</button>` : ''}</section>`;
       const b = el.querySelector('#skanuj-stanowisko');

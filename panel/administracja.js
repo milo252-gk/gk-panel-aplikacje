@@ -295,7 +295,7 @@
         <div class="admin-pasek">
           <input id="admin-szukaj" type="search" placeholder="Szukaj osoby (imię, login)" aria-label="Szukaj osoby: imię, nazwisko albo login" value="${esc(szukaj)}">
           <label class="zaznacz"><input type="checkbox" id="admin-nieaktywni" ${nieaktywni ? 'checked' : ''}> Pokaż wyłączone</label>
-          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Produkcja, UR, KJ)">${P.ik('drukuj')}Identyfikatory</button>
+          <button type="button" data-akcja="identyfikatory" id="admin-identyfikatory" title="Kody QR do logowania skanem (GK Produkcja, Utrzymanie Ruchu, Kontrola Jakości)">${P.ik('drukuj')}Identyfikatory</button>
           <button type="button" class="glowny" id="admin-dodaj">+ Dodaj osobę</button>
         </div>
         <div id="admin-lista" class="lista"></div>`;

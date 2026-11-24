@@ -1843,7 +1843,7 @@
   /* Właściciel 2026-10-26: „opcje dodawania większej ilości zdjęć do zlecenia”. Telefon robi jedno zdjęcie na raz, więc
      pole zbiera je w kolejce (do MAKS_ZDJEC_FORMULARZA, jak przy wykonaniu w zlecenia.js): każde ma miniaturę i ✕. Pliki
      czyta zdjeciaPola(input) przy wysyłce. */
-  const MAKS_ZDJEC_FORMULARZA = 8;
+  const MAKS_ZDJEC_FORMULARZA = 9;                    // właściciel 2026-11-24: „Limit to 9 zdjęć”
   const plikiPola = new WeakMap();
   /* D91: maks() — ile nowych zdjęć jeszcze wolno (okno „Zmień” liczy też zdjęcia już dołączone do zlecenia);
      bez opcji — MAKS_ZDJEC_FORMULARZA. Zwraca pokaz(), żeby okno mogło przerysować licznik po zmianie listy obok. */
@@ -1922,7 +1922,7 @@
     const a = Hala.otwartaAwariaMaszyny(hala.obiekty('awaria'), fa.maszyna.value);
     const moze = Hala.mozeDopisacDoAwarii(hala.pracownik, hala.kontrakt);
     box.hidden = !a;
-    wyslij.textContent = a ? (moze ? 'Zgłoś osobną' : 'Zgłoś mimo to') : 'Zgłoś do UR';
+    wyslij.textContent = a ? (moze ? 'Zgłoś osobną' : 'Zgłoś mimo to') : 'Zgłoś do Utrzymania Ruchu';
     if (!a) return;
     box.querySelector('p').textContent = Hala.podpowiedzODuplikacie(a, { slowniki: hala.slowniki, pracownicy: hala.pracownicy, mozeDopisac: moze });
     box.querySelector('[data-dopisz]').hidden = !moze;

@@ -3061,7 +3061,7 @@
      Wynik: { zdjecia } — PEŁNA lista (hub zastępuje) albo undefined, gdy nic się nie zmieniło (pola wtedy nie wysyłamy, więc
      edycja treści nie nadpisze zdjęć dołożonych w międzyczasie przy przekazaniu); bledy — ponad maks (domyślnie 8). */
   function zdjeciaEdycji(stare, zostaja, nowe, maks) {
-    const limit = maks || 8;
+    const limit = maks || 9;
     const s = [].concat(stare || []).filter(x => typeof x === 'string');
     const z = [].concat(zostaja || []).filter(x => s.includes(x));
     const lista = [...new Set(z.concat([].concat(nowe || []).filter(x => typeof x === 'string' && x)))];

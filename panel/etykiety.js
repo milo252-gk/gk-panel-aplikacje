@@ -171,11 +171,11 @@
       { kod: 'maszyny', nazwa: 'Maszyny', gdzie: 'Też: Administracja → Maszyny',
         elementy: proste('maszyny', p => [p.kod, wiele ? p.liniaNazwa : ''].filter(Boolean).join(' · ')) },
       { kod: 'punkty', nazwa: 'Punkty skanu w zleceniach i obchodach', gdzie: 'Naklejki maszyn, które trzeba zeskanować. Też: Zlecenia → Zapisane',
-        elementy: punktySkanu(sl).map(p => ({ klucz: p.klucz, nazwa: p.zrodlo === 'ur' ? `UR: ${p.nazwa}` : p.nazwa,
+        elementy: punktySkanu(sl).map(p => ({ klucz: p.klucz, nazwa: p.zrodlo === 'ur' ? `Utrzymanie Ruchu: ${p.nazwa}` : p.nazwa,
           podpis: `${p.etykiety.map(e => e.kod).join(', ')}${p.aktywny ? '' : ' · wstrzymane'}`, etykiety: p.etykiety })) },
       { kod: 'linie', nazwa: 'Linie', gdzie: '', elementy: wiele ? proste('linie', p => p.kod) : [] },
       { kod: 'stanowiska', nazwa: 'Stanowiska', gdzie: '', elementy: proste('stanowiska', p => [p.kod, p.liniaNazwa].filter(Boolean).join(' · ')) },
-      { kod: 'identyfikatory', nazwa: 'Identyfikatory osób', gdzie: 'Logowanie skanem w GK Produkcja, UR i KJ. Też: Administracja → Pracownicy',
+      { kod: 'identyfikatory', nazwa: 'Identyfikatory osób', gdzie: 'Logowanie skanem w GK Produkcja, GK Utrzymanie Ruchu i GK Kontrola Jakości. Też: Administracja → Pracownicy',
         elementy: identyfikatory(pracownicy, kontrakt).map(p => ({ klucz: `pracownicy/${p.kod}`, nazwa: p.nazwa, podpis: p.kod, etykiety: [p] })) },
     ];
     return lista.filter(k => k.elementy.length || k.wczytuje || k.blad);

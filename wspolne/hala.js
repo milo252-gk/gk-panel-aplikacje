@@ -1524,15 +1524,24 @@
         img.src = adres;
       });
     }
+    let c = null;
     try {
       const w = obraz.width, h = obraz.height;
       const skala = Math.min(1, maks / Math.max(w, h));
-      const c = document.createElement('canvas');
+      c = document.createElement('canvas');
       c.width = Math.round(w * skala); c.height = Math.round(h * skala);
       c.getContext('2d').drawImage(obraz, 0, 0, c.width, c.height);
-      return await new Promise(ok => c.toBlob(ok, 'image/jpeg', jakosc));
+      const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', jakosc));
+      // Brak pamięci: toBlob oddaje null, a nie wyjątek — wcześniej dalej szło `blob.type` (TypeError „Cannot read properties of null”).
+      if (!blob) throw new Error('Za mało pamięci w telefonie, żeby przetworzyć zdjęcie. Wyślij najpierw to, co już dodałeś, albo zamknij inne aplikacje i spróbuj jeszcze raz.');
+      return blob;
     } finally {
       if (adres) URL.revokeObjectURL(adres);
+      // Zwalniamy pamięć OD RAZU, nie czekając na GC: zdekodowane zdjęcie z aparatu (12 Mpx ≈ 48 MB) i płótno trzymane do końca
+      // strony wyczerpywały pamięć telefonu po kilku zdjęciach z rzędu (Safari iOS ma łączny limit pamięci płócien — po nim
+      // kolejne zdjęcia wychodziły puste albo z błędem, aż do ponownego uruchomienia aplikacji).
+      try { if (obraz && typeof obraz.close === 'function') obraz.close(); } catch (e) { /* stara przeglądarka */ }
+      if (c) { c.width = 0; c.height = 0; }
     }
   }
 
@@ -2041,7 +2050,11 @@
     const adresyLokalne = new Map(), MAKS_ADRESOW = 40;
     h.adresPliku = async id => {
       if (adresyLokalne.has(id)) return adresyLokalne.get(id);
-      const w = await dzialanie(db, 'pliki', 'readonly', s => s.get(id));
+      // Odczyt podglądu nie może wywrócić ekranu: telefon wracający z tła (system zamknął połączenie z IndexedDB) rzucał tu wyjątek,
+      // przez co pole zdjęć (Lider.poleZdjec) nigdy się nie przerysowywało i nie dało się dodać kolejnego zdjęcia. Ponawiamy raz (zapisBezpiecznie
+      // otwiera bazę od nowa), a po drugim błędzie podgląd bierze się z huba.
+      let w = null;
+      try { w = await zapisBezpiecznie(() => dzialanie(db, 'pliki', 'readonly', s => s.get(id))); } catch (e) { w = null; }
       if (w && w.blob) {
         const u = URL.createObjectURL(w.blob);
         adresyLokalne.set(id, u);

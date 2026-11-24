@@ -307,7 +307,7 @@
   /* D91 (właściciel 2026-11-19: „daj możliwość dołączania zdjęć do zlecanych zadań”): przy przekazaniu można dołożyć
      zdjęcia. Pole zdjecia w zlecenie.przekazane = PEŁNA lista (istniejące + nowe) — hub zastępuje listę i odrzuca taką, która
      gubi istniejące albo przekracza 8. Bez nowych zdjęć — undefined (pola nie wysyłamy, zdjęcia zostają bez zmian). */
-  const MAKS_ZDJEC_ZLECENIA = 8;
+  const MAKS_ZDJEC_ZLECENIA = 9;                      // właściciel 2026-11-24: „Limit to 9 zdjęć” (hub: MAKS_ZDJEC_ZLECENIA)
   function zdjeciaPrzekazania(stare, noweIds) {
     const s = [].concat(stare || []).filter(x => typeof x === 'string');
     const n = [].concat(noweIds || []).filter(x => typeof x === 'string' && x && !s.includes(x));
@@ -508,9 +508,9 @@
     // dopisywać notatek do awarii (kontrakt) — dostają samą informację.
     const otwarta = H().otwartaAwariaMaszyny(hala.obiekty('awaria') || [], maszyna);
     const mozeDopisac = H().mozeDopisacDoAwarii(hala.pracownik, hala.kontrakt);
-    const etykietaWyslij = otwarta ? (mozeDopisac ? 'Zgłoś osobną' : 'Zgłoś mimo to') : 'Zgłoś do UR';
+    const etykietaWyslij = otwarta ? (mozeDopisac ? 'Zgłoś osobną' : 'Zgłoś mimo to') : 'Zgłoś do Utrzymania Ruchu';
     okno(`<form method="dialog"><h2>Zgłoś awarię</h2>
-      <p class="hala-okno-opis">${esc(nazwaMaszyny(sl, maszyna))} (${esc(maszyna)}) — trafi do UR.</p>
+      <p class="hala-okno-opis">${esc(nazwaMaszyny(sl, maszyna))} (${esc(maszyna)}) — trafi do Utrzymania Ruchu.</p>
       ${otwarta ? `<div class="hala-duplikat" role="note"><p>${esc(H().podpowiedzODuplikacie(otwarta, { slowniki: sl, pracownicy: hala.pracownicy, mozeDopisac }))}</p>
         ${mozeDopisac ? '<button type="button" class="glowny" data-dopisz>Dodaj do tej awarii</button>' : ''}</div>` : ''}
       <fieldset><legend>Jak bardzo?</legend>${prio.map((p, i) => `<label class="hala-zespol-zaznacz"><input type="radio" name="priorytet" value="${esc(p.kod)}" ${i === 0 ? 'checked' : ''}> ${esc(p.zatrzymuje && Object.keys(sl.linie || {}).length <= 1 ? 'Maszyna stoi' : p.nazwa)}</label>`).join('')}</fieldset>
@@ -549,7 +549,7 @@
           if (f.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(f.zdjecie.files[0])];
           await hala.zapisz('awaria.zgloszona', hala.nowyId(), dane);
           zamknij();
-          if (o.gotowe) o.gotowe('Awaria zgłoszona — UR dostało powiadomienie');
+          if (o.gotowe) o.gotowe('Awaria zgłoszona — Utrzymanie Ruchu dostało powiadomienie');
         } catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się zgłosić. Spróbuj jeszcze raz.'); b.disabled = false; }
       });
     });

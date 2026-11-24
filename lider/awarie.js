@@ -214,7 +214,7 @@
       tytul: `Czy ${rusza()} ruszyła?`,
       html: `<div class="karta-awarii">
           <div><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)} · ${esc(w.numer)}</span></div>
-          ${w.opisNaprawy ? `<p><span class="slaby">UR:</span> ${esc(w.opisNaprawy)}</p>` : ''}
+          ${w.opisNaprawy ? `<p><span class="slaby">Utrzymanie Ruchu:</span> ${esc(w.opisNaprawy)}</p>` : ''}
           <p class="slaby">Przestój: <span data-od="${esc(Date.parse(w.czasZgloszenia) || '')}">${esc(Hala.formatLicznika(w.przestojMs))}</span></p>
         </div>
         <form class="formularz">
@@ -276,7 +276,7 @@
       ${w.zdjecia.length ? `<div class="galeria-awarii" data-zdjecia="${esc(w.zdjecia.join(','))}" data-podpis="${esc(w.maszynaNazwa)}"></div>` : ''}
       ${w.mechanik ? `<div class="slaby">Mechanik: ${esc(w.mechanik)}</div>` : ''}
       ${w.powodWstrzymania ? `<div class="tekst-uwaga">Wstrzymana: ${esc(w.powodWstrzymania)}</div>` : ''}
-      ${w.opisNaprawy && w.doPotwierdzenia ? `<div>UR: ${esc(w.opisNaprawy)}</div>` : ''}
+      ${w.opisNaprawy && w.doPotwierdzenia ? `<div>Utrzymanie Ruchu: ${esc(w.opisNaprawy)}</div>` : ''}
       <div class="przestoj">Przestój <b ${w.aktywny ? `data-od="${esc(Date.parse(w.czasZgloszenia) || '')}"` : ''}>${esc(Hala.formatLicznika(w.przestojMs))}</b>
         <span class="slaby">od ${esc(w.godzZgloszenia)}</span></div>
       ${w.aktywny ? `<div class="akcje">

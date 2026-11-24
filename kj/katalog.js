@@ -181,7 +181,7 @@
     // ekran był pusty i planu nie dało się ustawić wcale.
     const grupy = W.wierszePlanu(hala.slowniki);
     if (!grupy.length) { box.innerHTML = '<p class="pusto">Brak linii — Menedżer zakłada je w Panelu (Administracja → Maszyny).</p>'; return; }
-    box.innerHTML = `<p class="slaby">Ile prób KJ na zmianę: na każdym stanowisku, a na linii bez stanowisk — na całej linii. 0 = poza planem.</p>
+    box.innerHTML = `<p class="slaby">Ile prób Kontroli Jakości na zmianę: na każdym stanowisku, a na linii bez stanowisk — na całej linii. 0 = poza planem.</p>
       <form id="f-plan">${grupy.map(g => `<section class="grupa"><h2>${esc(g.nazwa)}</h2>${g.pozycje.map(x => edycja
           ? KJ.licznik(x.pole, x.na_zmiane, x.nazwa, true)
           : `<div class="wiersz-planu"><span>${esc(x.nazwa)}</span><b>${esc(x.na_zmiane)}</b></div>`).join('')}</section>`).join('')}

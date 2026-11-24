@@ -107,13 +107,27 @@
     return Object.keys(z).length ? z : { I: { nazwa: 'Zmiana I', od: '06:00' }, II: { nazwa: 'Zmiana II', od: '14:00' }, III: { nazwa: 'Zmiana III', od: '22:00' } };
   };
   const wybrane = n => [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
+  /* D104: zmiany Magazynu mają własne godziny (7–15 / 15–22 / 22–6). Gdy zaznaczony jest TYLKO Magazyn — chipy zmian pokazują godziny Magazynu;
+     Magazyn razem z innymi działami — godziny zakładu i Magazynu obok siebie; bez Magazynu — jak dotąd (zmiany zakładu). */
+  const zmianyMagazynu = () => (wybrane('dzialy').includes('magazyn') && Hala.zmianyDzialu && Hala.zmianyDzialu(hala.slowniki, 'magazyn')) || null;
+  const tylkoMagazyn = () => !!zmianyMagazynu() && wybrane('dzialy').every(d => d === 'magazyn');
+  const godzinyZmiany = zm => `${(zm && zm.od) || ''}–${(zm && zm.do) || ''}`;
+  function rysujChipyZmian(zaznaczone) {
+    const zak = zmianySlownik(), mag = zmianyMagazynu(), tylkoMag = tylkoMagazyn();
+    $('stale-zmiany').innerHTML = Object.entries(zak).map(([k, zm]) => {
+      const godz = tylkoMag ? godzinyZmiany(mag[k] || zm) : mag ? `${godzinyZmiany(zm)} · Magazyn ${godzinyZmiany(mag[k] || zm)}` : godzinyZmiany(zm);
+      return chip('zmiany', k, `${esc(zm.nazwa || k)} <small>${esc(godz)}</small>`, (zaznaczone || []).includes(k));
+    }).join('');
+    $('stale-zmiany-opis').textContent = (tylkoMag ? `Zmiany Magazynu: ${Object.entries(zak).map(([k, zm]) => godzinyZmiany(mag[k] || zm)).join(' / ')}. ` : '')
+      + 'Każda zaznaczona zmiana dostaje własne zlecenie. Bez zaznaczenia: jedno dziennie, na start pierwszej zmiany.';
+  }
   // Trwające zlecenie otwarte do poprawienia (Zlecenia → ✎ Zmień): { id, kod, d }. Null — zwykłe okno zapisanego.
   let instancja = null;
   /* D92 (właściciel 2026-11-19: „daj możliwość dołączania zdjęć do zlecanych zadań”): w oknie „Zmień” trwającego zlecenia
      zdjęcia od zlecającego — dołączone (✕ zdejmuje z listy zlecenia; pliku na serwerze nie kasujemy) i nowe (aparat albo
-     galeria, razem najwyżej 8 — ten sam limit co „Nowe zlecenie” i hub). Wynik liczy W.zdjeciaEdycji. */
+     galeria, razem najwyżej 9 — ten sam limit co „Nowe zlecenie” i hub). Wynik liczy W.zdjeciaEdycji. */
   let zdjeciaZostaja = [];
-  const maksZdjec = P.MAKS_ZDJEC_FORMULARZA || 8;
+  const maksZdjec = P.MAKS_ZDJEC_FORMULARZA || 9;
   const pokazNowe = P.poleZdjecia ? P.poleZdjecia(f.inst_zdjecie, { maks: () => maksZdjec - zdjeciaZostaja.length }) : () => {};
   function rysujZdjeciaZlecenia() {
     const lista = $('inst-zdjecia-lista');
@@ -132,7 +146,7 @@
   const ped = P.widoki.checklisty.utworz(f, {
     lista: $('stale-pozycje'), wklej: $('stale-wklej'),
     linia: () => (f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value),
-    zmianaOd: () => { const zm = zmianySlownik(); return (zm[wybrane('zmiany')[0] || Object.keys(zm)[0]] || {}).od; },
+    zmianaOd: () => { const zm = tylkoMagazyn() ? Object.assign({}, zmianySlownik(), zmianyMagazynu()) : zmianySlownik(); return (zm[wybrane('zmiany')[0] || Object.keys(zm)[0]] || {}).od; },
     produkcja: () => wybrane('dzialy').every(d => d === 'produkcja'),
     zmiana: () => odswiez(), instancja: () => !!instancja, kod: () => edytowanyKod,
   });
@@ -393,8 +407,7 @@
     f.okno_minuty.value = wartosci.okno_minuty || 60;
     const dni = codziennie ? [1, 2, 3, 4, 5, 6, 7] : (wartosci.dni || []);
     $('stale-dni').innerHTML = SKROTY_DNI.map((n, i) => chip('dni', i + 1, n, dni.includes(i + 1), 'checkbox', W.DNI_NAZWY[i])).join('');
-    $('stale-zmiany').innerHTML = Object.entries(zmianySlownik()).map(([k, zm]) =>
-      chip('zmiany', k, `${esc(zm.nazwa || k)} <small>${esc(zm.od || '')}</small>`, (wartosci.zmiany || []).includes(k))).join('');
+    rysujChipyZmian(wartosci.zmiany || []);
     const wg = wartosci.zmiany_wg_dni || {};
     wgDni.dostepne = wgDniDostepne() || !!Object.keys(wg).length;       // zapisane wyjątki nie giną, nawet gdy serwer ich nie zna
     wgDni.aktywne = !!Object.keys(wg).length;
@@ -463,7 +476,7 @@
       const c = instancja || edytowanyKod ? null : W.gotowaCzynnosc(f.tytul.value, hala.slowniki);
       if (c) { if (c.opis && !f.opis.value.trim()) f.opis.value = c.opis; f.wymagaj_zdjecia.checked = !!c.zdjecie; f.wymagaj_notatki.checked = !!c.notatka; }
     }
-    if (ev.target.name === 'dzialy') rysujOsoby(wybrane('osoby'));
+    if (ev.target.name === 'dzialy') { rysujOsoby(wybrane('osoby')); rysujChipyZmian(wybrane('zmiany')); }
     if (ev.target === f.linia) rysujMaszynyStalego(wybrane('maszyny_stalego'));
     if (ev.target.name === 'maszyny_stalego') synchMaszynyStalego();
     if (ev.target === f.rodzaj && f.rodzaj.value === 'daty') ustawMiesiac(kal.daty.filter(d => d >= dzis())[0]);

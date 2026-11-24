@@ -450,7 +450,7 @@
           ? `Typ: ${nazwaZeStalej(stale, 'typy_usterek', d.typ_usterki) || d.typ_usterki}${d.priorytet ? ', priorytet: ' + priorytetInfo(stale, d.priorytet).nazwa : ''}`
           : `Priorytet: ${d.priorytet ? priorytetInfo(stale, d.priorytet).nazwa : '—'}`;
         case 'awaria.przypisana': return `Przekazana: ${nazwaPracownika(pracownicy, d.mechanik)}`;
-        case 'awaria.zakonczona_ur': return `Zakończona przez UR: ${d.opis_naprawy || ''}`;
+        case 'awaria.zakonczona_ur': return `Zakończona przez Utrzymanie Ruchu: ${d.opis_naprawy || ''}`;
         case 'awaria.potwierdzona': return 'Lider potwierdził — linia ruszyła';
         case 'awaria.potwierdzenie_odrzucone': return `Lider: nie działa — ${d.powod || ''}`;
         case 'awaria.anulowana': return `Odwołana: ${d.powod || ''}`;

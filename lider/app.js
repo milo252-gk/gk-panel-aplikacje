@@ -232,8 +232,9 @@
   Lider.poleZdjec = (kontener, lista, naZmiane, opcje) => {
     const o = Object.assign({ maks: 6, etykieta: 'Zdjęcie' }, opcje || {});
     async function rysuj() {
+      // Błąd odczytu jednego podglądu nie może zostawić pola bez przycisku „Zdjęcie” (wcześniej odrzucona obietnica przerywała rysowanie).
       const miniatury = await Promise.all(lista.map(async id => `<figure class="miniatura">
-        <img src="${esc(await hala.adresPliku(id))}" alt="Zdjęcie">
+        <img src="${esc(await hala.adresPliku(id).catch(() => ''))}" alt="Zdjęcie">
         <button type="button" class="usun" data-usun="${esc(id)}" aria-label="Usuń zdjęcie">${Lider.ik('zamknij', 18)}</button></figure>`));
       kontener.innerHTML = `<div class="zdjecia">${miniatury.join('')}
         ${lista.length < o.maks ? `<label class="przycisk dodaj-zdjecie">${window.GKIkony ? `<span class="ik">${window.GKIkony.html('aparat', 18)}</span>` : ''}${esc(o.etykieta)}

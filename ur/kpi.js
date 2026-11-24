@@ -108,7 +108,7 @@
           <h2>Maszyny — najdłuższy przestój</h2>${tabelaMaszyn(wynik.maszyny)}
           ${u.linia || !wiele ? '' : `<h2>Linie</h2>${tabelaLinii(wynik.linie)}`}
           <h2>Typy usterek</h2>${tabelaTypow(wynik.typy, k.stale)}
-          <p class="slaby stopka">${esc(zrodlo)} MTTR: od zgłoszenia do „Zakończona przez UR”. Przestój: do potwierdzenia lidera. Odwołane się nie liczą.</p>`
+          <p class="slaby stopka">${esc(zrodlo)} MTTR: od zgłoszenia do „Zakończona przez Utrzymanie Ruchu”. Przestój: do potwierdzenia lidera. Odwołane się nie liczą.</p>`
           : `<p class="pusto" id="kpi-hub">${UR.online() ? 'Liczę na serwerze…' : 'Dłuższe okresy liczy serwer — potrzebna sieć. Bez sieci wybierz 7 albo 30 dni.'}</p>`}</div>
         <div id="eksport-csv"></div>`;
       // Kierownik zakładu i administrator: awarie do Excela za dowolny okres (wspólny pasek ../wspolne/eksport.js, D32, R3).

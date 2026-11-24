@@ -289,7 +289,7 @@
       <h2 id="t-proby"><span class="ik" data-ikona="proba" data-rozmiar="20"></span>Próby jakościowe</h2>
       <form class="filtry-zlecen" id="filtry-prob" autocomplete="off">
         <label>Okres<select name="okres"><option value="1">dziś i wczoraj</option><option value="7">7 dni</option><option value="30">30 dni</option></select></label>
-        <label>Kto<select name="zrodlo"><option value="">Lider i KJ</option><option value="lider">Lider</option><option value="kj">KJ</option></select></label>
+        <label>Kto<select name="zrodlo"><option value="">Lider i Kontrola Jakości</option><option value="lider">Lider</option><option value="kj">Kontrola Jakości</option></select></label>
       </form>
       <div id="lista-prob" class="lista"></div>
     </section>
@@ -348,7 +348,7 @@
         <label id="zlecenie-czynnosc" hidden>Czynność, która zaliczy zlecenie sama<select name="czynnosc">
           <option value="">— zwykłe zlecenie (dział klika „Zrobione”) —</option>
           <option value="proba">Próba jakościowa — zaliczy się po zapisaniu próby</option>
-          <option value="przeglad">Przegląd UR — zaliczy się po zakończeniu przeglądu</option>
+          <option value="przeglad">Przegląd Utrzymania Ruchu — zaliczy się po zakończeniu przeglądu</option>
         </select></label>
         <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
              miniatura i nazwa pliku (panel.js → poleZdjecia). D91: bez capture — na telefonie wybór aparat ALBO galeria. -->
@@ -401,7 +401,7 @@
         <label>Termin (opcjonalnie)<input name="inst_termin" type="datetime-local"></label>
       </div>
       <!-- D91: zdjęcia do zlecenia — dołączone wcześniej (✕ zdejmuje z listy zlecenia, plik zostaje na serwerze) i nowe
-           (aparat albo galeria, razem najwyżej 8; stale.js → P.poleZdjecia). -->
+           (aparat albo galeria, razem najwyżej 9; stale.js → P.poleZdjecia). -->
       <div id="inst-zdjecia">
         <p class="slaby konto-drobne" id="inst-zdjecia-opis" hidden>Dołączone do zlecenia:</p>
         <div class="hala-zdjecie-lista" id="inst-zdjecia-lista"></div>
@@ -622,7 +622,7 @@
       <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
     </div>
     <p class="blad" role="alert" hidden></p>
-    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="czerwony" type="submit">Zgłoś do UR</button></div>
+    <div class="przyciski"><button type="button" data-zamknij>Anuluj</button><button class="czerwony" type="submit">Zgłoś do Utrzymania Ruchu</button></div>
   </form>
 </dialog>
 
