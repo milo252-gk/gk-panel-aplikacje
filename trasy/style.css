@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-b86606799d03';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-901448634551';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -902,9 +902,9 @@ body.okno-otwarte .mapa{visibility:hidden}
 .filtry-podsumowanie{font-weight:400; font-size:13px; flex:1 1 200px; min-width:0}
 .filtry-wyczysc{margin-left:auto}
 .filtry-pasek{display:flex; flex-wrap:wrap; gap:8px 10px}
-.filtry-pasek label{margin:0; flex:1 1 140px; min-width:0; max-width:230px; font-size:12px}
+.filtry-pasek label{margin:0; flex:1 1 124px; min-width:0; max-width:230px; font-size:12px}      /* 124 px: pięć filtrów (Trasy) mieści się w jednym rzędzie na 1280 px, jak w Panelu */
 .filtry-pasek input,.filtry-pasek select{width:100%; min-width:0; display:block; font-size:14px}
-.filtry-pasek label:first-child{flex-basis:210px; max-width:260px}      /* Sortowanie: etykieta „Domyślnie (najstarsze pierwsze)” jest dłuższa */
+.filtry-pasek label:first-child{flex-basis:190px; max-width:240px}      /* Sortowanie: etykieta „Domyślnie (najstarsze pierwsze)” jest dłuższa */
 .filtry-pasek label.filtr-aktywny select,.filtry-pasek label.filtr-aktywny input{border-color:var(--akcent); box-shadow:0 0 0 2px var(--pomarancz-tlo)}
 /* Unifikacja E3 (2026-11-23): na komputerze JEDEN zwarty rząd — pola po lewej, „N z M”, plakietka i „Wyczyść” po prawej w tej samej linii;
    aktywne pola mają pomarańczową obwódkę, więc podsumowanie tekstem jest zbędne. Telefon: bez zmian (jeden przewijany rząd). */

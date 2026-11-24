@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-b86606799d03';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-901448634551';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -3194,6 +3194,31 @@ async function sprawdzZdarzenia() {
   }
 }
 
+/* Po aktualizacji aplikacji (raz na wersję i urządzenie) odrzucone zapisy, które serwer odrzucił tylko dlatego, że czegoś
+   jeszcze brakowało (kod 409 — po MAKS_PROB próbach), wracają do kolejki same. Przyczyna mogła zniknąć wraz z nową wersją
+   (np. punkt „nasz” bez numeru zamówienia). Nic nie ginie i nic się nie dubluje: uuid operacji zostaje ten sam, a serwer
+   pamięta przyjęte numery. Zapisy odrzucone na stałe (400/404/410, „trwały” błąd) zostają na półce do decyzji człowieka. */
+const KLUCZ_PONOWIEN_PO_AKTUALIZACJI = 'ponowione-po-wersji'; // przez Pamiec (dostaje przedrostek gk-trasy.)
+function odrzuconeDoPonowienia(lista, uzytkownikId) {
+  return (lista || []).filter(o => o && o.uuid && o.uzytkownik === uzytkownikId
+    && /nie udało się wysłać \d+ razy/.test(String(o.blad || '')));
+}
+async function ponowOdrzuconePoAktualizacji() {
+  try {
+    const wersja = (typeof WERSJA_SKRYPTU === 'string') ? WERSJA_SKRYPTU : '';
+    if (!wersja || !stan.uz || Pamiec.czytaj(KLUCZ_PONOWIEN_PO_AKTUALIZACJI) === wersja) return;
+    const doPonowienia = odrzuconeDoPonowienia(await Kolejka.listaOdrzuconych(), stan.uz.id);
+    // Wersję zapisujemy od razu: jedna próba na wersję, bez pętli, gdy przyczyna dalej jest.
+    Pamiec.zapisz(KLUCZ_PONOWIEN_PO_AKTUALIZACJI, wersja);
+    if (!doPonowienia.length) return;
+    for (const o of doPonowienia) await Kolejka.ponow(o.uuid);
+    await odswiezStanSieci();
+    const n = doPonowienia.length;
+    komunikat(`Po aktualizacji ponawiam ${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')}, które się nie wysłały.`, 'ok');
+    await synchronizuj(true);
+  } catch (e) { /* dodatek: błąd (np. zablokowane IndexedDB) nie może zatrzymać wejścia do aplikacji */ }
+}
+
 async function wejdzDoAplikacji() {
   document.getElementById('ekran-logowania').classList.add('ukryty');
   document.getElementById('aplikacja').classList.remove('ukryty');
@@ -3206,6 +3231,7 @@ async function wejdzDoAplikacji() {
   await wczytajSlowniki();
   startPaskaDzwieku();
   synchronizuj();
+  ponowOdrzuconePoAktualizacji();
   wyslijZapisyBiura();
   if (typeof pobierzTraseNaJutro === 'function') pobierzTraseNaJutro(true);   // D78: na jutro bez zasięgu
   // Zdarzenia od tej chwili — pierwsze pytanie tylko ustawia numer (start nic nie gra).

@@ -4450,6 +4450,7 @@ function oknoKontaZespolu(k) {
           <p class="male slaby" style="margin:0 0 10px">Nikt nie zna niczyjego hasła ani PIN-u — możesz tylko
             przywrócić startowe. Osoba ustawi własne przy następnym logowaniu.</p>
           <div class="przyciski-konta">
+            <button type="button" data-akcja-konta="resetuj_konto" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>
             <button type="button" data-akcja-konta="haslo_startowe">Ustaw hasło startowe</button>
             <button type="button" data-akcja-konta="resetuj_pin">Resetuj PIN</button>
             <button type="button" data-akcja-konta="wyloguj_wszedzie">Wyloguj wszędzie</button>
@@ -4468,6 +4469,9 @@ function oknoKontaZespolu(k) {
         haslo_startowe: [`Ustawić hasło startowe?`,
           `${k.imie} dostanie hasło „haslo123”, PIN zostanie skasowany, a wszystkie urządzenia wylogowane. `
           + 'Przy pierwszym logowaniu ustawi nowe hasło i PIN.', 'Ustaw hasło startowe'],
+        resetuj_konto: [`Zresetować hasło i PIN?`,
+          `${k.imie} dostanie hasło „haslo123” i PIN 1234, wszystkie urządzenia zostaną wylogowane, `
+          + 'a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło'],
         resetuj_pin: [`Zresetować PIN?`,
           `${k.imie} dostanie PIN startowy 1234 — przy pierwszym logowaniu ustawi nowy. Hasło się nie zmienia.`,
           'Resetuj PIN'],
@@ -4484,7 +4488,8 @@ function oknoKontaZespolu(k) {
         try {
           zajety(true);
           const w = await API.post('/api/konta-gk/osoba', { akcja, id: k.id });
-          komunikat(akcja === 'resetuj_pin' ? `PIN startowy ${w.pin || '1234'} — ${k.imie} ustawi nowy przy logowaniu`
+          komunikat(akcja === 'resetuj_konto' ? `${k.imie}: hasło „haslo123” i PIN 1234 — przy logowaniu ustawi nowe.`
+            : akcja === 'resetuj_pin' ? `PIN startowy ${w.pin || '1234'} — ${k.imie} ustawi nowy przy logowaniu`
             : akcja === 'haslo_startowe' ? `Hasło startowe haslo123 — ${k.imie} ustawi nowe przy logowaniu`
               : `Wylogowano ${k.imie} ze wszystkich urządzeń`, 'ok');
           if (w.uwaga) komunikat(w.uwaga, 'blad');
