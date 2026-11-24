@@ -325,7 +325,7 @@
           ${uprawnienia(lista.find(x => x.id === p.id)).resetKonta ? '<button type="button" class="maly" data-akcja="resetuj-konto" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>' : ''}
           <button type="button" class="maly" data-akcja="edytuj">Zmień</button>
         </div>
-      </article>`).join('') || '<p class="pusto">Nikogo nie znaleziono</p>';
+      </article>`).join('') || '<p class="pusto">Nikogo nie znalazłem.</p>';
   }
 
   const fp = $('formularz-osoby');

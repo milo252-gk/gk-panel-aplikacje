@@ -133,6 +133,7 @@
     lista: $('stale-pozycje'), wklej: $('stale-wklej'),
     linia: () => (f.linia.value === W.LINIA_KAZDA ? '' : f.linia.value),
     zmianaOd: () => { const zm = zmianySlownik(); return (zm[wybrane('zmiany')[0] || Object.keys(zm)[0]] || {}).od; },
+    produkcja: () => wybrane('dzialy').every(d => d === 'produkcja'),
     zmiana: () => odswiez(), instancja: () => !!instancja, kod: () => edytowanyKod,
   });
   /* Maszyny zlecenia stałego jako pola wyboru; ukryte pole „maszyna” = pierwsza zaznaczona (wymaganie skanu, hub). Maszyna

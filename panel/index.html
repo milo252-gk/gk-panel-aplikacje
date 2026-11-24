@@ -85,26 +85,24 @@
   <div id="na-zywo" class="na-zywo">
     <div class="pulpit-gora">
       <div id="kafelki-liczb" class="hala-kafelki kafelki-liczb" aria-label="Najważniejsze liczby"></div>
+      <!-- Właściciel 2026-11-23: filtry sekcji „Aktualna zmiana” w wolnym miejscu rzędu liczb (jeden zwarty rząd; telefon — jeden przewijany). -->
+      <form class="filtry-biezace" id="filtry-biezace" autocomplete="off">
+        <label>Dział<select name="dzial"><option value="">wszystkie</option></select></label>
+        <label>Osoba<select name="osoba"><option value="">wszyscy</option></select></label>
+        <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
+        <button type="button" id="biezace-czysc" class="maly" hidden>Wyczyść filtry</button>
+      </form>
       <!-- Właściciel 2026-11-10: to samo okno co „+ Nowe zlecenie” w Zleceniach i pod tym samym warunkiem (kierownik zakładu, admin). -->
       <button type="button" id="pulpit-nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
     </div>
     <!-- Właściciel 2026-11-18: sekcji „Jakość i BHP” i kafelka jakości już nie ma (BHP i jakość są w checklistach); kolejność Pulpitu: liczby → Obchody → Awarie (zwarty pasek).
          D87 (właściciel 2026-11-17): odbiór checklisty jest w karcie obchodu (panel.js: rysujKafelki → „Do odbioru”), nie w osobnej sekcji. -->
-    <!-- Właściciel 2026-11-23: jedna sekcja „Zlecenia w toku” w układzie dawnych Obchodów — karty checklist (obchody) i karty zleceń działów
+    <!-- Właściciel 2026-11-23: jedna sekcja „Aktualna zmiana” w układzie dawnych Obchodów — karty checklist (obchody) i karty zleceń działów (od 2026-11-23 bez nich)
          (zlecenia, zgłoszenia, narzędzia, BHP) w jednej siatce, z tymi samymi akcjami (Przyjmij/Odbierz/Zwróć/Historia/Zmień) i jednym rzędem filtrów.
          D87: odbiór checklisty jest w jej karcie (panel.js: rysujKafelki → „Do odbioru”); karty zleceń dokłada rysujBiezace. Konto „ekran” (monitor)
          nie ma filtrów, liczników ani kart zleceń — jego Pulpit zostaje bez zmian. -->
     <section class="obchody" id="pulpit-zlecenia" aria-labelledby="t-biezace">
-      <h2 id="t-biezace">Zlecenia w toku <span class="licznik" id="biezace-liczniki"></span></h2>
-      <form class="filtry-biezace" id="filtry-biezace" autocomplete="off">
-        <label>Dział<select name="dzial"><option value="">wszystkie</option></select></label>
-        <label>Osoba<select name="osoba"><option value="">wszyscy</option></select></label>
-        <label>Rodzaj<select name="rodzaj"><option value="">wszystkie</option></select></label>
-        <label id="biezace-linia">Linia<select name="linia"><option value="">wszystkie</option></select></label>
-        <label id="biezace-maszyna">Maszyna<select name="maszyna"><option value="">wszystkie</option></select></label>
-        <label class="zaznacz"><input type="checkbox" name="spoznione"> <span class="ik" data-ikona="zegar" data-rozmiar="16"></span>tylko spóźnione</label>
-        <button type="button" id="biezace-czysc" class="maly" hidden>Wyczyść filtry</button>
-      </form>
+      <h2 id="t-biezace">Aktualna zmiana</h2>
       <div id="kafelki" class="kafelki"></div>
     </section>
     <section class="awarie" aria-labelledby="t-awarie">
@@ -131,16 +129,15 @@
       <!-- D60 (właściciel 2026-10-14): jedna lista zadań — zlecenia, zapisane/stałe, checklisty zadań, zadania kierownika,
            zgłoszenia, narzędzia i BHP razem, ze znacznikiem rodzaju i filtrem „Rodzaj”; obok wszystkie wzory (Zapisane). -->
       <div class="chipy tryb-zlecen" id="tryb-zlecen" role="group" aria-label="Zlecenia albo zapisane">
-        <button type="button" class="chip" data-tryb="biezace" aria-pressed="true">Zlecenia odebrane</button>
+        <button type="button" class="chip" data-tryb="biezace" aria-pressed="true">Zlecenia</button>
         <button type="button" class="chip" data-tryb="stale" aria-pressed="false"><span class="ik" data-ikona="zapisane" data-rozmiar="16"></span>Zlecenia zapisane</button>
         <button type="button" class="chip" data-tryb="kalendarz" aria-pressed="false"><span class="ik" data-ikona="kalendarz" data-rozmiar="16"></span>Kalendarz zleceń</button>
       </div>
       <div id="zlecenia-biezace" class="zlecenia-czesc">
         <!-- UI etap 2 (właściciel 2026-10-12): trzy filtry. Po terminie (⏰), zaplanowane i przepadłe to znaczniki na
              wierszach — „W toku” ma spóźnione na górze i zaplanowane na dole, „Zamknięte” ma przepadłe (W.chipyZlecen). -->
-        <!-- Unifikacja E4 (właściciel 2026-11-23): „W toku” i „Do odbioru” przeszły na Pulpit (sekcja „Zlecenia w toku”); ten ekran
-             to historia — zawsze „Odebrane”. Chipy zostają w DOM (ukryte), bo logika filtra i liczniki z nich korzystają. -->
-        <div class="chipy" id="filtr-zlecen" role="group" aria-label="Które zlecenia" hidden>
+        <!-- Wariant B (2026-11-24): zlecenia nie-checklistowe (zlecenia, zgłoszenia, narzędzia, BHP) są w jednym miejscu — Zlecenia → W toku / Do odbioru / Odebrane, z pełnymi akcjami; Pulpit pokazuje tylko karty checklist. -->
+        <div class="chipy" id="filtr-zlecen" role="group" aria-label="Które zlecenia">
           <button type="button" class="chip" data-filtr="otwarte" aria-pressed="true">W toku</button>
           <button type="button" class="chip" data-filtr="do-zamkniecia" aria-pressed="false">Do odbioru</button>
           <button type="button" class="chip" data-filtr="zamkniete" aria-pressed="false">Odebrane</button>

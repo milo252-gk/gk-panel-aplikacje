@@ -41,7 +41,7 @@
   /* D92: zalogowana osoba z Magazynu (W.profilMagazynu) — aplikacja „GK Magazyn” bez Zmiany, Jakości, Awarii i Raportu zmiany.
      Ekrany, wezwania i powiadomienia produkcji pytają o to tutaj (awarie.js, jakosc.js). */
   Lider.magazyn = () => hala.zalogowany() && W.profilMagazynu(hala.pracownik);
-  Lider.ekranDostepny = nazwa => !W.ukryteEkrany(hala.pracownik).includes(nazwa);
+  Lider.ekranDostepny = nazwa => !W.ukryteEkrany(hala.pracownik).includes(nazwa) && (nazwa !== 'rcp' || W.mozeRcp(hala.pracownik));
 
   // ------------------------------------------------------------ komunikaty
 
@@ -638,7 +638,7 @@
     if (nazwa !== Lider.stan.ekran && !(opcje && opcje.bezHistorii)) wHistorii(nazwa);
     Lider.stan.ekran = nazwa;
     // Ekrany schowane w „Więcej” (D74) podświetlają w menu „Więcej”.
-    const wMenu = nazwa === 'koniec' || nazwa === 'moje' || nazwa === 'wyniki' ? 'wiecej' : nazwa;
+    const wMenu = nazwa === 'koniec' || nazwa === 'moje' || nazwa === 'wyniki' || nazwa === 'rcp' ? 'wiecej' : nazwa;
     for (const b of document.querySelectorAll('.dolny [data-ekran]')) {
       if (b.dataset.ekran === wMenu) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
@@ -709,6 +709,8 @@
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu-wiecej">
           ${mag ? '' : '<button type="button" class="glowny" data-a="koniec">Raport zmiany</button>'}
+          ${W.mozeRcp(hala.pracownik) && !mag ? '<button type="button" data-a="rcp">Ludzie ze zmiany (RCP)</button>' : ''}
+          
           <button type="button" data-a="moje">Moje zgłoszenia</button>
           <button type="button" data-a="wyniki">Moje wyniki</button>
           <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>
@@ -716,6 +718,8 @@
         <p class="slaby">${esc(opisKonta.charAt(0).toUpperCase() + opisKonta.slice(1))} — w Moim koncie (ikona osoby u góry).</p>`;
       const koniec = el.querySelector('[data-a=koniec]');
       if (koniec) koniec.addEventListener('click', () => Lider.pokazEkran('koniec'));
+      const rcp = el.querySelector('[data-a=rcp]');
+      if (rcp) rcp.addEventListener('click', () => Lider.pokazEkran('rcp'));
       el.querySelector('[data-a=moje]').addEventListener('click', () => Lider.pokazEkran('moje'));
       el.querySelector('[data-a=wyniki]').addEventListener('click', () => Lider.pokazEkran('wyniki'));
       el.querySelector('[data-a=niewyslane]').addEventListener('click', () => pokazOdrzucone());

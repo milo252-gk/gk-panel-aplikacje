@@ -12,7 +12,7 @@
   const P = window.Panel;
   const { hala, W, esc } = P;
 
-  const S = { czesc: 'dni', od: '', do: '', filtr: 'do_zatwierdzenia', szukaj: '', dni: null, karty: null, grafik: null, tydzien: '', blad: '', otwarte: new Set(),
+  const S = { czesc: 'dni', od: '', do: '', filtr: 'do_zatwierdzenia', szukaj: '', dni: null, potwierdzenia: [], karty: null, wnioski: null, nieznane: null, pule: null, brak: null, lista: null, grafik: null, tydzien: '', blad: '', otwarte: new Set(),
               eksport: { format: 'csv', wszystkie: false } };
   let korzen = null, wczytuje = false, ostatnieOdswiezenie = 0;
   const ODSWIEZ_MS = 60000;
@@ -31,8 +31,18 @@
     wczytuje = true;
     try {
       if (!S.od) Object.assign(S, W.rcpOkres(hala.teraz()));
-      if (S.czesc === 'dni' || S.dni === null) S.dni = (await api('GET', `dni?od=${S.od}&do=${S.do}`)).dni;
-      if (S.czesc === 'karty' || S.czesc === 'grafik' || S.karty === null) S.karty = (await api('GET', 'karty')).karty;
+      if (S.czesc === 'dni' || S.dni === null) {
+        const r = await api('GET', `dni?od=${S.od}&do=${S.do}`);
+        S.dni = r.dni; S.potwierdzenia = r.potwierdzenia || [];
+      }
+      if (S.czesc === 'karty' || S.czesc === 'grafik' || S.karty === null) {
+        const r = await api('GET', 'karty');
+        S.karty = r.karty;
+      }
+      if (S.czesc === 'wnioski' || S.wnioski === null) S.wnioski = (await api('GET', 'wnioski')).wnioski;
+      if (S.czesc === 'wnioski') S.pule = await api('GET', 'pule');
+      if (S.czesc === 'karty') S.nieznane = (await api('GET', 'nieznane')).nieznane;
+      if (S.czesc === 'dni') S.brak = await api('GET', 'brak-odbic');
       if (S.czesc === 'grafik') {
         if (!S.tydzien) S.tydzien = poniedzialek(W.dzienZakladu(hala.teraz()));
         S.grafik = await api('GET', `grafik?od=${S.tydzien}&do=${dodajDni(S.tydzien, 6)}`);
@@ -47,6 +57,14 @@
   const nazwaRodzaju = r => (r === 'wyjscie' ? 'wyjście' : 'wejście');
   const dzisIso = () => new Date().toISOString();
 
+  // Potwierdzenie Lidera/Mistrza (D96): kto, o której, notatka zmiany i uwaga przy tej osobie. To nie jest zatwierdzenie dnia.
+  function sprawdzone(w) {
+    const p = (S.potwierdzenia || []).find(x => x.dzien === w.dzien && x.osoby.some(o => o.id === w.pracownik));
+    if (!p) return '';
+    const uwaga = (p.osoby.find(o => o.id === w.pracownik) || {}).uwaga;
+    return `<div class="rcp-sprawdzone">${P.ik('osoba', 14)}Sprawdzone przez Lidera: <b>${esc(p.kto)}</b>, ${esc(W.godzina(p.kiedy))} — ${esc(p.notatka)}${uwaga ? `<span class="slaby"> · przy osobie: ${esc(uwaga)}</span>` : ''}</div>`;
+  }
+
   function wierszDnia(w) {
     const otwarty = S.otwarte.has(w.klucz);
     const zat = w.status === 'zatwierdzony', wPracy = w.status === 'w_pracy';
@@ -60,6 +78,7 @@
         <div class="tytul"><b>${esc(w.nazwa)}</b> <span class="slaby">${esc(w.dzienOpis)}</span></div>
         <div class="szczegoly"><span>${esc(w.godziny || '—')}</span><span><b>${esc(w.czas)}</b></span>${nad}
           ${zat ? znacznik(`Zatwierdzone (${w.zatwierdzil})`, 'ok') : ''}${w.zmiana ? znacznik('Zmiana ' + w.zmiana) : ''}${w.spoznienie ? znacznik(`Spóźnienie ${w.spoznienie} min`, 'uwaga') : ''}${wPracy ? znacznik('W pracy', 'uwaga') : ''}${w.uwagi.map(u => znacznik(u, 'uwaga')).join('')}</div>
+        ${sprawdzone(w)}
         ${otwarty ? `<div class="rcp-popraw">
           <ul class="rcp-odbicia">${odbicia}</ul>
           ${zat ? '<p class="slaby">Dzień jest zatwierdzony — najpierw wycofaj zatwierdzenie, żeby go poprawić.</p>' : `<form class="rcp-korekta" autocomplete="off">
@@ -77,7 +96,18 @@
       </div></article>`;
   }
 
-  function trescDni() {
+  // „Kto nie odbił”: na zmianie trwającej albo świeżo zakończonej — brak wejścia (plan jest, odbicia nie) i brak wyjścia.
+  function brakOdbic() {
+    const b = S.brak;
+    if (!b || !b.zmiana || (!b.brak_wejscia.length && !b.brak_wyjscia.length)) return '';
+    const lista = (naglowek, osoby, opis) => osoby.length ? `<p><b>${naglowek} · ${osoby.length}:</b> ${osoby.map(o => esc(o.nazwa) + (opis ? opis(o) : '')).join(', ')}</p>` : '';
+    return `<div class="rcp-brak" role="status"><b>Zmiana ${esc(b.zmiana)} — brakujące odbicia</b>
+      ${lista('Brak wejścia', b.brak_wejscia)}${lista('Brak wyjścia', b.brak_wyjscia, o => o.wejscie ? ` (wszedł ${esc(godzinaLok(o.wejscie))})` : '')}</div>`;
+  }
+  const godzinaLok = iso => { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+
+  function trescDni() { return brakOdbic() + trescDniLista(); }
+  function trescDniLista() {
     const l = W.rcpLiczby(S.dni || []);
     const licznik = { do_zatwierdzenia: l.doZatwierdzenia, z_uwagami: l.zUwagami, spoznienia: l.spoznienia, zatwierdzone: l.zatwierdzone, wszystkie: l.razem };
     const wiersze = W.rcpWiersze(S.dni || [], { filtr: S.filtr, szukaj: S.szukaj });
@@ -92,11 +122,84 @@
       <div class="lista">${wiersze.map(wierszDnia).join('') || `<p class="pusto${S.dni && S.filtr === 'do_zatwierdzenia' && !l.razem ? '' : ''}">${S.dni === null ? 'Wczytuję…' : (l.razem ? 'Nic w tym filtrze.' : 'Brak odbić w tym okresie.')}</p>`}</div>`;
   }
 
+  // ---- osoby: konta GK z hali (od D97 także „Pracownik produkcji” — bez dostępu do aplikacji, tylko brelok)
+  const osobyRcp = () => (hala.pracownicy || []).filter(p => p.aktywny !== false && !(p.role || []).includes('ekran'));
+  const linieSlownika = () => Object.entries((hala.slowniki && hala.slowniki.linie) || {}).map(([k, v]) => [k, (v && v.nazwa) || k]);
+  const nazwaLinii = kod => (linieSlownika().find(([k]) => k === kod) || [kod, kod])[1];
+
+  function podgladListy() {
+    const l = S.lista;
+    if (!l || !l.podglad) return '';
+    const p = l.podglad;
+    return `<div class="rcp-podglad" aria-live="polite">
+      <p><b>${p.ok}</b> kont do założenia${p.bledy ? `, <b class="blad-tekst">${p.bledy}</b> do poprawy` : ''}. Nic nie jest jeszcze zapisane — konta powstaną dopiero po zatwierdzeniu, wszystkie naraz.</p>
+      <ul class="rcp-odbicia">${p.wiersze.map(w => `<li>${w.blad ? P.ik('ostrzezenie', 14) : P.ik('haczyk', 14)} ${esc(w.nazwa || '(brak nazwy)')}
+        <span class="slaby">· ${esc(w.linie.map(nazwaLinii).join(', ') || 'bez linii')} · ${w.karta ? 'brelok ' + esc(w.karta) : 'bez breloka'}</span>
+        ${w.blad ? `<span class="blad-tekst"> — wiersz ${w.nr}: ${esc(w.blad)}</span>` : ''}</li>`).join('')}</ul>
+      ${p.bledy ? '<p class="slaby">Popraw wskazane wiersze w polu powyżej i sprawdź jeszcze raz.</p>'
+                : `<button type="button" class="glowny" data-akcja="lista-zapisz">Załóż ${p.ok} ${p.ok === 1 ? 'konto' : 'kont'}</button>`}</div>`;
+  }
+
+  function trescImportu() {
+    const linie = linieSlownika();
+    return `<h3>Pracownicy produkcji</h3>
+      <p class="slaby opis-widoku">Każdy pracownik ma konto GK. Wklej listę — powstaną konta z funkcją „Pracownik produkcji” (bez dostępu do aplikacji: tylko terminal RCP,
+        własne dane i wnioski urlopowe) i przypisane breloki. Hasło i PIN startowy ustawia osoba przy pierwszym użyciu. Linia decyduje, którego Lidera lub Mistrza osoba jest „do sprawdzenia”.</p>
+      <details class="rcp-lista"${S.listaOtwarta ? ' open' : ''}><summary>Wklej listę pracowników</summary>
+        <form class="rcp-lista-formularz" autocomplete="off">
+          <label>Jedna osoba w wierszu: <span class="slaby">Imię Nazwisko; linia; brelok (średnik, tabulator albo przecinek; brelok można pominąć)</span>
+            <textarea name="lista" rows="6" placeholder="Jan Kowalski; ${esc((linie[0] || ['', 'Linia 1'])[1])}; 6450974">${esc((S.lista && S.lista.tekst) || '')}</textarea></label>
+          <button type="submit" class="maly">Sprawdź listę</button>
+          <p class="blad" role="alert" hidden></p>
+        </form>
+        ${podgladListy()}
+      </details>`;
+  }
+
+  // ---- widok „Wnioski urlopowe” (D97): wnioski z terminala; zatwierdza kierownik zakładu i Menedżer, zatwierdzony wpisuje się do Urlopów
+  const dataPl = iso => String(iso || '').split('-').reverse().join('.');
+  const liczbaOczekujacych = () => (S.wnioski || []).filter(w => w.status === 'oczekuje').length;
+  function wierszWniosku(w) {
+    const stan = w.status === 'oczekuje' ? znacznik('Czeka na decyzję', 'uwaga')
+      : w.status === 'zatwierdzony' ? znacznik('Zatwierdzony', 'ok') : znacznik('Odrzucony', 'blad');
+    const decyzja = w.decyzja ? `<span class="slaby">· ${esc(w.decyzja.kto)}${w.decyzja.powod ? ': ' + esc(w.decyzja.powod) : ''}</span>` : '';
+    return `<article class="zlecenie${w.status === 'oczekuje' ? '' : ' wyslane'}" data-wniosek="${esc(String(w.id))}">
+      <div class="opis"><div class="tytul"><b>${esc(w.nazwa)}</b> ${stan}</div>
+        <div class="szczegoly"><span>${esc(dataPl(w.od))} – ${esc(dataPl(w.do))}</span><span>· ${esc(w.rodzaj_nazwa)}</span>${w.notatka ? `<span>· ${esc(w.notatka)}</span>` : ''}${decyzja}</div></div>
+      ${w.status === 'oczekuje' ? `<div class="akcje"><button type="button" class="maly glowny" data-akcja="wniosek-zatwierdz">Zatwierdź</button>
+        <button type="button" class="maly" data-akcja="wniosek-odrzuc">Odrzuć</button></div>` : ''}</article>`;
+  }
+  function trescWnioskow() {
+    const w = S.wnioski;
+    if (w === null) return '<p class="pusto">Wczytuję…</p>';
+    const czekaja = w.filter(x => x.status === 'oczekuje'), reszta = w.filter(x => x.status !== 'oczekuje').slice(0, 30);
+    return `<p class="slaby opis-widoku">Pracownik składa wniosek na terminalu (po przyłożeniu breloka). Zatwierdzony wniosek wpisuje się do Administracji → Urlopy
+        i działa dokładnie jak urlop wpisany ręcznie; pracownik widzi decyzję na terminalu w „Sprawdź dane”.</p>
+      <h3>Czekają na decyzję · ${czekaja.length}</h3>
+      <div class="lista">${czekaja.map(wierszWniosku).join('') || '<p class="pusto">Brak wniosków do rozpatrzenia.</p>'}</div>
+      ${reszta.length ? `<h3>Ostatnie decyzje</h3><div class="lista">${reszta.map(wierszWniosku).join('')}</div>` : ''}
+      ${trescPul()}`;
+  }
+
+  // Pula dni urlopu na rok (dni robocze): terminal pokazuje pracownikowi „zostało X dni”. Bez ustawionej puli terminal niczego nie pokazuje.
+  function trescPul() {
+    const p = S.pule;
+    if (!p) return '';
+    return `<h3>Pula urlopu na ${esc(String(p.rok))}</h3>
+      <p class="slaby">Ile dni urlopu przysługuje osobie w roku. Wykorzystane liczymy z wpisów w Urlopach (dni robocze, bez świąt).</p>
+      <div class="lista">${p.osoby.map(o => `<form class="zlecenie rcp-pula-formularz" data-pracownik="${esc(o.id)}" autocomplete="off">
+        <div class="opis"><div class="tytul"><b>${esc(o.nazwa)}</b></div>
+          <div class="szczegoly"><span>${o.pula === null ? 'pula nie ustawiona' : `wykorzystano ${o.wykorzystano}, zostało ${o.zostalo}`}</span></div></div>
+        <div class="akcje"><label>Dni<input name="dni" type="number" min="0" max="60" step="1" required value="${o.pula === null ? '' : esc(String(o.pula))}"></label>
+          <input type="hidden" name="rok" value="${esc(String(p.rok))}"><button type="submit" class="maly">Zapisz</button></div></form>`).join('')
+        || '<p class="pusto">Brak osób z funkcją „Pracownik produkcji”.</p>'}</div>`;
+  }
+
   // ---- widok „Karty”
   function trescKart() {
     const karty = S.karty || [];
     const maja = new Set(karty.map(k => k.pracownik));
-    const osoby = (hala.pracownicy || []).filter(p => p.aktywny !== false && !(p.role || []).includes('ekran'));
+    const osoby = osobyRcp();
     const bez = osoby.filter(p => !maja.has(p.id));
     return `<p class="slaby opis-widoku">Brelok przypisujesz osobie raz: kliknij pole „Numer karty” i przyłóż brelok do czytnika
         (czytnik sam wpisze numer i zatwierdzi). Jedna osoba ma jeden aktywny brelok; nowy zastępuje stary.</p>
@@ -111,7 +214,20 @@
           <div class="opis"><div class="tytul"><b>${esc(k.nazwa || k.pracownik)}</b></div><div class="szczegoly"><span>numer: ${esc(k.numer)}</span></div></div>
           <div class="akcje"><button type="button" class="maly" data-akcja="odepnij">Odepnij</button></div></article>`).join('')
         || `<p class="pusto">${S.karty === null ? 'Wczytuję…' : 'Żaden brelok nie jest jeszcze przypisany.'}</p>`}</div>
-      ${bez.length ? `<h3>Bez breloka · ${bez.length}</h3><p class="slaby">${bez.map(p => esc(p.nazwa)).join(', ')}</p>` : ''}`;
+      ${bez.length ? `<h3>Bez breloka · ${bez.length}</h3><p class="slaby">${bez.map(p => esc(p.nazwa)).join(', ')}</p>` : ''}
+      ${trescNieznanych()}
+      ${trescImportu()}`;
+  }
+
+  // Nieznane breloki z terminali (ostatnie 30 dni; zapisujemy tylko 4 ostatnie cyfry). Żeby przypisać — przyłóż brelok do czytnika w formularzu wyżej.
+  function trescNieznanych() {
+    const n = S.nieznane;
+    if (n === null) return '';
+    return `<h3>Nieznane breloki · ostatnie 30 dni · ${n.length}</h3>
+      <p class="slaby">Ktoś przyłożył brelok, którego nie ma w systemie. Pokazujemy tylko 4 ostatnie cyfry. Żeby go przypisać, wybierz osobę, kliknij „Numer karty” i przyłóż ten brelok do czytnika.</p>
+      <div class="lista">${n.map(x => `<article class="zlecenie"><div class="opis"><div class="tytul"><b>…${esc(x.koncowka)}</b> ${znacznik(x.ile + '×', 'uwaga')}</div>
+        <div class="szczegoly"><span>ostatnio ${esc(new Date(x.ostatnio).toLocaleString('pl-PL'))}</span><span>· terminal: ${esc(x.urzadzenie || '—')}</span></div></div></article>`).join('')
+        || '<p class="pusto">Żaden nieznany brelok nie był przykładany.</p>'}</div>`;
   }
 
   // ---- widok „Grafik” (prosty plan zmian: osoba × dzień; plan wolno zmieniać, odbicia nie)
@@ -123,7 +239,7 @@
     const zmiany = Object.entries(g.zmiany || {});
     const maja = new Set((S.karty || []).map(k => k.pracownik));
     // Wiersze: osoby z brelokiem (to oni odbijają się na terminalu) + każdy, kto ma plan w tym tygodniu.
-    const osoby = (hala.pracownicy || []).filter(p => p.aktywny !== false && (maja.has(p.id) || dni.some(d => plan.has(`${p.id}|${d}`))))
+    const osoby = osobyRcp().filter(p => maja.has(p.id) || dni.some(d => plan.has(`${p.id}|${d}`)))
       .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
     // D95: zmiany, których plan zakładu tego dnia nie przewiduje, są wyszarzone (wybór nadal możliwy — plan niczego nie blokuje).
     const komorka = (p, d) => {
@@ -163,7 +279,7 @@
   }
 
   // ---- szkielet i rysowanie
-  const CZESCI = [['dni', 'Dni'], ['grafik', 'Grafik'], ['karty', 'Breloki'], ['eksport', 'Plik dla płac']];
+  const CZESCI = [['dni', 'Dni'], ['grafik', 'Grafik'], ['karty', 'Breloki'], ['wnioski', 'Wnioski urlopowe'], ['eksport', 'Plik dla płac']];
 
   function rysujTresc() {
     if (!korzen) return;
@@ -171,12 +287,15 @@
     const aktywny = document.activeElement;
     const zapamietaj = aktywny && t.contains(aktywny) && aktywny.dataset ? aktywny.dataset.pole : null;
     const html = S.blad ? `<p class="blad" role="alert">${esc(S.blad)}</p>${S.czesc === 'dni' ? trescDni() : ''}`
-      : (S.czesc === 'dni' ? trescDni() : S.czesc === 'grafik' ? trescGrafiku() : S.czesc === 'karty' ? trescKart() : trescEksportu());
+      : (S.czesc === 'dni' ? trescDni() : S.czesc === 'grafik' ? trescGrafiku() : S.czesc === 'karty' ? trescKart() : S.czesc === 'wnioski' ? trescWnioskow() : trescEksportu());
     if (t.innerHTML !== html) {
       t.innerHTML = html;
       if (zapamietaj) { const el = t.querySelector(`[data-pole="${zapamietaj}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.type === 'search') el.setSelectionRange(el.value.length, el.value.length); } }
     }
-    for (const b of korzen.querySelectorAll('[data-rcp-czesc]')) b.setAttribute('aria-pressed', String(b.dataset.rcpCzesc === S.czesc));
+    for (const b of korzen.querySelectorAll('[data-rcp-czesc]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.rcpCzesc === S.czesc));
+      if (b.dataset.rcpCzesc === 'wnioski') b.textContent = liczbaOczekujacych() ? `Wnioski urlopowe · ${liczbaOczekujacych()}` : 'Wnioski urlopowe';
+    }
   }
 
   async function wykonaj(wywolanie, sukces) {
@@ -225,6 +344,25 @@
           if (powod) await wykonaj(() => api('POST', 'anuluj', { odbicie: b.dataset.odbicie, powod }), 'Odbicie anulowane');
           break;
         }
+        case 'lista-zapisz': {
+          try {
+            const w = await api('POST', 'import', { lista: S.lista.tekst, zapisz: true });
+            P.komunikat(`Założono konta: ${w.dodano}`, 'ok'); S.lista = null; await wczytaj();
+          } catch (e) { P.komunikat(tekstBledu(e), 'blad'); }
+          break;
+        }
+        case 'wniosek-zatwierdz': case 'wniosek-odrzuc': {
+          const id = b.closest('[data-wniosek]').dataset.wniosek, zatwierdz = b.dataset.akcja === 'wniosek-zatwierdz';
+          const w = (S.wnioski || []).find(x => String(x.id) === id);
+          if (zatwierdz) {
+            if (await P.potwierdz('Zatwierdzić wniosek?', `${w ? w.nazwa + ': ' + dataPl(w.od) + ' – ' + dataPl(w.do) : ''}. Urlop wpisze się do Administracji → Urlopy.`, 'Zatwierdź'))
+              await wykonaj(() => api('POST', 'wniosek/decyzja', { id, decyzja: 'zatwierdz' }), 'Wniosek zatwierdzony, urlop wpisany');
+          } else {
+            const powod = await P.zapytajTekst({ tytul: 'Odrzucić wniosek?', etykieta: 'Powód (zobaczy go pracownik)', wymagany: true, przycisk: 'Odrzuć', wstecz: 'Nie' });
+            if (powod) await wykonaj(() => api('POST', 'wniosek/decyzja', { id, decyzja: 'odrzuc', powod }), 'Wniosek odrzucony');
+          }
+          break;
+        }
         case 'odepnij': {
           if (await P.potwierdz('Odpiąć brelok?', 'Osoba nie będzie mogła odbijać się tym brelokiem, aż przypiszesz nowy.', 'Odepnij'))
             await wykonaj(() => api('POST', 'karty', { pracownik, odepnij: true }), 'Brelok odpięty');
@@ -243,7 +381,9 @@
       const p = ev.target.dataset && ev.target.dataset.pole;
       if (p === 'od' || p === 'do') { S[p] = ev.target.value; if (S.od && S.do) wczytaj(); }
     });
+    korzen.addEventListener('toggle', ev => { if (ev.target.classList && ev.target.classList.contains('rcp-lista')) S.listaOtwarta = ev.target.open; }, true);
     korzen.addEventListener('input', ev => {
+      if (ev.target.name === 'lista' && S.lista) S.lista = { tekst: ev.target.value, podglad: null };   // zmiana tekstu unieważnia podgląd
       if (ev.target.dataset && ev.target.dataset.pole === 'szukaj') { S.szukaj = ev.target.value; rysujTresc(); }
     });
 
@@ -255,6 +395,14 @@
         const wiersz = f.closest('[data-pracownik]');
         const czas = f.czas.value ? new Date(f.czas.value).toISOString() : '';
         await wykonaj(() => api('POST', 'korekta', { pracownik: wiersz.dataset.pracownik, rodzaj: f.rodzaj.value, czas, powod: f.powod.value.trim() }), 'Odbicie dodane');
+      } else if (f.classList.contains('rcp-lista-formularz')) {
+        S.lista = { tekst: f.lista.value, podglad: null };
+        try {
+          S.lista.podglad = await api('POST', 'import', { lista: f.lista.value });
+          S.listaOtwarta = true; pokazBlad(''); rysujTresc();
+        } catch (e) { pokazBlad(tekstBledu(e)); }
+      } else if (f.classList.contains('rcp-pula-formularz')) {
+        await wykonaj(() => api('POST', 'pule', { pracownik: f.dataset.pracownik, rok: f.rok.value, dni: f.dni.value }), 'Pula urlopu zapisana');
       } else if (f.classList.contains('rcp-karta-formularz')) {
         try {
           const w = await api('POST', 'karty', { pracownik: f.pracownik.value, karta: f.karta.value.trim() });
@@ -280,7 +428,7 @@
   function rysuj(el) {
     if (!korzen || !el.contains(korzen)) { korzen = null; zbudujSzkielet(el); rysujTresc(); wczytaj(); return; }
     // Panel woła rysuj() przy każdym zdarzeniu z huba — dane odświeżamy tylko co minutę i tylko na liście dni.
-    if (S.czesc === 'dni' && Date.now() - ostatnieOdswiezenie > ODSWIEZ_MS) wczytaj();
+    if ((S.czesc === 'dni' || S.czesc === 'wnioski') && Date.now() - ostatnieOdswiezenie > ODSWIEZ_MS) wczytaj();
   }
 
   P.widoki.rcp = { rysuj };

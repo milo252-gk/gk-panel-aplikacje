@@ -435,14 +435,14 @@
         <details class="kafelek-odbior" data-klucz="${esc(k.klucz)}"${odbiorKarty.get(k.klucz) === true ? ' open' : ''}><summary>Do odbioru <span class="znacznik ok">${k.wiersze.length}</span></summary>
           <div class="lista">${k.wiersze.map(wierszZlecenia).join('')}</div></details>
       </article>`;
-    // Filtry sekcji (dział, linia, „tylko spóźnione”; osoba/maszyna/rodzaj inne niż „Checklista” ukrywają karty checklist) dotyczą kart checklist
+    // Filtry sekcji (dział, linia, „tylko spóźnione”; osoba i rodzaj „Zlecenie” ukrywają karty checklist) dotyczą kart checklist
     // tak samo jak kart zleceń. Zwracana lista `karty` zostaje pełna — liczy z niej kafelek „Opóźnione checklisty”.
     const kartaPasuje = k => {
       if (document.body.classList.contains('tryb-ekran')) return true;      // monitor nie ma filtrów — pokazuje wszystkie karty
       const dz = biezaceDzial(), moje = mojeDzialy() || [];
       if (dz === W.MOJE_DZIALY ? !moje.includes(k.dzial || 'produkcja') : (dz && (k.dzial || 'produkcja') !== dz)) return false;
       if (biezace.linia && k.linia !== biezace.linia) return false;
-      if (biezace.osoba || biezace.maszyna || (biezace.rodzaj && biezace.rodzaj !== 'checklista')) return false;
+      if (biezace.osoba || biezace.maszyna || biezace.rodzaj === 'zlecenie') return false;
       return !biezace.spoznione || k.opoznione.length > 0;
     };
     $('kafelki').innerHTML = karty.filter(kartaPasuje).map(k => {
@@ -692,12 +692,7 @@
   /* Wybór filtra, trybu (biezace | stale) i rodzaju z zewnątrz (kafelek „Zlecenia po terminie” na pulpicie, push, BHP).
      Rodzaj podany — tylko ten (np. BHP); bez rodzaju — filtr rodzaju czyszczony, żeby kafelek pokazał wszystko. */
   Panel.pokazZlecenia = (filtr, tryb, rodzaj, zachowaj) => {
-    // Unifikacja E4: „W toku” i „Do odbioru” są na Pulpicie (sekcja „Zlecenia w toku”) — kafelki, push #zlecenia, #bhp, Szukaj i
-    // nowe zlecenie prowadzą tam; Zlecenia to już tylko historia („Odebrane”), zapisane i kalendarz.
-    if ((filtr === 'otwarte' || filtr === 'do-zamkniecia') && (tryb || trybZlecen) === 'biezace') {
-      pokazBiezace(Object.assign({}, zachowaj ? {} : ZERO_BIEZACYCH, { rodzaj: rodzaj || '' }));
-      return;
-    }
+    // Wariant B (2026-11-24): „W toku” i „Do odbioru” wracają na ekran Zlecenia (pełne akcje); Pulpit ma tylko karty checklist.
     if (filtr) filtrZlecen = filtr;
     if (tryb) trybZlecen = tryb;
     filtry.rodzaj = rodzaj || '';
@@ -849,16 +844,19 @@
      telefon/Panel trzyma w pamięci tylko dwie doby. */
   const filtry = { dzial: '', osoba: '', okres: 2, spoznione: false, rodzaj: '', status: '', linia: '', maszyna: '', od: '', doDnia: '', sort: '', pulpitSort: '' };
   let starsze = { od: null, lista: [], wczytuje: false };
-  /* ------------------------------------------------------------ Unifikacja E4 (właściciel 2026-11-23): „Zlecenia w toku” na Pulpicie
+  /* ------------------------------------------------------------ Unifikacja E4 (właściciel 2026-11-23): „Aktualna zmiana” na Pulpicie
      Dawny „W toku” i „Do odbioru” z ekranu Zlecenia, z tymi samymi wierszami i akcjami (wierszZlecenia, obsluzKlikZlecenia, zgloszenia.js),
      nad Obchodami. Filtry tej sekcji (dział, osoba, rodzaj, linia, maszyna, „tylko spóźnione”) to stan w pamięci tej karty — nie zapisujemy ich
      i nie ruszamy kluczy hala.panel.filtry.<id> (te należą do listy „Zlecenia odebrane”). Domyślny dział jak w D76 (lider UR / kierownik KJ — „mój
      dział i moje”). Konto „ekran” (monitor) tej sekcji nie ma. */
-  const ZERO_BIEZACYCH = { dzial: null, osoba: '', rodzaj: '', linia: '', maszyna: '', spoznione: false };
+  const ZERO_BIEZACYCH = { dzial: null, osoba: '', rodzaj: '', linia: '', maszyna: '', spoznione: false };   // maszyna: bez pola w filtrach, ustawia ją tylko Szukaj
   const biezace = Object.assign({}, ZERO_BIEZACYCH);
   const biezaceDzial = () => (biezace.dzial === null ? dzialDomyslny() : biezace.dzial);
+  // Rodzaje na Pulpicie są dwa (właściciel 2026-11-23): Checklista i Zlecenie — zgłoszenie, narzędzia, BHP itd. to „Zlecenie”.
+  const rodzajPulpitu = () => '';      // Pulpit pokazuje już tylko karty checklist — filtra rodzaju nie ma (właściciel 2026-11-23)
   function pokazBiezace(ust) {
     Object.assign(biezace, ust || {});
+    biezace.rodzaj = rodzajPulpitu(biezace.rodzaj);
     document.querySelector('.zakladki [data-widok="na-zywo"]').click();
     narysuj();
     // Sekcja bywa jeszcze ukryta, gdy rysowanie (rAF) nie zdążyło — próbujemy kilka razy.
@@ -884,24 +882,12 @@
     const osoby = (d.pracownicy || []).filter(p => p.aktywny !== false && (!rolaDzialu || (p.role || []).some(r => rolaDzialu.includes(r))))
       .filter(p => (p.role || []).some(r => dz.some(x => (x.role || []).includes(r))));
     if (!wypelnijSelect(f.osoba, '<option value="">wszyscy</option>' + osoby.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join(''), biezace.osoba)) biezace.osoba = '';
-    wypelnijSelect(f.rodzaj, '<option value="">wszystkie</option>' + W.RODZAJE_ZADAN.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join(''), biezace.rodzaj);
-    const sl = d.slowniki || {};
-    const wiele = W.wieleLinii(sl);
-    $('biezace-linia').hidden = !wiele;
-    if (!wiele) biezace.linia = '';
-    const linie = Object.entries(sl.linie || {}).sort((a, b) => ((a[1] || {}).kolejnosc || 0) - ((b[1] || {}).kolejnosc || 0));
-    wypelnijSelect(f.linia, '<option value="">wszystkie</option>' + linie.map(([k, l]) => `<option value="${esc(k)}">${esc((l || {}).nazwa || k)}</option>`).join(''), biezace.linia);
-    const maszyny = Object.entries(sl.maszyny || {}).filter(([k, m]) => !biezace.linia || (m || {}).linia === biezace.linia || k === biezace.maszyna)
-      .sort((a, b) => String((a[1] || {}).nazwa || a[0]).localeCompare(String((b[1] || {}).nazwa || b[0]), 'pl'));
-    $('biezace-maszyna').hidden = !maszyny.length;
-    wypelnijSelect(f.maszyna, '<option value="">wszystkie</option>' + maszyny.map(([k, m]) => `<option value="${esc(k)}">${esc((m || {}).nazwa || k)}</option>`).join(''), biezace.maszyna);
     f.spoznione.checked = biezace.spoznione;
     $('biezace-czysc').hidden = !(biezaceDzial() !== dzialDomyslny() || biezace.osoba || biezace.rodzaj || biezace.linia || biezace.maszyna || biezace.spoznione);
   }
   function rysujBiezace(d, lista) {
     const ekran = document.body.classList.contains('tryb-ekran');
     $('filtry-biezace').hidden = ekran;
-    $('biezace-liczniki').hidden = ekran;
     if (ekran) { if (!$('kafelki').children.length) $('kafelki').innerHTML = `<p class="pusto">${esc($('kafelki').dataset.pustyTekst || '')}</p>`; return; }
     const ZG = Panel.widoki.zgloszenia;
     rysujFiltryBiezace(d);
@@ -909,43 +895,10 @@
       .filter(z => !((z.pozycje || []).length && wKartach.has(z.id)))
       .map(z => Object.assign(z, { html: wierszZlecenia(z) }));
     const wToku = dla('otwarte'), doOdbioru = dla('do-zamkniecia');
-    const inne = ZG ? ZG.wiersze(d, 'do-zamkniecia') : [];
-    const fm = { dzial: biezaceDzial(), osoba: biezace.osoba, rodzaj: biezace.rodzaj, linia: biezace.linia, maszyna: biezace.maszyna, spoznione: biezace.spoznione,
-                 mojeDzialy: mojeDzialy() || [], ja: hala.pracownik && hala.pracownik.id };
-    const rzedyWToku = W.polaczZadania(W.filtrujZlecenia(wToku, fm), []);
-    const rzedyDoOdbioru = W.polaczZadania(W.filtrujZlecenia(doOdbioru, fm), W.filtrujZlecenia(inne, fm));
-    // Liczniki w nagłówku: zlecenia w toku (⏰ — po terminie) i do odbioru, razem z kartami checklist (ich „do odbioru” liczy się w karcie).
-    const zl = ZG ? ZG.liczby() : { czeka: 0, alarm: false };
-    const po = wToku.filter(z => z.poTerminie).length, nOdb = doOdbioru.length + zl.czeka;
-    const chipy = [{ napis: `W toku${wToku.length ? ` · ${wToku.length}` : ''}`, po, alarm: po > 0 }, { napis: `Do odbioru${nOdb ? ` · ${nOdb}` : ''}`, po: 0, alarm: !!zl.alarm }];
-    $('biezace-liczniki').innerHTML = chipy.map(c => `<span class="znacznik ${c.alarm ? 'alarm' : 'info'}" title="${c.po ? `${c.po} po terminie` : ''}">${esc(c.napis)}${c.po ? ` · ${ik('zegar', 14).replace('class="ik"', 'class="ik bez-odstepu"')}${c.po}` : ''}</span>`).join('');
-    // Jedna karta na dział: „W toku” (spóźnione na górze) i „Do odbioru” — rozwinięte, bo karta istnieje tylko wtedy, gdy coś w niej jest.
-    const dzialy = (d.stale && d.stale.dzialy) || [];
-    const nazwaDzialu = kod => (dzialy.find(x => x.kod === kod) || {}).nazwa || (kod ? kod : 'Inne');
-    const wgDzialu = new Map();
-    const dodaj = (r, g) => { const k = r.dzial || ''; if (!wgDzialu.has(k)) wgDzialu.set(k, { toku: [], odb: [] }); wgDzialu.get(k)[g].push(r); };
-    rzedyWToku.forEach(r => dodaj(r, 'toku'));
-    rzedyDoOdbioru.forEach(r => dodaj(r, 'odb'));
-    const kolejnosc = k => { const i = dzialy.findIndex(x => x.kod === k); return i < 0 ? 999 : i; };
-    const rozwiniete = kl => odbiorKarty.get(kl) !== false;
-    const czesc = (kl, nazwa, wiersze, klasa) => wiersze.length
-      ? `<details class="kafelek-odbior" data-klucz="${esc(kl)}"${rozwiniete(kl) ? ' open' : ''}><summary>${nazwa} <span class="znacznik ${klasa}">${wiersze.length}</span></summary>
-          <div class="lista">${wiersze.map(w => w.html).join('')}</div></details>` : '';
-    const karty = [...wgDzialu].sort((a, b) => kolejnosc(a[0]) - kolejnosc(b[0])).map(([kod, g]) => {
-      const klT = `zl/${kod}/toku`, klO = `zl/${kod}/odb`;
-      const poT = g.toku.filter(r => r.poTerminie).length, alarm = g.odb.some(r => r.alarm);
-      const kolor = poT || alarm ? 'czerwony' : g.odb.length ? 'zolty' : 'zielony';
-      const otwarta = (g.toku.length && rozwiniete(klT)) || (g.odb.length && rozwiniete(klO));
-      return `<article class="kafelek kolor-${kolor} zlecenia-dzialu${otwarta ? ' odbior-otwarty' : ''}" data-klucz="zl/${esc(kod)}">
-        <header><h3>${esc(nazwaDzialu(kod))}</h3>${poT ? `<span class="znacznik alarm">Po terminie: ${poT}</span>` : ''}</header>
-        <div class="podpis-karty slaby">Zlecenia</div>
-        <div class="liczby"><b>${g.toku.length}</b> <span>w toku${g.odb.length ? ` · do odbioru ${g.odb.length}` : ''}</span></div>
-        ${czesc(klT, 'W toku', g.toku, poT ? 'alarm' : 'info')}${czesc(klO, 'Do odbioru', g.odb, 'ok')}
-      </article>`;
-    }).join('');
+    // Właściciel 2026-11-23: kart zleceń działów („Lider GK · Zlecenia · W toku”) na Pulpicie nie ma — wystarczy rozwinięcie karty checklisty
+    // (lista pozycji, odbiór). Wiersze zostają w zlecBufor, bo okno szczegółów pozycji czyta stamtąd.
     for (const el of $('kafelki').querySelectorAll('.zlecenia-dzialu, .pusto')) el.remove();
-    if (karty) $('kafelki').insertAdjacentHTML('beforeend', karty);
-    else if (!$('kafelki').children.length) {
+    if (!$('kafelki').children.length) {
       const filtrAktywny = !$('biezace-czysc').hidden;
       $('kafelki').innerHTML = `<p class="pusto">${filtrAktywny ? 'Nic nie pasuje do filtrów — wyczyść je.' : esc($('kafelki').dataset.pustyTekst || 'Żadne zlecenie nie jest w toku ani nie czeka na odbiór.')}${!filtrAktywny && mozeWyslac('zlecenie.utworzone') ? ' Dodasz je przyciskiem „Nowe zlecenie”.' : ''}</p>`;
     }
@@ -957,8 +910,7 @@
   }
   $('filtry-biezace').addEventListener('change', ev => {
     const f = $('filtry-biezace');
-    Object.assign(biezace, { dzial: f.dzial.value, osoba: f.osoba.value, rodzaj: f.rodzaj.value, linia: f.linia.value, maszyna: f.maszyna.value, spoznione: f.spoznione.checked });
-    if (ev.target === f.linia && biezace.linia && biezace.maszyna && ((hala.slowniki.maszyny || {})[biezace.maszyna] || {}).linia !== biezace.linia) biezace.maszyna = '';
+    Object.assign(biezace, { dzial: f.dzial.value, osoba: f.osoba.value, spoznione: f.spoznione.checked });
     narysuj();
   });
   $('filtry-biezace').addEventListener('submit', ev => ev.preventDefault());
@@ -1121,7 +1073,6 @@
       ? `${tekst}. Dodasz je przyciskiem „Nowe zlecenie”.` : tekst;
   }
   function rysujZlecenia(d, lista) {
-    if (trybZlecen === 'biezace') filtrZlecen = 'zamkniete';       // E4: bieżące zlecenia są na Pulpicie, tu tylko odebrane
     for (const b of document.querySelectorAll('#tryb-zlecen [data-tryb]')) b.setAttribute('aria-pressed', String(b.dataset.tryb === trybZlecen));
     for (const b of document.querySelectorAll('#filtr-zlecen [data-filtr]')) b.setAttribute('aria-pressed', String(b.dataset.filtr === filtrZlecen));
     // D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):

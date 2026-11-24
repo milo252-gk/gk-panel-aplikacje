@@ -87,7 +87,7 @@
     return role.some(r => ROLE_MAGAZYNU.includes(r)) && !role.some(r => ROLE_GK_LIDER.includes(r));
   }
   /* Ekrany, których osoba nie widzi (menu, adres #…, powiadomienia): Magazyn — bez Zmiany, Jakości, Awarii i Raportu zmiany. */
-  const EKRANY_BEZ_MAGAZYNU = ['zmiana', 'jakosc', 'awarie', 'koniec'];
+  const EKRANY_BEZ_MAGAZYNU = ['zmiana', 'jakosc', 'awarie', 'koniec', 'rcp'];
   const ukryteEkrany = pracownik => profilMagazynu(pracownik) ? EKRANY_BEZ_MAGAZYNU.slice() : [];
   const ekranStartowy = pracownik => profilMagazynu(pracownik) ? 'zlecenia' : 'zmiana';
 
@@ -670,6 +670,36 @@
     return nazwa && (ekrany || []).includes(nazwa) ? nazwa : null;
   }
 
+  // ------------------------------------------------------------ RCP: sprawdzanie ludzi zmiany (D96)
+
+  /* Ekran RCP mają Lider, Mistrz, kierownik i administrator (serwer: te same role, inne dostają 403); brygadzista SP i Magazyn — nie. */
+  const ROLE_RCP = ['lider', 'mistrz', 'kierownik', 'admin'];
+  const mozeRcp = pracownik => !profilMagazynu(pracownik) && ((pracownik && pracownik.role) || []).some(r => ROLE_RCP.includes(r));
+
+  /* Osoba ze zmiany → wiersz ekranu: znaczniki odbić (wszedł, spóźnienie, wyszedł, w pracy, braki) i czy trzeba dopisać uwagę. */
+  function rcpOsoba(o) {
+    const znaczniki = [];
+    if (o.brak_wejscia) znaczniki.push({ tekst: 'Brak wejścia', rodzaj: 'uwaga' });
+    if (o.wejscie) znaczniki.push({ tekst: `Wszedł ${godzina(o.wejscie)}` });
+    if (o.spoznienie_min > 0) znaczniki.push({ tekst: `Spóźnienie ${o.spoznienie_min} min`, rodzaj: 'uwaga' });
+    if (o.wyjscie) znaczniki.push({ tekst: `Wyszedł ${godzina(o.wyjscie)}` });
+    else if (o.brak_wyjscia) znaczniki.push({ tekst: 'Brak wyjścia', rodzaj: 'uwaga' });
+    else if (o.w_pracy) znaczniki.push({ tekst: 'W pracy' });
+    return { id: o.id, nazwa: o.nazwa, znaczniki, sprawdzone: o.sprawdzone || null,
+             uwaga: !!(o.brak_wejscia || o.brak_wyjscia || o.spoznienie_min > 0) };
+  }
+
+  /* Stan ekranu: ile osób, ile sprawdzonych i czy można potwierdzić zmianę (wszyscy sprawdzeni + notatka; zmiana bez ludzi — samą notatką). */
+  function rcpPodsumowanie(stan, notatka, mojePotwierdzenie) {
+    const osoby = (stan && stan.osoby) || [];
+    const sprawdzone = osoby.filter(o => o.sprawdzone).length;
+    const zostalo = osoby.length - sprawdzone;
+    const pusta = !String(notatka || '').trim();
+    return { razem: osoby.length, sprawdzone, zostalo, potwierdzone: !!mojePotwierdzenie,
+             mozna: !mojePotwierdzenie && zostalo === 0 && !pusta,
+             podpowiedz: mojePotwierdzenie ? 'Zmiana potwierdzona.' : zostalo ? `Zostało do sprawdzenia: ${zostalo}.` : pusta ? 'Napisz notatkę do zmiany.' : '' };
+  }
+
   // ------------------------------------------------------------ audyt 2026-10-12 (jedna linia, D51)
 
   /* Zakład z jedną linią (D51: w zakładzie GK jedna linia „Hala”, schowana w Panelu). Wtedy wybór linii, dopiski
@@ -793,7 +823,7 @@
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
-    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, profilMagazynu, ukryteEkrany, ekranStartowy, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
+    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, profilMagazynu, ukryteEkrany, ekranStartowy, mozeRcp, rcpOsoba, rcpPodsumowanie, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,

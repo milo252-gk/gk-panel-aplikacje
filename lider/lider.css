@@ -277,3 +277,14 @@ details.wiecej[open] { display: grid; gap: 12px; }
 .menu-wiecej { display: grid; gap: 10px; margin: 12px 0; }
 .menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }
 .opis-pozycji { margin: 8px 0; white-space: pre-line; }
+
+/* RCP: ludzie ze zmiany (D96) */
+.rcp-lista { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
+.rcp-osoba { background: var(--karta); border: 1px solid var(--ramka); border-radius: 10px; padding: 10px 12px; }
+.rcp-osoba.sprawdzona { opacity: .85; }
+.rcp-osoba-glowna { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rcp-znaczniki { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 160px; }
+.rcp-sprawdzone { display: inline-flex; align-items: center; gap: 6px; color: var(--tekst-slaby); }
+.rcp-uwaga { width: 100%; margin-top: 8px; }
+.rcp-notatka { display: grid; gap: 4px; margin: 0 0 8px; }
+.rcp-notatka textarea { width: 100%; font: inherit; }

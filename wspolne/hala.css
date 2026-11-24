@@ -384,7 +384,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
 .hala-kafelki > * { background: var(--tlo); border: 0; border-radius: 10px; padding: 10px 8px; text-align: center;
                     box-shadow: none; color: inherit; font: inherit; min-height: 0; }
 .hala-kafelki .etykieta { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); margin-bottom: 3px; }
-.hala-kafelki b { display: block; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hala-kafelki b { display: block; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }   /* rozmiar dopasowuje gk-ikony.js (dopasujLiczby): liczba nie wystaje z kafelka */
 .hala-kafelki .pilne b { color: var(--czerwony); }
 .hala-kafelki .uwaga b { color: var(--zolty); }
 .hala-kafelki .dobrze b { color: var(--zielony); }
@@ -908,6 +908,17 @@ body.hala-ma-skan :is(.hala-zlecenie-formularz, .hala-pozycja-panel) { padding-b
 .wyniki-tytul { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--tekst-slaby); }
 .wyniki-uwaga { margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--czerwony-tlo); color: var(--czerwony); font-weight: 600; }
 .wyniki .hala-kafelki small { display: block; font-size: 12px; color: var(--tekst-slaby); margin-top: 2px; }
+/* Telefon: kafelki Moich wyników po dwa w rzędzie (jeden na wiersz marnował ekran i wydłużał stronę ponad miarę). */
+@media (max-width: 600px) { .wyniki .hala-kafelki { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Dostępność (audyt 2026-11-24): na telefonie cel dotyku co najmniej 44 px — ikony w nagłówku, tytuły zleceń (zwykłe button.maly mają już 52 px wyżej); przycisk „Włącz” w banerze
+   dźwięku ma wizualnie 30 px (baner ma stałą wysokość), więc dostaje niewidoczne pole dotyku. */
+@media (max-width: 600px) {
+  button.hala-zlecenie-tytul { display: inline-flex; align-items: center; min-height: 44px; }
+  button.hala-checklista-naglowek { min-height: 44px; }
+  .naglowek .kto > button { min-width: 44px; min-height: 44px; }
+  .baner-dzwieku button { position: relative; }
+  .baner-dzwieku button::after { content: ''; position: absolute; inset: -8px -6px; }
+}
 .wyniki-karty { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .wyniki-karta { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien, 12px); padding: 12px 14px; display: grid; gap: 8px; }
 .wyniki-karta header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }

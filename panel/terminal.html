@@ -30,6 +30,20 @@
   #stan .kropka { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--stan-ok); margin-right: 6px; }
   #stan.czeka .kropka { background: var(--stan-czeka); }
   #stan.blad .kropka { background: var(--stan-blad); }
+  #opcje { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+  #opcje[hidden], #okno[hidden] { display: none; }
+  #opcje button { font-size: clamp(18px, 2.6vw, 30px); min-height: 72px; padding: 0 32px; border-radius: 14px; }
+  #okno { position: fixed; inset: 0; background: var(--tlo); color: var(--tekst); overflow: auto; padding: 24px; box-sizing: border-box; }
+  #okno .okno-karta { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+  #okno h1 { font-size: clamp(24px, 4vw, 40px); margin: 0; }
+  #okno .okno-pasek { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #okno button, #okno input, #okno select { font-size: 20px; min-height: 56px; }
+  #okno label { display: grid; gap: 6px; font-size: 18px; }
+  #okno table { width: 100%; border-collapse: collapse; font-size: 18px; font-variant-numeric: tabular-nums; }
+  #okno th, #okno td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--linia, #8884); }
+  #okno .slaby { color: var(--tekst-slaby); }
+  #okno .blad-tekst { color: var(--czerwony); }
+  #okno .ok-tekst { color: var(--zielony); }
   #formularz-logowania { display: grid; gap: 12px; text-align: left; }
   #formularz-logowania input { font-size: 20px; min-height: 52px; }
 </style>
@@ -55,7 +69,13 @@
   <p id="data"></p>
   <p id="komunikat">Zeskanuj kartę…</p>
   <p id="podpis"></p>
+  <div id="opcje" hidden>
+    <button type="button" id="opcja-dane" class="glowny">Sprawdź dane</button>
+    <button type="button" id="opcja-wniosek">Złóż wniosek urlopowy</button>
+  </div>
 </main>
+<!-- Okno osoby (D97): otwiera się po „Sprawdź dane” / „Złóż wniosek urlopowy” (brelok zamiast PIN-u). Wygasa po bezczynności i wraca do skanu. -->
+<main id="okno" hidden aria-live="polite"><div class="okno-karta"></div></main>
 <div id="stan" role="status"><span class="kropka"></span><span id="stan-tekst">Łączę…</span></div>
 
 <script src="../wspolne/hala.js"></script>

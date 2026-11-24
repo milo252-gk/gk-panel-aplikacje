@@ -439,7 +439,7 @@
                                   cel: maszynyPozycji(p).length === 1 ? maszynyPozycji(p)[0] : (p.maszyna || null),
                                   maszyna: p.maszyna || null, maszyny: maszynyPozycji(p), skany: skanyPozycji(d, p.id),
                                   wymagaj_zdjecia: !!p.wymagaj_zdjecia, wymagaj_notatki: !!p.wymagaj_notatki,
-                                  wymagaj_skanu: !!p.wymagaj_skanu, od: p.od || d.od || null, opis: p.opis || '', zlecenie: z.id, pozycja: p.id });
+                                  wymagaj_skanu: !!p.wymagaj_skanu, wymagaj_rcp: !!p.wymagaj_rcp, od: p.od || d.od || null, opis: p.opis || '', zlecenie: z.id, pozycja: p.id });
         if ((d.wykonane || {})[p.id]) wynik.dane.wykonane[id] = d.wykonane[p.id];
         if ((d.pominiete || {})[p.id]) wynik.dane.pominiete[id] = d.pominiete[p.id];
         // D87: pozycja zwrócona przez kierownika (nie zrobiona, z powodem) — lider widzi, DLACZEGO wróciła. Klucz tylko, gdy jest zwrot.
@@ -470,7 +470,7 @@
       for (const k of ['czynnosc', 'maszyna', 'opis']) if (p[k]) q[k] = p[k];
       const wiele = maszynyPozycji(p);                  // kilka maszyn: lista; jedna zostaje w polu „maszyna” (bliźniak hala.py)
       if (wiele.length > 1) { q.maszyny = wiele; delete q.maszyna; } else if (wiele.length) q.maszyna = wiele[0];
-      for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu']) if (p[k] === true) q[k] = true;
+      for (const k of ['wymagaj_zdjecia', 'wymagaj_notatki', 'wymagaj_skanu', 'wymagaj_rcp']) if (p[k] === true) q[k] = true;
       if (!isNaN(start) && Number.isInteger(p.minuty)) {
         const l = lokalny(start);
         let t = zLokalnego(l.rok, l.miesiac, l.dzien, l.godz, l.min + p.minuty);

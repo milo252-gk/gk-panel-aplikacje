@@ -689,7 +689,7 @@
       // Właściciel 2026-11-18: BHP i jakości nie ma na Pulpicie (są w checklistach); zgłoszenia BHP są w Zlecenia → rodzaj „BHP”.
       // „do odbioru” — tak samo jak chip w Zleceniach (kierownik odbiera albo zwraca); dwie nazwy jednej listy myliły.
       // UI etap 3: krótka etykieta „Zlecenia” + dopisek pod liczbą — „ZLECENIA · 1 DO ODBIORU” łamało się w wąskim kafelku.
-      { kod: 'zlecenia', etykieta: doZamkniecia ? 'Zlecenia' : 'Zlecenia w toku', dopisek: doZamkniecia ? `${doZamkniecia} do odbioru` : null,
+      { kod: 'zlecenia', etykieta: 'Zlecenia', dopisek: doZamkniecia ? `${doZamkniecia} do odbioru` : null,
         liczba: otwarte + doZamkniecia, klasa: klasa(otwarte + doZamkniecia, 'neutralne') },
       { kod: 'po-terminie', etykieta: 'Zlecenia po terminie', liczba: spoznione, klasa: klasa(spoznione, 'pilne') },
     ].concat(bezRaportu === undefined ? [] : [
@@ -944,11 +944,14 @@
 
   /* Wersja kontraktu od 1.34.0 zna harmonogram.zmiany_wg_dni — wcześniej hub zleciłby we wszystkie dni wszystkie zmiany
      wzorca, więc okno nie oferuje wtedy różnych zmian w różne dni. */
-  function obslugujeZmianyWgDni(kontrakt) {
-    const a = String((kontrakt && kontrakt.wersja) || '').split('.').map(Number), b = [1, 34, 0];
+  function kontraktOd(kontrakt, b) {
+    const a = String((kontrakt && kontrakt.wersja) || '').split('.').map(Number);
     for (let i = 0; i < 3; i++) if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i];
     return true;
   }
+  const obslugujeZmianyWgDni = kontrakt => kontraktOd(kontrakt, [1, 34, 0]);
+  /* Wymóg pozycji „RCP” (odklikanie ludzi zmiany zamiast zdjęcia) zna serwer od kontraktu 1.35.0 — wcześniej okno go nie oferuje. */
+  const obslugujeWymogRcp = kontrakt => kontraktOd(kontrakt, [1, 35, 0]);
 
   /* „Wklej listę”: jedna pozycja w wierszu, opcjonalnie „g:mm nazwa”; punktory i numery z początku wiersza znikają. */
   function pozycjeZTekstu(tekst) {
@@ -1051,7 +1054,7 @@
         start: godzina(Date.parse(w.start)), termin: godzina(Date.parse(w.termin)), od: w.od ? godzina(Date.parse(w.od)) : '',
         pozycje: (Array.isArray(s.pozycje) ? H().pozycjeWystapienia(s.pozycje, w.start, w.termin) : []).map(p => ({
           nazwa: p.nazwa || '', opis: p.opis || '', godz: p.termin ? godzina(Date.parse(p.termin)) : '', od: p.od ? godzina(Date.parse(p.od)) : '',
-          maszyny: maszynyNazwy(H().maszynyPozycji(p)), skan: p.wymagaj_skanu === true, zdjecie: p.wymagaj_zdjecia === true, notatka: p.wymagaj_notatki === true })),
+          maszyny: maszynyNazwy(H().maszynyPozycji(p)), skan: p.wymagaj_skanu === true, zdjecie: p.wymagaj_zdjecia === true, notatka: p.wymagaj_notatki === true, rcp: p.wymagaj_rcp === true })),
       })),
     };
   }
@@ -1455,7 +1458,9 @@
       if (wybrane.length > 50) bledy.push(`Pozycja ${nr}: najwyżej 50 maszyn.`);
       if (wybrane.length > 1) q.maszyny = wybrane.slice(0, 50);
       else if (wybrane.length === 1) q.maszyna = wybrane[0];
-      if (p.zdjecie) q.wymagaj_zdjecia = true;
+      // D96: odklikanie ludzi w RCP zastępuje zdjęcie (serwer odrzuca oba naraz).
+      if (p.rcp) q.wymagaj_rcp = true;
+      else if (p.zdjecie) q.wymagaj_zdjecia = true;
       if (p.notatka) q.wymagaj_notatki = true;
       if (p.skan) {
         if (wybrane.length) q.wymagaj_skanu = true;
@@ -1488,7 +1493,7 @@
                godzina: Number.isInteger(p.minuty) ? tekstZMinut(p.minuty) : '', od: Number.isInteger(p.od_minuty) ? tekstZMinut(p.od_minuty) : '',
                czynnosc: p.czynnosc || '', maszyna: p.maszyna || '', z_kodu: p.z_kodu || '',
                maszyny: Array.isArray(p.maszyny) && p.maszyny.length ? p.maszyny.slice() : (p.maszyna ? [p.maszyna] : []),
-               zdjecie: !!p.wymagaj_zdjecia, notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu })) };
+               zdjecie: !!p.wymagaj_zdjecia, notatka: !!p.wymagaj_notatki, skan: !!p.wymagaj_skanu, rcp: !!p.wymagaj_rcp })) };
   }
 
   /* „💾 Zapisz” przy zwykłym zleceniu (jak „Zapisz jako szablon” w GK Trasy): te same pola, domyślnie POJEDYNCZE
@@ -2888,7 +2893,8 @@
   /* R5 (2026-11-09, D82): kto może dostać urlop od tej osoby — kierownik zakładu i admin: wszyscy z działami hali; lider UR i kierownik KJ:
      tylko osoby z jego działu (hub: blad_urlopu_osoby). Lista i formularz Urlopów pokazują tylko te osoby. */
   function osobyDoUrlopow(pracownicy, ja, dzialy) {
-    const wDzialach = (p) => (p.role || []).some(r => (dzialy || []).some(d => (d.role || []).includes(r)));
+    // D97: Pracownik produkcji nie ma działu (nie otwiera aplikacji), ale jego urlop wpisuje kierownik zakładu (kierownik UR/KJ — nie: mozeUrlopOsoby).
+    const wDzialach = (p) => (p.role || []).includes('pracownik_prod') || (p.role || []).some(r => (dzialy || []).some(d => (d.role || []).includes(r)));
     return (pracownicy || []).filter(p => p && p.aktywny !== false && wDzialach(p) && H().mozeUrlopOsoby(p, ja, dzialy))
       .sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
@@ -3443,7 +3449,7 @@
                        checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
-                       zmianyDniZMacierzy, obslugujeZmianyWgDni, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
+                       zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
                        zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, czyZamknacPoOdbiorze, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        planDoFormularza, planZeStanu, planZmianZapisy, skutkiPlanu, zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,

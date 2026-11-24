@@ -55,7 +55,8 @@
           <label class="pozycja-od" title="Przed tą godziną pozycji nie da się odhaczyć (okno od–do)">${P.ik('klepsydra')}Od godziny (po starcie zmiany)
             <input class="od" value="${esc(p.od || '')}" placeholder="0:15" inputmode="numeric" aria-label="Pozycja do zrobienia od godziny po starcie zmiany (g:mm)"></label>
           ${maszynyPozycjiHtml(p, maszyny)}
-          <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie ? 'checked' : ''}> ${P.ik('aparat')}zdjęcie</label>
+          <label class="zaznacz"><input type="checkbox" class="zdjecie" ${p.zdjecie && !p.rcp ? 'checked' : ''}${p.rcp ? ' disabled' : ''}> ${P.ik('aparat')}zdjęcie</label>
+          ${W.obslugujeWymogRcp(hala.kontrakt) ? `<label class="zaznacz rcp-wymog"${o.produkcja && !o.produkcja() ? ' hidden' : ''} title="Pozycja odhaczy się sama, gdy Lider albo Mistrz sprawdzi w RCP wszystkich ludzi swojej zmiany i wpisze notatkę. Zastępuje zdjęcie."><input type="checkbox" class="rcp" ${p.rcp ? 'checked' : ''}> ${P.ik('osoba')}ludzie w RCP (zamiast zdjęcia)</label>` : ''}
           <label class="zaznacz"><input type="checkbox" class="notatka" ${p.notatka ? 'checked' : ''}> ${P.ik('notatka')}notatka</label>
           <label class="zaznacz" title="Pozycja odhaczy się sama po zeskanowaniu naklejek QR wszystkich wybranych maszyn"><input type="checkbox" class="skan" ${p.skan ? 'checked' : ''}> ${P.ik('skan')}skan QR wszystkich wybranych maszyn</label>
         </div>
@@ -68,7 +69,7 @@
         const v = c => w.querySelector('.' + c);
         return { id: w.dataset.id || null, godzina: v('godzina').value, od: v('od').value, nazwa: v('nazwa').value, opis: v('opis').value,
                  czynnosc: w.dataset.czynnosc || '', maszyny: [...w.querySelectorAll('.maszyna-wybor:checked')].map(x => x.value),
-                 zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked,
+                 zdjecie: v('zdjecie').checked, notatka: v('notatka').checked, skan: v('skan').checked, rcp: !!(v('rcp') && v('rcp').checked),
                  z_kodu: w.dataset.zKodu || '', termin_iso: w.dataset.terminIso || '', od_iso: w.dataset.odIso || '' };
       });
     }
@@ -78,14 +79,19 @@
       const od = o.zmianaOd();
       const instancja = !!(o.instancja && o.instancja());
       lista.classList.toggle('bez-godzin', instancja);
+      // D96: wymóg „RCP” ma sens tylko w checkliście produkcji (Lider/Mistrz) — przy innym dziale chowamy go i oddajemy zdjęcie.
+      const produkcja = !o.produkcja || o.produkcja();
       for (const w of lista.querySelectorAll('.pozycja-checklisty')) {
+        const rcp = w.querySelector('.rcp');
+        if (rcp && !produkcja) { rcp.checked = false; w.querySelector('.zdjecie').disabled = false; }
+        if (rcp) rcp.closest('.rcp-wymog').hidden = !produkcja;
         const min = W.minutyZTekstu(w.querySelector('.godzina').value);
         w.querySelector('.godz').textContent = !instancja && w.querySelector('.godzina').value.trim() ? `= ${W.godzinaPozycji(od, min)}`
           : instancja && w.dataset.terminIso ? W.godzina(Date.parse(w.dataset.terminIso)) : '';
         const cz = w.dataset.czynnosc;
         const ile = w.querySelectorAll('.maszyna-wybor:checked').length;
         w.querySelector('.ikony').innerHTML = [cz ? (IKONA_CZYNNOSCI[cz] ? P.ik(IKONA_CZYNNOSCI[cz]) : P.ik('skan')) : '',
-          w.querySelector('.zdjecie').checked ? P.ik('aparat') : '', w.querySelector('.notatka').checked ? P.ik('notatka') : '', w.querySelector('.skan').checked ? P.ik('skan') : '',
+          w.querySelector('.zdjecie').checked ? P.ik('aparat') : '', w.querySelector('.rcp') && w.querySelector('.rcp').checked ? P.ik('osoba') : '', w.querySelector('.notatka').checked ? P.ik('notatka') : '', w.querySelector('.skan').checked ? P.ik('skan') : '',
           ile ? `${P.ik('ustawienia')}${ile}` : '', w.querySelector('.od').value.trim() || w.dataset.odIso ? P.ik('klepsydra') : '', w.querySelector('.opis').value.trim() ? P.ik('edytuj') : ''].join('');
         const licznik = w.querySelector('[data-liczba-maszyn]');
         if (licznik) licznik.textContent = ile ? `(zaznaczone: ${ile})` : '';
@@ -99,6 +105,11 @@
 
     /* D72: wybrana gotowa czynność ustawia swoje domyślne wymagania — tylko gdy w wierszu nic jeszcze nie zaznaczono. */
     f.addEventListener('change', ev => {
+      if (ev.target.matches('.pozycja-checklisty .rcp')) {          // D96: RCP zastępuje zdjęcie — jedno wyklucza drugie
+        const zdj = ev.target.closest('.pozycja-checklisty').querySelector('.zdjecie');
+        if (ev.target.checked) zdj.checked = false;
+        zdj.disabled = ev.target.checked;
+      }
       const pole = ev.target.closest('.pozycja-checklisty .nazwa');
       if (pole) {
         const c = W.gotowaCzynnosc(pole.value, hala.slowniki);

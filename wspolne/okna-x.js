@@ -46,3 +46,36 @@
   showModal.__gkX = true;
   HTMLDialogElement.prototype.showModal = showModal;
 })();
+
+/* Liczby w kafelkach (.hala-kafelki) same dopasowują rozmiar (właściciel 2026-11-23: „liczby wystają poza kafelek”, np. 200/246).
+   Font liczby zmniejsza się tylko wtedy, gdy się nie mieści (minimum 12 px) — krótkie liczby zostają duże, bez ucinania i bez przewijania.
+   Plik jest ładowany przez Panel, Lidera, UR i KJ (GK Trasy i GK Flota mają własne kafelki i tego pliku nie używają). */
+(function () {
+  'use strict';
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+  const LICZBY = '.hala-kafelki > * > b';      // tylko liczba kafelka, nie zwykłe <b> w kartach
+  function dopasuj() {
+    document.querySelectorAll(LICZBY).forEach(function (el) {
+      el.style.fontSize = '';
+      if (!el.clientWidth) return;                              // widok ukryty — dopasujemy, gdy się pokaże
+      let rozmiar = parseFloat(getComputedStyle(el).fontSize) || 16;
+      for (let i = 0; i < 6 && el.scrollWidth > el.clientWidth && rozmiar > 12; i++) {
+        rozmiar = Math.max(12, Math.floor(rozmiar * el.clientWidth / el.scrollWidth));
+        el.style.fontSize = rozmiar + 'px';
+      }
+    });
+  }
+  let czeka = false;
+  const zaplanuj = function () {
+    if (czeka) return;
+    czeka = true;
+    (window.requestAnimationFrame || setTimeout)(function () { czeka = false; dopasuj(); });
+  };
+  const start = function () {
+    // Nie obserwujemy atrybutu style — własne zmiany rozmiaru nie wywołują pętli.
+    new MutationObserver(zaplanuj).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+    window.addEventListener('resize', zaplanuj);
+    zaplanuj();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

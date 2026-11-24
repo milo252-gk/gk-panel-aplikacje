@@ -50,16 +50,34 @@
   grid-template-rows: auto auto auto;
   flex: 1;
 }
+/* Bez kart zleceń sekcje są niskie — nie rozciągamy ich na całą wysokość okna (puste tło w kartach). Monitor ma własny układ z wierszem 1fr. */
+body:not(.tryb-ekran) .na-zywo { align-content: start; }
 body.tryb-ekran .na-zywo { grid-template-areas: "liczby" "obchody" "awarie"; }
 @media (min-width: 901px) { body.tryb-ekran .na-zywo { grid-template-rows: auto minmax(0, 1fr) auto; } }
 /* Kafelki liczb (pulpit GK Flota) — jeden rząd nad obchodami; zlecenia są klikalne. Pokazujemy tylko kafelki z liczbą
    (W.kafelkiDoPokazania), więc kolumny stałej szerokości (auto-fill): dwa kafelki nie rozjeżdżają się na cały ekran. */
 /* Kafelki i przycisk „+ Nowe zlecenie” (tylko ten, kto zleca) w jednym rzędzie Pulpitu; na wąskim ekranie przycisk schodzi pod kafelki. */
-.pulpit-gora { grid-area: liczby; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
-.pulpit-gora > .kafelki-liczb { flex: 1 1 320px; min-width: 0; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.pulpit-gora { grid-area: liczby; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+/* Jedna karta na górze Pulpitu (właściciel 2026-11-23): po lewej liczby, obok filtry sekcji „Aktualna zmiana”, po prawej „+ Nowe zlecenie”.
+   Monitor (konto ekran) zostaje bez zmian — tam liczby mają własną kartę, a filtrów nie ma. */
+body:not(.tryb-ekran) .pulpit-gora { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien); box-shadow: var(--obrys-gorny), var(--cien); padding: 12px; }
+body:not(.tryb-ekran) .pulpit-gora > .kafelki-liczb { background: none; border: 0; box-shadow: none; padding: 0; }
+.pulpit-gora > .kafelki-liczb { flex: 0 1 auto; min-width: 0; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(150px, 190px); }
+/* Filtry sekcji „Aktualna zmiana” (właściciel 2026-11-23) w wolnym miejscu rzędu liczb, obok kafelków; gdy się nie mieszczą — schodzą pod nie. */
+.pulpit-gora > .filtry-biezace { flex: 1 1 420px; margin: 0; }
+body.tryb-ekran .pulpit-gora > .kafelki-liczb { flex: 1 1 320px; grid-auto-flow: row; grid-auto-columns: auto; }
+@media (max-width: 900px) {
+  .pulpit-gora > .kafelki-liczb { flex: 1 1 100%; grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .pulpit-gora > .filtry-biezace { flex: 1 1 100%; }
+  .pulpit-gora { padding: 10px; }
+}
 .pulpit-gora > #pulpit-nowe-zlecenie { flex: 0 0 auto; }
 /* Telefon: główne działanie Pulpitu na całą szerokość; kolor grafitowy jak każdy przycisk główny (STYL §1; decyzja właściciela 2026-11-23 — pomarańcz tylko akcent; w ciemnym motywie jaśniejszy grafit z hala.css). */
-@media (max-width: 600px) { .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; } }
+@media (max-width: 600px) {
+  .pulpit-gora > #pulpit-nowe-zlecenie { flex: 1 1 100%; }
+  .pulpit-gora > .kafelki-liczb { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pulpit-gora > .kafelki-liczb:is(:has(> :nth-child(4):last-child), :has(> :nth-child(2):last-child)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 /* Same zera — jedno spokojne zdanie zamiast kafelków. */
 .kafelki-liczb > .spokoj { grid-column: 1 / -1; margin: 0; background: none; padding: 4px 8px; text-align: left;
   color: var(--zielony); font-weight: 600; }
@@ -69,13 +87,11 @@ body.tryb-ekran .na-zywo { grid-template-areas: "liczby" "obchody" "awarie"; }
 /* UI etap 3: „1 do odbioru” pod liczbą zamiast w etykiecie — etykieta zostaje krótka i nie łamie się w wąskim kafelku. */
 .kafelki-liczb .dopisek { display: block; font-size: 12px; font-weight: 600; color: var(--tekst-slaby); margin-top: 2px; }
 .obchody { grid-area: obchody; }
-/* Filtry sekcji „Zlecenia w toku i do odbioru”: jeden zwarty rząd (komputer) / jeden przewijany rząd (telefon). */
+/* Filtry sekcji „Aktualna zmiana”: jeden zwarty rząd (komputer) / jeden przewijany rząd (telefon). */
 .filtry-biezace { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin: 0 0 10px; }
 .filtry-biezace label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .filtry-biezace label.zaznacz { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; color: var(--tekst); min-height: var(--dotyk); white-space: nowrap; }
 .filtry-biezace select { min-width: 0; width: 132px; }
-.biezace-grupa { margin: 8px 0 4px; font-size: 14px; font-weight: 700; color: var(--tekst-slaby); display: flex; gap: 8px; align-items: center; }
-.biezace-liczniki-chip { font-weight: 700; }
 @media (max-width: 600px) {
   .filtry-biezace { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
   .filtry-biezace::-webkit-scrollbar { display: none; }
@@ -99,9 +115,17 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 
 /* RCP (rcp.js) — tylko tokeny GK; wiersze dni to zwykłe karty .zlecenie, więc dodajemy tylko pasek, formularze i listę odbić. */
 .rcp-widok { padding: 12px 16px; }
-.rcp-pasek, .rcp-korekta, .rcp-eksport, .rcp-karta-formularz { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
-.rcp-pasek label, .rcp-korekta label, .rcp-eksport label, .rcp-karta-formularz label { display: grid; gap: 4px; font-size: 13px; color: var(--tekst-slaby); }
+.rcp-pasek, .rcp-korekta, .rcp-eksport, .rcp-karta-formularz, .rcp-osoba-formularz { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
+.rcp-pasek label, .rcp-korekta label, .rcp-eksport label, .rcp-karta-formularz label, .rcp-osoba-formularz label, .rcp-lista-formularz label { display: grid; gap: 4px; font-size: 13px; color: var(--tekst-slaby); }
 .rcp-szukaj { flex: 1 1 180px; }
+.rcp-sprawdzone { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; color: var(--tekst-slaby); }
+.rcp-lista { margin: 0 0 12px; }
+.rcp-lista summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.rcp-lista-formularz { display: grid; gap: 8px; margin: 0 0 10px; }
+.rcp-lista-formularz textarea { width: 100%; font: inherit; }
+.rcp-podglad { margin: 0 0 12px; }
+.rcp-wymog[hidden] { display: none; }
+.zlecenie.wylaczona { opacity: .6; }
 .rcp-wybor { display: flex !important; align-items: center; gap: 8px; }
 .rcp-wybor input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; padding: 0; flex: none; }
 .rcp-popraw { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ramka); }
@@ -147,8 +171,7 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 
 /* ---------------------------------------------------------------- kafelki obchodów */
 
-.obchody > .filtry-biezace[hidden], .licznik[hidden] { display: none; }
-.kafelek.zlecenia-dzialu .lista { overflow: visible; }
+.filtry-biezace[hidden], .licznik[hidden] { display: none; }
 .kafelki { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .kafelek {
   border: 1px solid var(--ramka); border-top: 8px solid var(--kolor); border-radius: var(--promien);
@@ -510,6 +533,11 @@ dialog.okno { max-height: calc(100vh - 24px); overflow: auto; }
 .okres-opis { margin: 0 0 10px; }
 /* Osiem kafelków wskaźników w jednym rzędzie na 1366 px (z „Zlecenia w terminie”, D31). */
 #wskazniki-tresc > .hala-kafelki { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+/* Jedna ramka zamiast trzech (właściciel 2026-11-24): widok Wyniki i Wskaźniki leży już w karcie ekranu, więc kafelki, sekcja „Moje wyniki”
+   i wykresy nie mają własnej białej ramki w ramce — kafelki są szare na białym, bloki wskaźników to szare pola bez obramowania. */
+#wskazniki-tresc > .hala-kafelki, #wyniki-tresc .hala-kafelki { background: none; border: 0; box-shadow: none; padding: 0; }
+#wyniki-tresc section.wyniki { background: none; border: 0; box-shadow: none; padding: 0; }
+#wskazniki-tresc section { background: var(--tlo); border: 0; box-shadow: none; }
 .wskazniki-dwa { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 12px; }
 .wskazniki-dwa section { box-shadow: none; }
 .wskazniki-dwa h3 { margin: 0 0 8px; font-size: 1em; }
@@ -560,7 +588,7 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
   #filtry-pola::-webkit-scrollbar { display: none; }
   /* Wskazówka przewijania: prawa krawędź blednie, a odstęp na końcu sprawia, że po przewinięciu ostatnie pole jest w pełni widoczne. */
   #filtry-pola { padding-right: 28px; -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent); mask-image: linear-gradient(to right, black calc(100% - 36px), transparent); }
-  #filtry-pola > label { flex: none; width: 150px; }
+  #filtry-pola > label, #filtry-rzadkie > label { flex: none; width: 150px; }   /* rzadkie pola (Okres, Linia, Maszyna, daty) też — dawniej kurczyły się do 29 px */
   #filtry-pola > label.zaznacz { width: auto; padding-right: 6px; white-space: nowrap; }
   #filtry-pola select, #filtry-pola input[type="date"] { min-width: 0; width: 100%; }
   .chipy { gap: 6px; }
@@ -912,3 +940,7 @@ dialog.okno .sobota-lista { grid-template-columns: 1fr; }
 .kreator [data-krok]:not(.krok-aktywny) { display: none; }
 .kreator .stale-suma { display: none; }
 @media (max-width: 600px) { .stale-wiersz-dnia { grid-template-columns: 1fr; } .stale-suma { flex-basis: 100%; } }
+.rcp-brak { border-left: 4px solid var(--zolty); padding: 8px 12px; margin: 0 0 12px; background: var(--zolty-tlo); }
+.rcp-brak p { margin: 4px 0 0; }
+.rcp-pula-formularz .akcje { display: flex; gap: 8px; align-items: flex-end; }
+.rcp-pula-formularz input[name=dni] { width: 5em; }

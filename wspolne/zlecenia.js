@@ -218,7 +218,7 @@
       return { id: p.id, nazwa: p.nazwa || '', opis: p.opis || '', godz: godz(p.termin), odGodz: godz(p.od), odMs: isNaN(o) ? null : o,
                terminMs: isNaN(t) ? null : t, czynnosc: p.czynnosc || null,
                maszyna: p.maszyna || null, maszyny, skany: skanyPozycji(d, p.id),
-               wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true,
+               wymagajZdjecia: p.wymagaj_zdjecia === true, wymagajNotatki: p.wymagaj_notatki === true, wymagajRcp: p.wymagaj_rcp === true,
                wymagajSkanu: (p.wymagaj_skanu === true && maszyny.length > 0) || p.czynnosc === 'obchod', stan, wpis: wyk || pom || null,
                // D87: kierownik zwrócił TĘ pozycję do poprawy (powód); null = nie zwrócona albo już poprawiona.
                zwrot: odbior[p.id] && odbior[p.id].zwrocona ? { uwagi: (odbior[p.id].zwrot || {}).uwagi || '', autor: (odbior[p.id].zwrot || {}).autor || null } : null };
@@ -767,7 +767,7 @@
           ${q.odGodz || q.godz ? `<span class="hala-pozycja-godz">${esc(q.odGodz ? (q.godz ? `${q.odGodz}–${q.godz}` : `od ${q.odGodz}`) : q.godz)}</span>` : ''}
           <span class="hala-pozycja-nazwa">${esc(q.nazwa)}${q.zwrot ? `<span class="hala-pozycja-zwrot">${ikona('powtarzaj', 14)} Wróciła od kierownika${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</span>` : ''}${q.maszyny.length === 1 ? ` <span class="slaby">· ${esc(nazwaM(q.maszyny[0]))}</span>`
             : q.maszyny.length > 1 ? ` <span class="slaby">· ${q.maszyny.length} maszyn${q.wymagajSkanu ? ` · ${ikona('skan', 12)}${q.maszyny.filter(m => q.skany.includes(m)).length}/${q.maszyny.length}` : ''}</span>` : ''}</span>
-          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? (IKONA_CZYNNOSCI[q.czynnosc] ? ikona(IKONA_CZYNNOSCI[q.czynnosc], 16) : ikona('skan', 16)) : ''}${q.wymagajZdjecia ? ikona('aparat', 16) : ''}${q.wymagajNotatki ? ikona('notatka', 16) : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? ikona('skan', 16) : ''}</span>
+          <span class="hala-pozycja-wymogi" aria-hidden="true">${q.czynnosc ? (IKONA_CZYNNOSCI[q.czynnosc] ? ikona(IKONA_CZYNNOSCI[q.czynnosc], 16) : ikona('skan', 16)) : ''}${q.wymagajZdjecia ? ikona('aparat', 16) : ''}${q.wymagajNotatki ? ikona('notatka', 16) : ''}${q.wymagajRcp ? ikona('osoba', 16) : ''}${q.wymagajSkanu && q.czynnosc !== 'obchod' ? ikona('skan', 16) : ''}</span>
         </button>${otwarta && otwarta.pozycja === q.id ? formularzPozycji(z, q, otwarta, opcje, nazwaM) : ''}`).join('')}
     </div>`;
   }
@@ -788,6 +788,14 @@
         ${[].concat(q.wpis.zdjecia || []).length ? `<div class="hala-zlecenie-zdjecia">${miniatury([].concat(q.wpis.zdjecia))}</div>` : ''}
         <div class="hala-zlecenie-akcje"><button type="button" data-akcja="pozycja-zamknij">Zamknij</button>
           <button type="button" data-akcja="pozycja-cofnij">Cofnij odhaczenie</button></div></div>`;
+    }
+    // D96: pozycję z wymogiem „RCP” odhacza serwer, gdy Lider/Mistrz sprawdzi ludzi swojej zmiany i wpisze notatkę — tu tylko droga do ekranu RCP.
+    if (q.wymagajRcp) {
+      return `<div class="hala-pozycja-panel">
+        ${q.opis ? `<p class="hala-pozycja-opis">${esc(q.opis)}</p>` : ''}
+        <p>${ikona('osoba', 16)}Odhaczy się sama, gdy sprawdzisz w RCP ludzi swojej zmiany i napiszesz notatkę.</p>
+        <div class="hala-zlecenie-akcje"><button type="button" data-akcja="pozycja-zamknij">Zamknij</button>
+          <button type="button" class="glowny" data-akcja="pozycja-rcp">${ikona('osoba', 16)}Sprawdź ludzi w RCP</button></div></div>`;
     }
     const w = f.wymagania;
     const opisPozycji = q.opis ? `<p class="hala-pozycja-opis">${esc(q.opis)}</p>` : '';
@@ -900,6 +908,10 @@
       await hala.zapisz('zlecenie.pozycja_cofnieta', id, { pozycja: q.id });
       s.poz = null; s.info = `Cofnięto: ${q.nazwa}`;
       return rysuj(el, hala, o);
+    }
+    if (a === 'pozycja-rcp') {
+      zwolnij(f); s.poz = null; rysuj(el, hala, o);
+      return o.rcp ? o.rcp() : (global.location.hash = '#rcp');
     }
     if (a === 'pozycja-czynnosc' && o.czynnosc && o.czynnosc.wykonaj) {
       zwolnij(f); s.poz = null; rysuj(el, hala, o);
