@@ -99,7 +99,7 @@
      zmianę zlecenia-checklisty (z pozycjami). Kolejność: mistrz, UR, KJ, brygadzista SP, potem karty lidera (linie). Dział „brygadzista-sp”
      (Strefa Płyt, aplikacja Lider) jest obsłużony po kodzie; musi go jeszcze mieć kontrakt/hub (stale.dzialy) — bez tego nie powstaną zlecenia. */
   const DZIALY_OBCHODOW = [['mistrz', 'Checklista Mistrza GK', 'Mistrz GK'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
-                           ['brygadzista-sp', 'Checklista Lidera SP', 'Lider SP']];
+                           ['brygadzista-sp', 'Checklista Lidera SP', 'Lider SP'], ['magazyn', 'Checklista Magazynu', 'Magazyn']];
   function obchodyMistrza(arg) { return obchodyDzialow(Object.assign({}, arg, { tylko: ['mistrz'] })); }
   /* Karty obchodów działów innych niż lider. `ja` + `stale`: lider UR i kierownik KJ widzą tylko kartę swojego działu (Hala.dzialyKierownika),
      kierownik zakładu i admin wszystkie. `tylko` — zawężenie kodów (test, mistrz). */
@@ -3257,7 +3257,8 @@
      pod nim podpis działu („Mistrz”, „Lider · Linia 1”, „Brygadzista SP”, „UR”, „KJ”). Kolejność: mistrz, lider (linie jak dotąd), brygadzista SP,
      UR, KJ; w obrębie działu wg najwcześniejszego terminu pozycji i nazwy. Linia lidera bez żadnej checklisty zostaje jedną kartą jak dawniej
      (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Lider UR i Kierownik KJ widzą z kart działów tylko swój. */
-  const KOLEJNOSC_KART = ['mistrz', 'produkcja', 'brygadzista-sp', 'ur', 'kj'];
+  /* 2026-11-24: + magazyn (D92) — bez niego aktywna checklista Magazyniera nie miała karty na Pulpicie. */
+  const KOLEJNOSC_KART = ['mistrz', 'produkcja', 'brygadzista-sp', 'ur', 'kj', 'magazyn'];
   function obchodyKarty({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia, ja }) {
     if (!zmiana) return [];
     const liniowe = obchody({ slowniki, pracownicy, zmianaLinii, zmiana, teraz, prog, awarie, stale, zlecenia });

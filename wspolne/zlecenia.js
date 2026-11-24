@@ -484,10 +484,12 @@
         <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
         ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">${ikona('klepsydra', 16)}Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
         : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
+          ${z.doKierownika && z.dzialania.przekaz && z.status === 'nowe' && !z.poCzasie ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
           ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
           ${z.zamkniecieZmiany ? '<button type="button" class="glowny" data-akcja="zamknij-zmiane">Zamknij z tym, co jest</button>' : ''}
-          <button type="button" data-akcja="nie-moge">Nie mogę</button></div>`)
+          <button type="button" data-akcja="nie-moge">Nie mogę</button></div>
+          ${z.doKierownika && z.dzialania.przekaz && z.status === 'nowe' ? '<p class="slaby hala-zlecenie-podpowiedz">Zrobisz ją sam („Biorę”) albo przekażesz jednej osobie — checklisty nie da się rozdzielić na kilka osób.</p>' : ''}`)
         : z.doZrobienia ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : akcjeKarty(z, s)) : z.rozdzielone ? `<div class="hala-zlecenie-akcje">${z.dzialania.rozdziel ? '<button type="button" data-akcja="rozdziel">Rozdziel</button>' : ''}</div>`
         : `${z.zdjeciaWykonania.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjeciaWykonania)}</div>` : ''}<div class="hala-zlecenie-kiedy slaby">Wysłane do kierownika</div>`}
       </article>`;

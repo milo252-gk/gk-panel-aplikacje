@@ -900,9 +900,11 @@
   /* Nowe zlecenie: czy idzie „do kierownika działu” (pole do_kierownika). Tylko kierownik zakładu (i admin), dział
      z kierownikiem (UR, KJ), bez wybranej osoby. Lider UR dla swojego działu zleca wprost — jest tym kierownikiem.
      Bliźniak: do_kierownika w hala.py — ta sama reguła dla wystąpień zapisanych z harmonogramu (P18, 2026-10-19). */
+  // D102 (właściciel 2026-11-24): Magazyn nie idzie „do kierownika działu” — widzą go i biorą wszyscy z magazynu. Bliźniak: hala.py → DZIALY_BEZ_DO_KIEROWNIKA.
+  const DZIALY_BEZ_DO_KIEROWNIKA = ['magazyn'];
   function doKierownika(dane, rolaAutora, dzialyKontraktu) {
     const d = dane || {};
-    if (d.wykonawca || dzialyKierownika(rolaAutora, dzialyKontraktu) !== null) return false;
+    if (d.wykonawca || DZIALY_BEZ_DO_KIEROWNIKA.includes(d.dzial) || dzialyKierownika(rolaAutora, dzialyKontraktu) !== null) return false;
     return (dzialyKontraktu || []).some(x => x && x.kod === d.dzial && x.rola_kierownika);
   }
 

@@ -173,6 +173,11 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 
 .filtry-biezace[hidden], .licznik[hidden] { display: none; }
 .kafelki { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+/* Aktualna zmiana (właściciel 2026-11-24): karty checklist po 4 w rzędzie na komputerze, następne 4 w kolejnym rzędzie (bez przewijania sekcji —
+   naturalna wysokość); tablet 2, telefon 1 kolumna. Monitor „ekran” zachowuje własne przewijanie niżej. */
+@media (min-width: 1100px) { .kafelki { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 600px) and (max-width: 1099px) { .kafelki { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 599px) { .kafelki { grid-template-columns: minmax(0, 1fr); } }
 .kafelek {
   border: 1px solid var(--ramka); border-top: 8px solid var(--kolor); border-radius: var(--promien);
   padding: 8px 12px 10px; background: var(--karta);
