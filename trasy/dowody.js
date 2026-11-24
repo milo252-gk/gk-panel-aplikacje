@@ -348,4 +348,12 @@ function podepnijSzukajke() {
     przycisk.setAttribute('aria-expanded', otwarte ? 'true' : 'false');
     if (otwarte) pole.focus(); else zamknij(true);
   };
+  // Klawisz „/” (standard UI GK §5, jak w Panelu): komputer — fokus w polu, telefon — rozwija lupę. Nie w polach tekstowych ani w oknach.
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target || {};
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '') || t.isContentEditable || document.querySelector('dialog[open], .okno-tlo:not(.ukryty)')) return;
+    if (forma.getClientRects().length) { e.preventDefault(); pole.focus(); pole.select(); }
+    else if (przycisk && przycisk.getClientRects().length) { e.preventDefault(); przycisk.click(); }
+  });
 }

@@ -32,6 +32,7 @@ EKRANY.szablony = {
 
     pole.innerHTML = `
       <div class="pasek-narzedzi">
+        ${przelacznikWidokuTras('zapisane')}
         <button class="glowny" id="sz-nowy">+ Nowa zapisana trasa</button>
         <button id="sz-wroc">${ikonka('strzalka-lewo')}Trasy</button>
       </div>
@@ -65,6 +66,7 @@ EKRANY.szablony = {
                i użyj „Dodaj do zapisanych tras” (pod „Więcej”).</div></div></div>`}`;
 
     pole.querySelector('#sz-wroc').onclick = () => pokazEkran('trasy');
+    podepnijPrzelacznikWidokuTras(pole, dzisiaj());
     pole.querySelector('#sz-nowy').onclick = () => oknoSzablonu(null, kierowcy, busy);
     pole.querySelectorAll('[data-edytuj]').forEach(b => b.onclick = () =>
       oknoSzablonu(szablony.find(s => s.id === Number(b.dataset.edytuj)), kierowcy, busy));

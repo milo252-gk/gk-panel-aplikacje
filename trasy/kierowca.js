@@ -381,7 +381,17 @@ EKRANY.moja = {
 async function rozpocznijZlecenie(trasa, data) {
   const zostalo = await nieodhaczone(trasa);
   if (zostalo) {
-    komunikat(tekstNiepotwierdzonych(zostalo), 'blad');
+    // Kliknięcie przy bazie to początek pracy kierowcy: czas liczy się od razu (serwer zapisuje tylko start_o,
+    // trasa zostaje „planowana”). Wyjazd dalej czeka na numery zamówień — jak dotąd.
+    if (!trasa.start_o) {
+      await doKolejki({ typ: 'stan_trasy', trasa: trasa.id, stan: 'start', czas: czasTeraz() }, null);
+      trasa.start_o = czasTeraz();
+      await Kolejka.zapamietaj('moja-trasa-' + data, trasa);
+      mojaTrasa = trasa;
+      komunikat('Czas pracy liczy się. Wyjazd po potwierdzeniu załadunku.', 'ok');
+    } else {
+      komunikat(tekstNiepotwierdzonych(zostalo), 'blad');
+    }
     pokazEkran('zaladunek', { data });
     return;
   }

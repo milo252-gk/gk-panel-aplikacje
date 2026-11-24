@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-a1010ff5f2d4';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-ebaee6dd1726';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -2141,6 +2141,16 @@ function menuDlaRoli() {
 /* Ekrany, które przeniesiono do innego (stare hasze i zakładki): nazwa → [ekran, parametry]. */
 const STARE_EKRANY = { planowanie: ['raporty', { sekcja: 'planowanie' }] };
 
+/* E6 (2026-11-24): menu biura ma 7–8 pozycji. Ekrany Kalendarz i Zapisane trasy to przełączniki widoków na ekranie Trasy,
+   a Miejsca wyjazdu i Zaproś kierowcę — chipy w Administracji (administrator) albo w „Ustawieniach firmy” (biuro).
+   Same ekrany i ich adresy (#miesiac, #szablony, #lokalizacje, #zaproszenie, linki z push i wstęg) zostają; tu tylko mówimy,
+   którą pozycję menu podświetlić, gdy ekran należy do grupy. */
+function pozycjaMenuEkranu(nazwa) {
+  if (nazwa === 'miesiac' || nazwa === 'szablony') return 'trasy';
+  if (nazwa === 'lokalizacje' || nazwa === 'zaproszenie') return jestAdministratorem() ? 'administracja' : 'ustawienia';
+  return nazwa;
+}
+
 async function pokazEkran(nazwa, parametry) {
   if (STARE_EKRANY[nazwa]) {          // „Terminowość planowania” jest sekcją Raportu pracy (2026-11-23)
     parametry = Object.assign({}, parametry, STARE_EKRANY[nazwa][1]);
@@ -2162,13 +2172,20 @@ async function pokazEkran(nazwa, parametry) {
   stan.parametryEkranu = parametry || {};
   document.getElementById('tytul-ekranu').textContent = ekran.tytul;
   document.querySelectorAll('.menu button[data-ekran], .pasek-dolny button[data-ekran]')
-    .forEach(b => b.classList.toggle('wybrany', b.dataset.ekran === nazwa));
+    .forEach(b => b.classList.toggle('wybrany', b.dataset.ekran === pozycjaMenuEkranu(nazwa)));
   zamknijMenu();
   const tresc = document.getElementById('tresc');
   tresc.innerHTML = '<div class="pusto">Wczytuję…</div>';
   window.scrollTo(0, 0);
   try {
     await ekran.rysuj(tresc, parametry || {});
+    // Miejsca wyjazdu i Zaproś kierowcę mieszkają pod Administracją / Ustawieniami: przycisk powrotu na górze.
+    if ((nazwa === 'lokalizacje' || nazwa === 'zaproszenie') && stan.ekran === nazwa) {
+      const ust = jestAdministratorem() ? 'administracja' : 'ustawienia';
+      tresc.insertAdjacentHTML('afterbegin', `<div class="pasek-narzedzi"><button type="button" id="wroc-do-ustawien">${
+        ikonka('strzalka-lewo')}${ust === 'administracja' ? 'Administracja' : 'Ustawienia'}</button></div>`);
+      tresc.querySelector('#wroc-do-ustawien').onclick = () => pokazEkran(ust, ust === 'administracja' ? { zakladka: stan.adminZakladka } : undefined);
+    }
   } catch (e) {
     tresc.innerHTML = `<div class="karta"><h2>Nie udało się wczytać</h2>
       <p class="slaby">${escHtml(poLudzku(e))}</p>

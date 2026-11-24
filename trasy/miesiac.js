@@ -69,6 +69,7 @@ EKRANY.miesiac = {
 
     pole.innerHTML = `
       <div class="pasek-narzedzi">
+        ${przelacznikWidokuTras('kalendarz')}
         <button type="button" id="k-wstecz" aria-label="Poprzedni miesiąc">${ikonka('strzalka-lewo')}Poprzedni</button>
         <button type="button" id="k-dzis"${miesiac === dzis.slice(0, 7) ? ' aria-current="date"' : ''}>Ten miesiąc</button>
         <button type="button" id="k-dalej" aria-label="Następny miesiąc">Następny${ikonka('strzalka-prawo', 16, true)}</button>
@@ -84,6 +85,7 @@ EKRANY.miesiac = {
         </div>
       </div>`;
 
+    podepnijPrzelacznikWidokuTras(pole, dzisiaj());
     pole.querySelector('#k-wstecz').onclick = () => pokazEkran('miesiac', { miesiac: sasiedni(-1) });
     pole.querySelector('#k-dalej').onclick = () => pokazEkran('miesiac', { miesiac: sasiedni(1) });
     pole.querySelector('#k-dzis').onclick = () => pokazEkran('miesiac', { miesiac: dzis.slice(0, 7) });

@@ -577,7 +577,7 @@ EKRANY.trasy = {
                <div style="margin-top:8px"><button type="button" class="maly" data-filtr-wyczysc>Wyczyść filtry</button></div>`
                : `Na ${polskaData(data)} nie ma jeszcze trasy.`}
              <div class="male${jestPodgladem() ? ' ukryty' : ''}" style="margin-top:8px">Kliknij „+ Nowa trasa” albo „Wczytaj z Excela”.
-               Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (menu → Zapisane trasy).</div></div></div>`}`;
+               Powtarzalny kurs zrobisz jednym kliknięciem z zapisanej trasy (przełącznik „Zapisane trasy” nad listą).</div></div></div>`}`;
 
     podepnijPrzelacznikWidokuTras(pole, data);
     podepnijFiltry(pole, 'trasy', f, def, () => pokazEkran('trasy', { data, widok: 'dzien' }));
@@ -646,7 +646,10 @@ function przelacznikWidokuTras(aktywny) {
   return `<span class="przelacznik-widoku" role="group" aria-label="Widok tras">
       <button type="button" id="t-widok-dzien" ${aktywny === 'dzien' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Dzień</button>
       <button type="button" id="t-widok-tydzien" ${aktywny === 'tydzien' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Tydzień</button>
-      <button type="button" id="t-widok-lista" ${aktywny === 'lista' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Lista</button>
+      <button type="button" id="t-widok-lista" ${aktywny === 'lista' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Lista</button>${
+      jestPodgladem() ? '' : `
+      <button type="button" id="t-widok-zapisane" ${aktywny === 'zapisane' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Zapisane trasy</button>
+      <button type="button" id="t-widok-kalendarz" ${aktywny === 'kalendarz' ? 'class="glowny" aria-pressed="true"' : 'aria-pressed="false"'}>Kalendarz</button>`}
     </span>`;
 }
 
@@ -654,6 +657,10 @@ function podepnijPrzelacznikWidokuTras(pole, data) {
   pole.querySelector('#t-widok-dzien').onclick = () => { Pamiec.zapisz('widok_tras', 'dzien'); pokazEkran('trasy', { data, widok: 'dzien' }); };
   pole.querySelector('#t-widok-tydzien').onclick = () => { Pamiec.zapisz('widok_tras', 'tydzien'); pokazEkran('trasy', { data, widok: 'tydzien' }); };
   pole.querySelector('#t-widok-lista').onclick = () => { Pamiec.zapisz('widok_tras', 'lista'); pokazEkran('trasy', { data, widok: 'lista' }); };
+  // E6: dawne pozycje menu „Zapisane trasy” i „Kalendarz” — te same ekrany, wejście z przełącznika (bez zmiany zapamiętanego widoku).
+  const zapisane = pole.querySelector('#t-widok-zapisane'), kalendarz = pole.querySelector('#t-widok-kalendarz');
+  if (zapisane) zapisane.onclick = () => pokazEkran('szablony');
+  if (kalendarz) kalendarz.onclick = () => pokazEkran('miesiac', { miesiac: String(data).slice(0, 7) });
 }
 
 /* Filtr „Auto” w widoku dnia i tygodnia (właściciel 2026-11-17: zobaczyć i filtrować zlecenia, które realizowało dane auto).
@@ -3697,10 +3704,28 @@ function blokKierowcowZablokowanych(konta) {
 }
 
 async function rysujUstawieniaBiura(pole) {
-  const [ustawienia, konta] = await Promise.all([API.get('/api/ustawienia'), API.get('/api/konta-kierowcow')]);
-  stan.ustawienia = ustawienia;
-  await odswiezLokalizacje();
+  const chipy = `<div class="chipy" role="group" aria-label="Skróty">
+      <button type="button" class="chip" id="u-miejsca">Miejsca wyjazdu</button>
+      <button type="button" class="chip" id="u-zapros">Zaproś kierowcę</button>
+    </div>`;
+  const podepnijChipy = () => {
+    pole.querySelector('#u-miejsca').onclick = () => pokazEkran('lokalizacje');
+    pole.querySelector('#u-zapros').onclick = () => pokazEkran('zaproszenie');
+  };
+  let ustawienia, konta;
+  try {
+    [ustawienia, konta] = await Promise.all([API.get('/api/ustawienia'), API.get('/api/konta-kierowcow')]);
+    stan.ustawienia = ustawienia;
+    await odswiezLokalizacje();
+  } catch (e) {
+    // Skróty (Miejsca wyjazdu, Zaproś kierowcę) były pozycjami menu i otwierały się bez tego zapytania — przy braku serwera zostają.
+    pole.innerHTML = `${chipy}<div class="karta"><h2>Nie udało się wczytać</h2><p class="slaby">${escHtml(poLudzku(e))}</p>
+      <button class="glowny" onclick="pokazEkran('ustawienia')">Spróbuj ponownie</button></div>`;
+    podepnijChipy();
+    return;
+  }
   pole.innerHTML = `
+    ${chipy}
     <p class="male slaby" style="margin:0 0 10px">Tu ustawiasz, jak program liczy trasy
       i pilnuje kierowców oraz zakładasz konta kierowców. Klucze, pocztę, kopie zapasowe
       i konta biura zmienia Szef Sprzedaży.</p>
@@ -3710,6 +3735,7 @@ async function rysujUstawieniaBiura(pole) {
     ${kartaKontKierowcow(ustawienia, konta)}`;
   const nowyKierowca = pole.querySelector('#u-nowy-kierowca');
   if (nowyKierowca) nowyKierowca.onclick = () => oknoKontaZespolu(null);
+  podepnijChipy();
   pole.querySelectorAll('[data-kierowca-konto]').forEach(b =>
     b.onclick = () => oknoKontaZespolu(konta.find(x => x.id === Number(b.dataset.kierowcaKonto))));
   pole.querySelectorAll('[data-odblokuj]').forEach(b => b.onclick = async () => {
@@ -3932,7 +3958,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       <button class="glowny zapisz-ustawienia" style="margin-top:12px">Zapisz ustawienia</button>`)}
 
     ${zwin('Jak wejść z telefonu', '', `
-      <p class="male">Najprościej: menu <b>${ikonka('zaproszenie')}Zaproś kierowcę</b> — kierowca skanuje kod QR
+      <p class="male">Najprościej: ${jestAdministratorem() ? 'Administracja' : 'Ustawienia'} → <b>${ikonka('zaproszenie')}Zaproś kierowcę</b> — kierowca skanuje kod QR
         aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
         (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
         a gdy Panel Zarządczy GK jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
@@ -4219,6 +4245,9 @@ const ZAKLADKI_ADMINISTRACJI = [
   // Unifikacja E7 (2026-11-23): „Role i uprawnienia” jako chip-drzwi administratora (jak w Panelu) — otwiera to samo okno co „Moje konto”.
   { id: 'role', napis: 'Role i uprawnienia', drzwi: true },
   { id: 'ustawienia', napis: 'Ustawienia' },
+  // E6 (2026-11-24): dawne pozycje menu — chipy-drzwi do tych samych ekranów (widzi je całe biuro, jak dotąd).
+  { id: 'lokalizacje', napis: 'Miejsca wyjazdu', drzwi: true, ekran: 'lokalizacje' },
+  { id: 'zaproszenie', napis: 'Zaproś kierowcę', drzwi: true, ekran: 'zaproszenie' },
 ];
 
 function kartaKodowQRAdmina() {
@@ -4246,6 +4275,8 @@ EKRANY.administracja = {
       <div id="admin-tresc"><div class="pusto">Wczytuję…</div></div>`;
     pole.querySelectorAll('[data-zakladka]').forEach(b =>
       b.onclick = () => {
+        const drzwi = ZAKLADKI_ADMINISTRACJI.find(z => z.id === b.dataset.zakladka && z.ekran);
+        if (drzwi) { pokazEkran(drzwi.ekran); return; }
         if (b.dataset.zakladka === 'role') {       // drzwi: okno, bez zmiany zakładki; „Wróć” i zamknięcie zostają na tej samej zakładce
           otworzRole(() => pokazEkran('administracja', { zakladka: stan.adminZakladka })).catch(e => komunikat(poLudzku(e), 'blad'));
           return;
