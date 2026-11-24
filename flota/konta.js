@@ -412,6 +412,7 @@ function oknoKontaZespolu(u) {
           <p class="slaby male">Hasła ani PIN-u nikt tu nie wpisuje — osoba ustawia je sama
             przy logowaniu. Działa od razu, bez „Zapisz”.</p>
           <div class="konto-akcje">
+            <button type="button" id="kz-reset" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>
             <button type="button" id="kz-haslo">Ustaw hasło startowe</button>
             <button type="button" id="kz-pin">Resetuj PIN</button>
             <button type="button" id="kz-wyloguj">Wyloguj wszędzie</button>
@@ -434,6 +435,9 @@ function oknoKontaZespolu(u) {
           odswiezEkran();
         };
       };
+      dzialanie('#kz-reset', 'resetuj_konto', 'Zresetować hasło i PIN?',
+                `${u ? u.imie : ''} dostanie hasło „haslo123” i PIN 1234, wszystkie urządzenia zostaną `
+                + 'wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło');
       dzialanie('#kz-haslo', 'haslo_startowe', 'Ustawić hasło startowe?',
                 `${u ? u.imie : ''} dostanie hasło „haslo123”, PIN zostanie skasowany, a wszystkie `
                 + 'urządzenia wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło i PIN.', 'Ustaw');
