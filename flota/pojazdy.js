@@ -619,14 +619,19 @@ function oknoPojazdu(p) {
 }
 
 async function oknoPrzypisania(p) {
-  const kierowcy = await sprobuj(() => API.get('/api/kierowcy')) || [];
+  const kierowcy = await sprobuj(() => API.get('/api/kierowcy?z_biura=1')) || [];
+  // D103: kierowcy (i osoby oznaczone jako jeżdżące) osobno od reszty biura — wybranie kogoś z biura oznacza go
+  // jako kierowcę (dostaje „Moje auto”); żadna rola się nie zmienia.
+  const opcje = u => `<option value="${u.id}"${p.kierowca === u.id ? ' selected' : ''}>${escHtml(u.imie)}</option>`;
+  const jezdzacy = kierowcy.filter(u => u.grupa !== 'biuro');
+  const zBiura = kierowcy.filter(u => u.grupa === 'biuro');
   okno({
     tytul: 'Kto jeździ ' + p.rejestracja,
     tresc: `<label class="pole">Kierowca
       <select id="w-kto">
         <option value="">— nikt —</option>
-        ${kierowcy.map(u => `<option value="${u.id}"${p.kierowca === u.id ? ' selected' : ''}>${
-          escHtml(u.imie)}</option>`).join('')}
+        ${jezdzacy.map(opcje).join('')}
+        ${zBiura.length ? `<optgroup label="Z biura — dostanie ekran „Moje auto”">${zBiura.map(opcje).join('')}</optgroup>` : ''}
       </select></label>
       <p class="slaby male">Kierowca widzi w telefonie tylko to auto: swoje terminy,
       swój przegląd miesięczny i licznik. Nie widzi VIN-u, polisy ani kosztów.</p>`,

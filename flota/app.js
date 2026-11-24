@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-5ff15874a9db';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-03e05599834a';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -1990,6 +1990,12 @@ function menuDlaRoli() {
   document.querySelectorAll('.tylko-biuro-bez-admina')
     .forEach(e => e.classList.toggle('ukryty', !biuro || jestAdministratorem()));
   document.querySelectorAll('.tylko-kierowca').forEach(e => e.classList.toggle('ukryty', biuro));
+  // D103: biuro/administrator z przypisanym autem (albo oznaczony w Panelu jako „Kierowca GK Flota”) ma w menu
+  // bocznym „Moje auto” i „Przegląd” — te same ekrany co kierowca, na jego własnym aucie.
+  if (biuro && stan.uz && stan.uz.moje_auto) {
+    document.querySelectorAll('button.tylko-kierowca[data-ekran="moj"], button.tylko-kierowca[data-ekran="przeglad"]')
+      .forEach(e => e.classList.remove('ukryty'));
+  }
 
   const dolne = (biuro ? PASEK_BIURA : PASEK_KIEROWCY).filter(([e]) => EKRANY[e]);
   const pasek = document.getElementById('pasek-dolny');
@@ -3237,6 +3243,10 @@ async function wejdzDoAplikacji() {
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
   document.getElementById('menu-rola').textContent = NAZWA_ROLI[stan.uz.rola] || stan.uz.rola || '';   // 2026-11-23: rola pod imieniem, program stały
+  // D103: odpowiedz logowania nie niesie `moje_auto` - biuro/administrator dopytuje /api/ja (bez sieci zostaje, co bylo).
+  if (jestBiuro() && stan.uz.moje_auto === undefined && stan.online !== false) {
+    try { const ja = await API.get('/api/ja'); stan.uz.moje_auto = !!ja.moje_auto; } catch (e) { /* bez menu Moje auto */ }
+  }
   menuDlaRoli();
   odswiezBanerDzwieku();
   // Zanim cokolwiek narysujemy: czy przeglądarka na pewno ma komplet plików
