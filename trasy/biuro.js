@@ -2964,7 +2964,7 @@ EKRANY.klienci = {
       const wynik = stan.klienci.filter(k =>
         !fraza || (k.nazwa + ' ' + k.miasto + ' ' + k.ulica + ' ' + (k.telefon || ''))
           .toLowerCase().includes(fraza));
-      if (!wynik.length) return '<div class="pusto">Nic nie pasuje do wyszukiwania.</div>';
+      if (!wynik.length) return '<div class="pusto">Nic nie znalazłem.</div>';
       return wynik.map(k => `<button class="przystanek s-oczekuje" data-klient="${k.id}"
           style="${k.aktywny ? '' : 'opacity:.55'}">
           <span class="numer">${escHtml(k.nazwa[0] || '?')}</span>

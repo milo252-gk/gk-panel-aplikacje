@@ -55,6 +55,8 @@ h3 .miara-i{margin-left:8px}
 /* ---------------------------------------------------------------- Kalendarz miesiąca */
 .kal-legenda{margin:0 0 10px}
 .siatka-kal{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px}
+/* Telefon: odstęp 3 px, żeby dzień miał co najmniej 44 px szerokości (cel dotyku). */
+@media (max-width:520px){ .siatka-kal{gap:3px} }
 .naglowek-kal{text-align:center; font-size:12px; font-weight:700; color:var(--tekst-slaby); text-transform:uppercase; padding:2px 0}
 button.dzien-kal{position:relative; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:3px;
   min-height:76px; width:auto; margin:0; padding:6px 7px; text-align:left; border-radius:10px;
@@ -68,7 +70,7 @@ button.dzien-kal.dzis{border:2px solid var(--granat)}
 .dzien-kal.dzis .nr{color:var(--granat-tekst)}
 .dzien-kal .liczby{display:flex; align-items:baseline; gap:3px; line-height:1.15}
 .dzien-kal .liczby b{font-size:16px; font-variant-numeric:tabular-nums}
-.dzien-kal .liczby i{font-style:normal; font-size:11px; color:var(--tekst-slaby)}
+.dzien-kal .liczby i{font-style:normal; font-size:12px; color:var(--tekst-slaby)}
 .dzien-kal .nieudane-kal{position:absolute; top:5px; right:6px; min-width:20px; height:20px; padding:0 5px; border-radius:10px;
   background:var(--czerwony); color:var(--na-barwie); font-size:12px; font-weight:700; line-height:20px; text-align:center}
 @media (max-width:520px){
@@ -76,7 +78,7 @@ button.dzien-kal.dzis{border:2px solid var(--granat)}
   button.dzien-kal{min-height:64px; padding:4px 4px}
   .dzien-kal .liczby i{display:none}
   .dzien-kal .liczby b{font-size:14px}
-  .dzien-kal .nieudane-kal{top:3px; right:3px; min-width:18px; height:18px; line-height:18px; font-size:11px; padding:0 4px}
+  .dzien-kal .nieudane-kal{top:3px; right:3px; min-width:18px; height:18px; line-height:18px; font-size:12px; padding:0 4px}
 }
 
 /* ---------------------------------------------------------------- Role i uprawnienia */
@@ -97,9 +99,9 @@ button.dzien-kal.dzis{border:2px solid var(--granat)}
 .role-tabela td.rola-nie{color:var(--tekst-slaby); font-weight:400}
 .role-tabela .moja-rola{background:var(--nasze-tlo)}
 .role-tabela .role-grupa th{background:var(--tlo); text-align:left; font-size:12px}
-.role-tabela .rola-uwaga{display:block; font-size:11px; font-weight:400; color:var(--tekst-slaby); line-height:1.2}
+.role-tabela .rola-uwaga{display:block; font-size:12px; font-weight:400; color:var(--tekst-slaby); line-height:1.2}
 .role-opisy dt.moja-rola{color:var(--granat-tekst)}
-.znacznik{display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; background:var(--tlo-neutralne); color:var(--tekst)}
+.znacznik{display:inline-block; font-size:12px; font-weight:700; padding:1px 8px; border-radius:999px; background:var(--tlo-neutralne); color:var(--tekst)}
 .znacznik.ok{background:var(--nasze-tlo); color:var(--akcent)}
 
 /* Planowanie tras (2026-11-19, planowanie.js): lista dni z trasami */

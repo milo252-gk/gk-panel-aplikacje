@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-906f52ee5aef';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-a1010ff5f2d4';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -272,7 +272,7 @@ button.glowny{background:var(--granat); border-color:var(--granat); color:var(--
 button.zielony{background:var(--zielony); border-color:var(--zielony); color:var(--na-barwie)}
 button.czerwony{background:var(--czerwony); border-color:var(--czerwony); color:var(--na-barwie)}
 button.duzy{width:100%; min-height:54px; font-size:16px; margin-top:6px}
-button.maly{min-height:34px; padding:5px 10px; font-size:13px; border-radius:8px}
+button.maly{min-height:36px; padding:5px 10px; font-size:13px; border-radius:8px}
 button.tekstowy{border:0; background:none; color:var(--akcent); padding:6px 4px; min-height:auto}
 button.ikona-btn{border:0; background:none; font-size:20px; padding:0 10px; line-height:1;
                  min-height:44px; min-width:44px; display:inline-flex; align-items:center;
@@ -1011,7 +1011,9 @@ body.okno-otwarte .mapa{visibility:hidden}
   background:var(--zolty-tlo); color:var(--zolty); font-size:13px; font-weight:600; overflow:hidden}
 .baner-dzwieku .ik{margin-right:0; flex:none}
 .baner-dzwieku .baner-tekst{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.baner-dzwieku button{flex:none; min-height:30px; padding:0 12px; margin-left:auto}
+.baner-dzwieku button{flex:none; min-height:30px; padding:0 12px; margin-left:auto; position:relative}
+/* Cel dotyku 44 px bez zmiany wysokości banera (audyt dostępności 2026-11-24). */
+.baner-dzwieku button::after{content:''; position:absolute; inset:-8px -6px}
 @media (max-width:820px){ .baner-dzwieku#pasek-dzwieku{margin:0; border-radius:0} }
 
 /* Ruch ograniczony na życzenie systemu: pulsowanie kropki sieci, wjazd komunikatu, obrót kółka i obrót strzałki rozwijania. */
