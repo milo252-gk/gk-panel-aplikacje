@@ -7,7 +7,7 @@
    nie siega, a zasieg komorkowy bywa jednokreskowy. Program ma sie tam otworzyc
    i przyjac komplet zdjec.                                                   */
 
-const WERSJA = 'flotex-79600043149d';
+const WERSJA = 'flotex-e1866e193f94';
 
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
@@ -55,7 +55,7 @@ self.addEventListener('activate', e => {
 });
 
 /* Powiadomienia przy ZAMKNIĘTEJ aplikacji (Web Push) — ten sam sposób co hub
-   GK Panel Kierownika (wspolne/klient/hala-push-sw.js).
+   Panel Zarządczy GK (wspolne/klient/hala-push-sw.js).
 
    Program wysyła push BEZ treści (szyfrowanie treści wymagałoby bibliotek spoza
    Pythona), więc tutaj po jego otrzymaniu pytamy program „co nowego” adresem

@@ -268,9 +268,9 @@ function sekcjaTunelu(u) {
       <div class="karta-gora" id="u-tunel"><h3>Adres HTTPS dla kierowców</h3>
         <span class="plakietka ${klasa}">${escHtml(opis)}</span></div>
 
-      <div class="wstega info">Bez tego kierowcy mają <b>ograniczony</b> tryb offline:
+      <div class="wstega info">Bez tego kierowcy mają <b>ograniczone</b> działanie bez zasięgu:
         aplikacja przyjmie zdjęcia bez zasięgu, ale tylko jeśli była otwarta od wyjazdu.
-        Przeglądarki włączają pełny tryb offline wyłącznie pod adresem
+        Przeglądarki włączają pełne działanie bez zasięgu wyłącznie pod adresem
         <code>https://</code>. Tunel Cloudflare daje taki adres bez stałego IP
         i bez otwierania portów w routerze.</div>
 
@@ -359,7 +359,7 @@ function podepnijTunel(pole) {
   const adresOpis = pole.querySelector('#u-tunel-adres-opis');
   const OPISY = {
     brak: 'Kierowcy wchodzą tylko z firmowego wifi, pod adresem http://192.168… '
-      + 'Tryb offline działa w ograniczonym zakresie.',
+      + 'Działanie bez zasięgu jest ograniczone.',
     // D42: z aplikacją na GitHub Pages tryb szybki wystarcza na co dzień — hub
     // Panelu publikuje bieżący adres tunelu, a telefony same się na niego przełączają.
     szybki: 'Adres losowy, w rodzaju https://cos-tam.trycloudflare.com, i ZMIENIA SIĘ '
@@ -676,7 +676,7 @@ function stanPages(p, tunel) {
   if (!p.lokalne) return `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Zarządczemu GK
     (kopia testowa albo druga kopia na innym porcie).</div>`;
   if (!p.hub_odpisal) return `<div class="wstega uwaga">Panel Zarządczy GK jeszcze się nie odezwał.
-    Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>`;
+    Sprawdź, czy Panel Zarządczy GK działa na tym komputerze (w nowej wersji).</div>`;
   const bezUkosnika = a => String(a || '').replace(/\/+$/, '');
   const staryAdres = !!tunel && !!p.adres_api && bezUkosnika(p.adres_api) !== bezUkosnika(tunel);
   return `

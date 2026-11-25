@@ -229,7 +229,7 @@ EKRANY.protokol = {
 
     pole.innerHTML = `
       ${g.status === 'odrzucony' ? `<div class="wstega blad">
-        Przegląd odrzucony${g.odrzucil_imie ? ' przez ' + escHtml(g.odrzucil_imie) : ''}.
+        Przegląd zwrócony${g.odrzucil_imie ? ' przez ' + escHtml(g.odrzucil_imie) : ''}.
         Powód: ${escHtml(g.powod || 'nie podano')}</div>` : ''}
       ${g.status === 'zatwierdzony' ? `<div class="wstega ok">
         Zatwierdzony${g.zatwierdzil_imie ? ' przez ' + escHtml(g.zatwierdzil_imie) : ''}${

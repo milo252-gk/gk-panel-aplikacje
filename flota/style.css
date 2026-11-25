@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-79600043149d';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-e1866e193f94';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -187,6 +187,8 @@ input,select,textarea{
 }
 input:focus,select:focus,textarea:focus{outline:2px solid var(--akcent); outline-offset:-1px;
                                         border-color:var(--akcent)}
+/* Widoczny fokus z klawiatury na przyciskach, odnośnikach i pozycjach menu (jak w hali; tylko :focus-visible — mysz i dotyk go nie wywołują). */
+button:focus-visible,a:focus-visible,summary:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--akcent); outline-offset:2px}
 textarea{min-height:76px; resize:vertical}
 label{display:block; font-weight:600; font-size:13px; margin-bottom:12px}
 label.plaska{display:flex; align-items:center; gap:9px; font-weight:500; margin:10px 0}
@@ -372,7 +374,7 @@ button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line
 @media (min-width:821px) and (max-height:720px){
   .menu-naglowek{padding:8px 18px 6px}
   .menu .menu-logo{width:88px; margin-bottom:2px}
-  .menu-rola{display:none}
+  /* 2026-11-24: rola i nazwa programu zostają także w niskim oknie (jak w Panelu Zarządczym GK) — menu przewija się samo. */
 }
 
 main{padding:16px; max-width:1180px; margin:0 auto;
@@ -537,6 +539,10 @@ main h3{scroll-margin-top:calc(var(--gora-wys) + 12px)}
 /* Link w wstędze („Pokaż w Ustawieniach”, „Uzupełnij teraz”) w kolorze samej wstęgi, nie pomarańczowego akcentu:
    akcent na brzoskwiniowym/czerwonym tle miał 2,85-2,99:1, kolor wstęgi daje powyżej 4,5:1 (jasny i ciemny motyw). */
 .wstega button.tekstowy,.pusto button.tekstowy{color:inherit; text-decoration:underline; font-weight:700}
+/* Link w zdaniu wstęgi jest tekstem w linii: przycisk 44 px rozciągał wiersz, więc na telefonie linie wstęgi
+   (np. „Instrukcja w razie awarii jest pusta…”) miały przerwy po 44 px. Pole dotyku zostaje (padding), a ujemny margines
+   oddaje wierszowi tę samą wysokość (przycisk jest zawsze „inline-block”, nie da się go uczynić „inline”). */
+.wstega button.tekstowy{min-height:0; padding:12px 4px; margin:-12px 0; line-height:inherit; vertical-align:baseline}
 
 /* ------------------------------------------------- pozycje list (flota) */
 /* Wiersz-przycisk: pojazd na liście floty, protokół, usterka, alarm terminu.

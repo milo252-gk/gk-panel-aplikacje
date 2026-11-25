@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-79600043149d';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-e1866e193f94';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -160,7 +160,7 @@ function escHtml(t) {
    „Failed to fetch" nie mówi mu nic; „Brak zasięgu — zapisałem w telefonie"
    mówi wszystko. Tłumaczymy w JEDNYM miejscu, bo wyciekały z pięciu różnych. */
 function poLudzku(e) {
-  if (!e) return 'Coś poszło nie tak. Spróbuj jeszcze raz.';
+  if (!e) return 'Nie udało się wykonać operacji. Spróbuj jeszcze raz.';
   const nazwa = String(e.name || '');
   const tekst = String(e.message || '');
   if (nazwa === 'QuotaExceededError' || /quota|storage|full disk|exceeded its quota/i.test(tekst)) {
@@ -187,7 +187,7 @@ function poLudzku(e) {
       + 'w zwykłym oknie.';
   }
   // Komunikaty z naszego serwera są już po polsku — te przepuszczamy bez zmian.
-  return tekst || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
+  return tekst || 'Nie udało się wykonać operacji. Spróbuj jeszcze raz.';
 }
 
 /* Wybór motywu: jasny, ciemny albo „jak w telefonie”.
@@ -2673,7 +2673,7 @@ function oknoKonta() {
    i „Sprawdź dźwięki” — info → pilne → awaria, żeby człowiek usłyszał, czym
    różni się zwykła wiadomość od pilnej, zanim zadzwoni naprawdę. */
 function poleDzwieku() {
-  return `<p class="konto-drobne">Przy otwartej aplikacji nowa sprawa daje dźwięk — w tym urządzeniu.</p>
+  return `<p class="konto-drobne">Przy otwartej aplikacji nowe powiadomienie daje dźwięk — w tym urządzeniu.</p>
     <div class="przyciski-konta">
       <button type="button" id="btn-dzwiek" aria-pressed="${Dzwiek.wlaczony()}">${napisDzwieku()}</button>
       <button type="button" id="btn-sprawdz-dzwieki">${ikonka('glos')}Sprawdź dźwięki</button>
@@ -2683,7 +2683,7 @@ function napisDzwieku() {
   return Dzwiek.wlaczony() ? ikonka('alerty') + 'Dźwięk powiadomień: włączony'
     : ikonka('dzwonek-wyl') + 'Dźwięk powiadomień: wyłączony';
 }
-const PROBA_DZWIEKOW = [['info', 0], ['pilne', 1100], ['awaria', 3200]];
+const PROBA_DZWIEKOW = [['info', 0], ['reakcja', 1100], ['pilne', 2300], ['awaria', 4500]];
 function podepnijDzwiek(pole) {
   const przelacz = pole.querySelector('#btn-dzwiek');
   const sprawdz = pole.querySelector('#btn-sprawdz-dzwieki');
@@ -3226,7 +3226,7 @@ async function sprawdzZdarzenia() {
     const glowne = najwazniejszeZdarzenie(nowe);
     if (!glowne) return;
     Dzwiek.zagraj(WAGA_DZWIEKU[glowne.dzwiek] ? glowne.dzwiek : 'info');
-    komunikat((glowne.tytul || 'Nowa sprawa') + (nowe.length > 1 ? ` (+${nowe.length - 1})` : ''),
+    komunikat((glowne.tytul || 'Nowe powiadomienie') + (nowe.length > 1 ? ` (+${nowe.length - 1})` : ''),
       glowne.dzwiek === 'info' ? '' : (glowne.dzwiek === 'pilne' ? 'uwaga' : 'blad'));
     // Bieżący ekran ze świeżymi danymi — ale nie spod palca (otwarte okno, pisanie).
     const ekran = EKRANY[stan.ekran];
