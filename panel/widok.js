@@ -75,7 +75,18 @@
       .sort((a, b) => (Date.parse((a.dane || {}).czas_przyjecia) || 0) - (Date.parse((b.dane || {}).czas_przyjecia) || 0));
     const stan = doPrzyjecia && !przyjete.length ? 'brak' : doPrzyjecia ? 'czesc' : przyjete.length ? 'przyjete' : null;
     if (!stan) return { stan: null, tekst: '' };
-    if (stan === 'brak') return { stan, tekst: 'Nikt jeszcze nie przyjął zleceń' };
+    /* „Nikt jeszcze nie przyjął” kłamie, gdy lista ma już zrobione albo pominięte pozycje (2026-11-25, zrzut z produkcji: magazynier
+       odhaczył 2/7, a karta mówiła, że nikt nie przyjął) — przyjęcie jest tylko krokiem w aplikacji (hub go nie egzekwuje), a Magazyn
+       (GK Magazyn) w ogóle nie ma przycisku „Przyjmuję zlecenia”, więc jego checklista zostaje „nowa” do końca. Dlatego: dział
+       Magazyn — bez napisu o przyjęciu; praca bez przyjęcia — „Praca w toku (bez przyjęcia)”. Stan ‘brak’ zostaje tylko dla listy
+       bez żadnej odhaczonej pozycji (Lider ma tę samą regułę bez zmian: tam przyjęcie jest warunkiem odhaczania). */
+    if (stan === 'brak') {
+      const maPostep = zl.some(z => { const d = z.dane || {};
+        return Object.values(d.wykonane || {}).some(Boolean) || Object.values(d.pominiete || {}).some(Boolean); });
+      if (maPostep) return { stan: 'bez', tekst: 'Praca w toku (bez przyjęcia)' };
+      if (zl.length && zl.every(z => (z.dane || {}).dzial === 'magazyn')) return { stan: null, tekst: '' };
+      return { stan, tekst: 'Nikt jeszcze nie przyjął zleceń' };
+    }
     const d = przyjete[0].dane;
     return { stan, tekst: `Przyjął: ${nazwaPracownika(pracownicy, d.przyjal)}${d.czas_przyjecia ? ' · ' + godzina(d.czas_przyjecia) : ''}${stan === 'czesc' ? ' (część zleceń czeka)' : ''}` };
   }
