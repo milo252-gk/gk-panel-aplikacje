@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-c2a42ec0efcb';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-f3a620fc014c';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -2427,7 +2427,7 @@ function wyborWygladu() {
   const naKomputerze = typeof window.matchMedia === 'function'
     && window.matchMedia('(min-width:821px)').matches;
   const wybrany = Motyw.odczytaj();
-  return [['auto', naKomputerze ? 'Jak w systemie' : 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']]
+  return [['auto', 'Jak w systemie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']]
     .map(([k, n]) => `<button type="button" data-wyglad="${k}" aria-pressed="${wybrany === k}">${n}</button>`)
     .join('');
 }

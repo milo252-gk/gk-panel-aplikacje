@@ -154,8 +154,10 @@ function nazwaPowoduUwagi(kod) {
 }
 
 const NAPISY_RODZAJU = { dostawa: 'Dostawa', odbior: 'Odbiór', oba: 'Dostawa i odbiór' };
+/* Od 2026-11-25 wymogi (domyślnie zdjęcie i notatka) ma każdy punkt, nie tylko nasz. Miękko: ostrzeżenie przy zapisie, bez blokady. */
+const ETYKIETY_WYMOGOW = { odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', notatka: 'notatka', dokument: 'numer dokumentu' };
 function wymogiPunktu(p) {
-  return p && p.nasze ? String(p.wymogi || '').split(',').filter(Boolean) : [];
+  return p ? String(p.wymogi || '').split(',').filter(Boolean) : [];
 }
 
 function kartaPrzystanku(p, numer, klikalny, nastepny) {
@@ -290,8 +292,8 @@ EKRANY.moja = {
             — pokaże się po zamknięciu tej.</div>` : ''}
         <div class="przyciski" style="margin-top:12px">
           ${mojaTrasa.status === 'planowana' ? ('<button class="glowny" id="btn-start">' + ikonka('odtworz') + 'Rozpocznij trasę</button>') : ''}
-          ${zrobione === l.wszystkie && l.wszystkie && mojaTrasa.status !== 'zakonczona'
-        ? ('<button class="zielony" id="btn-koniec">' + ikonka('haczyk') + 'Zakończ trasę</button>') : ''}
+          ${zrobione === l.wszystkie && l.wszystkie && !mojaTrasa.koniec_klik && mojaTrasa.status !== 'odwolana'
+        ? ('<button class="zielony" id="btn-koniec">' + ikonka('haczyk') + 'Zakończ pracę</button>') : ''}
           ${mojaTrasa.status !== 'odwolana' && mojaTrasa.data <= dzisiaj()
         ? ('<button id="btn-uwaga">' + ikonka('ostrzezenie') + 'Uwaga w trasie</button>') : ''}
           <button id="btn-mapa-link">${ikonka('mapa')}Cała trasa w Google Maps</button>
@@ -323,10 +325,21 @@ EKRANY.moja = {
     if (btnStart) btnStart.onclick = () => rozpocznijZlecenie(mojaTrasa, data);
     const btnKoniec = pole.querySelector('#btn-koniec');
     if (btnKoniec) btnKoniec.onclick = async () => {
-      if (!await potwierdz('Zakończyć trasę?', 'Wszystkie punkty są zamknięte.')) return;
+      // Właściciel 2026-11-25: czas pracy kończy się kliknięciem po powrocie do bazy (jak „Rozpocznij” rano).
+      // GPS tylko ostrzega, gdy kierowca jest daleko od bazy — nie blokuje (bywa bez zasięgu i bez zgody na położenie).
+      let daleko = '';
+      const baza = mojaTrasa.baza_lat != null ? [mojaTrasa.baza_lat, mojaTrasa.baza_lon] : null;
+      if (baza && window.ETA && ETA.odlegloscKm) {
+        const gdzie = await biezacePolozenie();
+        if (gdzie) {
+          const km = ETA.odlegloscKm(gdzie.lat, gdzie.lon, baza[0], baza[1]);
+          if (km > 1) daleko = ' Według położenia jesteś ' + (km < 10 ? km.toFixed(1) : Math.round(km)).toString().replace('.', ',') + ' km od bazy.';
+        }
+      }
+      if (!await potwierdz('Zakończyć pracę?', 'Czy jesteś w bazie? Czas pracy kończy się teraz.' + daleko)) return;
       await doKolejki({ typ: 'stan_trasy', trasa: mojaTrasa.id, stan: 'koniec', czas: czasTeraz() },
-        'Trasa zakończona');
-      mojaTrasa.status = 'zakonczona';
+        'Praca zakończona');
+      mojaTrasa.status = 'zakonczona'; mojaTrasa.koniec_klik = 1; mojaTrasa.koniec_o = czasTeraz();
       await Kolejka.zapamietaj('moja-trasa-' + data, mojaTrasa);
       pokazEkran('moja', { data, zPamieci: true });
       komunikat('Nie zapomnij o raporcie pracy', 'ok');
@@ -460,7 +473,7 @@ function oknoPrzystanku(id) {
           nie dostawa do klienta. ${wymogiPunktu(p).length ? '' : 'Nie ma tu podpisu ani numeru zamówienia.'}
           ${NAPISY_RODZAJU[p.rodzaj] ? `<br><b>Co zrobić:</b> ${NAPISY_RODZAJU[p.rodzaj]}.` : ''}
           ${wymogiPunktu(p).length ? `<br><b>Biuro prosi o:</b> ${wymogiPunktu(p).map(w =>
-            ({ odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', dokument: 'numer dokumentu' }[w] || w)).join(', ')}.` : ''}</div>` : ''}
+            (escHtml(ETYKIETY_WYMOGOW[w] || w))).join(', ')}.` : ''}</div>` : ''}
       ${p.towar ? `<p><b>Towar:</b> ${escHtml(p.towar)}</p>` : ''}
       ${p.dokument && !p.nasze ? `<p><b>Dokument:</b> ${escHtml(p.dokument)}</p>` : ''}
       ${p.uwagi ? `<p><b>Uwagi do dostawy:</b> ${escHtml(p.uwagi)}</p>` : ''}
@@ -642,7 +655,8 @@ function oknoDostarczone(p) {
       <label style="margin-top:16px">Zdjęcia <span class="slaby">(towar, dokument, miejsce)</span></label>
       ${przyciskAparatu('d-zdjecia')}
       <div class="miniatury" id="d-miniatury"></div>
-      <label style="margin-top:12px">Notatka <span class="slaby">(nieobowiązkowa)</span>
+      ${!nasze && wymogi.length ? `<div class="male slaby" style="margin-top:10px">Biuro prosi o: ${wymogi.map(w => escHtml(ETYKIETY_WYMOGOW[w] || w)).join(', ')}.</div>` : ''}
+      <label style="margin-top:12px">Notatka <span class="slaby">(${wymogi.includes('notatka') ? 'wymagana przez biuro' : 'nieobowiązkowa'})</span>
         <textarea id="d-notatka" placeholder="np. zostawione w magazynie od podwórza"></textarea>
       </label>`,
     przyciski: [
@@ -664,16 +678,17 @@ function oknoDostarczone(p) {
         // Ostrzeżenie o braku dowodu ma sens tylko przy dostawie do odbiorcy.
         // Przy własnym magazynie pokazywałoby się ZAWSZE, a ostrzeżenie, które
         // zawsze się pojawia, przestaje cokolwiek znaczyć.
-        if (!nasze && !dane.odebral && !dane.podpis && !dane.zdjecia.length) {
+        if (!nasze && !wymogi.length && !dane.odebral && !dane.podpis && !dane.zdjecia.length) {
           if (!await potwierdz('Brak dowodu dostawy',
             'Nie ma podpisu, zdjęcia ani nazwiska odbierającego. Zapisać mimo to?')) return;
         }
         // Własny punkt z wymogami biura: miękkie ostrzeżenie o tym, czego brakuje (nie blokuje — kierowca bywa w terenie).
-        if (nasze && wymogi.length) {
+        if (wymogi.length) {
           const brakuje = [];
           if (wymogi.includes('odebral') && !dane.odebral) brakuje.push('kto odebrał');
           if (wymogi.includes('podpis') && !dane.podpis) brakuje.push('podpis');
           if (wymogi.includes('zdjecie') && !dane.zdjecia.length) brakuje.push('zdjęcie');
+          if (wymogi.includes('notatka') && !dane.notatka) brakuje.push('notatka');
           if (wymogi.includes('dokument') && !dane.dokument) brakuje.push('numer dokumentu');
           if (brakuje.length && !await potwierdz('Brakuje: ' + brakuje.join(', '),
             'Biuro prosi o to przy tym punkcie. Zapisać mimo to?')) return;

@@ -55,26 +55,26 @@
 })();
 </script>
 <title>Panel Zarządczy SP</title>
-<link rel="manifest" href="manifest.webmanifest?v=trasex-c2a42ec0efcb">
-<link rel="icon" href="ikona.svg?v=trasex-c2a42ec0efcb">
+<link rel="manifest" href="manifest.webmanifest?v=trasex-f3a620fc014c">
+<link rel="icon" href="ikona.svg?v=trasex-f3a620fc014c">
 <!-- iPhone nie bierze ikony z manifestu ani z SVG — na ekranie poczatkowym
      pokazywal zrzut strony. Potrzebny jest PNG 180x180. -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=trasex-c2a42ec0efcb">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=trasex-f3a620fc014c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GK Trasy">
 <!-- Ciemny pasek z bialym tekstem — jak naglowek aplikacji (theme-color). -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="vendor/leaflet.css?v=trasex-c2a42ec0efcb">
-<link rel="stylesheet" href="style.css?v=trasex-c2a42ec0efcb">
-<link rel="stylesheet" href="wskazniki.css?v=trasex-c2a42ec0efcb">
+<link rel="stylesheet" href="vendor/leaflet.css?v=trasex-f3a620fc014c">
+<link rel="stylesheet" href="style.css?v=trasex-f3a620fc014c">
+<link rel="stylesheet" href="wskazniki.css?v=trasex-f3a620fc014c">
 </head>
 <body>
 
 <!-- ===================================================== EKRAN LOGOWANIA -->
 <div id="ekran-logowania" class="logowanie ukryty">
   <form class="karta-logowania" id="form-logowania">
-    <img class="znak-logo" src="logo-gkf.png?v=trasex-c2a42ec0efcb"
+    <img class="znak-logo" src="logo-gkf.png?v=trasex-f3a620fc014c"
          alt="GK Factory" width="666" height="374">
     <h1>Panel Zarządczy SP</h1>
     <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
@@ -128,7 +128,7 @@
 
   <nav class="menu" id="menu">
     <div class="menu-naglowek">
-      <img class="menu-logo" src="logo-gkf.png?v=trasex-c2a42ec0efcb" alt="GK Factory"
+      <img class="menu-logo" src="logo-gkf.png?v=trasex-f3a620fc014c" alt="GK Factory"
            width="666" height="374">
       <div class="menu-imie" id="menu-imie"></div>
       <!-- 2026-11-23: trzy linie jak w aplikacjach hali — imię i nazwisko, NAZWA ROLI osoby (app.js → wejdzDoAplikacji), STAŁA nazwa programu. -->
@@ -194,37 +194,37 @@
 <div id="komunikaty" class="komunikaty"></div>
 <div id="zajetosc" class="zajetosc ukryty"><div class="kolo"></div></div>
 
-<script src="vendor/leaflet.js?v=trasex-c2a42ec0efcb"></script>
+<script src="vendor/leaflet.js?v=trasex-f3a620fc014c"></script>
 <!-- app.js pierwszy: to on zaklada wspolny 'stan' i rejestr EKRANY,
      z ktorych korzystaja biuro.js i kierowca.js. -->
 <!-- Wspólne dźwięki GK (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js, który je podpina. -->
-<script src="gk-dzwieki.js?v=trasex-c2a42ec0efcb"></script>
+<script src="gk-dzwieki.js?v=trasex-f3a620fc014c"></script>
 <!-- Reakcje (kopia 1:1 z huba) i ich reguły dla Tras (reakcje-trasy.js) — używane dopiero w kierowca.js i biuro.js. -->
-<script src="gk-reakcje.js?v=trasex-c2a42ec0efcb"></script>
-<script src="reakcje-trasy.js?v=trasex-c2a42ec0efcb"></script>
+<script src="gk-reakcje.js?v=trasex-f3a620fc014c"></script>
+<script src="reakcje-trasy.js?v=trasex-f3a620fc014c"></script>
 <!-- Wspólny zestaw ikon liniowych menu (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js (menuDlaRoli). -->
-<script src="gk-ikony.js?v=trasex-c2a42ec0efcb"></script>
-<script src="kolejka.js?v=trasex-c2a42ec0efcb"></script>
-<script src="gk-offline.js?v=trasex-c2a42ec0efcb"></script>
-<script src="mapa.js?v=trasex-c2a42ec0efcb"></script>
-<script src="podpis.js?v=trasex-c2a42ec0efcb"></script>
-<script src="skrot.js?v=trasex-c2a42ec0efcb"></script>
-<script src="app.js?v=trasex-c2a42ec0efcb"></script>
-<script src="eta.js?v=trasex-c2a42ec0efcb"></script>
-<script src="dowody.js?v=trasex-c2a42ec0efcb"></script>
-<script src="biuro.js?v=trasex-c2a42ec0efcb"></script>
-<script src="import.js?v=trasex-c2a42ec0efcb"></script>
-<script src="firma.js?v=trasex-c2a42ec0efcb"></script>
-<script src="szablony.js?v=trasex-c2a42ec0efcb"></script>
-<script src="zaproszenie.js?v=trasex-c2a42ec0efcb"></script>
+<script src="gk-ikony.js?v=trasex-f3a620fc014c"></script>
+<script src="kolejka.js?v=trasex-f3a620fc014c"></script>
+<script src="gk-offline.js?v=trasex-f3a620fc014c"></script>
+<script src="mapa.js?v=trasex-f3a620fc014c"></script>
+<script src="podpis.js?v=trasex-f3a620fc014c"></script>
+<script src="skrot.js?v=trasex-f3a620fc014c"></script>
+<script src="app.js?v=trasex-f3a620fc014c"></script>
+<script src="eta.js?v=trasex-f3a620fc014c"></script>
+<script src="dowody.js?v=trasex-f3a620fc014c"></script>
+<script src="biuro.js?v=trasex-f3a620fc014c"></script>
+<script src="import.js?v=trasex-f3a620fc014c"></script>
+<script src="firma.js?v=trasex-f3a620fc014c"></script>
+<script src="szablony.js?v=trasex-f3a620fc014c"></script>
+<script src="zaproszenie.js?v=trasex-f3a620fc014c"></script>
 <!-- 2026-11-18: wskaźniki dostaw, kalendarz miesiąca, role i uprawnienia, „i” z definicjami (nowe pliki, tylko odczyt). -->
-<script src="miary.js?v=trasex-c2a42ec0efcb"></script>
-<script src="wskazniki.js?v=trasex-c2a42ec0efcb"></script>
+<script src="miary.js?v=trasex-f3a620fc014c"></script>
+<script src="wskazniki.js?v=trasex-f3a620fc014c"></script>
 <!-- 2026-11-19: raport „Planowanie tras” (wynik biura: trasy zaplanowane przed terminem; tylko odczyt + CSV). -->
-<script src="planowanie.js?v=trasex-c2a42ec0efcb"></script>
-<script src="miesiac.js?v=trasex-c2a42ec0efcb"></script>
-<script src="role.js?v=trasex-c2a42ec0efcb"></script>
-<script src="kierowca.js?v=trasex-c2a42ec0efcb"></script>
-<script src="rcp.js?v=trasex-c2a42ec0efcb"></script>
+<script src="planowanie.js?v=trasex-f3a620fc014c"></script>
+<script src="miesiac.js?v=trasex-f3a620fc014c"></script>
+<script src="role.js?v=trasex-f3a620fc014c"></script>
+<script src="kierowca.js?v=trasex-f3a620fc014c"></script>
+<script src="rcp.js?v=trasex-f3a620fc014c"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-c2a42ec0efcb';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-f3a620fc014c';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -91,7 +91,7 @@
   --promien:12px; --gora-wys:56px; --dol-wys:60px;
   /* Wysokość przycisku pod palec — jak --dotyk w hali (hala.css): 44 px na
      komputerze, 52 px na telefonie (niżej, max-width:820px). */
-  --dotyk:44px;
+  --dotyk:44px; --dotyk-maly:36px;   /* mały cel dotyku (button.maly) — token jak w hala.css i Flocie (STYL-GK §1) */
 }
 
 /* ======================================================== MOTYW CIEMNY ===
@@ -251,6 +251,8 @@ input,select,textarea{
   background:var(--pole-tlo); color:var(--tekst);
 }
 input:focus,select:focus,textarea:focus{outline:2px solid var(--akcent); outline-offset:-1px; border-color:var(--akcent)}
+/* Widoczny fokus z klawiatury na przyciskach i odnośnikach (jak w hali i we Flocie; tylko :focus-visible — mysz i dotyk go nie wywołują). */
+button:focus-visible,a:focus-visible,summary:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--akcent); outline-offset:2px}
 textarea{min-height:76px; resize:vertical}
 label{display:block; font-weight:600; font-size:13px; margin-bottom:12px}
 label.plaska{display:flex; align-items:center; gap:9px; font-weight:500; margin:10px 0}
@@ -272,7 +274,7 @@ button.glowny{background:var(--granat); border-color:var(--granat); color:var(--
 button.zielony{background:var(--zielony); border-color:var(--zielony); color:var(--na-barwie)}
 button.czerwony{background:var(--czerwony); border-color:var(--czerwony); color:var(--na-barwie)}
 button.duzy{width:100%; min-height:54px; font-size:16px; margin-top:6px}
-button.maly{min-height:36px; padding:5px 10px; font-size:13px; border-radius:8px}
+button.maly{min-height:var(--dotyk-maly); padding:5px 10px; font-size:13px; border-radius:8px}
 button.tekstowy{border:0; background:none; color:var(--akcent); padding:6px 4px; min-height:auto}
 button.ikona-btn{border:0; background:none; font-size:20px; padding:0 10px; line-height:1;
                  min-height:44px; min-width:44px; display:inline-flex; align-items:center;
@@ -822,7 +824,7 @@ body.okno-otwarte .mapa{visibility:hidden}
      jak w hali — także chipy powodów i „Wyczyść podpis”. Karty punktów są
      wyższe same z siebie, a przycisk ✕ na miniaturze i link tekstowy mają
      własne wymiary, więc ich to nie dotyczy. */
-  :root{--dotyk:52px; --dol-wys:64px}
+  :root{--dotyk:52px; --dotyk-maly:44px; --dol-wys:64px}
   .rola-kierowca main button:not(.przystanek):not(.tekstowy),
   .rola-kierowca .okno-tresc button:not(.tekstowy){min-height:var(--dotyk)}
   /* Przyciski okien i stopek, chipy, przycisk konta w nagłówku, pigułki „Wygląd”

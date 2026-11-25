@@ -1164,7 +1164,7 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
 /* „Do zatwierdzenia”: biuro ma ocenić dostawę bez otwierania punktu, więc przy każdej widzi to, co kierowca
    zebrał — kto odebrał, numer dokumentu, notatkę, podpis i zdjęcia (miniatury jak w Panelu Zarządczym GK,
    dotknięcie powiększa). Czego punkt wymaga, a kierowca nie dał, jest podpisane na czerwono. */
-const WYMOGI_ETYKIETY = { odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', dokument: 'numer dokumentu' };
+const WYMOGI_ETYKIETY = { odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', notatka: 'notatka', dokument: 'numer dokumentu' };
 
 function brakiDowodow(x) {
   if (x.status !== 'dostarczone') return [];
@@ -1174,6 +1174,7 @@ function brakiDowodow(x) {
     odebral: !!(x.odebral || '').trim(),
     podpis: zal.some(z => z.typ === 'podpis'),
     zdjecie: zal.some(z => z.typ === 'zdjecie'),
+    notatka: !!(x.notatka || '').trim(),
     dokument: !!(x.dokument || '').trim(),
   };
   return wymogi.filter(w => w in ma && !ma[w]).map(w => WYMOGI_ETYKIETY[w]);
@@ -2174,7 +2175,7 @@ async function oknoDodawaniaKlientow(t) {
               <label>Miejsca wyjazdu — co kierowca tam robi
                 <select id="dk-rodzaj">${opcjeRodzajuNaszych('')}</select></label>
               <div class="male slaby" style="margin-top:8px">Kierowca ma podać:</div>
-              <div id="dk-wymogi">${checkboxyWymogow('dk', '')}</div>
+              <div id="dk-wymogi">${checkboxyWymogow('dk', 'zdjecie,notatka')}</div>
             </div>
             <p class="male slaby">Punkty dopiszą się w takiej kolejności, w jakiej je
               zaznaczysz. Pilną dostawę możesz wstawić w środek dnia — wybierz,
@@ -2195,7 +2196,7 @@ async function oknoDodawaniaKlientow(t) {
         // domyślne dodanie wygląda dla serwera dokładnie jak dotąd.
         if (wybrane.some(k => k[0] === 'L')) {
           if (rodzajNaszych) tresc.rodzaj = rodzajNaszych;
-          if (wymogiNaszych) tresc.wymogi = wymogiNaszych;
+          tresc.wymogi = wymogiNaszych;            // także puste: biuro świadomie odznaczyło wszystko (domyślnie zdjęcie i notatka)
         }
         const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/przystanki`, tresc),
           `Dodano ${wybrane.length} punktów`);
@@ -2332,7 +2333,9 @@ function stanPunktu(t, p) {
 const RODZAJE_NASZYCH = [['', 'Bez określenia'], ['dostawa', 'Dostawa'], ['odbior', 'Odbiór'],
   ['oba', 'Dostawa i odbiór']];
 const WYMOGI_NASZYCH = [['odebral', 'Kto odebrał'], ['podpis', 'Podpis'], ['zdjecie', 'Zdjęcie'],
-  ['dokument', 'Numer dokumentu']];
+  ['notatka', 'Notatka'], ['dokument', 'Numer dokumentu']];
+// Od 2026-11-25 wymogi (domyślnie zdjęcie i notatka) ma KAŻDY punkt; u klienta „numer dokumentu” podaje biuro, więc go tam nie ma.
+const WYMOGI_U_KLIENTA = WYMOGI_NASZYCH.filter(x => x[0] !== 'dokument');
 
 function napisRodzaju(r) {
   const w = RODZAJE_NASZYCH.find(x => x[0] === r);
@@ -2346,9 +2349,9 @@ function opcjeRodzajuNaszych(wybrany) {
   return RODZAJE_NASZYCH.map(([k, n]) =>
     `<option value="${k}"${k === (wybrany || '') ? ' selected' : ''}>${n}</option>`).join('');
 }
-function checkboxyWymogow(prefiks, lista) {
+function checkboxyWymogow(prefiks, lista, uKlienta) {
   const ustawione = String(lista || '').split(',');
-  return WYMOGI_NASZYCH.map(([k, n]) => `<label class="plaska" style="display:inline-flex;gap:6px;margin:4px 14px 4px 0">
+  return (uKlienta ? WYMOGI_U_KLIENTA : WYMOGI_NASZYCH).map(([k, n]) => `<label class="plaska" style="display:inline-flex;gap:6px;margin:4px 14px 4px 0">
       <input type="checkbox" data-wymog="${prefiks}" value="${k}"${ustawione.includes(k) ? ' checked' : ''}> ${n}</label>`).join('');
 }
 function wymogiZPola(pole, prefiks) {
@@ -2571,7 +2574,9 @@ function oknoSzczegolowPunktu(t, id) {
           <div id="sp-wymogi">${checkboxyWymogow('sp', p.wymogi)}</div>`
           : `<label>Numer dokumentu (WZ, zamówienie)
           <input id="sp-dokument" value="${escHtml(p.dokument || '')}">
-        </label>`}
+        </label>
+          <div class="male slaby" style="margin-top:8px">Kierowca ma przy tym punkcie podać:</div>
+          <div id="sp-wymogi">${checkboxyWymogow('sp', p.wymogi, true)}</div>`}
         <div class="dwie">
           <label>Okno czasowe od<input type="time" id="sp-od" value="${escHtml(p.okno_od || '')}"></label>
           <label>Okno czasowe do<input type="time" id="sp-do" value="${escHtml(p.okno_do || '')}"></label>
@@ -2581,7 +2586,7 @@ function oknoSzczegolowPunktu(t, id) {
         </label>` : `
         ${p.towar ? `<p><b>Towar:</b> ${escHtml(p.towar)}</p>` : ''}
         ${p.nasze && p.rodzaj ? `<p><b>Rodzaj:</b> ${escHtml(napisRodzaju(p.rodzaj))}</p>` : ''}
-        ${p.nasze && p.wymogi ? `<p><b>Kierowca podaje:</b> ${escHtml(napisWymogow(p.wymogi))}</p>` : ''}
+        ${p.wymogi ? `<p><b>Kierowca podaje:</b> ${escHtml(napisWymogow(p.wymogi))}</p>` : ''}
         ${p.uwagi ? `<p><b>Uwagi:</b> ${escHtml(p.uwagi)}</p>` : ''}`}`,
     przyciski: (admin && !zamkniety) ? [
       { napis: 'Zamknij', klik: z => z() },
@@ -2594,10 +2599,8 @@ function oknoSzczegolowPunktu(t, id) {
           uwagi: document.getElementById('sp-uwagi').value,
         };
         // Rodzaj i wymogi tylko dla naszych punktów — u klienta pól nie ma, więc nie wysyłamy nic nowego.
-        if (p.nasze) {
-          zmiany.rodzaj = document.getElementById('sp-rodzaj').value;
-          zmiany.wymogi = wymogiZPola(document, 'sp');
-        }
+        if (p.nasze) zmiany.rodzaj = document.getElementById('sp-rodzaj').value;
+        zmiany.wymogi = wymogiZPola(document, 'sp');       // od 2026-11-25 także u klienta
         const w = await sprobuj(() => zapisBiura('POST', '/api/przystanki/' + p.id, zmiany, {
           opis: 'punkt ' + (p.klient_nazwa || ''),
           zrodla: ['/api/trasy/' + t.id],
@@ -2760,7 +2763,10 @@ function kartaNaZywo(t) {
         <h2 style="margin:0">${escHtml(t.kierowca || 'bez kierowcy')}</h2>
         <div class="male slaby">${escHtml(t.pojazd || 'bez auta')}${
           t.rejestracja ? ' · ' + escHtml(t.rejestracja) : ''}${
-          t.start_o ? ' · start ' + escHtml(t.start_o) : ' · wyjazd ' + escHtml(t.wyjazd || '')}</div>
+          t.start_o ? ' · start ' + escHtml(t.start_o) : ' · wyjazd ' + escHtml(t.wyjazd || '')}${
+          t.status === 'zakonczona' && t.koniec_o
+            ? ' · koniec pracy ' + escHtml(samaGodzina(t.koniec_o)) + (t.koniec_klik ? '' : ' (wg ostatniego punktu — kierowca nie kliknął w bazie)')
+            : ''}</div>
       </div>
       <span class="plakietka p-${t.status}">${escHtml(etykietaStatusuTrasy(t.status))}</span>
     </div>
