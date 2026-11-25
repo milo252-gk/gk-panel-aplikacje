@@ -68,6 +68,29 @@
     return !!(k && k.wirtualna && !k.zamknieta && !(k.przyjecie && k.przyjecie.tekst));
   }
 
+  /* „Pilne od zespołu” (właściciel 2026-11-25): wpisy z „Pilne — powiadom kierownika” przy „Zrobione” pozycji (wykonane[pozycja].pilne)
+     albo całego zlecenia (pilne_wykonania). Trwałe w zleceniu (nie znikają po potwierdzeniu — potwierdzenia nie ma), na Pulpicie
+     z ostatnich 48 godzin, od najnowszego, najwyżej 20. Hub wysłał push; tu tylko wpis z notatką i zdjęciami. */
+  const OKNO_PILNYCH_MS = 48 * 3600 * 1000;
+  function pilneOdZespolu(w) {
+    const teraz = w.teraz, nazwa = id => ((w.pracownicy || []).find(p => p && p.id === id) || {}).nazwa || id || '';
+    const wyniki = [];
+    for (const z of w.zlecenia || []) {
+      const d = z.dane || {};
+      const poz = new Map((d.pozycje || []).filter(p => p && p.id).map(p => [p.id, p]));
+      const wpisy = Object.entries(d.wykonane || {}).filter(([, e]) => e && e.pilne)
+        .map(([pid, e]) => ({ pozycja: pid, nazwaPozycji: (poz.get(pid) || {}).nazwa || pid, czas: e.czas, autor: e.autor, uwagi: e.uwagi || '', zdjecia: [].concat(e.zdjecia || []) }));
+      if (d.pilne_wykonania) wpisy.push({ pozycja: '', nazwaPozycji: '', czas: d.czas_wykonania, autor: d.wykonal, uwagi: d.uwagi_wykonania || '', zdjecia: [].concat(d.zdjecia_wykonania || []) });
+      for (const e of wpisy) {
+        const ms = Date.parse(e.czas);
+        if (!ms || teraz - ms > OKNO_PILNYCH_MS) continue;
+        wyniki.push({ id: z.id, tytul: d.tytul || '', pozycja: e.pozycja, nazwaPozycji: e.nazwaPozycji, kto: nazwa(e.autor), czas: e.czas, ms,
+                      uwagi: e.uwagi, zdjecia: e.zdjecia });
+      }
+    }
+    return wyniki.sort((a, b) => b.ms - a.ms).slice(0, 20);
+  }
+
   function przyjecieListy(lista, pracownicy) {
     const zl = (lista && lista.zlecenia) || [];
     const doPrzyjecia = zl.filter(z => z.status === 'nowe').length;
@@ -3480,7 +3503,7 @@
   }
 
   const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
+                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, pilneOdZespolu, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,

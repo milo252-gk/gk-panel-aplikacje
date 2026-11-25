@@ -102,6 +102,12 @@
          D87: odbiór checklisty jest w jej karcie (panel.js: rysujKafelki → „Do odbioru”); karty zleceń dokłada rysujBiezace. Konto „ekran” (monitor)
          nie ma filtrów, liczników ani kart zleceń — jego Pulpit zostaje bez zmian. -->
     <section class="obchody" id="pulpit-zlecenia" aria-labelledby="t-biezace">
+      <!-- Właściciel 2026-11-25: „Pilne — powiadom kierownika” przy „Zrobione” (push z huba do kierownika zakładu i Menedżera) zostawia tu trwały wpis
+           z notatką i zdjęciami (ostatnie 48 godzin). Tylko informacja — bez potwierdzania; blok chowa się, gdy nic nie ma. -->
+      <div class="pilne" id="pulpit-pilne" hidden>
+        <h3 id="t-pilne"><span class="ik" data-ikona="ostrzezenie" data-rozmiar="18"></span>Pilne od zespołu <span id="licznik-pilnych" class="licznik"></span></h3>
+        <div id="lista-pilnych" class="lista"></div>
+      </div>
       <h2 id="t-biezace">Aktualna zmiana</h2>
       <div id="kafelki" class="kafelki"></div>
     </section>

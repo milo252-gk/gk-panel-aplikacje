@@ -469,6 +469,12 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
 .hala-zlecenie-miniatura button { position: absolute; top: 0; right: 0; width: 36px; height: 36px; min-height: 36px; padding: 0;
                                   border-radius: 0 10px 0 10px; background: var(--grafit-ciemny); color: var(--na-barwie); border: 0; font-size: 16px; }
 .hala-zlecenie-brakuje { margin: 0; color: var(--czerwony); font-weight: 700; }
+/* „Pilne — powiadom kierownika” (2026-11-25): pole wyboru z opisem; ramka w kolorze ostrzeżenia, cel dotyku jak przyciski. */
+.hala-zlecenie-pilne { display: flex; align-items: flex-start; gap: 10px; min-height: var(--dotyk); padding: 10px 12px; border: 1px solid var(--zolty);
+  border-radius: 10px; background: var(--zolty-tlo); cursor: pointer; }
+.hala-zlecenie-pilne input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--zolty); }
+.hala-zlecenie-pilne > span { display: grid; gap: 2px; min-width: 0; }
+.hala-zlecenie-pilne .slaby { font-weight: 400; font-size: 13px; }
 /* Zaległe zlecenia (2026-10-02, jak „Zaległe dostawy” w GK Trasy): osobna sekcja z numerami 1, 2, 3… i czerwona karta
    na ekranie głównym działu (HalaZlecenia.rysujZalegle). Numer mówi, co zrobić najpierw — sam kolor tego nie mówi. */
 .hala-zlecenie.zalegle { border-left-color: var(--czerwony); background: var(--czerwony-tlo); }

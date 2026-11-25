@@ -522,6 +522,29 @@
       hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
   }
 
+  /* „Pilne od zespołu” (2026-11-25): trwałe wpisy z „Pilne — powiadom kierownika”, ostatnie 48 godzin (W.pilneOdZespolu). Konto „ekran”
+     (monitor) ich nie widzi — to wiadomość do kierownika i Menedżera. */
+  function rysujPilne(d, zlecenia) {
+    const sekcja = $('pulpit-pilne');
+    const wiersze = ((hala.pracownik && (hala.pracownik.role || []).includes('ekran')) ? [] : W.pilneOdZespolu({ zlecenia, pracownicy: d.pracownicy, teraz: d.teraz }));
+    sekcja.hidden = !wiersze.length;
+    $('licznik-pilnych').innerHTML = wiersze.length ? `<span class="znacznik alarm">${wiersze.length}</span>` : '';
+    $('lista-pilnych').innerHTML = wiersze.map(w => {
+      const podpis = [w.nazwaPozycji, w.tytul].filter(Boolean).join(' · ');
+      return `<article class="pilne-wpis" data-id="${esc(w.id)}">
+        <div class="opis"><div><b>${esc(w.nazwaPozycji || w.tytul || 'Zlecenie')}</b>${w.nazwaPozycji && w.tytul ? ` <span class="slaby">${esc(w.tytul)}</span>` : ''}</div>
+          <div class="slaby">${esc(w.kto)} · ${esc(W.godzina(w.czas))}</div>
+          ${w.uwagi ? `<div class="tekst-opisu">${esc(w.uwagi)}</div>` : ''}</div>
+        ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
+      </article>`;
+    }).join('');
+    ladujZdjeciaLeniwie($('lista-pilnych'));
+  }
+  $('lista-pilnych').addEventListener('click', ev => {
+    const foto = ev.target.closest('[data-zdjecie]');
+    if (foto) pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis);
+  });
+
   function statusKlasa(status) {
     return { zgloszona: 'alarm', przyjeta: 'uwaga', w_trakcie: 'info', wstrzymana: 'neutral', oczekuje_potwierdzenia: 'ok' }[status] || 'neutral';
   }
@@ -622,6 +645,7 @@
       if (widokAktywny === 'na-zywo') {
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
+        rysujPilne(d, zlecenia);
         rysujBiezace(d, zlecenia);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
                                 slowniki: d.slowniki, urzadzenia }));
@@ -713,7 +737,7 @@
      Adres czyścimy, żeby następne powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie
      przełączało widoku. Przed zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
   function obsluzAdres() {
-    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#checklisty', '#bhp'].includes(location.hash)) return;
+    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#checklisty', '#bhp', '#pilne'].includes(location.hash)) return;
     const adres = location.hash;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* stary adres zostanie — bez szkody */ }
     // #administracja = dotknięty alarm huba (etap 2: kopia, adres na Pages, token, miejsce) — tylko administrator ma ten widok.
@@ -725,6 +749,8 @@
       Panel.pokazZlecenia(null, 'stale');
       return;
     }
+    // #pilne — dotknięte powiadomienie „Pilne — powiadom kierownika” (2026-11-25): Pulpit, gdzie stoi sekcja „Pilne od zespołu”.
+    if (adres === '#pilne') { const z = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (z) z.click(); return; }
     // #bhp — dotknięte powiadomienie o zgłoszeniu BHP (D59): lista ⛑ BHP, otwarte na górze.
     if (adres === '#bhp') { Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp'); return; }
     Panel.pokazZlecenia('otwarte', 'biezace');

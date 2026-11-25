@@ -392,6 +392,7 @@
     try {
       if (!String(f.tekst || '').trim() && !(f.pliki || []).length && !((f.skany || []).length)) return hala.brudnopis.usun(klucz);
       const d = { id: f.id, tekst: f.tekst || '', zdjecia: (f.pliki || []).map(p => p.id), skan: f.skan || null, czas: Date.now() };
+      if (f.pilne) d.pilne = true;
       if (f.rodzaj !== undefined) { d.rodzaj = f.rodzaj; d.skany = f.skany || []; } else d.pozycja = f.pozycja;
       return hala.brudnopis.zapisz(klucz, d, odrazu ? { odrazu: true } : undefined);
     } catch (e) { return Promise.resolve(); }
@@ -441,12 +442,19 @@
       if (s[rodzaj]) continue;
       s[rodzaj] = rodzaj === 'formularz'
         ? { id: d.id, rodzaj: d.rodzaj === 'odrzucone' ? 'odrzucone' : 'wykonane', tekst: String(d.tekst || ''), pliki, blad: null, skan: d.skan || null,
-            skany: Array.isArray(d.skany) ? d.skany : [], wymagania: wymaganiaZ(w, hala) }
-        : { id: d.id, pozycja: d.pozycja, tekst: String(d.tekst || ''), pliki, skan: d.skan || null, blad: null, wysyla: false, pracownicy: hala.pracownicy,
+            pilne: !!d.pilne, skany: Array.isArray(d.skany) ? d.skany : [], wymagania: wymaganiaZ(w, hala) }
+        : { id: d.id, pozycja: d.pozycja, tekst: String(d.tekst || ''), pliki, skan: d.skan || null, pilne: !!d.pilne, blad: null, wysyla: false, pracownicy: hala.pracownicy,
             wymagania: wymaganiaPozycji(q, w, hala.slowniki) };
       zmiana = true;
     }
     if (zmiana) rysuj(el, hala, s.opcje);
+  }
+
+  /* „Pilne — powiadom kierownika” (właściciel 2026-11-25): zaznaczone razem ze „Zrobione” wysyła push do kierownika zakładu i Menedżera
+     (hub liczy adresatów po roli, autor sam sobie nie dzwoni) i zostawia wpis w Panelu. Tylko informacja — bez potwierdzania. */
+  function polePilne(f) {
+    return `<label class="hala-zlecenie-pilne"><input type="checkbox" data-pilne ${f.pilne ? 'checked' : ''}>
+      <span><b>${ikona('ostrzezenie', 16)} Pilne — powiadom kierownika</b><span class="slaby">Kierownik zakładu i Menedżer dostaną powiadomienie z Twoją notatką i zdjęciami.</span></span></label>`;
   }
 
   function formularz(f) {
@@ -467,6 +475,7 @@
             <input type="file" accept="image/*" capture="environment" multiple data-zdjecie hidden></label>` : ''}</div></div>` : ''}
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${zrobione ? pole(w.wymagajNotatki && !juz.notatka, 'Notatka') : 'Dlaczego nie da się tego zrobić?'}</span>
         <textarea data-pole rows="3" maxlength="2000" placeholder="${zrobione ? 'Co zrobione, co zauważone' : 'Kierownik to zobaczy'}">${esc(f.tekst)}</textarea></label>
+      ${zrobione ? polePilne(f) : ''}
       <p class="hala-zlecenie-brakuje" data-brakuje ${brak.length ? '' : 'hidden'}>${esc(tekstBraku(brak))}</p>
       <p class="hala-zlecenie-blad" ${f.blad ? '' : 'hidden'}>${esc(f.blad || '')}</p>
       <div class="hala-zlecenie-akcje">
@@ -616,6 +625,11 @@
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-pole]') && s.poz) { s.poz.tekst = ev.target.value; s.poz.blad = null; odswiezPozycje(el, s.poz); zapiszSzkic(hala, s.poz); }
       });
       el.addEventListener('change', async ev => {
+        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pilne]')) {
+          const f = ev.target.closest('.hala-pozycja-panel') ? s.poz : s.formularz;
+          if (f) { f.pilne = !!ev.target.checked; zapiszSzkic(hala, f); }
+          return;
+        }
         if (zNaszejTresci(ev, el) && ev.target.matches('[data-postep-zdjecie]')) {
           // D56: zdjęcie krokiem postępu — od razu do kierownika, bez „Zrobione”.
           const art = ev.target.closest('[data-id]');
@@ -750,6 +764,7 @@
           await hala.zapisz('zlecenie.odrzucone', id, { powod: tekst });
         } else {
           const dane = tekst ? { uwagi: tekst } : {};
+          if (f.pilne) dane.pilne = true;
           const zdjecia = [];
           for (const p of f.pliki) zdjecia.push(p.id);               // zdjęcia już są w kolejce telefonu (dodajZdjeciaDoFormularza)
           if (zdjecia.length) dane.zdjecia = zdjecia;
@@ -904,6 +919,7 @@
             <input type="file" accept="image/*" capture="environment" multiple data-pozycja-zdjecie hidden></label>` : ''}</div></div>
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajNotatki, 'Notatka')} <span class="slaby">— przy „Pomiń” to powód</span></span>
         <textarea data-pozycja-pole rows="2" maxlength="1000" placeholder="Co zrobione, co zauważone">${esc(f.tekst)}</textarea></label>
+      ${polePilne(f)}
       <p class="hala-zlecenie-brakuje" data-pozycja-brakuje ${brak.length ? '' : 'hidden'}>${esc(tekstBraku(brak))}</p>
       <p class="hala-zlecenie-blad" ${f.blad ? '' : 'hidden'}>${esc(f.blad || '')}</p>
       <div class="hala-zlecenie-akcje">
@@ -1035,6 +1051,7 @@
       try {
         const dane = {};
         if (f.tekst.trim()) dane.uwagi = f.tekst.trim();
+        if (f.pilne) dane.pilne = true;
         const zdjecia = [];
         for (const p of f.pliki) zdjecia.push(p.id);               // zdjęcia już są w kolejce telefonu (dodajZdjeciaDoFormularza)
         if (zdjecia.length) dane.zdjecia = zdjecia;
