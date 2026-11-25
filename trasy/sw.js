@@ -2,7 +2,7 @@
    Trzyma kopie samego programu (HTML, style, skrypty, mapa). Danych nie
    buforuje tutaj — od tego jest IndexedDB w kolejka.js.                      */
 
-const WERSJA = 'trasex-901448634551';
+const WERSJA = 'trasex-c2a42ec0efcb';
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara
    kopia nie ma jak zostać podana. Poprzednio wystarczyło, że przeglądarka
@@ -95,7 +95,7 @@ self.addEventListener('fetch', e => {
 });
 
 /* Powiadomienia przy ZAMKNIĘTEJ aplikacji — ten sam sposób co aplikacje hali
-   (GK Panel Kierownika, wspolne/hala-push-sw.js). Program wysyła push BEZ
+   (Panel Zarządczy GK, wspolne/hala-push-sw.js). Program wysyła push BEZ
    treści (szyfrowanie treści wymagałoby bibliotek spoza Pythona), więc tutaj
    po jego otrzymaniu pytamy program „co nowego” adresem subskrypcji, który
    działa jak klucz, i dopiero wtedy pokazujemy powiadomienie.               */

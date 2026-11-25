@@ -1,6 +1,6 @@
 /* GK Trasy — „Kalendarz” miesiąca tras (2026-11-18, decyzja właściciela).
 
-   Wzór: Kalendarz zleceń w GK Panel Kierownika. Siatka miesiąca od poniedziałku: w każdej kratce numer dnia, liczba tras
+   Wzór: Kalendarz zleceń w Panelu Zarządczym GK. Siatka miesiąca od poniedziałku: w każdej kratce numer dnia, liczba tras
    i liczba punktów (czerwona kropka z liczbą — nieudane). Dotknięcie dnia otwiera ten dzień na ekranie Trasy.
    Dane z istniejącego GET /api/trasy?od=&do= (pola ile, ile_ok, ile_nie) — bez nowego endpointu, tylko odczyt. */
 

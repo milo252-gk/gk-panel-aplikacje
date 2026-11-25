@@ -1,6 +1,6 @@
 /* GK Trasy — ekran „Wskaźniki” (2026-11-18, decyzja właściciela): jak dobrze jadą dostawy.
 
-   Wzór: Wskaźniki w GK Panel Kierownika (panel/web/wskazniki.js) — okresy „Dziś / Wczoraj / Ostatnie 7 dni / Ten miesiąc /
+   Wzór: Wskaźniki w Panelu Zarządczym GK (panel/web/wskazniki.js) — okresy „Dziś / Wczoraj / Ostatnie 7 dni / Ten miesiąc /
    Zakres”, zakres zapamiętany do końca dnia, kafelki liczb, paski i tabele pod spodem, przy każdym kafelku i nagłówku „i”
    z definicją (miary.js). Tylko odczyt: liczby z GET /api/wskazniki (biuro i administrator; podział na kierowców tylko administrator), nic nie zapisujemy.
    Liczy serwer (a_wskazniki w trasex.py); tu tylko rysujemy. */

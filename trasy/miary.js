@@ -1,6 +1,6 @@
 /* GK Trasy — miary: definicje liczb („i” przy kafelkach i nagłówkach) i wybór zakresu dat (2026-11-18).
 
-   Wzór: wspolne/klient/miary.js w GK Panel Kierownika (HalaMiary). Tutaj osobna, mniejsza kopia na potrzeby Tras
+   Wzór: wspolne/klient/miary.js w Panelu Zarządczym GK (HalaMiary). Tutaj osobna, mniejsza kopia na potrzeby Tras
    (inne liczby, bez zegara zakładu Hala) — ta sama zasada: jedno miejsce z tekstami, które mówią, JAK liczymy.
        MiaryTras.DEFINICJE.za_pierwszym      // {nazwa, tekst}
        MiaryTras.przycisk('za_pierwszym')    // <button class="miara-i">i</button> — dotknięcie pokazuje dymek z tekstem

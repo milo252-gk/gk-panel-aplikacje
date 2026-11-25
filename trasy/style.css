@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-901448634551';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-c2a42ec0efcb';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -394,7 +394,7 @@ button.ikona-btn{border:0; background:none; font-size:20px; padding:0 10px; line
 @media (min-width:821px) and (max-height:720px){
   .menu-naglowek{padding:8px 18px 6px}
   .menu .menu-logo{width:88px; margin-bottom:2px}
-  .menu-rola{display:none}
+  /* 2026-11-24: rola i nazwa programu zostają także w niskim oknie (jak w Panelu Zarządczym GK) — menu przewija się samo. */
 }
 
 main{padding:16px; max-width:1180px; margin:0 auto; padding-bottom:calc(var(--dol-wys) + 24px)}
@@ -770,7 +770,7 @@ body.okno-otwarte .mapa{visibility:hidden}
 .wstega.blad{background:var(--czerwony-tlo); color:var(--czerwony)}
 .wstega.ok{background:var(--zielony-tlo); color:var(--zielony)}
 
-/* Pulpit biura: rząd kafelków liczb — wygląd jak na pulpicie GK Panel Kierownika (hala.css .hala-kafelki): jedna karta,
+/* Pulpit biura: rząd kafelków liczb — wygląd jak na pulpicie Panel Zarządczy GK (hala.css .hala-kafelki): jedna karta,
    w niej szare pola z liczbą; kolor liczby mówi o wadze. Tylko kafelki z liczbą > 0 (kafelkiPulpitu w biuro.js). */
 .kafelki-liczb{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); margin:0 0 16px;
   background:var(--karta); border:1px solid var(--ramka); border-radius:var(--promien);

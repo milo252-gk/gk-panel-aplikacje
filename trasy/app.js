@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-901448634551';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-c2a42ec0efcb';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -169,7 +169,7 @@ function poLudzku(e) {
    Wolno je zmieniać wyłącznie razem — smoke.js wykonuje tamten kod na
    atrapach i porównuje wynik z Motyw.policz.
 
-   Klucz jest WSPÓLNY dla programów GK: „gk.motyw” (GK Panel Kierownika
+   Klucz jest WSPÓLNY dla programów GK: „gk.motyw” (Panel Zarządczy GK
    i GK Flota czytają ten sam). Na github.io wszystkie stoją pod jednym
    źródłem, a osoba z trzema programami ustawiała motyw trzy razy.
    Własny „gk-trasy.motyw” to już tylko migracja: przejmij() przenosi go raz
@@ -1255,7 +1255,7 @@ const API = {
 };
 
 /* Powiadomienia przy ZAMKNIĘTEJ aplikacji (Web Push) — tak samo jak aplikacje
-   hali w GK Panel Kierownika. Telefon zapisuje się u serwera push swojej
+   hali w Panelu Zarządczym GK. Telefon zapisuje się u serwera push swojej
    przeglądarki (klucz VAPID programu) i oddaje programowi adres subskrypcji.
    Program wysyła pusty push, a sw.js dociąga treść z /api/push/co-nowego.
 
@@ -3182,7 +3182,7 @@ async function sprawdzZdarzenia() {
     const glowne = najwazniejszeZdarzenie(nowe);
     if (!glowne) return;
     Dzwiek.zagraj(WAGA_DZWIEKU[glowne.dzwiek] ? glowne.dzwiek : 'info');
-    komunikat((glowne.tytul || 'Nowa sprawa') + (nowe.length > 1 ? ` (+${nowe.length - 1})` : ''),
+    komunikat((glowne.tytul || 'Nowe powiadomienie') + (nowe.length > 1 ? ` (+${nowe.length - 1})` : ''),
       glowne.dzwiek === 'info' ? '' : 'uwaga');
     // Bieżący ekran ze świeżymi danymi — ale nie spod palca (otwarte okno, pisanie).
     const ekran = EKRANY[stan.ekran];

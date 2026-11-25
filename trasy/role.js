@@ -1,6 +1,6 @@
 /* GK Trasy — okno „Role i uprawnienia” (2026-11-18, decyzja właściciela). Tylko odczyt; niczego nie zmienia.
 
-   Wzór: panel/web/role.js w GK Panel Kierownika. Tabela przychodzi z GET /api/role (trasex.py → tabela_rol) i jest
+   Wzór: panel/web/role.js w Panelu Zarządczym GK. Tabela przychodzi z GET /api/role (trasex.py → tabela_rol) i jest
    LICZONA z reguł, które egzekwuje serwer (progi ról przy endpointach, listy PODGLAD_*), a nie wpisana drugi raz — więc
    nie rozjedzie się z kodem. ✓ wolno, ◐ wolno w ograniczonym zakresie (opis w dymku komórki i pod tabelą), — nie wolno.
    Otwiera się z „Moje konto” (biuro i administrator). Rola zalogowanej osoby jest podświetlona. */

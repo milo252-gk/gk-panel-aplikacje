@@ -4896,7 +4896,7 @@ function kartaPages(u) {
     ${!p.lokalne ? `<div class="wstega uwaga">Ta kopia programu nie zgłasza adresu Panelowi Zarządczemu GK (kopia
         testowa albo druga kopia na innym porcie).</div>` : ''}
     ${p.lokalne && !p.hub_odpisal ? `<div class="wstega uwaga">Panel Zarządczy GK jeszcze się nie odezwał.
-        Sprawdź, czy GK Panel Kierownika działa na tym komputerze (w nowej wersji).</div>` : ''}
+        Sprawdź, czy Panel Zarządczy GK działa na tym komputerze (w nowej wersji).</div>` : ''}
     ${p.blad ? `<div class="wstega uwaga">Panel Zarządczy GK nie wysłał adresu na GitHub:
         ${escHtml(p.blad)} Panel ponawia sam; szczegóły w Panelu → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
