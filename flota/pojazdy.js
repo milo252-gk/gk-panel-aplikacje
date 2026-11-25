@@ -97,7 +97,7 @@ EKRANY.pulpit = {
         To nie jest zaległość — dojdą, gdy telefon złapie zasięg.</div>` : ''}
 
       ${d.instrukcja_gotowa === false ? `<div class="wstega blad">
-        <b>Instrukcja w razie awarii jest pusta.</b>
+        <b>Pomoc w drodze jest pusta.</b>
         Kierowca na poboczu nic w niej nie znajdzie.
         <button class="tekstowy" id="p-do-instrukcji">Uzupełnij teraz</button></div>` : ''}
 
@@ -245,7 +245,7 @@ EKRANY.pojazdy = {
   poSynchronizacji() { if (stan.ekran === 'pojazdy') odswiezEkran(); },
 
   async rysuj(pole) {
-    const f = stan._filtrFloty || (stan._filtrFloty = { szukaj: '', rodzaj: '', wszystkie: false });
+    const f = filtrOsoby('_filtrFloty', { szukaj: '', rodzaj: '', wszystkie: false });
     const pyt = new URLSearchParams();
     if (f.szukaj) pyt.set('szukaj', f.szukaj);
     if (f.rodzaj) pyt.set('rodzaj', f.rodzaj);
@@ -679,8 +679,7 @@ EKRANY.terminy = {
      auta (i tego terminu). Filtr auta żyje w parametrach, a nie w pamięci
      filtra: wejście z menu pokazuje znów całą flotę.                         */
   async rysuj(pole, param) {
-    const f = stan._filtrTerminow
-      || (stan._filtrTerminow = { rodzaj: '', widok: 'lista' });
+    const f = filtrOsoby('_filtrTerminow', { rodzaj: '', widok: 'lista' });
     const p = param || {};
     const autoFiltra = Number(p.pojazd) || null;
     if (p.rodzaj !== undefined) {

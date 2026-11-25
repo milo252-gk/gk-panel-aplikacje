@@ -53,12 +53,12 @@ EKRANY.przeglady = {
     // UI etap 3: biuro zaczyna od bieżącego miesiąca (obok stoi „Załóż przeglądy
     // na ten miesiąc”), a nie od pustego pola „---- ----”. Kierowca widzi
     // wszystkie swoje przeglądy, jak dawniej.
-    const f = stan._filtrProtokolow
-      || (stan._filtrProtokolow = { status: biuro ? 'wykonany' : '', okres: biuro ? okresDzis() : '' });
+    const f = filtrOsoby('_filtrProtokolow', { status: biuro ? 'wykonany' : '', okres: biuro ? okresDzis() : '', sortuj: '' });
     const pyt = new URLSearchParams();
     if (f.status) pyt.set('status', f.status);
     if (f.okres) pyt.set('okres', f.okres);
-    const lista = await sprobuj(() => API.get('/api/przeglady?' + pyt.toString())) || [];
+    const lista = posortujListe(await sprobuj(() => API.get('/api/przeglady?' + pyt.toString())) || [], f.sortuj,
+      g => g.wykonano_o || g.okres || '');
     // Filtr miesiąca nie może schować zaległej roboty: przegląd z zeszłego
     // miesiąca, którego nikt nie sprawdził, dalej czeka. Liczymy go osobno
     // i pokazujemy wstęgę z jednym kliknięciem do „wszystkie miesiące”.
@@ -89,6 +89,7 @@ EKRANY.przeglady = {
             data-status="${s}">${s ? escHtml(OPIS_STATUSU[s] || s) : 'wszystkie'}</button>`).join('')}
         </div>
         <label>Miesiąc<select id="pr-okres">${opcjeMiesiecy(f.okres)}</select></label>
+        ${polaSortowania(f.sortuj)}
         <button id="pr-zaloz"${stanMiesiaca && !stanMiesiaca.razem && f.okres ? ' class="glowny"' : ''}>Załóż przeglądy na ten miesiąc</button>
       </div>` : ''}
       ${zInnych ? `<div class="wstega uwaga">Z innych miesięcy na sprawdzenie czeka jeszcze
@@ -106,6 +107,7 @@ EKRANY.przeglady = {
         b.onclick = () => { f.status = b.dataset.status; odswiezEkran(); };
       });
       pole.querySelector('#pr-okres').onchange = e => { f.okres = e.target.value; odswiezEkran(); };
+      pole.querySelector('#sortowanie').onchange = e => { f.sortuj = e.target.value; odswiezEkran(); };
       pole.querySelector('#pr-zaloz').onclick = () => zalozProtokoly();
       const wszystkie = pole.querySelector('#pr-wszystkie');
       if (wszystkie) wszystkie.onclick = () => { f.okres = ''; odswiezEkran(); };
@@ -144,6 +146,20 @@ function okresDzis(d = new Date()) {
    się w Edge/Chrome jako „---- ----”, a Safari na iPhonie go nie ma wcale.
    Słowami („październik 2026”), ostatnie 12 miesięcy plus „wszystkie”.
    Miesiąc spoza listy (z wcześniejszego filtra) dokładamy, żeby nie zginął. */
+/* Sortowanie list rekordów (STYL-GK §6 „Kolejność list”): „Domyślnie” zostawia kolejność z serwera, obok jawne
+   „Najnowsze → najstarsze” i „Najstarsze → najnowsze”. Nieznana zapisana wartość wraca do „Domyślnie”.
+   Wybór jest pamiętany na osobę razem z filtrami (filtrOsoby). Tylko klient — serwer i dane bez zmian. */
+const OPCJE_SORTOWANIA = [['', 'Domyślnie'], ['nowe', 'Najnowsze → najstarsze'], ['stare', 'Najstarsze → najnowsze']];
+function polaSortowania(wybrane) {
+  return `<label>Sortowanie<select id="sortowanie">${OPCJE_SORTOWANIA.map(([w, o]) =>
+    `<option value="${w}"${w === (wybrane || '') ? ' selected' : ''}>${o}</option>`).join('')}</select></label>`;
+}
+function posortujListe(lista, tryb, dataRekordu) {
+  if (tryb !== 'nowe' && tryb !== 'stare') return lista;
+  const znak = tryb === 'nowe' ? -1 : 1;
+  return lista.slice().sort((a, b) => znak * String(dataRekordu(a)).localeCompare(String(dataRekordu(b))));
+}
+
 function opcjeMiesiecy(wybrany, teraz = new Date()) {
   const okresy = [];
   for (let i = 0; i < 12; i++) {
@@ -509,10 +525,11 @@ EKRANY.usterki = {
     const biuro = jestBiuro();
     // U kierowcy ta sama nazwa co zakładka w pasku dolnym i pozycja menu.
     if (!biuro) document.getElementById('tytul-ekranu').textContent = 'Usterka';
-    const f = stan._filtrUsterek || (stan._filtrUsterek = { status: '' });
+    const f = filtrOsoby('_filtrUsterek', { status: '', sortuj: '' });
     const pyt = new URLSearchParams();
     if (f.status) pyt.set('status', f.status);
-    const lista = await sprobuj(() => API.get('/api/usterki?' + pyt.toString())) || [];
+    const lista = posortujListe(await sprobuj(() => API.get('/api/usterki?' + pyt.toString())) || [], f.sortuj,
+      u => u.utworzono || '');
     const stany = ['', 'zgloszona', 'w_naprawie', 'zamknieta'];
     // Zdjęcia kierowcy przy usterce (serwer daje je tylko biuru) — token do
     // <img> bierzemy tylko wtedy, gdy na liście jest choć jedno zdjęcie.
@@ -529,6 +546,7 @@ EKRANY.usterki = {
           ${stany.map(s => `<button class="chip${f.status === s ? ' wybrany' : ''}"
             data-status="${s}">${s ? escHtml(opisKodu(OPIS_USTERKI, s)) : 'wszystkie'}</button>`).join('')}
         </div>
+        ${polaSortowania(f.sortuj)}
       </div>
       ${lista.length ? lista.map(u => `
         <div class="pozycja s-${escHtml(u.status)}">
@@ -560,6 +578,7 @@ EKRANY.usterki = {
     pole.querySelectorAll('[data-status]').forEach(b => {
       b.onclick = () => { f.status = b.dataset.status; odswiezEkran(); };
     });
+    pole.querySelector('#sortowanie').onchange = e => { f.sortuj = e.target.value; odswiezEkran(); };
     pole.querySelectorAll('[data-zamknij]').forEach(b => {
       b.onclick = () => oknoUsterki(lista.find(u => u.id === Number(b.dataset.zamknij)), token);
     });

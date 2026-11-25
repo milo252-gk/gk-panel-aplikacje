@@ -17,7 +17,7 @@
    co zobaczy kierowca.                                                       */
 
 EKRANY.awaria = {
-  tytul: 'W razie awarii',
+  tytul: 'Pomoc w drodze',
 
   async rysuj(pole) {
     const biuro = jestBiuro();

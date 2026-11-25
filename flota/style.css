@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-e1866e193f94';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-14811db65ec2';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -1040,6 +1040,13 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
     radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.28), transparent) left center / 14px 100% no-repeat scroll,
     radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.28), transparent) right center / 14px 100% no-repeat scroll}
 @media (max-width:820px){
+  /* STYL-GK §8 / Trasy: filtry i sortowanie na telefonie to jeden poziomo przewijany rząd tuż nad listą — lista zaczyna się
+     na pierwszym ekranie (Przeglądy miały trzy rzędy chipów, miesiąc i przycisk, ok. 400 px przed pierwszym przeglądem). */
+  .pasek-narzedzi{flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding-bottom:2px}
+  .pasek-narzedzi::-webkit-scrollbar{display:none}
+  .pasek-narzedzi > *{flex:none}
+  .pasek-narzedzi .chipy{flex-wrap:nowrap; margin:0}
+  .pasek-narzedzi .chip{white-space:nowrap}
   .flota-karty{display:block}
   .flota-tabela{display:none}
   /* cele dotyku (ocena UX, poz. 9): przyciski tekstowe i odnośniki w wierszach */

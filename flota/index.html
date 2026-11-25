@@ -58,11 +58,11 @@
 })();
 </script>
 <title>GK Flota</title>
-<link rel="manifest" href="manifest.webmanifest?v=flotex-e1866e193f94">
-<link rel="icon" href="ikona.svg?v=flotex-e1866e193f94">
+<link rel="manifest" href="manifest.webmanifest?v=flotex-14811db65ec2">
+<link rel="icon" href="ikona.svg?v=flotex-14811db65ec2">
 <!-- iPhone nie bierze ikony z manifestu ani z SVG: na ekran początkowy
      dodaje to, co wskazuje apple-touch-icon, i to musi być PNG. -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-e1866e193f94">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-14811db65ec2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GK Flota">
@@ -70,7 +70,8 @@
      nie pod nią. Odstępy env(safe-area-inset-top) w .gora i podglądzie zdjęcia
      zostają — przy „black” są po prostu zerowe. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="style.css?v=flotex-e1866e193f94">
+<link rel="stylesheet" href="style.css?v=flotex-14811db65ec2">
+<!-- Instrukcja do telefonu (przycisk „Instrukcja” w Moim koncie) to osobna strona: instrukcja.html (kopia offline w sw.js). -->
 </head>
 <body>
 
@@ -79,7 +80,7 @@
      tokenu. Bez klasy 'ukryty' formularz mrugałby przy każdym wejściu. -->
 <div id="ekran-logowania" class="logowanie ukryty">
   <form class="karta-logowania" id="form-logowania">
-    <img class="znak-logo" src="logo-gkf.png?v=flotex-e1866e193f94"
+    <img class="znak-logo" src="logo-gkf.png?v=flotex-14811db65ec2"
          alt="GK Factory" width="666" height="374">
     <h1>GK Flota</h1>
     <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
@@ -139,7 +140,7 @@
        lokalny plik, bo program musi wstać bez internetu. -->
   <nav class="menu" id="menu">
     <div class="menu-naglowek">
-      <img class="menu-logo" src="logo-gkf.png?v=flotex-e1866e193f94" alt="GK Factory"
+      <img class="menu-logo" src="logo-gkf.png?v=flotex-14811db65ec2" alt="GK Factory"
            width="666" height="374">
       <div class="menu-imie" id="menu-imie"></div>
       <!-- 2026-11-23: trzy linie jak w aplikacjach hali — imię i nazwisko, NAZWA ROLI osoby (app.js → wejdzDoAplikacji), STAŁA nazwa programu. -->
@@ -162,7 +163,7 @@
     <button data-ekran="przeglady"  class="tylko-biuro"><span class="ikona-menu" data-ikona="raporty"></span> <span>Przeglądy</span></button>
     <button data-ekran="usterki"><span class="ikona-menu" data-ikona="awaria"></span>
       <span class="tylko-biuro">Usterki</span><span class="tylko-kierowca">Usterka</span></button>
-    <button data-ekran="awaria"><span class="ikona-menu" data-ikona="ratunek"></span> <span>Instrukcja w razie awarii</span></button>
+    <button data-ekran="awaria"><span class="ikona-menu" data-ikona="ratunek"></span> <span>Pomoc w drodze</span></button>
     <button data-ekran="zaproszenie" class="tylko-biuro"><span class="ikona-menu" data-ikona="zaproszenie"></span> <span>Zaproś kierowcę</span></button>
     <!-- R13: biuro zakłada konta kierowców i odblokowuje im logowanie (administrator ma to w Administracji). -->
     <button data-ekran="kierowcy" class="tylko-biuro-bez-admina"><span class="ikona-menu" data-ikona="konta"></span> <span>Konta kierowców</span></button>
@@ -228,23 +229,23 @@
      w sw.js. Pominięcie w sw.js daje program, który działa przy zasięgu,
      a bez zasięgu nie wstaje wcale. -->
 <!-- Wspólne dźwięki GK (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js, który je podpina. -->
-<script src="gk-dzwieki.js?v=flotex-e1866e193f94"></script>
-<script src="gk-reakcje.js?v=flotex-e1866e193f94"></script>
+<script src="gk-dzwieki.js?v=flotex-14811db65ec2"></script>
+<script src="gk-reakcje.js?v=flotex-14811db65ec2"></script>
 <!-- Wspólny zestaw ikon liniowych menu (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js (menuDlaRoli). -->
-<script src="gk-ikony.js?v=flotex-e1866e193f94"></script>
-<script src="kolejka.js?v=flotex-e1866e193f94"></script>
-<script src="gk-offline.js?v=flotex-e1866e193f94"></script>
-<script src="zdjecia.js?v=flotex-e1866e193f94"></script>
-<script src="podpis.js?v=flotex-e1866e193f94"></script>
-<script src="skrot.js?v=flotex-e1866e193f94"></script>
-<script src="app.js?v=flotex-e1866e193f94"></script>
-<script src="pojazdy.js?v=flotex-e1866e193f94"></script>
-<script src="przeglady.js?v=flotex-e1866e193f94"></script>
-<script src="awaria.js?v=flotex-e1866e193f94"></script>
-<script src="zaproszenie.js?v=flotex-e1866e193f94"></script>
-<script src="kierowca.js?v=flotex-e1866e193f94"></script>
-<script src="ustawienia.js?v=flotex-e1866e193f94"></script>
-<script src="konta.js?v=flotex-e1866e193f94"></script>
-<script src="administracja.js?v=flotex-e1866e193f94"></script>
+<script src="gk-ikony.js?v=flotex-14811db65ec2"></script>
+<script src="kolejka.js?v=flotex-14811db65ec2"></script>
+<script src="gk-offline.js?v=flotex-14811db65ec2"></script>
+<script src="zdjecia.js?v=flotex-14811db65ec2"></script>
+<script src="podpis.js?v=flotex-14811db65ec2"></script>
+<script src="skrot.js?v=flotex-14811db65ec2"></script>
+<script src="app.js?v=flotex-14811db65ec2"></script>
+<script src="pojazdy.js?v=flotex-14811db65ec2"></script>
+<script src="przeglady.js?v=flotex-14811db65ec2"></script>
+<script src="awaria.js?v=flotex-14811db65ec2"></script>
+<script src="zaproszenie.js?v=flotex-14811db65ec2"></script>
+<script src="kierowca.js?v=flotex-14811db65ec2"></script>
+<script src="ustawienia.js?v=flotex-14811db65ec2"></script>
+<script src="konta.js?v=flotex-14811db65ec2"></script>
+<script src="administracja.js?v=flotex-14811db65ec2"></script>
 </body>
 </html>

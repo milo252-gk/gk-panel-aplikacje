@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-e1866e193f94';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-14811db65ec2';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -1624,7 +1624,44 @@ function zarejestrujSyncKolejki() {
    i zapamiętane filtry list. Bez tego następna osoba na tym samym komputerze
    oglądała zdjęcia na tokenie poprzedniej (biuro → kierowca: cudze zdjęcia
    przez 20 minut) i wchodziła w jej filtry i ostatnio otwarte auto.         */
+/* Pamięć filtrów list na osobę (STYL-GK §8 „pamięć filtrów”, jak w GK Trasy i Panelu): filtry Floty, Terminów,
+   Przeglądów i Usterek wracają po ponownym wejściu albo po wylogowaniu i zalogowaniu tej samej osoby na tym urządzeniu.
+   Klucz „filtry.<login>” (przedrostek gk-flota. dokłada pamietaj), tylko dodany — żaden istniejący klucz się nie zmienia.
+   Nie pamiętamy tego, co otwiera drzwi albo szybko się starzeje: wpisanego szukania i wybranego miesiąca przeglądów
+   (zapamiętany stary miesiąc ukrywałby bieżące przeglądy). Zapis przy wylogowaniu, zmianie osoby i schowaniu karty. */
+const FILTRY_OSOBY = ['_filtrFloty', '_filtrProtokolow', '_filtrUsterek', '_filtrTerminow'];
+const FILTRY_BEZ_PAMIECI = ['szukaj', 'okres'];
+function kluczFiltrowOsoby() {
+  return stan.uz && stan.uz.login ? 'filtry.' + String(stan.uz.login).toLowerCase() : '';
+}
+function zapiszFiltryOsoby() {
+  const klucz = kluczFiltrowOsoby();
+  if (!klucz) return;
+  const paczka = {};
+  for (const nazwa of FILTRY_OSOBY) {
+    if (!stan[nazwa]) continue;
+    paczka[nazwa] = Object.fromEntries(Object.entries(stan[nazwa]).filter(([k]) => !FILTRY_BEZ_PAMIECI.includes(k)));
+  }
+  if (Object.keys(paczka).length) pamietaj(klucz, JSON.stringify(paczka));
+}
+/* Filtr ekranu: z pamięci tej sesji, a gdy go nie ma — domyślny z zapisem osoby nałożonym na wartości domyślne
+   (znane klucze i ten sam typ; reszta z pamięci jest ignorowana, więc stary albo uszkodzony zapis nic nie psuje). */
+function filtrOsoby(nazwa, domyslny) {
+  if (stan[nazwa]) return stan[nazwa];
+  const f = Object.assign({}, domyslny);
+  try {
+    const zapis = JSON.parse(przypomnijSobie(kluczFiltrowOsoby()) || '{}')[nazwa] || {};
+    for (const k of Object.keys(domyslny)) {
+      if (!FILTRY_BEZ_PAMIECI.includes(k) && k in zapis && typeof zapis[k] === typeof domyslny[k]) f[k] = zapis[k];
+    }
+  } catch (e) { /* uszkodzony zapis — zostają wartości domyślne */ }
+  return (stan[nazwa] = f);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') zapiszFiltryOsoby(); });
+window.addEventListener('pagehide', zapiszFiltryOsoby);
+
 function zapomnijStanOsoby() {
+  zapiszFiltryOsoby();
   if (typeof TokenZdjec !== 'undefined') TokenZdjec.zapomnij();
   delete stan._filtrProtokolow; delete stan._filtrFloty;
   delete stan._filtrUsterek; delete stan._pojazdProtokolu;
@@ -2352,7 +2389,7 @@ function wyborWygladu() {
   const naKomputerze = typeof window.matchMedia === 'function'
     && window.matchMedia('(min-width:821px)').matches;
   const wybrany = Motyw.odczytaj();
-  return [['auto', naKomputerze ? 'Jak w systemie' : 'Jak w telefonie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']]
+  return [['auto', 'Jak w systemie'], ['jasny', 'Jasny'], ['ciemny', 'Ciemny']]
     .map(([k, n]) => `<button type="button" data-wyglad="${k}" aria-pressed="${wybrany === k}">${n}</button>`)
     .join('');
 }
@@ -2589,6 +2626,7 @@ function oknoKonta() {
         </div>
       </fieldset>`}
       ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${ikonka('telefon')}${napisKodowQR()}</button>` : ''}
+      <div class="przyciski-konta konto-pomoc"><button type="button" id="btn-instrukcja">Instrukcja</button></div>
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${escHtml(opisPowiadomien())}</p>
         <div id="push-konto" class="konto-push"><p class="konto-drobne">Sprawdzam…</p></div>
@@ -2653,6 +2691,8 @@ function oknoKonta() {
         stan.uz.haslo_startowe = false;
         zamknijOkno();
       };
+      // Instrukcja jest zwykłą stroną z web/ (instrukcja.html) — jak w GK Trasy: działa też z GitHub Pages i bez zasięgu (sw.js).
+      pole.querySelector('#btn-instrukcja').onclick = () => window.open(`instrukcja.html?v=${typeof WERSJA_SKRYPTU === 'string' ? WERSJA_SKRYPTU : ''}`, '_blank', 'noopener');
       const kodyQR = pole.querySelector('#btn-kody-qr');
       if (kodyQR) kodyQR.onclick = oknoKodowAplikacji;
       rysujPowiadomienia(pole.querySelector('#push-konto'));
