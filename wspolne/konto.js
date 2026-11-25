@@ -1,4 +1,4 @@
-/* GK Panel Kierownika — wspólne okna konta: „Zmień hasło”, „Zmień PIN”, „Ustaw hasło i PIN” po pierwszym logowaniu
+/* Panel Zarządczy GK — wspólne okna konta: „Zmień hasło”, „Zmień PIN”, „Ustaw hasło i PIN” po pierwszym logowaniu
    i pole sekretu na ekranie logowania (D32: jedno konto we wszystkich aplikacjach GK; D43: hasło raz na 16 godzin na
    urządzeniu, na co dzień PIN 4 cyfry).
 

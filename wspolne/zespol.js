@@ -1,4 +1,4 @@
-/* GK Panel Kierownika — „Mój zespół” (D49, właściciel 2026-10-08: „Pozwól adminom GK Trasy, Lidera, UR itp. tworzyć konta
+/* Panel Zarządczy GK — „Mój zespół” (D49, właściciel 2026-10-08: „Pozwól adminom GK Trasy, Lidera, UR itp. tworzyć konta
    dla swoich pracowników”). Kierownik zakładu, lider UR i kierownik KJ zakładają i zmieniają konta SWOICH ludzi:
    lider UR — mechaników, kierownik KJ — kontrolerów, kierownik zakładu — mistrzów, liderów UR i kierowników KJ, liderów,
    mechaników i kontrolerów. D76 (2026-10-19): mistrz nie jest przełożonym lidera — od tej decyzji nie ma zespołu

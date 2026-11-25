@@ -1,4 +1,4 @@
-/* GK Panel Kierownika — wyniki pracy: terminowość, wykonane do zadanych, średnia dzienna, zlecenia bez przypisania wzięte na siebie
+/* Panel Zarządczy GK — wyniki pracy: terminowość, wykonane do zadanych, średnia dzienna, zlecenia bez przypisania wzięte na siebie
    i odrzucone przez kierownika (właściciel 2026-11-23: „Raport pracy, brakuje mi…”, D98).
 
    JEDEN komponent dla Panelu (Wyniki: zakład, działy, osoby — kierownik zakładu, Menedżer i kierownik działu swój dział) i dla

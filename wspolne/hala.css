@@ -1,4 +1,4 @@
-/* GK Panel Kierownika — wspólny wygląd czterech aplikacji (plik w kodzie: hala.css). Każda ładuje ten plik PRZED własnym
+/* Panel Zarządczy GK — wspólny wygląd czterech aplikacji (plik w kodzie: hala.css). Każda ładuje ten plik PRZED własnym
    arkuszem i używa zmiennych, zamiast wpisywać kolory na sztywno — zielony „na czas”
    u lidera to ten sam zielony na panelu kierownika.
 

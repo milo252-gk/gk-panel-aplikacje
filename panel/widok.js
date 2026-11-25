@@ -61,6 +61,13 @@
   /* „Przyjmuję zadania” w GK Produkcja (2026-11-16) = rozpoczęcie pracy na zmianie. Z zleceń checklisty (pola przyjal i czas_przyjecia
      z zdarzenia zlecenie.przyjete — klient zna je bez zmian na hubie): { stan, tekst }; stan 'brak' (nikt jeszcze), 'czesc', 'przyjete'
      albo null (brak checklisty / zrobiona bez przyjęcia). Bliźniak: LiderWidok.przyjecieChecklisty. */
+  /* Czerwony napis pod nazwą kafelka znaczy TYLKO „Nie otwarta” (nikt nie wziął checklisty i nie ma raportu). „Wirtualna” oznacza
+     jedynie, że lider nie kliknął „Otwórz zmianę” (D67: checklista to zlecenie, można je przyjąć bez tego) — napis „Przyjął: Imię · 22:03”
+     nie jest alarmem (właściciel 2026-11-24: czerwone imię lidera mylące). */
+  function stanKafelkaCzerwony(k) {
+    return !!(k && k.wirtualna && !k.zamknieta && !(k.przyjecie && k.przyjecie.tekst));
+  }
+
   function przyjecieListy(lista, pracownicy) {
     const zl = (lista && lista.zlecenia) || [];
     const doPrzyjecia = zl.filter(z => z.status === 'nowe').length;
@@ -3462,7 +3469,7 @@
   }
 
   const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
+                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,

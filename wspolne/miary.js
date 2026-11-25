@@ -1,4 +1,4 @@
-/* GK Panel Kierownika — wspólne miary (D47): jak liczymy każdy wskaźnik i wybór zakresu dat.
+/* Panel Zarządczy GK — wspólne miary (D47): jak liczymy każdy wskaźnik i wybór zakresu dat.
 
    Panel → Wskaźniki i UR → KPI pokazują TE SAME definicje (jedno miejsce — ten plik), zgodne z kodem, który liczy
    (Hala.kpiAwarii / Hala.wskaznikiOkresu i bliźniaki w hubie, KONTRAKT §6.1, §6.3a, D37, D44):

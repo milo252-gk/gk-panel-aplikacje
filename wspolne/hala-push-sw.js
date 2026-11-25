@@ -44,11 +44,11 @@ async function halaPushHub() {
 }
 
 /* Tytuł powiadomienia, gdy hub nie podał własnego (albo nie odpowiedział): nazwa APLIKACJI po zakresie workera — GK Produkcja (/lider/),
-   GK Utrzymanie Ruchu (/ur/), GK Kontrola Jakości (/kj/), GK Panel Kierownika (/panel/ i każdy inny). Tylko napis; payload i endpointy bez zmian. */
-const HALA_PUSH_NAZWY = { lider: 'GK Produkcja', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'GK Panel Kierownika' };
+   GK Utrzymanie Ruchu (/ur/), GK Kontrola Jakości (/kj/), Panel Zarządczy GK (/panel/ i każdy inny). Tylko napis; payload i endpointy bez zmian. */
+const HALA_PUSH_NAZWY = { lider: 'GK Produkcja', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', panel: 'Panel Zarządczy GK' };
 function halaPushNazwaAplikacji() {
   const czesci = new URL(self.registration.scope).pathname.split('/').filter(Boolean);
-  return HALA_PUSH_NAZWY[czesci[czesci.length - 1]] || 'GK Panel Kierownika';
+  return HALA_PUSH_NAZWY[czesci[czesci.length - 1]] || 'Panel Zarządczy GK';
 }
 
 self.addEventListener('push', e => {

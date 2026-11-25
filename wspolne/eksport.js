@@ -1,4 +1,4 @@
-/* GK Panel Kierownika — wspólny pasek „Pobierz CSV” (D32: zestawienia do Excela dla kierowników).
+/* Panel Zarządczy GK — wspólny pasek „Pobierz CSV” (D32: zestawienia do Excela dla kierowników).
 
    Panel (Raporty), UR (KPI) i KJ (Pareto) rysują ten sam pasek. R3 (właściciel 2026-11-09): zestawienia CSV ma tylko
    kierownik zakładu i administrator — lider UR i kierownik KJ ich nie pobierają (pasek się nie rysuje; hub na razie tylko

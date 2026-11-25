@@ -462,7 +462,7 @@
       return `<article class="kafelek kolor-${esc(k.kolor)}${k.zatrzymania ? ' stoi' : ''}${odb.length ? ' ma-odbior' : ''}${odbOtwarty ? ' odbior-otwarty' : ''}${pod.length ? ' ma-podglad' : ''}${podOtwarty ? ' pozycje-otwarte' : ''}" data-klucz="${esc(k.klucz)}">
         <header><h3>${esc(k.naglowek)}</h3>${k.zatrzymania ? `<span class="znacznik alarm">${ik('stop', 14)}Stoi: ${k.zatrzymania}</span>` : k.awarie ? `<span class="znacznik uwaga">Awarie: ${k.awarie}</span>` : ''}</header>
         ${k.podpis ? `<div class="podpis-karty slaby">${esc(k.podpis)}</div>` : ''}
-        <div class="stan-zmiany ${k.wirtualna ? 'nieotwarta' : ''}">${esc(stan)}</div>
+        <div class="stan-zmiany ${W.stanKafelkaCzerwony(k) ? 'nieotwarta' : ''}">${esc(stan)}</div>
         <div class="postep" role="progressbar" aria-valuemin="0" aria-valuemax="${k.wszystkie}" aria-valuenow="${k.zrobione}"><span style="width:${proc}%"></span></div>
         <div class="liczby"><b>${k.zrobione}/${k.wszystkie}</b>${k.najblizsza ? ` <span>Następne ${esc(k.najblizsza.godz)} · ${esc(k.najblizsza.nazwa)}</span>` : k.wszystkie ? ' <span>Wszystko zrobione</span>' : ' <span>Brak planu</span>'}</div>
         ${k.opoznione.length ? `<ul class="opoznione" aria-label="Opóźnione">${opoz}</ul>` : ''}
