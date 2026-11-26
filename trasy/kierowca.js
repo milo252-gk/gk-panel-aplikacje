@@ -651,6 +651,21 @@ function brakiDowoduDostawy(wymogi, dane, nasze) {
   return brakuje;
 }
 
+/* Twarde braki (właściciel 2026-11-26): bez nich nie da się zakończyć punktu — u klienta zdjęcie i podpis, w naszej
+   lokalizacji zdjęcie i notatka, plus to, co biuro dodało (kto odebrał, numer dokumentu). Czysta funkcja, bez ostrzeżenia
+   „kto odebrał albo podpis” (to zostaje miękkie, w brakiDowoduDostawy). Wyjście awaryjne: „Nie mogę zakończyć” z powodem
+   w notatce — punkt zamyka się z notatką zaczynającą się od PREFIKS_BEZ_DOWODU, a biuro widzi czerwony znacznik. */
+const PREFIKS_BEZ_DOWODU = 'Bez dowodu: ';
+function brakiTwardeDostawy(wymogi, dane) {
+  const brakuje = [];
+  if (wymogi.includes('odebral') && !dane.odebral) brakuje.push('kto odebrał');
+  if (wymogi.includes('podpis') && !dane.podpis) brakuje.push('podpis');
+  if (wymogi.includes('zdjecie') && !dane.zdjecia.length) brakuje.push('zdjęcie');
+  if (wymogi.includes('notatka') && !dane.notatka) brakuje.push('notatka');
+  if (wymogi.includes('dokument') && !dane.dokument) brakuje.push('numer dokumentu');
+  return brakuje;
+}
+
 function oknoDostarczone(p) {
   let podpisPole = null;
   const zdjecia = [];
@@ -659,6 +674,49 @@ function oknoDostarczone(p) {
   const nasze = !!p.nasze;
   // Wymogi ustawione przez biuro dla naszego punktu (np. odbiór z podpisem). Bez nich — jak dotąd.
   const wymogi = wymogiPunktu(p);
+  const zbierzDane = () => {
+    const wart = id => (document.getElementById(id) || {}).value || '';
+    const dane = {
+      status: 'dostarczone',
+      odebral: wart('d-odebral').trim(),
+      notatka: wart('d-notatka').trim(),
+      podpis: podpisPole && !podpisPole.pusty() ? podpisPole.obraz() : null,
+      zdjecia: zdjecia.slice(),
+    };
+    if (nasze && wymogi.includes('dokument')) dane.dokument = wart('d-dokument').trim();
+    return dane;
+  };
+  const pokazBrakiTwarde = twarde => {
+    const ramka = document.getElementById('d-braki');
+    if (ramka) {
+      ramka.textContent = 'Nie da się zakończyć — brakuje: ' + twarde.join(', ')
+        + '. Uzupełnij to. Jeśli się nie da (np. aparat nie działa), wpisz powód w notatce i wybierz „Nie mogę zakończyć”.';
+      ramka.style.display = '';
+    }
+    const wyjscie = document.getElementById('d-nie-moge');
+    if (wyjscie) wyjscie.style.display = '';
+    komunikat('Brakuje: ' + twarde.join(', '), 'blad');
+  };
+  // Wyjście awaryjne: powód obowiązkowy (notatka), punkt zamyka się z napisem PREFIKS_BEZ_DOWODU, biuro widzi czerwony znacznik.
+  const nieMoge = async () => {
+    const dane = zbierzDane();
+    const twarde = brakiTwardeDostawy(wymogi, dane);
+    const powodTekst = dane.notatka.replace(/^Bez dowodu:\s*/i, '').trim();
+    if (powodTekst.length < 5) {
+      komunikat('Wpisz w notatce powód (np. aparat nie działa)', 'blad');
+      const poleNotatki = document.getElementById('d-notatka');
+      if (poleNotatki) poleNotatki.focus();
+      return;
+    }
+    if (!await potwierdz('Zakończyć bez pełnego dowodu?',
+      'Biuro zobaczy czerwony znacznik braku dowodu i Twój powód: „' + powodTekst + '”. Brakuje: '
+      + (twarde.length ? twarde.join(', ') : 'nic') + '.')) return;
+    dane.notatka = PREFIKS_BEZ_DOWODU + powodTekst;
+    zamknijOkno();
+    if (oknoDostarczone.odepnij) oknoDostarczone.odepnij();
+    await zapiszDostawe(p, dane);
+    try { await Kolejka.zapomnij(kluczSzkicu(p)); } catch (e) { /* trudno */ }
+  };
 
   okno({
     tytul: (nasze ? 'Postój: ' : 'Dostawa: ') + p.klient_nazwa,
@@ -666,20 +724,22 @@ function oknoDostarczone(p) {
       ${!nasze || wymogi.includes('odebral') ? `<label>Kto odebrał <span class="slaby">(imię i nazwisko lub „magazyn”)</span>
         <input id="d-odebral" autocapitalize="words" placeholder="np. Jan Kowalski">
       </label>` : ''}
-      ${!nasze || wymogi.includes('podpis') ? `<label>Podpis odbierającego
+      ${!nasze || wymogi.includes('podpis') ? `<label>Podpis odbierającego${wymogi.includes('podpis') ? ' <span class="slaby">(wymagany)</span>' : ''}
         <canvas class="pole-podpisu" id="d-podpis"></canvas>
       </label>
       <button class="maly" id="d-czysc-podpis" type="button">Wyczyść podpis</button>` : ''}
       ${nasze && wymogi.includes('dokument') ? `<label>Numer dokumentu <span class="slaby">(WZ, PZ, zamówienie)</span>
         <input id="d-dokument" maxlength="60" value="${escHtml(p.dokument || '')}">
       </label>` : ''}
-      <label style="margin-top:16px">Zdjęcia <span class="slaby">(towar, dokument, miejsce)</span></label>
+      <label style="margin-top:16px">Zdjęcia <span class="slaby">(${wymogi.includes('zdjecie') ? 'wymagane co najmniej jedno — ' : ''}towar, dokument, miejsce)</span></label>
       ${przyciskAparatu('d-zdjecia')}
       <div class="miniatury" id="d-miniatury"></div>
       ${!nasze && wymogi.length ? `<div class="male slaby" style="margin-top:10px">Biuro prosi o: ${wymogi.map(w => escHtml(ETYKIETY_WYMOGOW[w] || w)).join(', ')}.</div>` : ''}
       <label style="margin-top:12px">Notatka <span class="slaby">(${wymogi.includes('notatka') ? 'wymagana przez biuro' : 'nieobowiązkowa'})</span>
         <textarea id="d-notatka" placeholder="np. zostawione w magazynie od podwórza"></textarea>
-      </label>`,
+      </label>
+      <div class="wstega uwaga" id="d-braki" role="alert" style="display:none;margin-top:12px"></div>
+      <button class="maly czerwony" id="d-nie-moge" type="button" style="display:none;margin-top:8px">${ikonka('ostrzezenie')}Nie mogę zakończyć</button>`,
     przyciski: [
       { napis: 'Anuluj', klik: async z => {
         if (oknoDostarczone.odepnij) oknoDostarczone.odepnij();
@@ -687,15 +747,11 @@ function oknoDostarczone(p) {
         z();
       } },
       { napis: nasze ? 'Zapisz postój' : 'Zapisz dostawę', ikona: 'haczyk', klasa: 'zielony', klik: async z => {
-        const wart = id => (document.getElementById(id) || {}).value || '';
-        const dane = {
-          status: 'dostarczone',
-          odebral: wart('d-odebral').trim(),
-          notatka: wart('d-notatka').trim(),
-          podpis: podpisPole && !podpisPole.pusty() ? podpisPole.obraz() : null,
-          zdjecia: zdjecia.slice(),
-        };
-        if (nasze && wymogi.includes('dokument')) dane.dokument = wart('d-dokument').trim();
+        const dane = zbierzDane();
+        // Twardy wymóg (2026-11-26): bez wymaganych dowodów punktu nie da się zakończyć — zostaje okno z listą braków
+        // i wyjściem „Nie mogę zakończyć” (powód w notatce). Zapis w kolejce bez zasięgu nie przepada: blokada działa tylko tu.
+        const twarde = brakiTwardeDostawy(wymogi, dane);
+        if (twarde.length) { pokazBrakiTwarde(twarde); return; }
         // Ostrzeżenie o braku dowodu ma sens tylko przy dostawie do odbiorcy.
         // Przy własnym magazynie pokazywałoby się ZAWSZE, a ostrzeżenie, które
         // zawsze się pojawia, przestaje cokolwiek znaczyć.
@@ -716,6 +772,8 @@ function oknoDostarczone(p) {
       } },
     ],
     poOtwarciu: async pole => {
+      const wyjscieAwaryjne = pole.querySelector('#d-nie-moge');
+      if (wyjscieAwaryjne) wyjscieAwaryjne.onclick = nieMoge;
       const plotno = pole.querySelector('#d-podpis');
       if (plotno) {
         podpisPole = Podpis.zaloz(plotno);

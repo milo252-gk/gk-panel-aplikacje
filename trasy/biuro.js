@@ -1166,6 +1166,14 @@ async function oknoZamknieciaPrzezBiuro(p, poZmianie) {
    dotknięcie powiększa). Czego punkt wymaga, a kierowca nie dał, jest podpisane na czerwono. */
 const WYMOGI_ETYKIETY = { odebral: 'kto odebrał', podpis: 'podpis', zdjecie: 'zdjęcie', notatka: 'notatka', dokument: 'numer dokumentu' };
 
+/* Punkt zamknięty awaryjnie („Nie mogę zakończyć” w aplikacji kierowcy): notatka zaczyna się od „Bez dowodu: ” + powód.
+   Nie jest to pełny dowód, więc biuro widzi czerwony znacznik i powód (nawet gdy sama notatka spełnia wymóg „notatka”). */
+const PREFIKS_BEZ_DOWODU_BIURA = 'Bez dowodu: ';
+function bezDowoduPowod(x) {
+  const n = String((x && x.notatka) || '');
+  return x && x.status === 'dostarczone' && n.startsWith(PREFIKS_BEZ_DOWODU_BIURA) ? n.slice(PREFIKS_BEZ_DOWODU_BIURA.length).trim() : '';
+}
+
 function brakiDowodow(x) {
   if (x.status !== 'dostarczone') return [];
   const wymogi = String(x.wymogi || '').split(',').filter(Boolean);
@@ -1223,6 +1231,7 @@ function htmlDowodow(x, token, bezOdebralNotatki) {
     + miniaturyDowodow(zal, 'zaladunek', 'Załadunek', token, x.klient_nazwa + ' · załadunek');
   // Karta punktu ma już „Odebrał” i notatkę w pasku statusu — tam nie powtarzamy.
   return `${bezOdebralNotatki ? '' : pole('Odebrał:', x.odebral)}${pole('Dokument:', x.dokument)}${pole('Towar:', x.towar)}${bezOdebralNotatki ? '' : pole('Notatka:', x.notatka)}
+    ${bezDowoduPowod(x) ? `<div class="dp-pole dp-brak">${ikonka('ostrzezenie')}Zakończone bez pełnego dowodu — powód kierowcy: ${escHtml(bezDowoduPowod(x))}</div>` : ''}
     ${braki.length ? `<div class="dp-pole dp-brak">Brakuje: ${escHtml(braki.join(', '))}</div>` : ''}
     ${miniatury ? `<div class="dp-media">${miniatury}</div>` : ''}`;
 }
@@ -2033,7 +2042,14 @@ function wierszPrzystanku(p, indeks, ile, admin) {
     if (p.odebral) dopiski.push((ikonka('osoba') + 'odebrał: ') + escHtml(p.odebral));
     if (p.notatka) dopiski.push(ikonka('notatka') + escHtml(String(p.notatka).length > 90 ? String(p.notatka).slice(0, 90) + '…' : p.notatka));
     if (p.ile_zalacznikow) dopiski.push(ikonka('spinacz') + p.ile_zalacznikow);
-    else if (p.status === 'dostarczone' && !nasze) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('ostrzezenie') + 'bez podpisu i zdjęcia</span>'));
+    const bezDow = bezDowoduPowod(p);
+    const wymaganeBezZal = String(p.wymogi || '').split(',').filter(w => w === 'zdjecie' || w === 'podpis');
+    if (bezDow) dopiski.push(('<span style="color:var(--czerwony)">' + ikonka('ostrzezenie') + 'bez dowodu — powód: ' + escHtml(bezDow) + '</span>'));
+    else if (p.status === 'dostarczone' && !p.ile_zalacznikow && wymaganeBezZal.length) {
+      // Punkt wymagał zdjęcia i/lub podpisu, a nie ma żadnego załącznika (od 26.11 u klienta zdjęcie i podpis) — czerwony znacznik.
+      dopiski.push(('<span style="color:var(--czerwony)">' + ikonka('ostrzezenie') + 'brak dowodu: '
+        + wymaganeBezZal.map(w => WYMOGI_ETYKIETY[w]).join(', ') + '</span>'));
+    } else if (p.status === 'dostarczone' && !p.ile_zalacznikow && !nasze) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('ostrzezenie') + 'bez podpisu i zdjęcia</span>'));
   }
   if (p.eta) dopiski.push(ETA.opis(p));
   if (p.mapa_lat == null) dopiski.push(('<span style="color:var(--zolty)">' + ikonka('ostrzezenie') + 'brak adresu na mapie</span>'));
@@ -2182,6 +2198,8 @@ async function oknoDodawaniaKlientow(t) {
               <div class="male slaby" style="margin-top:8px">Kierowca ma podać:</div>
               <div id="dk-wymogi">${checkboxyWymogow('dk', 'zdjecie,notatka')}</div>
             </div>
+            <p class="male slaby">Domyślnie kierowca u klienta robi zdjęcie i bierze podpis, a u nas robi zdjęcie i pisze notatkę
+              (bez nich nie zakończy punktu). Wymogi zmienisz potem w szczegółach punktu.</p>
             <p class="male slaby">Punkty dopiszą się w takiej kolejności, w jakiej je
               zaznaczysz. Pilną dostawę możesz wstawić w środek dnia — wybierz,
               po którym punkcie ma stanąć.</p>`,
@@ -2201,7 +2219,9 @@ async function oknoDodawaniaKlientow(t) {
         // domyślne dodanie wygląda dla serwera dokładnie jak dotąd.
         if (wybrane.some(k => k[0] === 'L')) {
           if (rodzajNaszych) tresc.rodzaj = rodzajNaszych;
-          tresc.wymogi = wymogiNaszych;            // także puste: biuro świadomie odznaczyło wszystko (domyślnie zdjęcie i notatka)
+          // Domyślne (zdjęcie i notatka) nie wysyłamy: serwer sam da klientowi zdjęcie i podpis, a naszemu miejscu zdjęcie i notatkę
+          // (przy mieszanym wyborze to ważne). Zmienione albo puste (biuro świadomie odznaczyło wszystko) idzie do wszystkich dodawanych.
+          if (wymogiNaszych !== 'zdjecie,notatka') tresc.wymogi = wymogiNaszych;
         }
         const w = await sprobuj(() => API.post(`/api/trasy/${t.id}/przystanki`, tresc),
           `Dodano ${wybrane.length} punktów`);
