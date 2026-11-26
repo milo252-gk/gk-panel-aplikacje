@@ -17,9 +17,9 @@ EKRANY.ustawienia = {
      ostrzegania i cykle, checklista, zestawienia do Excela. Wszystko
      techniczne (poczta, tunel, GitHub Pages, kopie, klucze połączeń z Panelem
      i GK Trasy, trzymanie danych) leży w jednej zwiniętej karcie
-     „Poczta, kopie i połączenia” (etap 2 poprawek UI, decyzja właściciela) — ustawia się to
+     „Zaawansowane” (etap 2 poprawek UI, decyzja właściciela) — ustawia się to
      raz, a na wierzchu straszyło i zasłaniało resztę. Alarm, który prowadzi
-     do takiej sekcji (kopia, tunel, adres na Pages), rozwija „Poczta, kopie i połączenia”
+     do takiej sekcji (kopia, tunel, adres na Pages), rozwija „Zaawansowane”
      i przewija do niej: param.sekcja = id karty (pokazSekcjeUstawien).      */
   async rysuj(pole, param) {
     const u = await sprobuj(() => API.get('/api/ustawienia'));
@@ -88,7 +88,7 @@ EKRANY.ustawienia = {
       </div>
 
       <details class="karta karta-zwijana zaawansowane" id="u-zaawansowane">
-        <summary>Poczta, kopie i połączenia</summary>
+        <summary>Zaawansowane</summary>
         <div class="zwijana-tresc">
       <p class="slaby male" style="margin-top:0">Poczta, tunel i adres dla telefonów, kopie
         zapasowe, połączenia z Panelem Zarządczym GK i GK Trasy, trzymanie danych — ustawia się
@@ -194,12 +194,12 @@ EKRANY.ustawienia = {
     pole.querySelectorAll('[data-eksport]').forEach(b => {
       b.onclick = () => pobierzZestawienie(b.dataset.eksport);
     });
-    // Karta „Poczta, kopie i połączenia” fabrycznie zwinięta; raz rozwinięte zostaje rozwinięte
+    // Karta „Zaawansowane” fabrycznie zwinięta; raz rozwinięte zostaje rozwinięte
     // po zapisie i odświeżeniu ekranu (do końca tej wizyty w programie).
     const zaawansowane = pole.querySelector('#u-zaawansowane');
     zaawansowane.open = !!stan._zaawansowaneOtwarte;
     zaawansowane.ontoggle = () => { stan._zaawansowaneOtwarte = zaawansowane.open; };
-    // Wejście z alarmu: rozwinąć kartę „Poczta, kopie i połączenia” i pokazać tę jedną sekcję —
+    // Wejście z alarmu: rozwinąć kartę „Zaawansowane” i pokazać tę jedną sekcję —
     // raz; odświeżenie po zapisie nie przewija drugi raz.
     const p = param || {};
     if (p.sekcja) {
@@ -210,7 +210,7 @@ EKRANY.ustawienia = {
   },
 };
 
-/* Sekcje karty „Poczta, kopie i połączenia”, do których prowadzą alarmy programu (alarmy_systemu
+/* Sekcje karty „Zaawansowane”, do których prowadzą alarmy programu (alarmy_systemu
    we flotex.py, pole `kod`). Alarm bez sekcji (mało miejsca na dysku) nie ma
    czego otworzyć w Ustawieniach.                                             */
 const SEKCJE_ALARMOW = {
@@ -223,7 +223,7 @@ function naUstawieniach() {
   return stan.ekran === 'ustawienia' || (stan.ekran === 'administracja' && stan.adminZakladka === 'ustawienia');
 }
 
-/* Rozwija kartę „Poczta, kopie i połączenia” i przewija do karty `id`. Z innego ekranu (wstęga
+/* Rozwija kartę „Zaawansowane” i przewija do karty `id`. Z innego ekranu (wstęga
    alarmu na pulpicie) najpierw otwiera Ustawienia z tym samym celem.        */
 function pokazSekcjeUstawien(id) {
   const zaawansowane = document.getElementById('u-zaawansowane');
@@ -276,7 +276,7 @@ function sekcjaTunelu(u) {
 
       ${u.tunel_blokada_pinu ? `<div class="wstega blad">
         <b>Tunel nie ruszy, dopóki konta biura i administratora nie mają haseł
-        min. 8 znaków (i nikt nie ma fabrycznego PIN-u „1234").</b><br>
+        min. 8 znaków (i nikt nie ma fabrycznego hasła „1234").</b><br>
         Za tym adresem stoi cała kartoteka floty — VIN-y, polisy, koszty i zdjęcia.
         Adres nie jest tajemnicą: boty skanują tę domenę i trafiają na świeży tunel
         w kilkanaście minut. Popraw w zakładce Konta:
@@ -408,11 +408,11 @@ function sekcjaKontGk(u) {
 
       <div class="wstega info">Jedna osoba — jedno konto we wszystkich aplikacjach GK.
         Konta zakłada się w <b>Panelu → Administracja</b>, a GK Flota pobiera je sama co
-        kilka minut. Logowanie: <b>imię i nazwisko + PIN</b>; stare loginy działają dalej.
+        kilka minut. Logowanie: <b>imię i nazwisko + hasło</b>; stare loginy działają dalej.
         Bez połączenia GK Flota prowadzi konta sama, jak dotąd.
         <b>Panel na tym komputerze łączy się sam</b> — Panel robi klucz i podaje go programowi
         przez plik w profilu Windows, nic nie trzeba wklejać.</div>
-      <p class="slaby male"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło i PIN
+      <p class="slaby male"><b>Login „admin”</b> to konto administratora z Panelu — to samo hasło
         co w Panelu (ustawia się je w aplikacji hali). Lokalny awaryjny „admin” z lokalnym hasłem
         wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
         ponad ${Number(adm.po_godz) || 24} godzin. Inni administratorzy Panelu logują się imieniem i nazwiskiem.</p>
@@ -433,7 +433,7 @@ function sekcjaKontGk(u) {
         ? `Login <b>admin</b> = konto z Panelu <b>${escHtml(adm.z_panelu)}</b> — lokalny awaryjny „admin” teraz nie wpuszcza.`
         : `Login <b>admin</b> = lokalne konto awaryjne${adm.w_panelu && !adm.swiezy
           ? ` — konta z Panelu nie pobrały się od ponad ${Number(adm.po_godz) || 24} h` : ''}.`}</p>` : ''}
-      ${lista('Bez konta — PIN do ustawienia w Panelu albo niech zaloguje się raz w aplikacji GK:',
+      ${lista('Bez konta — hasło do ustawienia w Panelu albo niech zaloguje się raz w aplikacji GK:',
               s.bez_pinu)}
       ${lista('Do wyjaśnienia:', s.konflikty)}
 
@@ -461,7 +461,7 @@ function sekcjaKontGk(u) {
         <button class="niszczacy${polaczone ? '' : ' ukryty'}" id="u-hub-odlacz">Odłącz</button>
       </div>
       <p class="slaby male">„Przenieś konta do Panelu” robi się raz: konta biura i kierowcy
-        założeni tutaj trafiają do Panelu z obecnymi PIN-ami (kierowców z GK Trasy przenosi
+        założeni tutaj trafiają do Panelu z obecnymi hasłami (kierowców z GK Trasy przenosi
         GK Trasy). Awaryjny „admin” zostaje tylko tutaj.${
         (s.do_przeniesienia || 0) ? ` Do przeniesienia: <b>${Number(s.do_przeniesienia)}</b>.` : ''}</p>
     </div>`;
@@ -500,10 +500,10 @@ function podepnijKontaGk(pole) {
   };
   we('u-hub-import').onclick = async () => {
     if (!await potwierdz('Przenieść konta do Panelu Zarządczego GK?',
-      'Konta biura i kierowców założone w GK Flota trafią do Panelu razem z obecnymi PIN-ami '
-      + '(PIN się nie zmienia). Osoba, która w Panelu już jest, dostanie tylko rolę GK Flota '
-      + 'i swój stary login — jej PIN z Panelu wygrywa. Potem konta zmienia się już tylko '
-      + 'w Panelu.', { tak: 'Przenieś' })) return;
+      'Konta biura i kierowców założone w GK Flota trafią do Panelu razem z obecnymi hasłami '
+      + '(hasło się nie zmienia; krótkie trzeba będzie zmienić przy pierwszym logowaniu). Osoba, która '
+      + 'w Panelu już jest, dostanie tylko rolę GK Flota i swój stary login — jej hasło z Panelu wygrywa. '
+      + 'Potem konta zmienia się już tylko w Panelu.', { tak: 'Przenieś' })) return;
     const w = await sprobuj(() => API.post('/api/panel/import', {}));
     if (!w) return;
     const konflikty = w.konflikty || [];
@@ -807,7 +807,7 @@ async function pobierzZestawienie(nazwa) {
    je sam (alarmy_systemu) i wysyła też push do biura, raz na 6 godzin.       */
 function wstegiAlarmow(alarmy) {
   return (alarmy || []).map(a => {
-    // Sekcje techniczne leżą od etapu 2 w zwiniętej karcie „Poczta, kopie i połączenia” —
+    // Sekcje techniczne leżą od etapu 2 w zwiniętej karcie „Zaawansowane” —
     // bez tego przycisku administrator szukałby kopii czy tunelu po omacku.
     const sekcja = jestAdministratorem() ? SEKCJE_ALARMOW[a.kod] : '';
     return `<div class="wstega ${a.push ? 'blad' : 'uwaga'}">

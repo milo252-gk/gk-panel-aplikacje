@@ -410,6 +410,7 @@ function oknoOdrzucenia(g) {
                        'Stan licznika nie zgadza się ze zdjęciem'];
   okno({
     tytul: 'Zwrot przeglądu za ' + miesiacSlownie(g.okres),
+    szkic: 'zwrot-' + g.id,
     tresc: `
       <p class="slaby">Powód zobaczy kierowca w telefonie — napisz konkret,
       a nie „źle". Zdjęcia zostają w przeglądzie, nic nie jest kasowane.</p>
@@ -615,6 +616,7 @@ function oknoUsterki(u, token) {
   const zdjecia = u.zdjecia || [];
   okno({
     tytul: 'Usterka: ' + u.opis.slice(0, 60),
+    szkic: 'naprawa-' + u.id,
     tresc: `
       <div class="zgloszenie-usterki">
         <p class="slaby male">${escHtml(u.rejestracja || '')}${u.zglosil_imie

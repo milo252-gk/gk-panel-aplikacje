@@ -1,7 +1,7 @@
 /* Konta pracowników — ekran administratora.
 
    Zasady, których broni serwer (ostatni administrator, minimalna długość
-   PIN-u, hasło wymagane przy awansie), pokazujemy człowiekowi ZANIM kliknie.
+   hasła, hasło wymagane przy awansie), pokazujemy człowiekowi ZANIM kliknie.
    Komunikat błędu po naciśnięciu „Zapisz" jest gorszą wersją tej samej
    informacji: wtedy trzeba się cofać i zgadywać, co było nie tak.            */
 
@@ -10,16 +10,18 @@ const OPIS_ROLI = {
   biuro: 'biuro — cała flota: auta, terminy, przeglądy, usterki',
   admin: 'administrator — to co biuro, plus konta i Ustawienia',
 };
-const MIN_PIN = { kierowca: 4, biuro: 8, admin: 8 };
+// Od 2026-11-26 (logowanie bez PIN-ów) nowe hasło każdego konta — także kierowcy — ma min. 8 znaków
+// (dawniej kierowca: PIN 4 cyfry). Już nadane krótkie hasła kierowców działają dalej.
+const MIN_HASLA = 8;
 
 /* Konto kierowcy z GK Trasy (GK Transport) — tylko do obejrzenia. Imię, login,
-   PIN i aktywność przychodzą z GK Trasy co kilka minut, więc pole do edycji
+   hasło i aktywność przychodzą z GK Trasy co kilka minut, więc pole do edycji
    byłoby kłamstwem: zmiana wróciłaby do starej przy najbliższej wymianie,
    a serwer i tak odpowiada na nią odmową. Auto przypisuje się dalej tutaj,
    na karcie auta — to jest sprawa floty, nie planu dnia.                 */
 /* Konto z Panelu Zarządczego GK (GK-KONTA.md) — jedna osoba, jedno konto we
    wszystkich aplikacjach GK. Zakłada się je i zmienia w Panelu → Administracja;
-   tutaj tylko oglądamy. PIN osoba zmienia sama w „Moje konto” (idzie do Panelu),
+   tutaj tylko oglądamy. Hasło osoba zmienia sama w „Moje konto” (idzie do Panelu),
    auto przypisuje się dalej tutaj, na karcie auta.                          */
 function oknoKontaZPanelu(u) {
   okno({
@@ -27,7 +29,7 @@ function oknoKontaZPanelu(u) {
     tresc: `
       <div class="wstega info">Konto prowadzi <b>Panel Zarządczy GK</b> — imię i nazwisko,
         rolę, telefon i wyłączenie zmieniasz w Panelu → <b>Administracja</b>${jestAdministratorem()
-          ? '' : ' (albo prosisz o to administratora)'}. PIN osoba
+          ? '' : ' (albo prosisz o to administratora)'}. Hasło osoba
         zmienia sama w „Moje konto”. Auto przypisujesz tutaj: Flota → karta auta →
         <b>Kierowca</b>.${stan.zespolGk ? `<br>Ta osoba ma też role spoza GK Floty
         (albo jest administratorem), więc jej konta nie zmienisz tutaj.` : ''}</div>
@@ -39,7 +41,7 @@ function oknoKontaZPanelu(u) {
         <label class="pole">Telefon
           <input value="${escHtml(u.telefon || '')}" disabled></label>
         <label class="pole">Rola
-          <input value="${escHtml(NAZWA_ROLI[u.rola] || u.rola)}" disabled></label>
+          <input value="${escHtml(etykietaRoli(u))}" disabled></label>
       </div>
       <p class="slaby male">Konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
@@ -51,7 +53,7 @@ function oknoKontaZTrasexu(u) {
   okno({
     tytul: 'Konto ' + u.imie,
     tresc: `
-      <div class="wstega info">Konto prowadzi <b>GK Trasy</b> — imię, login, PIN
+      <div class="wstega info">Konto prowadzi <b>GK Trasy</b> — imię, login, hasło
         i wyłączenie konta zmieniasz tam. Auto przypisujesz tutaj:
         Flota → karta auta → <b>Kierowca</b>.</div>
       <div class="dwie-kolumny">
@@ -62,7 +64,7 @@ function oknoKontaZTrasexu(u) {
         <label class="pole">Telefon
           <input value="${escHtml(u.telefon || '')}" disabled></label>
         <label class="pole">Rola
-          <input value="${escHtml(NAZWA_ROLI[u.rola] || u.rola)}" disabled></label>
+          <input value="${escHtml(etykietaRoli(u))}" disabled></label>
       </div>
       <p class="slaby male">Konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
@@ -102,7 +104,7 @@ EKRANY.konta = {
     pole.innerHTML = `
       ${stan.kontaZPanelu ? `<div class="wstega info">Konta zakłada się w <b>Panelu
         Kierownika → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
-        GK. GK Flota pobiera je sama co kilka minut (Administracja → Ustawienia → Konta GK). ${stan.zespolGk
+        GK. GK Flota pobiera je sama co kilka minut (Administracja → Ustawienia → Zaawansowane → Konta GK). ${stan.zespolGk
           ? `Konta <b>biura i kierowców</b> zakładasz też tutaj — „+ Dodaj konto” zapisuje
             je w Panelu.` : `Tutaj zostaje tylko awaryjny administrator.${zespol.powod
             ? `<br>${escHtml(zespol.powod)}` : ''}`}</div>` : ''}
@@ -132,7 +134,7 @@ EKRANY.konta = {
               ? ' <span class="plakietka p-zatwierdzony">z Panelu</span>' : ''}
               ${u.telefon ? `<br><span class="slaby male">${escHtml(u.telefon)}</span>` : ''}</td>
             <td>${escHtml(u.login)}</td>
-            <td><span class="plakietka">${escHtml(NAZWA_ROLI[u.rola] || u.rola)}</span></td>
+            <td><span class="plakietka">${escHtml(etykietaRoli(u))}</span></td>
             <td>${u.pojazdy ? escHtml(u.pojazdy) : '<span class="slaby">—</span>'}</td>
             <td>${u.ostatnio ? escHtml(polskaData(u.ostatnio))
               : '<span class="slaby">nigdy</span>'}</td>
@@ -210,7 +212,7 @@ EKRANY.kierowcy = {
   },
 };
 
-/* Blokada logowania z internetu (przez tunel): 10 złych PIN-ów na jedno konto
+/* Blokada logowania z internetu (przez tunel): 10 złych haseł na jedno konto
    w 15 minut zamyka je z internetu na minutę (od 2026-11-03 nie ma już blokady
    do odblokowania; dawne wpisy serwer ignoruje). Z firmowego wifi konto loguje
    się cały czas. Liczba złych prób w ostatniej godzinie mówi, czy ktoś
@@ -221,7 +223,7 @@ function rysujBlokady(b) {
   const zle = b.zle_proby_godzina || 0;
   if (!konta.length && !zle) return '';
   return `<div class="wstega ${konta.length ? 'uwaga' : 'info'}">
-    <b>Logowanie z internetu</b> — złe PIN-y z internetu w ostatniej godzinie:
+    <b>Logowanie z internetu</b> — złe hasła z internetu w ostatniej godzinie:
     <b>${zle}</b>.
     ${konta.length ? `<br>Zablokowane z internetu (z firmowego wifi wchodzą normalnie):
       <ul>${konta.map(k => `<li><b>${escHtml(k.imie)}</b> — do ${escHtml(String(k.do || '').slice(11, 16))}
@@ -287,7 +289,7 @@ function oknoEdycjiKonta(u, adminow) {
       </div>
       <p class="slaby male" id="k-opis-roli"></p>
 
-      <label class="pole">${nowy ? 'PIN *' : 'Nowy PIN (zostaw puste, żeby nie zmieniać)'}
+      <label class="pole">${nowy ? 'Hasło *' : 'Nowe hasło (zostaw puste, żeby nie zmieniać)'}
         <input id="k-pin" type="password" autocomplete="new-password" maxlength="128"></label>
       <p class="slaby male" id="k-opis-pinu"></p>
 
@@ -303,11 +305,9 @@ function oknoEdycjiKonta(u, adminow) {
       const opisPinu = tresc.querySelector('#k-opis-pinu');
       const odswiez = () => {
         opisRoli.textContent = OPIS_ROLI[rola.value] || '';
-        opisPinu.textContent = `PIN dla tej roli musi mieć co najmniej `
-          + `${MIN_PIN[rola.value]} ${odmiana(MIN_PIN[rola.value], 'znak', 'znaki', 'znaków')}`
-          + (rola.value === 'kierowca'
-              ? ' — kierowca wstukuje go w rękawicach, więc może być krótki.'
-              : ' — to konto widzi całą firmę, więc ma mieć prawdziwe hasło.');
+        // Logowanie bez PIN-ów (2026-11-26): ta sama reguła dla każdej roli.
+        opisPinu.textContent = `Hasło: co najmniej ${MIN_HASLA} znaków (litery, cyfry, znaki). `
+          + 'Osoba loguje się nim w GK Flota i może je potem zmienić w „Moje konto”.';
       };
       rola.onchange = odswiez;
       odswiez();
@@ -331,14 +331,12 @@ function oknoEdycjiKonta(u, adminow) {
         if (pin) dane.pin = pin;
         if (!dane.imie) { komunikat('Podaj imię i nazwisko', 'blad'); return; }
         if (nowy && !dane.login) { komunikat('Podaj login', 'blad'); return; }
-        if (nowy && !pin) { komunikat('Nowe konto musi dostać PIN', 'blad'); return; }
-        // Sprawdzamy tu, choć serwer sprawdza to samo: krótszy PIN wpisany
-        // w oknie odbijał się komunikatem po zamknięciu formularza, więc
+        if (nowy && !pin) { komunikat('Nowe konto musi dostać hasło', 'blad'); return; }
+        // Sprawdzamy tu, choć serwer sprawdza to samo: krótsze hasło wpisane
+        // w oknie odbijało się komunikatem po zamknięciu formularza, więc
         // wszystkie pozostałe pola trzeba było wpisywać drugi raz.
-        if (pin && pin.length < MIN_PIN[rola]) {
-          komunikat(`PIN dla roli „${rola}” musi mieć co najmniej ${MIN_PIN[rola]} ${
-            odmiana(MIN_PIN[rola], 'znak', 'znaki', 'znaków')}`,
-                    'blad');
+        if (pin && pin.length < MIN_HASLA) {
+          komunikat(`Hasło musi mieć co najmniej ${MIN_HASLA} znaków`, 'blad');
           return;
         }
         if (!await sprobuj(() => API.post('/api/uzytkownicy', dane),
@@ -365,10 +363,11 @@ function oknoKontaLokalnegoKierowcy(u) {
 
 /* Konto biura albo kierowcy zakładane i zmieniane PRZEZ PANEL (D49, GK-KONTA.md §3.5).
    Zapis idzie do huba (POST /api/panel/osoba), a konto wraca do GK Flota zwykłym
-   pobraniem kont — od razu, serwer pobiera je po każdym zapisie. Hasła ani PIN-u nikt
-   tu nie wpisuje (nikt nie zna niczyjego PIN-u): nowa osoba dostaje hasło startowe
-   haslo123, a „Ustaw hasło startowe” / „Resetuj PIN” działają jak w Panelu. Usuwa
-   tylko administrator w Panelu — tutaj konto się wyłącza.                         */
+   pobraniem kont — od razu, serwer pobiera je po każdym zapisie. Hasła nikt tu nie
+   wpisuje (nikt nie zna niczyjego hasła): nowa osoba dostaje hasło startowe haslo123,
+   a „Resetuj hasło” / „Ustaw hasło startowe” działają jak w Panelu. „Resetuj PIN”
+   zniknął 2026-11-26 (logowanie bez PIN-ów). Usuwa tylko administrator w Panelu —
+   tutaj konto się wyłącza.                                                      */
 const ROLE_ZESPOLU = [
   ['flota_biuro', 'Biuro', 'cała flota: auta, terminy, przeglądy, usterki'],
   ['trasy_kierowca', 'Kierowca', 'swoje auto, przeglądy i usterki'],
@@ -402,19 +401,18 @@ function oknoKontaZespolu(u) {
             + 'kierowcą w GK Trasy.</p>' : ''}`).join('')}
       </fieldset>`}
       ${nowy ? `<p class="wstega ok">Hasło startowe: <b>haslo123</b> — przy pierwszym logowaniu
-          osoba ustawi własne hasło i PIN.</p>` : `
+          osoba ustawi własne hasło.</p>` : `
         <label class="plaska"><input type="checkbox" id="kz-aktywny"${u.aktywny ? ' checked' : ''}>
           Konto aktywne</label>
         <p class="slaby male">Wyłączone konto nie zaloguje się w żadnej aplikacji GK.
           Usuwa administrator w Panelu → Administracja — tu możesz wyłączyć konto.${u.pojazdy
           ? ` Auta <b>${escHtml(u.pojazdy)}</b> zostaną wtedy bez opiekuna.` : ''}</p>
         <fieldset><legend>Hasło i dostęp</legend>
-          <p class="slaby male">Hasła ani PIN-u nikt tu nie wpisuje — osoba ustawia je sama
+          <p class="slaby male">Hasła nikt tu nie wpisuje — osoba ustawia je sama
             przy logowaniu. Działa od razu, bez „Zapisz”.</p>
           <div class="konto-akcje">
-            <button type="button" id="kz-reset" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>
+            <button type="button" id="kz-reset" title="Hasło haslo123 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>
             <button type="button" id="kz-haslo">Ustaw hasło startowe</button>
-            <button type="button" id="kz-pin">Resetuj PIN</button>
             <button type="button" id="kz-wyloguj">Wyloguj wszędzie</button>
           </div>
         </fieldset>`}
@@ -435,15 +433,12 @@ function oknoKontaZespolu(u) {
           odswiezEkran();
         };
       };
-      dzialanie('#kz-reset', 'resetuj_konto', 'Zresetować hasło i PIN?',
-                `${u ? u.imie : ''} dostanie hasło „haslo123” i PIN 1234, wszystkie urządzenia zostaną `
+      dzialanie('#kz-reset', 'resetuj_konto', 'Zresetować hasło?',
+                `${u ? u.imie : ''} dostanie hasło „haslo123”, wszystkie urządzenia zostaną `
                 + 'wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło');
       dzialanie('#kz-haslo', 'haslo_startowe', 'Ustawić hasło startowe?',
-                `${u ? u.imie : ''} dostanie hasło „haslo123”, PIN zostanie skasowany, a wszystkie `
-                + 'urządzenia wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło i PIN.', 'Ustaw');
-      dzialanie('#kz-pin', 'resetuj_pin', 'Zresetować PIN?',
-                `${u ? u.imie : ''} dostanie PIN startowy 1234 — przy pierwszym logowaniu ustawi nowy.`,
-                'Resetuj PIN');
+                `${u ? u.imie : ''} dostanie hasło „haslo123”, a wszystkie `
+                + 'urządzenia zostaną wylogowane. Przy następnym logowaniu osoba ustawi nowe hasło.', 'Ustaw');
       dzialanie('#kz-wyloguj', 'wyloguj_wszedzie', 'Wylogować wszędzie?',
                 `${u ? u.imie : ''} — osoba zostanie wylogowana we wszystkich aplikacjach GK i na `
                 + 'wszystkich urządzeniach. Następne logowanie — hasłem.', 'Wyloguj wszędzie');

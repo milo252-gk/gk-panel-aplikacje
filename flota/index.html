@@ -58,11 +58,11 @@
 })();
 </script>
 <title>GK Flota</title>
-<link rel="manifest" href="manifest.webmanifest?v=flotex-a7baee9dc270">
-<link rel="icon" href="ikona.svg?v=flotex-a7baee9dc270">
+<link rel="manifest" href="manifest.webmanifest?v=flotex-9be33c62ae97">
+<link rel="icon" href="ikona.svg?v=flotex-9be33c62ae97">
 <!-- iPhone nie bierze ikony z manifestu ani z SVG: na ekran początkowy
      dodaje to, co wskazuje apple-touch-icon, i to musi być PNG. -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-a7baee9dc270">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=flotex-9be33c62ae97">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GK Flota">
@@ -70,7 +70,7 @@
      nie pod nią. Odstępy env(safe-area-inset-top) w .gora i podglądzie zdjęcia
      zostają — przy „black” są po prostu zerowe. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="style.css?v=flotex-a7baee9dc270">
+<link rel="stylesheet" href="style.css?v=flotex-9be33c62ae97">
 <!-- Instrukcja do telefonu (przycisk „Instrukcja” w Moim koncie) to osobna strona: instrukcja.html (kopia offline w sw.js). -->
 </head>
 <body>
@@ -80,10 +80,10 @@
      tokenu. Bez klasy 'ukryty' formularz mrugałby przy każdym wejściu. -->
 <div id="ekran-logowania" class="logowanie ukryty">
   <form class="karta-logowania" id="form-logowania">
-    <img class="znak-logo" src="logo-gkf.png?v=flotex-a7baee9dc270"
+    <img class="znak-logo" src="logo-gkf.png?v=flotex-9be33c62ae97"
          alt="GK Factory" width="666" height="374">
     <h1>GK Flota</h1>
-    <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
+    <p class="pod">Zaloguj się imieniem i&nbsp;nazwiskiem i&nbsp;<span class="bez-lamania">hasłem</span></p>
     <!-- Te same słowa co GK Trasy i aplikacje hali (GK-KONTA.md, punkt 4,
          STYL-GK punkt 2): jedna osoba loguje się wszędzie tak samo. Stary
          login („marek") działa dalej — serwer go zna — ale ekran go nie podsuwa.
@@ -95,14 +95,12 @@
       <input name="login" id="pole-loginu" autocomplete="username" autocapitalize="none"
              autocorrect="off" spellcheck="false" required placeholder="np. Jan Kowalski">
     </label>
-    <!-- D43 (GK-KONTA.md §7.3, STYL-GK §2): podpis i klawiatura zaleza od osoby z pola 1
-         (app.js → poleSekretu). Osoba ze znacznikiem tego urzadzenia → „PIN (4 cyfry)”
-         z klawiatura cyfr; inaczej „Hasło (raz na 16 godzin na tym urządzeniu)” z pelna
-         klawiatura. Program bez kont D43 (konta tutejsze, z GK Trasy) — „PIN / hasło”. -->
-    <label><span id="etykieta-sekretu">PIN / hasło</span>
-      <input name="pin" id="pole-sekretu" type="password" autocomplete="current-password" required>
+    <!-- Logowanie bez PIN-ow (wlasciciel 2026-11-26): drugie pole to zawsze „Hasło” (pelna
+         klawiatura, bez trybu PIN i bez linku przełączania na PIN). Name „pin” zostaje — tak
+         nazywa sie pole sekretu w /api/logowanie (app.js → poleSekretu). -->
+    <label><span id="etykieta-sekretu">Hasło</span>
+      <input name="pin" id="pole-sekretu" type="password" autocomplete="current-password" maxlength="128" required>
     </label>
-    <button type="button" class="link-sekretu" id="przelacz-sekret" hidden>Zaloguj hasłem</button>
     <button class="glowny duzy" type="submit">Zaloguj</button>
     <div class="blad-logowania" id="blad-logowania" role="alert"></div>
     <!-- Tylko gdy konta przychodza z Panelu (GET /api/zyje → konta_z_panelu). -->
@@ -147,7 +145,7 @@
        lokalny plik, bo program musi wstać bez internetu. -->
   <nav class="menu" id="menu">
     <div class="menu-naglowek">
-      <img class="menu-logo" src="logo-gkf.png?v=flotex-a7baee9dc270" alt="GK Factory"
+      <img class="menu-logo" src="logo-gkf.png?v=flotex-9be33c62ae97" alt="GK Factory"
            width="666" height="374">
       <div class="menu-imie" id="menu-imie"></div>
       <!-- 2026-11-23: trzy linie jak w aplikacjach hali — imię i nazwisko, NAZWA ROLI osoby (app.js → wejdzDoAplikacji), STAŁA nazwa programu. -->
@@ -236,23 +234,23 @@
      w sw.js. Pominięcie w sw.js daje program, który działa przy zasięgu,
      a bez zasięgu nie wstaje wcale. -->
 <!-- Wspólne dźwięki GK (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js, który je podpina. -->
-<script src="gk-dzwieki.js?v=flotex-a7baee9dc270"></script>
-<script src="gk-reakcje.js?v=flotex-a7baee9dc270"></script>
+<script src="gk-dzwieki.js?v=flotex-9be33c62ae97"></script>
+<script src="gk-reakcje.js?v=flotex-9be33c62ae97"></script>
 <!-- Wspólny zestaw ikon liniowych menu (kopia 1:1 z huba, .github/spojnosc.py) — przed app.js (menuDlaRoli). -->
-<script src="gk-ikony.js?v=flotex-a7baee9dc270"></script>
-<script src="kolejka.js?v=flotex-a7baee9dc270"></script>
-<script src="gk-offline.js?v=flotex-a7baee9dc270"></script>
-<script src="zdjecia.js?v=flotex-a7baee9dc270"></script>
-<script src="podpis.js?v=flotex-a7baee9dc270"></script>
-<script src="skrot.js?v=flotex-a7baee9dc270"></script>
-<script src="app.js?v=flotex-a7baee9dc270"></script>
-<script src="pojazdy.js?v=flotex-a7baee9dc270"></script>
-<script src="przeglady.js?v=flotex-a7baee9dc270"></script>
-<script src="awaria.js?v=flotex-a7baee9dc270"></script>
-<script src="zaproszenie.js?v=flotex-a7baee9dc270"></script>
-<script src="kierowca.js?v=flotex-a7baee9dc270"></script>
-<script src="ustawienia.js?v=flotex-a7baee9dc270"></script>
-<script src="konta.js?v=flotex-a7baee9dc270"></script>
-<script src="administracja.js?v=flotex-a7baee9dc270"></script>
+<script src="gk-ikony.js?v=flotex-9be33c62ae97"></script>
+<script src="kolejka.js?v=flotex-9be33c62ae97"></script>
+<script src="gk-offline.js?v=flotex-9be33c62ae97"></script>
+<script src="zdjecia.js?v=flotex-9be33c62ae97"></script>
+<script src="podpis.js?v=flotex-9be33c62ae97"></script>
+<script src="skrot.js?v=flotex-9be33c62ae97"></script>
+<script src="app.js?v=flotex-9be33c62ae97"></script>
+<script src="pojazdy.js?v=flotex-9be33c62ae97"></script>
+<script src="przeglady.js?v=flotex-9be33c62ae97"></script>
+<script src="awaria.js?v=flotex-9be33c62ae97"></script>
+<script src="zaproszenie.js?v=flotex-9be33c62ae97"></script>
+<script src="kierowca.js?v=flotex-9be33c62ae97"></script>
+<script src="ustawienia.js?v=flotex-9be33c62ae97"></script>
+<script src="konta.js?v=flotex-9be33c62ae97"></script>
+<script src="administracja.js?v=flotex-9be33c62ae97"></script>
 </body>
 </html>

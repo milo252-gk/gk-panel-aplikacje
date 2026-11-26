@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-a7baee9dc270';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-9be33c62ae97';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -36,7 +36,7 @@ function zapomnijKlucz(klucz) {
 
 /* Jednorazowe przeniesienie kluczy sprzed przedrostka — bez tego aktualizacja
    wylogowałaby wszystkich kierowców naraz, a niewysłane zdjęcia czekałyby na
-   PIN, którego połowa z nich nie pamięta.
+   logowanie, którego połowa z nich nie pamięta.
 
    Dokładnie RAZ (znacznik 'przeniesiono'): potem goły 'token' należy już do
    kogoś innego na tym samym źródle i GK Flota nie ma prawa go czytać ani
@@ -134,8 +134,8 @@ const stan = {
   bezPamieci: false,        // IndexedDB nie odpowiada — tryb offline nie dziala
   bezSerwera: false,        // siec jest, a program w biurze nie odpowiada (pasek polaczenia)
   synchronizuje: false,
-  trybOffline: null,        // D78: {login, id, do} — zalogowano PIN-em bez sieci (bez tokenu)
-  // D43: konta z Panelu maja haslo + PIN (z /api/zyje; zapamietane na start bez sieci).
+  trybOffline: null,        // D78: {login, id, do} — zalogowano hasłem bez sieci (bez tokenu)
+  // D43: konta z Panelu (z /api/zyje; zapamietane na start bez sieci). Od 2026-11-26 tylko informacja — pole i tak „Hasło”.
   trybD43: przypomnijSobie('d43') === '1',
 };
 
@@ -406,8 +406,12 @@ function poleMaTresc(pole) {
     && (p.value || '').trim() && !p.dataset.wstepne);
 }
 
+/* Krzyżyk, dotknięcie tła i Escape chowają okno, ale szkic formularza ZOSTAJE (D11 z recenzji 25.11: przypadkowe
+   dotknięcie obok gubiło wpisany opis). Następne otwarcie tego samego formularza zapyta „Przywrócić niezapisane?”.
+   Szkic kasuje dopiero zapis albo „Anuluj” (zamknijOkno). */
 async function zamknijZPytaniem() {
   if (oknoMaTresc() && !await potwierdz('Porzucić to, co wpisane?', opisPorzuceniaOkna())) return;
+  szkicOkna = '';
   zamknijOkno();
 }
 
@@ -415,7 +419,8 @@ async function zamknijZPytaniem() {
    Kolejność: akcje dodatkowe -> Anuluj -> Zapisz ('glowny' zawsze ostatni),
    bo kciuk na telefonie ląduje przy prawej krawędzi.                        */
 /* konto: true — okno „Moje konto” w wyglądzie okna konta aplikacji hali (style.css → .okno-konta). */
-function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto }) {
+/* szkic: nazwa szkicu formularza (np. 'termin-12') — niezapisany formularz wraca po odświeżeniu strony (Szkice niżej). */
+function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto, szkic }) {
   const tlo = document.getElementById('okno-tlo');
   tlo.classList.toggle('okno-konta', !!konto);
   document.getElementById('okno-tytul').textContent = tytul || '';
@@ -434,14 +439,108 @@ function okno({ tytul, tresc, przyciski, poOtwarciu, szerokie, konto }) {
   tlo.classList.remove('ukryty');
   oznaczOtwarteOkno();
   poleTresci.scrollTop = 0;
+  szkicOkna = szkic || '';
+  Szkice.odepnij(poleTresci);                  // nowe okno: słuchacz szkicu poprzedniego formularza schodzi
   if (poOtwarciu) poOtwarciu(poleTresci);
+  // Szkic przypinamy PO poOtwarciu: ono ustawia wartości wyjściowe (auto, rodzaj), od których szkic się różni.
+  if (szkic) Szkice.przypnij(poleTresci, szkic).catch(() => { /* bez szkicu formularz działa jak dotąd */ });
   return zamknijOkno;
 }
 
+let szkicOkna = '';
 function zamknijOkno() {
+  if (szkicOkna) { Szkice.usun(szkicOkna); szkicOkna = ''; }
   document.getElementById('okno-tlo').classList.add('ukryty');
   oznaczOtwarteOkno();
 }
+
+/* ----------------------------------------------------- szkice formularzy (D10, jak w GK Trasy)
+
+   Niezapisany formularz (okno albo ekran) leży w pamięci przeglądarki tego urządzenia pod NOWYM kluczem
+   „gk-flota.szkic.<id osoby>.<nazwa>” (przedrostek dokłada pamietaj(); istniejących kluczy i kolejki nie ruszamy).
+   Po odświeżeniu strony, aktualizacji programu albo przypadkowym zamknięciu okna następne otwarcie tego samego
+   formularza pyta „Przywrócić niezapisane?”. Szkic kasuje zapis, „Anuluj” i „Odrzuć”; ważny jest dobę. Pola haseł,
+   PIN-ów, tokenów, kluczy i plików nigdy do szkicu nie trafiają (zdjęcia przeglądu mają własny brudnopis, zdjecia.js).
+   Biuro — tylko przy włączonych „Zapisach bez połączenia” (Moje konto), jak w Trasach; kierowca — zawsze (jego
+   zapisy i tak czekają w telefonie). Id osoby w kluczu: na wspólnym telefonie nikt nie zobaczy cudzego szkicu.   */
+const Szkice = (() => {
+  const WAZNOSC_MS = 24 * 60 * 60 * 1000;
+  const TAJNE = /(^|[-_])(pin|haslo|hasło|token|sekret|klucz)([-_]|$)|password/i;
+  const klucz = nazwa => 'szkic.' + (stan.uz ? stan.uz.id : 0) + '.' + nazwa;
+  function wlaczone() {
+    if (!stan.uz) return false;
+    return typeof jestBiuro === 'function' && jestBiuro() ? kolejkowanieBiuraWlaczone() : true;
+  }
+  function usun(nazwa) { zapomnijKlucz(klucz(nazwa)); }
+  function czytaj(nazwa) {
+    let s = null;
+    try { s = JSON.parse(przypomnijSobie(klucz(nazwa)) || 'null'); } catch (e) { s = null; }
+    if (!s || !s.pola || !(Date.now() - s.czas < WAZNOSC_MS)) { if (s) usun(nazwa); return null; }
+    return s;
+  }
+  function zapisz(nazwa, pola) { pamietaj(klucz(nazwa), JSON.stringify({ pola, czas: Date.now() })); }
+  /* Wartości pól kontenera po id (pola tekstowe, listy, pola wyboru). */
+  function zbierz(kontener, filtr) {
+    const pola = {};
+    kontener.querySelectorAll('input, textarea, select').forEach(el => {
+      const typ = (el.type || '').toLowerCase();
+      if (['password', 'file', 'button', 'submit', 'hidden', 'radio', 'search'].includes(typ)) return;
+      if (TAJNE.test(el.id || '') || TAJNE.test(el.name || '') || /password/.test(el.autocomplete || '')) return;
+      if (!el.id || (filtr && !filtr.test(el.id))) return;
+      pola[el.id] = typ === 'checkbox' ? !!el.checked : el.value;
+    });
+    return pola;
+  }
+  function wypelnij(kontener, pola) {
+    Object.keys(pola).forEach(k => {
+      const v = pola[k];
+      const el = kontener.querySelector('#' + (window.CSS && CSS.escape ? CSS.escape(k) : k));
+      if (!el || el.disabled) return;
+      if (el.type === 'checkbox') el.checked = !!v;
+      else if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) return;
+      else el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  /* Pilnuje formularza: najpierw (gdy jest szkic różny od stanu wyjściowego) pyta o przywrócenie, potem zapisuje
+     każdą zmianę. Zmiana wracająca do stanu wyjściowego kasuje szkic. `opcje.filtr` — wzorzec id pól objętych szkicem. */
+  /* Okno ma JEDNO pole treści (#okno-tresc) na wszystkie formularze — słuchacz poprzedniego formularza musi zejść,
+     inaczej pisanie w następnym oknie zapisywałoby się pod nazwą poprzedniego szkicu. */
+  function odepnij(kontener) {
+    if (!kontener) return;
+    kontener._szkicNr = (kontener._szkicNr || 0) + 1;      // pytanie „Przywrócić?” starego formularza już nic nie podepnie
+    if (kontener._odepnijSzkic) kontener._odepnijSzkic();
+  }
+  async function przypnij(kontener, nazwa, opcje) {
+    const o = opcje || {};
+    odepnij(kontener);
+    if (!kontener || !wlaczone()) return;
+    const nr = kontener._szkicNr;
+    const wyjsciowe = zbierz(kontener, o.filtr);
+    const s = czytaj(nazwa);
+    if (s && JSON.stringify(s.pola) !== JSON.stringify(wyjsciowe)) {
+      const d = new Date(s.czas);
+      const kiedy = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      const przywroc = await potwierdz('Przywrócić niezapisane?',
+        `Z ${kiedy} jest tu niezapisany formularz — przywrócić to, co wpisano?`, { tak: 'Przywróć', nie: 'Odrzuć' });
+      if (kontener._szkicNr !== nr) return;        // w czasie pytania otworzył się inny formularz — szkic czeka dalej
+      if (przywroc) wypelnij(kontener, s.pola); else usun(nazwa);
+    } else if (s) usun(nazwa);
+    const naZmiane = () => {
+      const teraz = zbierz(kontener, o.filtr);
+      if (JSON.stringify(teraz) === JSON.stringify(wyjsciowe)) usun(nazwa); else zapisz(nazwa, teraz);
+    };
+    kontener.addEventListener('input', naZmiane);
+    kontener.addEventListener('change', naZmiane);
+    kontener._odepnijSzkic = () => {
+      kontener.removeEventListener('input', naZmiane);
+      kontener.removeEventListener('change', naZmiane);
+      kontener._odepnijSzkic = null;
+    };
+  }
+  return { przypnij, odepnij, usun, czytaj, zapisz, zbierz, wypelnij };
+})();
 
 /* Klasa na <body> przy otwartej którejkolwiek warstwie. Bez niej strona pod
    spodem przewija się razem z oknem: kierowca przewija długi przegląd, okno
@@ -578,7 +677,7 @@ let API_BAZA = '';
    podda — pół minuty i dłużej. Start aplikacji i logowanie czekały na adres.json,
    a kierowca na placu patrzył na kółko. Teraz każde zapytanie ma limit; po jego
    przekroczeniu aplikacja zachowuje się tak, jak przy braku sieci (pamięć
-   odpowiedzi, kolejka, logowanie PIN-em bez sieci).
+   odpowiedzi, kolejka, logowanie hasłem bez sieci).
 
    Limit NIGDY nie jest powodem utraty zapisu:
    - zapisy kierowcy idą przez kolejkę w IndexedDB i znikają z niej dopiero po
@@ -803,7 +902,8 @@ function oznaczSerwer(odpowiada) {
 const PAMIEC_ODPOWIEDZI = 'odp:';
 const MAKS_ODPOWIEDZI = 2 * 1024 * 1024;        // znaków JSON-a
 const MAKS_ODPOWIEDZI_OSOBY = 300;
-const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|blokady|gk\/|eksport)/;
+// szukaj (26.11): każde zapytanie to inny adres — bez programu szukamy w listach z pamięci (szukajZPamieci).
+const BEZ_PAMIECI = /^\/api\/(zyje|zdarzenia|push\/|zaproszenie|pages\/|kopia|blokady|gk\/|eksport|szukaj)/;
 const KODY_BEZ_PROGRAMU = [502, 503, 504, 530];
 const ODSTEP_PROBY_PROGRAMU_MS = 30 * 1000;
 
@@ -981,6 +1081,22 @@ function odciskZrodla(dane) {
     (klucz, wartosc) => (klucz === 'terminy' ? undefined : wartosc))));
 }
 
+/* Źródło zapisu biura bywa jednym WPISEM listy (D10, terminy 26.11): { sciezka, id, pola }. Lista terminów niesie
+   liczone `dni`/`stan`, które zmieniają się o północy, i wszystkie inne terminy floty — porównanie całej odpowiedzi
+   dawałoby fałszywe konflikty. Porównujemy więc tylko wpis o danym `id` i tylko pola, które ktoś może zmienić
+   (`pola`). Wpis, którego już nie ma, to też zmiana. Źródło-napis (stare zapisy w kolejce) — jak dotąd, cała odpowiedź. */
+function kluczZrodla(z) {
+  return z.id == null ? z.sciezka : z.sciezka + '#' + z.id;
+}
+function odciskWpisuZrodla(z, dane) {
+  if (z.id == null) return odciskZrodla(dane);
+  const wpis = (Array.isArray(dane) ? dane : [dane]).find(x => x && x.id === z.id) || null;
+  if (!wpis || !Array.isArray(z.pola)) return odcisk(wpis);
+  const wybrane = {};
+  z.pola.forEach(k => { wybrane[k] = wpis[k] === undefined ? null : wpis[k]; });
+  return odcisk(wybrane);
+}
+
 /* Kolejkowanie zapisów biura jest domyślnie włączone — dla biura i administratora (jak w GK Trasy). Kierowca nie
    używa zapisBiura (jego zapisy idą przez kolejkę telefonu, kolejka.js). Wyłączenie: Moje konto → „Zapisy bez
    połączenia” (klucz tylko tego urządzenia, 'gk-flota.zapis-bez-polaczenia'); zapisy już czekające i tak się wyślą. */
@@ -1034,8 +1150,11 @@ async function zapisBiura(metoda, sciezka, dane, opcje) {
   if (!kolejkowanieBiuraWlaczone()) {
     // Opcję można wyłączyć tylko przy pustej kolejce, ale kolejka mogła urosnąć z innej karty: najpierw dowieź zaległe,
     // żeby starszy zapis z kolejki nie nadpisał nowego (to samo auto, ta sama usterka) ani nie zgłosił fałszywego konfliktu.
-    if ((await zapisyBiuraOsoby().catch(() => [])).some(op => !op.blad)) await wyslijZapisyBiura().catch(() => {});
-    return API.zadanie(metoda, sciezka, dane);
+    const czekajace = async () => (await zapisyBiuraOsoby().catch(() => [])).filter(op => !op.blad).length;
+    if (await czekajace()) await wyslijZapisyBiura().catch(() => {});
+    // W2 (recenzja 26.11): gdy zaległe dalej czekają (konflikt do decyzji, wysyłka trwa w innej karcie, program
+    // zniknął w trakcie), nowy zapis NIE przeskakuje kolejki — staje za nimi, jak przy włączonej opcji.
+    if (!await czekajace()) return API.zadanie(metoda, sciezka, dane);
   }
   const op = { uuid: numerOperacji(), metoda, sciezka, dane: dane === undefined ? null : dane,
                opis: o.opis || sciezka, uzytkownik: stan.uz ? stan.uz.id : null,
@@ -1053,6 +1172,14 @@ async function zapisBiura(metoda, sciezka, dane, opcje) {
   }
   if (!stan.uz) throw new Error('Zaloguj się ponownie — zapis bez konta nie poczeka');
   for (const z of o.zrodla || []) {
+    if (typeof z === 'object' && z) {
+      // Wpis listy (kluczZrodla): odcisk z danych, które człowiek miał przed oczami (`dane`), bo dokładnie tego adresu
+      // (np. terminy jednego auta razem z zamkniętymi) w pamięci zwykle nie ma.
+      const zrodlo = { sciezka: z.sciezka, id: z.id, pola: z.pola || null };
+      zrodlo.odcisk = z.dane ? odciskWpisuZrodla(zrodlo, z.dane) : '';
+      op.zrodla.push(zrodlo);
+      continue;
+    }
     const kopia = await odpowiedzZPamieci(z);
     op.zrodla.push({ sciezka: z, odcisk: kopia ? odciskZrodla(kopia.dane) : '' });
   }
@@ -1071,8 +1198,11 @@ async function zapisBiura(metoda, sciezka, dane, opcje) {
 /* Wysyła zaległe zapisy po kolei. Woła ją powrót programu, start aplikacji
    i każdy nowy zapis przy działającym programie. */
 async function wyslijZapisyBiura() {
-  if (zapisyBiura.wysyla || !stan.uz || !stan.token) return;
+  if (!stan.uz || !stan.token) return;
+  // Wysyłka już trwa: zapis dodany w jej trakcie nie był na jej liście — po niej trzeba przejść kolejkę jeszcze raz.
+  if (zapisyBiura.wysyla) { zapisyBiura.jeszczeRaz = true; return; }
   zapisyBiura.wysyla = true;
+  zapisyBiura.jeszczeRaz = false;
   try {
     for (const op of await zapisyBiuraOsoby()) {
       if (op.blad) continue;                       // czeka na człowieka, nie blokuje
@@ -1082,8 +1212,8 @@ async function wyslijZapisyBiura() {
         for (const z of op.zrodla || []) {
           const teraz = await API.zadanie('GET', z.sciezka);
           if (bezProgramu.od) return;               // odpowiedź z pamięci — programu dalej nie ma
-          const oczekiwany = zapisyBiura.oczekiwane[z.sciezka] || z.odcisk;
-          if (oczekiwany && odciskZrodla(teraz) !== oczekiwany) zmienione = true;
+          const oczekiwany = zapisyBiura.oczekiwane[kluczZrodla(z)] || z.odcisk;
+          if (oczekiwany && odciskWpisuZrodla(z, teraz) !== oczekiwany) zmienione = true;
         }
         if (zmienione) {
           op.konflikt = new Date().toISOString();
@@ -1102,7 +1232,7 @@ async function wyslijZapisyBiura() {
       }
       await Kolejka.zapomnij(PAMIEC_ZAPISOW + op.uuid);
       for (const z of op.zrodla || []) {
-        try { zapisyBiura.oczekiwane[z.sciezka] = odciskZrodla(await API.zadanie('GET', z.sciezka)); }
+        try { zapisyBiura.oczekiwane[kluczZrodla(z)] = odciskWpisuZrodla(z, await API.zadanie('GET', z.sciezka)); }
         catch (e) { /* sprawdzi następny zapis */ }
       }
     }
@@ -1111,6 +1241,7 @@ async function wyslijZapisyBiura() {
   } finally {
     zapisyBiura.wysyla = false;
     await pokazZapisyBiura();
+    if (zapisyBiura.jeszczeRaz && !bezProgramu.od) { zapisyBiura.jeszczeRaz = false; setTimeout(wyslijZapisyBiura, 0); }
   }
 }
 
@@ -1272,7 +1403,7 @@ async function doKolejki(op, komunikatSukcesu) {
 }
 
 async function synchronizuj(cicho = true) {
-  // D78: tryb bez połączenia nie ma tokenu — tylko sprawdzamy, czy program wrócił (i logujemy tę osobę jej PIN-em).
+  // D78: tryb bez połączenia nie ma tokenu — tylko sprawdzamy, czy program wrócił (i logujemy tę osobę jej hasłem).
   if (stan.trybOffline) { await sprobujWrocicDoSieci(); return; }
   if (stan.synchronizuje || !stan.token || !stan.uz) return;
   // Flagę stawiamy przed pierwszym await. Zdarzenia 'online' i
@@ -1386,7 +1517,7 @@ async function odswiezStanSieci() {
 /* ------------------------------------------------------------- logowanie */
 
 /* Logowanie idzie GOŁYM fetch, a nie przez API — API przy 401 wylogowuje,
-   a tutaj 401 znaczy po prostu „zły PIN" i ma zostać w polu pod formularzem.
+   a tutaj 401 znaczy po prostu „złe hasło" i ma zostać w polu pod formularzem.
 
    Ale adres musi być TEN SAM co w API. Gdy front stoi na GitHub Pages,
    a program w biurze, „/api/logowanie" bez API_BAZA pyta Pages o dane —
@@ -1403,12 +1534,12 @@ function loginZNazwy(t) {
 }
 
 /* Znaczniki urządzenia (D43, GK-KONTA.md §7.2). Po dobrym haśle program daje
-   temu urządzeniu znacznik ważny 16 godzin — z nim wystarcza PIN. Trzymamy go
+   temu urządzeniu znacznik ważny 16 godzin — od 2026-11-26 (logowanie bez PIN-ów)
+   służy już tylko logowaniu hasłem BEZ SIECI (gk-offline.js). Trzymamy go
    PER OSOBA (na wspólnym telefonie loguje się kilka osób): mapa login → {z, do}
-   pod kluczem 'znaczniki' (przedrostek gk-flota.). Klucze po loginZNazwy:
-   wpisane imię i nazwisko, login i imię z konta. Wylogowanie znacznika NIE
-   kasuje — po to jest: następne logowanie tej osoby PIN-em. Kasuje go
-   odpowiedź „wymagane_haslo”. */
+   pod kluczem 'znaczniki' (przedrostek gk-flota., klucz bez zmian). Klucze po
+   loginZNazwy: wpisane imię i nazwisko, login i imię z konta. Wylogowanie
+   znacznika NIE kasuje. Kasuje go odpowiedź „wymagane_haslo”. */
 const Znaczniki = {
   wszystkie() {
     try {
@@ -1437,49 +1568,30 @@ const Znaczniki = {
   },
 };
 
-/* Pole sekretu (D43, STYL-GK §2): osoba ze znacznikiem tego urządzenia → „PIN
-   (4 cyfry)” z klawiaturą cyfr; inaczej „Hasło (raz na 16 godzin na tym
-   urządzeniu)” z pełną klawiaturą. Program bez kont D43 (konta tutejsze,
-   z GK Trasy, Panel sprzed D43) — „PIN / hasło” jak dawniej (stan.trybD43
-   z /api/zyje). Link pod polem: „Zaloguj hasłem” (zapomniany PIN), przy haśle
-   ze znacznikiem — „Zaloguj PIN-em”; bez znacznika linku nie ma. */
-const ETYKIETY_SEKRETU = { pin: 'PIN lub hasło', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)',
-                           stary: 'PIN / hasło' };
+/* Pole sekretu (STYL-GK §2). Od 2026-11-26 (właściciel: „całkowicie usunąć PIN z logowania”)
+   zawsze „Hasło” z pełną klawiaturą — bez trybu PIN i bez linków przełączania PIN/hasło
+   (dawne `przelacz` jest pomijane). Funkcja zostaje, bo pilnuje podpisu i atrybutów pola
+   także w oknie „Zaloguj się ponownie”. Kierowca, którego jedynym sekretem są 4 cyfry
+   (konto tutejsze albo z GK Trasy), wpisuje je tutaj — to jego hasło. */
+const ETYKIETA_SEKRETU = 'Hasło';
 function poleSekretu({ ident, sekret, etykieta, przelacz }) {
-  let reczny = null;
-  const auto = () => (Znaczniki.dla(ident.value) ? 'pin' : (stan.trybD43 ? 'haslo' : 'stary'));
   function rysuj() {
-    const a = auto();
-    if (reczny === 'pin' && a !== 'pin') reczny = null;     // PIN-em tylko ze znacznikiem
-    const tryb = reczny || a;
-    if (etykieta) etykieta.textContent = ETYKIETY_SEKRETU[tryb];
-    // 2026-11-20: po haśle pole przyjmuje PIN ALBO hasło (serwer rozpoznaje po treści).
+    if (etykieta) etykieta.textContent = ETYKIETA_SEKRETU;
+    sekret.type = 'password';
     sekret.inputMode = 'text';
     sekret.maxLength = 128;
-    sekret.autocomplete = tryb === 'pin' ? 'off' : 'current-password';
-    sekret.dataset.tryb = tryb;
-    if (przelacz) {
-      przelacz.hidden = true;                // jedno pole przyjmuje PIN i hasło
-      przelacz.textContent = tryb === 'pin' ? 'Zaloguj hasłem' : 'Zaloguj PIN-em';
-    }
-    return tryb;
+    sekret.autocomplete = 'current-password';
+    sekret.dataset.tryb = 'haslo';
+    if (przelacz) przelacz.hidden = true;
+    return 'haslo';
   }
-  ident.addEventListener('input', () => { reczny = null; rysuj(); });
-  if (przelacz) {
-    przelacz.addEventListener('click', () => {
-      reczny = (reczny || auto()) === 'pin' ? 'haslo' : 'pin';
-      sekret.value = '';
-      rysuj();
-      sekret.focus();
-    });
-  }
+  if (ident) ident.addEventListener('input', rysuj);
   rysuj();
-  return { odswiez: () => { reczny = null; return rysuj(); }, tryb: () => sekret.dataset.tryb };
+  return { odswiez: rysuj, tryb: () => 'haslo' };
 }
 
-/* Reguły nowego hasła i PIN-u (D43 §7.1) — te same co w programie i w hubie
-   (blad_hasla, blad_pinu); tu tylko podpowiadamy od razu, serwer sprawdza sam. */
-// Hasło: min. 8 znaków, byle nie haslo123; PIN: dowolne 4 cyfry (D46, właściciel 2026-10-08).
+/* Reguły nowego hasła (D43 §7.1) — te same co w programie i w hubie (blad_hasla);
+   tu tylko podpowiadamy od razu, serwer sprawdza sam. Hasło: min. 8 znaków, byle nie haslo123. */
 function bledyHasla({ stare, nowe, powtorz, nazwa, wymagajStarego }) {
   const b = [];
   stare = String(stare || '').trim(); nowe = String(nowe || '').trim(); powtorz = String(powtorz || '').trim();
@@ -1490,15 +1602,6 @@ function bledyHasla({ stare, nowe, powtorz, nazwa, wymagajStarego }) {
   else if (nowe.toLowerCase() === 'haslo123') b.push('„haslo123” to hasło startowe — wpisz nowe.');
   if (nowe && stare && nowe === stare) b.push('Nowe hasło musi być inne niż obecne.');
   if (nowe && powtorz !== nowe) b.push('Powtórzone hasło nie zgadza się z nowym.');
-  return b;
-}
-function bledyPinu({ stary, nowy, powtorz, wymagajStarego }) {
-  const b = [];
-  stary = String(stary || '').trim(); nowy = String(nowy || '').trim(); powtorz = String(powtorz || '').trim();
-  if (wymagajStarego && !stary) b.push('Wpisz obecne hasło albo obecny PIN.');
-  if (!/^\d{4}$/.test(nowy)) b.push('PIN to dokładnie 4 cyfry.');
-  if (nowy && stary && nowy === stary) b.push('Nowy PIN musi być inny niż obecny.');
-  if (nowy && powtorz !== nowy) b.push('Powtórzony PIN nie zgadza się z nowym.');
   return b;
 }
 
@@ -1517,7 +1620,7 @@ async function odpowiedzLogowania(odp) {
 async function zaloguj(login, pin) {
   await adresDanychGotowy();
   // D43: pole „znacznik” idzie ZAWSZE (null, gdy go nie ma) — po nim program
-  // poznaje, że ta wersja umie PIN i okno „Ustaw hasło i PIN”.
+  // poznaje, że ta wersja umie okno „Ustaw hasło”. Pole sekretu nazywa się „pin” (nazwa bez zmian).
   const zn = Znaczniki.dla(login);
   let odp, wynik;
   try {
@@ -1529,7 +1632,7 @@ async function zaloguj(login, pin) {
     if ([502, 503, 504, 530].indexOf(odp.status) >= 0) throw new Error('Brak połączenia z programem w biurze.');
     wynik = await odpowiedzLogowania(odp);
   } catch (e) {
-    // D78: brak sieci albo programu w biurze — PIN-em bez sieci, gdy ta osoba ma tu ważny znacznik (16 h od hasła).
+    // D78: brak sieci albo programu w biurze — hasłem bez sieci, gdy ta osoba ma tu ważny znacznik (16 h od hasła przy sieci).
     const bezSieci = await zalogujBezSieci(login, pin, zn);
     if (bezSieci) return bezSieci;
     throw e;
@@ -1538,18 +1641,16 @@ async function zaloguj(login, pin) {
     const blad = new Error(wynik.blad || 'Nie udało się zalogować');
     blad.kodBledu = wynik.kod || '';
     blad.kod = odp.status;
-    // PIN bez ważnego znacznika albo 5 złych PIN-ów: ten znacznik już nic nie
-    // znaczy — pole wraca do hasła. Tak samo, gdy w polu „PIN” (z limitem 4 znaków) wpisano coś z literą albo znakiem:
-    // to nie był PIN, tylko ucięte hasło — znacznik jest już nieważny po stronie programu (zmiana hasła w Panelu),
-    // a bez zapomnienia go pole wracałoby do „PIN” przy każdej próbie (diagnoza logowania 2026-11-04).
-    if (blad.kodBledu === 'wymagane_haslo' || (blad.kodBledu === 'zly_pin' && zn && /\D/.test(String(pin || '').trim()))) {
+    // „Logowanie PIN-em wyłączone” (4 cyfry na koncie z hasłem z Panelu): znacznik tej osoby na tym urządzeniu
+    // jest dla programu podejrzany — zapominamy go, jak zawsze przy wymagane_haslo.
+    if (blad.kodBledu === 'wymagane_haslo') {
       Znaczniki.zapomnij(login);
     }
     throw blad;
   }
   if (wynik.do_ustawienia && wynik.do_ustawienia.length) {
-    // Hasło startowe albo brak PIN-u: sesja tylko do okna „Ustaw hasło i PIN”.
-    const blad = new Error('Ustaw nowe hasło i PIN, żeby wejść.');
+    // Hasło startowe: sesja tylko do okna „Ustaw hasło”.
+    const blad = new Error('Ustaw nowe hasło, żeby wejść.');
     blad.kodBledu = 'do_ustawienia';
     blad.ustawienie = Object.assign({}, wynik, { wpisany: login });
     throw blad;
@@ -1560,11 +1661,12 @@ async function zaloguj(login, pin) {
 /* ------------------------------------------- D78: praca bez połączenia (gk-offline.js)
 
    Właściciel 2026-10-19: „Tracąc internet nic nie przerywasz, działasz dalej, a po jego odzyskaniu dane trafiają
-   w docelowe miejsca.” Bez sieci kierowca loguje się PIN-em (ważny znacznik tego telefonu, 16 h od hasła). Tryb bez
-   połączenia nie ma tokenu — synchronizuj nic nie wysyła; zapisy czekają z autorem = ta osoba. Po powrocie sieci:
-   logowanie PIN-em z pamięci strony (nigdy z dysku) i wysyłka JEJ tokenem; po przeładowaniu strony (PIN-u w pamięci
-   nie ma) — ekran logowania z jej imieniem. Ten sam układ co GK Trasy (app.js). */
-let pinBezSieci = '';
+   w docelowe miejsca.” Bez sieci kierowca loguje się HASŁEM (od 2026-11-26; ważny znacznik tego telefonu, 16 h od
+   hasła przy sieci, weryfikator „gk-offline-2”). Tryb bez połączenia nie ma tokenu — synchronizuj nic nie wysyła;
+   zapisy czekają z autorem = ta osoba. Po powrocie sieci: logowanie hasłem z pamięci strony (nigdy z dysku) i wysyłka
+   JEJ tokenem; po przeładowaniu strony (hasła w pamięci nie ma) — ekran logowania z jej imieniem. Ten sam układ co
+   GK Trasy (app.js). */
+let hasloBezSieci = '';
 // gk-offline.js mógł się nie wczytać (stara kopia strony, testy z samym app.js) — wtedy po prostu bez trybu bez sieci.
 function gkOffline() { return typeof GKOffline !== 'undefined' ? GKOffline : null; }
 async function zalogujBezSieci(login, pin, zn) {
@@ -1582,7 +1684,7 @@ async function zalogujBezSieci(login, pin, zn) {
   zapomnijKlucz('token');
   stan.uz = r.profil;
   stan.trybOffline = { login, id: r.profil.id, do: r.do };
-  pinBezSieci = String(pin).trim();
+  hasloBezSieci = String(pin).trim();
   zakonczTrybDoOdczytu();
   await Kolejka.zapamietaj('profil', stan.uz).catch(() => {});
   await Kolejka.zapamietaj('sesja-offline', stan.trybOffline).catch(() => {});
@@ -1593,14 +1695,14 @@ async function zalogujBezSieci(login, pin, zn) {
 async function zakonczBezSieci(zostaw) {
   if (!stan.trybOffline) return;
   stan.trybOffline = null;
-  pinBezSieci = '';
+  hasloBezSieci = '';
   await Kolejka.zapomnij('sesja-offline').catch(() => {});
   if (zostaw !== null && zostaw !== undefined) {
     stan.uz = null;
     pokazLogowanie();
     const pole = document.getElementById('pole-loginu');
     if (pole && !pole.value) { pole.value = zostaw; if (stan.poleLogowania) stan.poleLogowania.odswiez(); }
-    komunikat('Połączenie wróciło — wpisz PIN, żeby wysłać zapisy z tego urządzenia.', 'ok');
+    komunikat('Połączenie wróciło — wpisz hasło, żeby wysłać zapisy z tego urządzenia.', 'ok');
   }
   odswiezPasekPolaczenia();
 }
@@ -1611,12 +1713,12 @@ async function sprobujWrocicDoSieci() {
   if (!(Date.parse(t.do) > Date.now())) { await zakonczBezSieci(t.login); return; }
   wracamDoSieci = true;
   try {
-    if (pinBezSieci) {
+    if (hasloBezSieci) {
       const zn = Znaczniki.dla(t.login);
       let odp, wynik;
       try {
         odp = await zapytajProgram('/api/logowanie', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ login: t.login, pin: pinBezSieci, znacznik: zn ? zn.z : null, offline: !!(gkOffline() && gkOffline().mozliwy()),
+          body: JSON.stringify({ login: t.login, pin: hasloBezSieci, znacznik: zn ? zn.z : null, offline: !!(gkOffline() && gkOffline().mozliwy()),
                                  urzadzenie: navigator.userAgent.slice(0, 110) }) });
         if ([502, 503, 504, 530].indexOf(odp.status) >= 0) return;            // tunel jeszcze nie stoi
         wynik = await odp.json();
@@ -1645,7 +1747,7 @@ function zarejestrujSyncKolejki() {
   } catch (e) { /* stara przeglądarka */ }
 }
 
-/* Zalogowano (logowanie albo „Ustaw hasło i PIN”): znacznik do Znaczniki,
+/* Zalogowano (logowanie albo „Ustaw hasło”): znacznik do Znaczniki,
    token i profil do pamięci. */
 /* Stan ekranów należący do osoby: token do zdjęć (TokenZdjec, przeglady.js)
    i zapamiętane filtry list. Bez tego następna osoba na tym samym komputerze
@@ -1713,8 +1815,8 @@ async function przyjmijLogowanie(odpowiedz, wpisany) {
   const wynik = Object.assign({}, odpowiedz);
   if (wynik.znacznik) Znaczniki.zapamietaj([wpisany, wynik.login, wynik.imie], wynik.znacznik, wynik.znacznik_do);
   delete wynik.znacznik;                     // znacznik nie idzie do profilu w IndexedDB
-  delete wynik.offline;                      // weryfikator PIN-u też nie (D78 — osobny rekord niżej)
-  // D78: weryfikator PIN-u bez sieci dla znacznika tego telefonu (albo żaden — stary PIN bez sieci już nie wpuszcza).
+  delete wynik.offline;                      // weryfikator hasła też nie (D78 — osobny rekord niżej)
+  // D78: weryfikator hasła bez sieci dla znacznika tego telefonu (albo żaden — stare hasło bez sieci już nie wpuszcza).
   // Tylko kierowca (jego telefon); biuro bez sieci — jak dotąd odczyt z pamięci i kolejka zapisów biura.
   if (gkOffline()) await gkOffline().zapamietaj(Kolejka, wynik, wynik.rola === 'kierowca' ? odpowiedz.offline : null,
                              [wpisany, wynik.login, wynik.imie]).catch(() => {});
@@ -1817,7 +1919,7 @@ async function wyloguj(cicho) {
   stan.token = ''; stan.uz = null;
   zapomnijKlucz('token');
   zakonczTrybDoOdczytu();
-  if (stan.trybOffline) { stan.trybOffline = null; pinBezSieci = ''; Kolejka.zapomnij('sesja-offline').catch(() => {}); }
+  if (stan.trybOffline) { stan.trybOffline = null; hasloBezSieci = ''; Kolejka.zapomnij('sesja-offline').catch(() => {}); }
   // Adres powrotu należy do tej sesji — następna osoba na tym telefonie
   // nie ma dostać przycisku do cudzej instalacji GK Trasy.
   zapomnijKlucz('gk_powrot');
@@ -1886,14 +1988,12 @@ function oknoPonownegoLogowania() {
       <label>Imię i nazwisko
         <input id="pl-login" autocomplete="username" autocapitalize="none" autocorrect="off"
                spellcheck="false" value="${escHtml(login)}"></label>
-      <label><span id="pl-etykieta">PIN / hasło</span>
-        <input id="pl-pin" type="password" autocomplete="current-password"></label>
-      <button type="button" class="link-sekretu" id="pl-przelacz" hidden>Zaloguj hasłem</button>
+      <label><span id="pl-etykieta">Hasło</span>
+        <input id="pl-pin" type="password" autocomplete="current-password" maxlength="128"></label>
       <div class="blad-logowania" id="pl-blad"></div>`,
     poOtwarciu: pole => {
       stan.polePonownego = poleSekretu({ ident: pole.querySelector('#pl-login'), sekret: pole.querySelector('#pl-pin'),
-                                         etykieta: pole.querySelector('#pl-etykieta'),
-                                         przelacz: pole.querySelector('#pl-przelacz') });
+                                         etykieta: pole.querySelector('#pl-etykieta') });
     },
     przyciski: [
       { napis: 'Później', klik: z => z() },
@@ -1955,46 +2055,35 @@ async function pokazInfoKont() {
     const odp = await zapytajProgram('/api/zyje');
     const w = odp.ok ? await odp.json() : {};
     if (linia) linia.hidden = !(w && w.konta_z_panelu);
-    // Ta sama odpowiedź mówi, czy konta są już w D43 (hasło + PIN) — wtedy pole
-    // sekretu pisze „Hasło (raz na 16 godzin…)” zamiast „PIN / hasło”.
+    // Ta sama odpowiedź mówi, czy konta są już w D43 (konta z Panelu). Od 2026-11-26 tylko zapamiętujemy
+    // (klucz 'd43' bez zmian) — pole sekretu i tak pisze zawsze „Hasło”.
     stan.trybD43 = !!(w && w.d43);
     pamietaj('d43', stan.trybD43 ? '1' : '');
   } catch (e) { if (linia) linia.hidden = true; }
   if (stan.poleLogowania) stan.poleLogowania.odswiez();
 }
 
-/* Okno „Ustaw hasło i PIN” (D43 §7.4, STYL-GK §2): pierwsze logowanie hasłem
-   startowym (albo konto bez PIN-u). Tylko brakujące pola. Sesja z logowania
-   służy wyłącznie temu oknu; po zapisie osoba jest zalogowana i idzie dalej(). */
+/* Okno „Ustaw hasło” (D43 §7.4, STYL-GK §2): pierwsze logowanie hasłem startowym.
+   Od 2026-11-26 bez PIN-u (dawne „Ustaw hasło i PIN”). Sesja z logowania służy
+   wyłącznie temu oknu; po zapisie osoba jest zalogowana i idzie dalej(). */
 function oknoUstawieniaKonta(u, dalej, bladNaStart) {
-  const haslo = (u.do_ustawienia || []).includes('haslo');
-  const pin = (u.do_ustawienia || []).includes('pin');
-  const tytul = haslo && pin ? 'Ustaw hasło i PIN' : haslo ? 'Ustaw nowe hasło' : 'Ustaw PIN';
   okno({
-    tytul, konto: true,
+    tytul: 'Ustaw hasło', konto: true,
     tresc: `
       <p class="konto-kto"><b>${escHtml(u.imie)}</b></p>
-      <p class="konto-drobne">${haslo ? 'Hasło startowe działa tylko przy pierwszym logowaniu. ' : ''}Hasło
-        wpiszesz raz na 16 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich
-        aplikacjach GK.</p>
-      ${haslo ? `<label>Nowe hasło (min. 8 znaków)<input id="us-haslo" type="password"
+      <p class="konto-drobne">Hasło startowe działa tylko przy pierwszym logowaniu. Nowe hasło działa we
+        wszystkich aplikacjach GK.</p>
+      <label>Nowe hasło (min. 8 znaków)<input id="us-haslo" type="password"
           autocomplete="new-password" maxlength="128"></label>
-        <label>Powtórz nowe hasło<input id="us-haslo2" type="password" autocomplete="new-password"
-          maxlength="128"></label>` : ''}
-      ${pin ? `<label>PIN (4 cyfry)<input id="us-pin" type="password" inputmode="numeric"
-          autocomplete="new-password" maxlength="4"></label>
-        <label>Powtórz PIN<input id="us-pin2" type="password" inputmode="numeric"
-          autocomplete="new-password" maxlength="4"></label>` : ''}
+      <label>Powtórz nowe hasło<input id="us-haslo2" type="password" autocomplete="new-password"
+          maxlength="128"></label>
       <p class="blad-ustawienia" id="us-blad" role="alert">${escHtml(bladNaStart || '')}</p>`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zapisz i wejdź', klasa: 'glowny', klik: async z => {
         const blad = document.getElementById('us-blad');
         const v = id => (document.getElementById(id) || {}).value || '';
-        const bledy = [
-          ...(haslo ? bledyHasla({ nowe: v('us-haslo'), powtorz: v('us-haslo2'), nazwa: u.imie }) : []),
-          ...(pin ? bledyPinu({ nowy: v('us-pin'), powtorz: v('us-pin2') }) : []),
-        ];
+        const bledy = bledyHasla({ nowe: v('us-haslo'), powtorz: v('us-haslo2'), nazwa: u.imie });
         if (bledy.length) { blad.textContent = bledy.join(' '); return; }
         blad.textContent = '';
         zajety(true);
@@ -2003,22 +2092,17 @@ function oknoUstawieniaKonta(u, dalej, bladNaStart) {
           const odp = await zapytajProgram('/api/ustaw-konto', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + u.token },
-            body: JSON.stringify({ haslo: v('us-haslo').trim(), pin: v('us-pin').trim(),
+            body: JSON.stringify({ haslo: v('us-haslo').trim(), offline: !!(gkOffline() && gkOffline().mozliwy()),
                                    urzadzenie: navigator.userAgent.slice(0, 110) }),
           });
           const w = await odpowiedzLogowania(odp);
           if (!odp.ok) {
-            if (w.do_ustawienia && w.do_ustawienia.length) {
-              // Hasło przeszło, PIN nie — zostaje okno z samym PIN-em.
-              oknoUstawieniaKonta(Object.assign({}, u, { do_ustawienia: w.do_ustawienia }), dalej, w.blad);
-              return;
-            }
             blad.textContent = w.blad || 'Nie udało się zapisać — spróbuj jeszcze raz.';
             return;
           }
           await przyjmijLogowanie(w, u.wpisany);
           z();
-          komunikat('Hasło i PIN ustawione — działają we wszystkich aplikacjach GK.', 'ok');
+          komunikat('Hasło ustawione — działa we wszystkich aplikacjach GK.', 'ok');
           if (dalej) await dalej();
         } catch (e) {
           blad.textContent = poLudzku(e);
@@ -2033,8 +2117,14 @@ function oknoUstawieniaKonta(u, dalej, bladNaStart) {
 
 /* --------------------------------------------------------------- ekrany */
 
-// Z wielkiej litery, jak role w oknie konta aplikacji hali (STYL-GK §3).
-const NAZWA_ROLI = { admin: 'Administrator', biuro: 'Biuro', kierowca: 'Kierowca' };
+// Z wielkiej litery, jak role w oknie konta aplikacji hali (STYL-GK §3). Nazwy z zatwierdzonej listy N8 (25.11):
+// „Administrator Floty” (rola `flota_admin`, konto awaryjne); ta sama tabela co NAZWY_ROL we flotex.py.
+const NAZWA_ROLI = { admin: 'Administrator Floty', biuro: 'Biuro', kierowca: 'Kierowca' };
+/* Nazwa roli KONTA (jak w GK Trasy): program podaje `etykieta_roli` — „Menedżer” dla Menedżera z Panelu (rola hali
+   `admin`). Bez niej (starszy program, profil sprzed zmiany, brak sieci) — tabela wyżej. Tylko napis. */
+function etykietaRoli(u) {
+  return (u && u.etykieta_roli) || NAZWA_ROLI[u && u.rola] || (u && u.rola) || '';
+}
 
 /* Trzy role, dwa progi. 'biuro' to wszystko, co robi się w biurze;
    'administrator' to dodatkowo konta i Ustawienia. Kierowca nie widzi ani
@@ -2227,7 +2317,7 @@ function trybOffline() {
       wyjasnienie: 'Aplikacja trzyma zdjęcia i odczyty bez zasięgu i wysyła je po powrocie, '
         + 'ale musi być otwarta od wyjazdu. Otwórz ją jeszcze na firmowym wifi. '
         + 'Pełną pracę bez zasięgu włącza dopiero adres z https:// — biuro uruchamia go '
-        + 'w Administracji → Ustawienia → „Adres HTTPS dla kierowców".',
+        + 'w Administracji → Ustawienia → Zaawansowane → „Adres HTTPS dla kierowców".',
     };
   }
   return {
@@ -2305,7 +2395,7 @@ function stempelWersji() {
       </div>
       ${doPublikacji && osobno ? `<div class="male" style="margin-top:6px">
         Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź
-        Administracja → Ustawienia → <b>Stały adres dla kierowców</b>.</div>` : ''}
+        Administracja → Ustawienia → Zaawansowane → <b>Stały adres dla kierowców</b>.</div>` : ''}
       ${naprawialne ? `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>` : ''}
     </div>`;
@@ -2351,7 +2441,7 @@ async function sprawdzSpojnoscWersji() {
     // i dostałby ostrzeżenie, z którym nie ma co zrobić.
     if (osobneAdresy && znanyDysk && dysk !== skrypt && jestBiuro()) {
       komunikat('Kierowcy mają starszą wersję aplikacji niż program w biurze. '
-        + 'Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź Administracja → Ustawienia → Stały adres dla kierowców.', 'blad');
+        + 'Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź Administracja → Ustawienia → Zaawansowane → Stały adres dla kierowców.', 'blad');
     }
     return;
   }
@@ -2405,24 +2495,11 @@ async function odswiezProgram() {
   location.reload();
 }
 
-/* Zasada nowego PIN-u w jednym miejscu — okno konta i okno słabego PIN-u mówią
-   to samo co serwer. Konto z Panelu Zarządczego GK ma PIN wspólny dla wszystkich
-   aplikacji GK: kierowca 4–8 cyfr (aplikacje hali mają klawiaturę cyfrową),
-   biuro hasło od 8 znaków (GK-KONTA.md, punkt 1). Pola PIN-u są bez
-   inputmode="numeric": na telefonie z klawiaturą cyfrową hasła biura nie
-   dałoby się wpisać. */
-function opisNowegoPinu() {
-  if (jestBiuro()) return 'min. 8 znaków';
-  return '4 cyfry';
-}
-
-/* Klawiatura jak w aplikacjach hali (konto.js): biuro — zwykła (hasło z liter),
-   kierowca z kontem z Panelu — cyfrowa (PIN to 4–8 cyfr). Tutejszy kierowca
-   mógł kiedyś dostać PIN z literami — dla niego też zwykła. */
-function trybKlawiaturyPinu() {
-  // Nowy PIN kierowcy to dokładnie 4 cyfry (D46; 2026-10-16 także konta tutejsze,
-  // jak serwer → sprawdz_dlugosc_pinu i GK Trasy) — klawiatura cyfrowa.
-  return !jestBiuro() ? 'numeric' : 'text';
+/* Zasada nowego hasła w jednym miejscu — okno konta i okno krótkiego hasła mówią
+   to samo co serwer: od 2026-11-26 nowe hasło KAŻDEGO konta (także kierowcy) ma
+   min. 8 znaków (dawniej kierowca: PIN 4 cyfry). Pełna klawiatura. */
+function opisNowegoHasla() {
+  return 'min. 8 znaków';
 }
 
 /* Wygląd w oknie konta: pigułki jak w aplikacjach hali (STYL-GK §3), nie natywne
@@ -2511,7 +2588,7 @@ function oknoKodowAplikacji() {
     tytul: naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon',
     konto: true,
     tresc: `<p class="konto-drobne">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu
-        głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN);
+        głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko i hasło);
         inne logowanie jest opisane przy aplikacji.</p>
       <div class="kody-aplikacji" id="kody-aplikacji"><p class="konto-drobne">Wczytuję…</p></div>`,
     // Jak w każdym oknie GK (2026-10-16): drugorzędny „Zamknij” obrysowany po lewej,
@@ -2598,7 +2675,7 @@ function tekstPaskaPolaczenia({ online, wKolejce, odrzucone, komputer, serwer, b
   const czesci = [];
   let klasa = 'ok';
   if (bezPolaczenia) {
-    // D78: zalogowano PIN-em bez sieci — wyraźna wstęga: nic nie idzie do programu, zapisy czekają w telefonie.
+    // D78: zalogowano hasłem bez sieci — wyraźna wstęga: nic nie idzie do programu, zapisy czekają w telefonie.
     klasa = 'offline';
     czesci.push(`Tryb bez połączenia — ${n ? czeka : `zapisy zostają w ${slowoUrzadzenia('', komputer)}`} · wyślą się po powrocie sieci`);
   } else if (!online) {
@@ -2628,19 +2705,16 @@ function odswiezPasekPolaczenia() {
 }
 
 /* „Moje konto” w układzie okna konta aplikacji hali (konto.js → HalaKonto.mojeKonto),
-   tak samo jak w GK Trasy: osoba i rola → Wygląd → Zmień hasło/PIN (formularz
+   tak samo jak w GK Trasy: osoba i rola → Wygląd → Zmień hasło (formularz
    rozwija się w oknie) → Powiadomienia → Dane w tym urządzeniu → wersja →
-   Zamknij + Wyloguj na dole. */
+   Zamknij + Wyloguj na dole. Od 2026-11-26 (logowanie bez PIN-ów) jeden przycisk
+   „Zmień hasło” dla każdego konta (dawny przycisk zmiany PIN-u zniknął). */
 function oknoKonta() {
-  // Serwer wymaga od biura dłuższego hasła niż od kierowcy: konto biura widzi
-  // całą flotę z VIN-ami i polisami. Podpowiedź musi mówić tę samą liczbę,
-  // inaczej człowiek wpisuje cztery znaki i dostaje odmowę bez zrozumienia.
-  const zmien = jestBiuro() ? 'Zmień hasło' : 'Zmień PIN';
   okno({
     tytul: 'Moje konto',
     konto: true,
     tresc: `
-      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(NAZWA_ROLI[stan.uz.rola] || stan.uz.rola)}</span></p>
+      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(etykietaRoli(stan.uz))}</span></p>
       <fieldset><legend>Wygląd</legend>
         <div class="wybor-wygladu" role="group" aria-label="Wygląd">${wyborWygladu()}</div>
         <p class="konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
@@ -2648,26 +2722,9 @@ function oknoKonta() {
       ${!jestBiuro() && telefonBiura() ? `<fieldset><legend>Biuro</legend>
         <p class="konto-drobne">${kontaktBiura()}</p></fieldset>` : ''}
       ${stan.uz.zrodlo === 'trasex'
-        ? `<p class="konto-drobne">Twoje konto prowadzi GK Trasy — tam zmieniasz PIN.
-             Nowy zadziała tutaj sam po kilku minutach.</p>`
-        : stan.uz.d43 ? trescZmianD43()
-        : `<div><button type="button" id="btn-pokaz-zmiane">${zmien}</button></div>
-      <fieldset id="zmiana-pinu" class="ukryty"><legend>${zmien}</legend>
-        <label>${jestBiuro() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
-               inputmode="${trybKlawiaturyPinu()}" autocomplete="current-password" maxlength="128"></label>
-        <label>${jestBiuro() ? 'Nowe hasło' : 'Nowy PIN'} <span class="slaby">(${escHtml(opisNowegoPinu())})</span>
-          <input id="pin-nowy" type="password" inputmode="${trybKlawiaturyPinu()}"
-                 autocomplete="new-password" maxlength="128"></label>
-        <p class="konto-drobne">${stan.uz.pin_w_panelu
-          ? (jestBiuro()
-            ? 'To hasło działa we wszystkich aplikacjach GK — zmiana tutaj zmienia je wszędzie. '
-            : 'Ten PIN działa we wszystkich aplikacjach GK — zmiana tutaj zmienia go wszędzie. ')
-          : ''}Zmiana wylogowuje pozostałe urządzenia — to urządzenie zostaje.</p>
-        <div class="przyciski">
-          <button type="button" id="btn-anuluj-zmiane">Anuluj</button>
-          <button type="button" class="glowny" id="btn-zmien-pin">${zmien}</button>
-        </div>
-      </fieldset>`}
+        ? `<p class="konto-drobne">Twoje konto prowadzi GK Trasy — tam zmieniasz hasło.
+             Nowe zadziała tutaj samo po kilku minutach.</p>`
+        : trescZmianyHasla()}
       ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${ikonka('telefon')}${napisKodowQR()}</button>` : ''}
       <div class="przyciski-konta konto-pomoc"><button type="button" id="btn-instrukcja">Instrukcja</button></div>
       <fieldset><legend>Powiadomienia</legend>
@@ -2678,7 +2735,8 @@ function oknoKonta() {
       <fieldset><legend>Dane w tym urządzeniu</legend>
         ${jestBiuro() ? `<p class="konto-drobne">Gdy program w biurze nie odpowiada (np. trwa aktualizacja serwera), zatwierdzenie
             i zwrot przeglądu, zmiany usterek, auta, kierowcy i terminu czekają w tym komputerze, a po powrocie połączenia wysyłają
-            się same. Nowych aut, terminów i przeglądów oraz zmian w Administracji to nie dotyczy — tych bez programu nie zapiszesz.</p>
+            się same. Nowych aut, terminów i przeglądów oraz zmian w Administracji to nie dotyczy — tych bez programu nie zapiszesz.
+            Niezapisany formularz wraca po odświeżeniu strony (aplikacja zapyta, czy go przywrócić).</p>
           <div class="przyciski-konta">
             <button type="button" id="btn-zapis-bez-polaczenia" aria-pressed="${kolejkowanieBiuraWlaczone()}">${napisZapisuBezPolaczenia()}</button>
           </div>` : ''}
@@ -2725,36 +2783,7 @@ function oknoKonta() {
            która pracowała na tym urządzeniu. Wyślą się, gdy ta osoba się tu zaloguje —
            nie kasuj danych aplikacji, bo przepadną.`;
       }
-      if (stan.uz.d43 && stan.uz.zrodlo !== 'trasex') podepnijZmianyD43(pole);
-      // „Zmień hasło” to przycisk; formularz rozwija się dopiero po nim (jak w hali).
-      const formularz = pole.querySelector('#zmiana-pinu');
-      const pokaz = pole.querySelector('#btn-pokaz-zmiane');
-      if (pokaz && !stan.uz.d43) {
-        pokaz.onclick = () => {
-          pokaz.parentNode.classList.add('ukryty');
-          formularz.classList.remove('ukryty');
-          pole.querySelector('#pin-stary').focus();
-        };
-        pole.querySelector('#btn-anuluj-zmiane').onclick = () => {
-          formularz.querySelectorAll('input').forEach(i => { i.value = ''; });
-          formularz.classList.add('ukryty');
-          pokaz.parentNode.classList.remove('ukryty');
-        };
-      }
-      const zmienPin = pole.querySelector('#btn-zmien-pin');
-      if (zmienPin && !stan.uz.d43) zmienPin.onclick = async () => {
-        const stary = pole.querySelector('#pin-stary').value;
-        const nowy = pole.querySelector('#pin-nowy').value;
-        const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }),
-          `${jestBiuro() ? 'Hasło zmienione' : 'PIN zmieniony'} — pozostałe urządzenia zostały wylogowane`);
-        if (!w) return;
-        // Zmiana hasła unieważnia stare sesje, więc trzeba przejąć nowy token,
-        // inaczej wyrzuciłoby z aplikacji dokładnie tego, kto właśnie posłuchał
-        // i zmienił PIN.
-        if (w.token) { stan.token = w.token; pamietaj('token', w.token); }
-        stan.uz.haslo_startowe = false;
-        zamknijOkno();
-      };
+      if (stan.uz.zrodlo !== 'trasex') podepnijZmianeHasla(pole);
       // Instrukcja jest zwykłą stroną z web/ (instrukcja.html) — jak w GK Trasy: działa też z GitHub Pages i bez zasięgu (sw.js).
       pole.querySelector('#btn-instrukcja').onclick = () => window.open(`instrukcja.html?v=${typeof WERSJA_SKRYPTU === 'string' ? WERSJA_SKRYPTU : ''}`, '_blank', 'noopener');
       const kodyQR = pole.querySelector('#btn-kody-qr');
@@ -2807,64 +2836,54 @@ function podepnijDzwiek(pole) {
   };
 }
 
-/* Moje konto, konto z Panelu w D43 (hasło + PIN, GK-KONTA.md §7, STYL-GK §3):
-   dwa przyciski „Zmień hasło” i „Zmień PIN”, każdy rozwija swój formularz. */
-function trescZmianD43() {
-  return `<div class="przyciski-konta" id="zmiany-d43">
+/* Moje konto → „Zmień hasło” (GK-KONTA.md §7, STYL-GK §3): przycisk rozwija formularz (jak w hali).
+   Jeden formularz dla każdego konta — z Panelu (D43) i tutejszego (jeden sekret); oba idą do
+   /api/zmien-haslo (dawne /api/zmien-pin odpowiada 410 od 2026-11-26). */
+function trescZmianyHasla() {
+  const wszedzie = stan.uz.d43 || stan.uz.pin_w_panelu;
+  return `<div class="przyciski-konta" id="zmiany-hasla">
         <button type="button" id="btn-pokaz-haslo">Zmień hasło</button>
-        <button type="button" id="btn-pokaz-pin">Zmień PIN</button>
       </div>
       <fieldset id="zmiana-hasla" class="ukryty"><legend>Zmień hasło</legend>
-        <p class="konto-drobne">To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 16 godzin
-          na urządzeniu, na co dzień — PIN. Inne urządzenia poproszą o nowe hasło.</p>
+        <p class="konto-drobne">${wszedzie ? 'To hasło działa we wszystkich aplikacjach GK — zmiana tutaj zmienia je wszędzie. ' : ''}Zmiana
+          wylogowuje pozostałe urządzenia — to urządzenie zostaje.</p>
         <label>Obecne hasło<input id="zh-stare" type="password" autocomplete="current-password" maxlength="128"></label>
-        <label>Nowe hasło (min. 8 znaków)<input id="zh-nowe" type="password" autocomplete="new-password" maxlength="128"></label>
+        <label>Nowe hasło (${escHtml(opisNowegoHasla())})<input id="zh-nowe" type="password" autocomplete="new-password" maxlength="128"></label>
         <label>Powtórz nowe hasło<input id="zh-powtorz" type="password" autocomplete="new-password" maxlength="128"></label>
         <p class="blad-ustawienia" id="zh-blad" role="alert"></p>
         <div class="przyciski">
           <button type="button" data-anuluj>Anuluj</button>
           <button type="button" class="glowny" id="btn-zmien-haslo">Zmień hasło</button>
         </div>
-      </fieldset>
-      <fieldset id="zmiana-pinu-d43" class="ukryty"><legend>Zmień PIN</legend>
-        <p class="konto-drobne">Ten PIN działa we wszystkich aplikacjach GK — na urządzeniu, na którym w ciągu
-          16 godzin wpisano hasło. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
-        <label>Obecne hasło albo PIN<input id="zp-stary" type="password" autocomplete="current-password" maxlength="128"></label>
-        <label>Nowy PIN (4 cyfry)<input id="zp-nowy" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
-        <label>Powtórz nowy PIN<input id="zp-powtorz" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
-        <p class="blad-ustawienia" id="zp-blad" role="alert"></p>
-        <div class="przyciski">
-          <button type="button" data-anuluj>Anuluj</button>
-          <button type="button" class="glowny" id="btn-zmien-pin-d43">Zmień PIN</button>
-        </div>
       </fieldset>`;
 }
 
-/* Nowy token (i znacznik) po zmianie sekretu — stare sesje przepadły, także ta. */
+/* Nowy token (i znacznik) po zmianie hasła — stare sesje przepadły, także ta. Weryfikator hasła bez sieci (D78):
+   nowy, gdy program go dał (konto z Panelu, kierowca), inaczej stary rekord znika (stare hasło nie może otwierać aplikacji). */
 function przejmijPoZmianie(w) {
   if (w.token) { stan.token = w.token; pamietaj('token', w.token); }
   if (w.znacznik) Znaczniki.zapamietaj([stan.uz.login, stan.uz.imie], w.znacznik, w.znacznik_do);
+  if (gkOffline()) gkOffline().zapamietaj(Kolejka, stan.uz, stan.uz.rola === 'kierowca' ? w.offline : null,
+                                          [stan.uz.login, stan.uz.imie]).catch(() => {});
+  stan.uz.haslo_startowe = false;
 }
 
-function podepnijZmianyD43(pole) {
-  const przyciski = pole.querySelector('#zmiany-d43');
-  const formularze = { haslo: pole.querySelector('#zmiana-hasla'), pin: pole.querySelector('#zmiana-pinu-d43') };
+function podepnijZmianeHasla(pole) {
+  const przyciski = pole.querySelector('#zmiany-hasla');
+  const formularz = pole.querySelector('#zmiana-hasla');
+  if (!przyciski || !formularz) return;
   const zwin = () => {
-    Object.values(formularze).forEach(f => {
-      f.classList.add('ukryty');
-      f.querySelectorAll('input').forEach(i => { i.value = ''; });
-      f.querySelector('.blad-ustawienia').textContent = '';
-    });
+    formularz.classList.add('ukryty');
+    formularz.querySelectorAll('input').forEach(i => { i.value = ''; });
+    formularz.querySelector('.blad-ustawienia').textContent = '';
     przyciski.classList.remove('ukryty');
   };
-  const rozwin = co => {
+  pole.querySelector('#btn-pokaz-haslo').onclick = () => {
     przyciski.classList.add('ukryty');
-    formularze[co].classList.remove('ukryty');
-    formularze[co].querySelector('input').focus();
+    formularz.classList.remove('ukryty');
+    formularz.querySelector('input').focus();
   };
-  pole.querySelector('#btn-pokaz-haslo').onclick = () => rozwin('haslo');
-  pole.querySelector('#btn-pokaz-pin').onclick = () => rozwin('pin');
-  pole.querySelectorAll('[data-anuluj]').forEach(b => { b.onclick = zwin; });
+  formularz.querySelectorAll('[data-anuluj]').forEach(b => { b.onclick = zwin; });
   const v = id => pole.querySelector(id).value;
   pole.querySelector('#btn-zmien-haslo').onclick = async () => {
     const blad = pole.querySelector('#zh-blad');
@@ -2872,24 +2891,12 @@ function podepnijZmianyD43(pole) {
                                nazwa: stan.uz.imie, wymagajStarego: true });
     blad.textContent = bledy.join(' ');
     if (bledy.length) return;
-    const w = await sprobuj(() => API.post('/api/zmien-haslo', { stare: v('#zh-stare').trim(), nowe: v('#zh-nowe').trim(),
+    const w = await sprobuj(() => API.post('/api/zmien-haslo', { stare: v('#zh-stare'), nowe: v('#zh-nowe').trim(),
+                                                              offline: !!(gkOffline() && gkOffline().mozliwy()),
                                                               urzadzenie: navigator.userAgent.slice(0, 110) }),
-      'Hasło zmienione — działa we wszystkich aplikacjach GK. Inne urządzenia poproszą o nowe hasło.');
-    if (!w) return;
-    przejmijPoZmianie(w);
-    zamknijOkno();
-  };
-  pole.querySelector('#btn-zmien-pin-d43').onclick = async () => {
-    const blad = pole.querySelector('#zp-blad');
-    const bledy = bledyPinu({ stary: v('#zp-stary'), nowy: v('#zp-nowy'), powtorz: v('#zp-powtorz'),
-                              wymagajStarego: true });
-    blad.textContent = bledy.join(' ');
-    if (bledy.length) return;
-    const zn = Znaczniki.dla(stan.uz.login);
-    const w = await sprobuj(() => API.post('/api/zmien-pin', { stary: v('#zp-stary').trim(), nowy: v('#zp-nowy').trim(),
-                                                            znacznik: zn ? zn.z : null,
-                                                            urzadzenie: navigator.userAgent.slice(0, 110) }),
-      'PIN zmieniony — działa we wszystkich aplikacjach GK.');
+      (stan.uz.d43 || stan.uz.pin_w_panelu)
+        ? 'Hasło zmienione — działa we wszystkich aplikacjach GK. Inne urządzenia poproszą o nowe hasło.'
+        : 'Hasło zmienione — pozostałe urządzenia zostały wylogowane');
     if (!w) return;
     przejmijPoZmianie(w);
     zamknijOkno();
@@ -3079,17 +3086,17 @@ async function rysujOdrzucone(pole) {
    fabryczne „1234” konta admin) — serwer melduje to polem haslo_startowe.
    To JEDYNA reguła, o którą tu pytamy: hasło biura ma min. 8 znaków (D46).
    Od D74 (właściciel 2026-10-16: „nie mają [ograniczeń], jakie hasła i jakie
-   piny chcą”) nie ma już okna „zmień PIN, bo łatwy”: kierowca z PIN-em
-   1234 czy 0000 nie dostaje żadnego ostrzeżenia.                              */
+   piny chcą”) nie ma okna „zmień, bo łatwe”: kierowca z dawnym 4-cyfrowym
+   hasłem (PIN-em) nie dostaje żadnego ostrzeżenia — zmieni je w Moim koncie.  */
 function oknoStartowegoHasla() {
-  if (!jestBiuro()) return;                 // kierowca: PIN dowolny, bez okna
+  if (!jestBiuro()) return;                 // kierowca: bez okna
   okno({
     tytul: 'Ustaw nowe hasło',
     tresc: `<div class="wstega uwaga">Hasło konta „${escHtml(stan.uz.imie || stan.uz.login)}” ma mniej
         niż 8 znaków (np. fabryczne <b>1234</b>). Hasło konta biura ma mieć co najmniej 8 znaków.</div>
       <label>Obecne hasło<input id="sh-stary" type="password"
              inputmode="text" autocomplete="current-password" maxlength="128"></label>
-      <label>Nowe hasło <span class="slaby">(${escHtml(opisNowegoPinu())})</span>
+      <label>Nowe hasło <span class="slaby">(${escHtml(opisNowegoHasla())})</span>
         <input id="sh-nowy" type="password" inputmode="text"
                autocomplete="new-password" maxlength="128"></label>
       <label>Powtórz nowe hasło
@@ -3103,10 +3110,12 @@ function oknoStartowegoHasla() {
         if (nowy !== document.getElementById('sh-powtorz').value) {
           return komunikat('Nowe hasła się nie zgadzają', 'blad');
         }
-        const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }), 'Hasło zmienione');
+        // 2026-11-26: /api/zmien-haslo (dawne /api/zmien-pin odpowiada 410).
+        const w = await sprobuj(() => API.post('/api/zmien-haslo', { stare: stary, nowe: nowy,
+                                                                  urzadzenie: navigator.userAgent.slice(0, 110) }),
+                                'Hasło zmienione');
         if (!w) return;
-        if (w.token) { stan.token = w.token; pamietaj('token', w.token); }
-        stan.uz.haslo_startowe = false;
+        przejmijPoZmianie(w);
         z();
       } },
     ],
@@ -3118,8 +3127,7 @@ function oknoStartowegoHasla() {
 async function uruchom() {
   stan.poleLogowania = poleSekretu({ ident: document.getElementById('pole-loginu'),
                                      sekret: document.getElementById('pole-sekretu'),
-                                     etykieta: document.getElementById('etykieta-sekretu'),
-                                     przelacz: document.getElementById('przelacz-sekret') });
+                                     etykieta: document.getElementById('etykieta-sekretu') });
   document.getElementById('form-logowania').onsubmit = async e => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -3132,7 +3140,7 @@ async function uruchom() {
       if (stan.trybOffline) komunikat('Bez sieci — tryb bez połączenia. Zapisy wyślą się same, gdy wróci zasięg.');
     } catch (blad) {
       if (blad && blad.kodBledu === 'do_ustawienia') {
-        // Hasło startowe: od razu okno „Ustaw hasło i PIN” (D43 §7.4).
+        // Hasło startowe: od razu okno „Ustaw hasło” (D43 §7.4).
         document.getElementById('pole-sekretu').value = '';
         oknoUstawieniaKonta(blad.ustawienie, wejdzDoAplikacji);
       } else {
@@ -3141,7 +3149,7 @@ async function uruchom() {
         pole.textContent = poLudzku(blad);
         if (blad && blad.kodBledu === 'wymagane_haslo') {
           document.getElementById('pole-sekretu').value = '';
-          stan.poleLogowania.odswiez();          // pole wraca do hasła
+          stan.poleLogowania.odswiez();
           document.getElementById('pole-sekretu').focus();
         }
       }
@@ -3346,10 +3354,16 @@ async function wejdzDoAplikacji() {
   document.getElementById('ekran-logowania').classList.add('ukryty');
   document.getElementById('aplikacja').classList.remove('ukryty');
   document.getElementById('menu-imie').textContent = stan.uz.imie;
-  document.getElementById('menu-rola').textContent = NAZWA_ROLI[stan.uz.rola] || stan.uz.rola || '';   // 2026-11-23: rola pod imieniem, program stały
-  // D103: odpowiedz logowania nie niesie `moje_auto` - biuro/administrator dopytuje /api/ja (bez sieci zostaje, co bylo).
-  if (jestBiuro() && stan.uz.moje_auto === undefined && stan.online !== false) {
-    try { const ja = await API.get('/api/ja'); stan.uz.moje_auto = !!ja.moje_auto; } catch (e) { /* bez menu Moje auto */ }
+  document.getElementById('menu-rola').textContent = etykietaRoli(stan.uz);   // 2026-11-23: rola pod imieniem, program stały
+  // D103: odpowiedz logowania nie niesie `moje_auto` ani `etykieta_roli` - biuro/administrator dopytuje /api/ja
+  // (bez sieci zostaje, co bylo).
+  if (jestBiuro() && (stan.uz.moje_auto === undefined || stan.uz.etykieta_roli === undefined) && stan.online !== false) {
+    try {
+      const ja = await API.get('/api/ja');
+      stan.uz.moje_auto = !!ja.moje_auto;
+      if (ja.etykieta_roli) stan.uz.etykieta_roli = ja.etykieta_roli;
+      document.getElementById('menu-rola').textContent = etykietaRoli(stan.uz);
+    } catch (e) { /* bez menu Moje auto */ }
   }
   menuDlaRoli();
   odswiezBanerDzwieku();
@@ -3368,7 +3382,7 @@ async function wejdzDoAplikacji() {
   pokazEkran(ekranDozwolony(zPowiadomienia) ? zPowiadomienia : (jestBiuro() ? 'pulpit' : 'moj'));
   Powiadomienia.odnow();
   // Tylko konto biura z hasłem krótszym niż 8 znaków (D46). Konta z GK Trasy to
-  // kierowcy — ich PIN może być dowolny (D74), więc żadnego ostrzeżenia.
+  // kierowcy — ich hasło (także dawne 4 cyfry) może być dowolne (D74), więc żadnego ostrzeżenia.
   if (stan.uz.haslo_startowe && jestBiuro() && stan.uz.zrodlo !== 'trasex') oknoStartowegoHasla();
 }
 

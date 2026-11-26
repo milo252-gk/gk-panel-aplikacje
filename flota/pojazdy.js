@@ -324,24 +324,19 @@ function posortujTerminy(lista, tryb) {
 }
 
 /* Stałe pole „Szukaj” w nagłówku (#gora-szukaj, index.html; podpina je app.js).
-   Szuka w jednym miejscu: aut (rejestracja, marka, model, VIN dla biura,
-   kierowca, najbliższy termin; dla biura też daty badania/OC/AC, numer polisy
-   i ubezpieczyciel — z tych samych list aut, bez nowych zapytań), usterek (opis,
-   rejestracja, kto zgłosił, status) i przeglądów (rejestracja, kierowca, miesiąc,
-   status). Dane osoby znikają przy zmianie osoby (szukajZapomnij) i po zapisie
-   stają się „do odświeżenia” (szukajPrzeterminuj). Zakres danych robi serwer — te same
-   listy co na ekranach (kierowca dostaje tylko swoje), więc nie ma tu nowego
-   endpointu ani nowego klucza w pamięci przeglądarki. Dopasowanie po stronie
-   programu, bez rozróżniania wielkości liter i polskich znaków; brak sieci =
-   komunikat, a nie puste wyniki. Wyniki są klikalne: auto → karta auta,
-   usterka → karta jej auta (kierowca: lista usterek), przegląd → protokół
-   (kierowca: lista przeglądów).                                             */
+   Od 26.11 (decyzja właściciela) szuka PROGRAM: GET /api/szukaj?q=…&ile=… (flotex.py → a_szukaj) — w autach
+   (rejestracja, marka, model, VIN dla biura, kierowca, najbliższy termin; dla biura też daty i polisy), usterkach
+   (opis, rejestracja, kto zgłosił, status, waga), przeglądach (rejestracja, kierowca, miesiąc, status) i terminach.
+   Telefon nie pobiera już trzech list po 500 wierszy. Uprawnienia robi program (te same funkcje co listy):
+   kierowca dostaje tylko swoje auto i bez imion/notatek innych osób. Bez programu — szukanie w tym, co ten
+   telefon/komputer ma w pamięci odpowiedzi (szukajZPamieci), z dopiskiem, a gdy nie ma nic — komunikat.
+   Zmiana osoby (szukajZapomnij) czyści pole, wyniki i odrzuca odpowiedzi „w locie”. Wyniki są klikalne:
+   auto → karta auta, usterka → karta jej auta (kierowca: lista usterek), przegląd → protokół (kierowca: lista
+   przeglądów), termin → Terminy tego auta (kierowca: karta auta).                                         */
 const SZUKAJ_MIN = 2;
-const SZUKAJ_ZRODLO_MS = 30000;    // listy usterek i przeglądów pobieramy najwyżej co 30 s
 const SZUKAJ_W_GRUPIE = 8;         // tyle wyników w grupie na start; reszta pod „Pokaż wszystkie”
-let szukajZrodlo = { czas: 0, dane: null };
+const SZUKAJ_WSZYSTKIE = 50;       // „Pokaż wszystkie”: tyle w grupie odda program (SZUKAJ_MAKS_W_GRUPIE)
 let szukajEpoka = 0;               // rośnie przy zmianie osoby: odpowiedzi „w locie” poprzedniej osoby giną
-let szukajWLocie = null;           // jedno pobranie naraz (wpisywanie nie mnoży zapytań)
 let szukajWyczysc = null;          // ustawia podepnijSzukajGora: czyści pole, wyniki i licznik
 
 function normalizujSzukane(t) {
@@ -349,90 +344,110 @@ function normalizujSzukane(t) {
     .replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/* Zmiana osoby (wylogowanie, inne logowanie): cała pamięć szukania poprzedniej osoby
-   znika — listy (z cudzymi autami, usterkami, przeglądami), tekst w polu, wyniki
-   i odpowiedzi, które jeszcze nie doszły. Woła zapomnijStanOsoby() z app.js.  */
+/* Zmiana osoby (wylogowanie, inne logowanie): tekst w polu, wyniki i odpowiedzi, które jeszcze nie doszły,
+   poprzedniej osoby nie mogą trafić do następnej. Woła zapomnijStanOsoby() z app.js.  */
 function szukajZapomnij() {
   szukajEpoka++;
-  szukajZrodlo = { czas: 0, dane: null };
-  szukajWLocie = null;
   if (szukajWyczysc) szukajWyczysc();
 }
 
-/* Po zapisie (nowa usterka, przegląd, edycja auta) pamięć jest nieaktualna — następne
-   szukanie pobierze listy od nowa, zamiast pokazywać stan sprzed 30 s. Dane zostają
-   (do czasu pobrania), więc nic nie znika z oczu. Woła API.zadanie() po zapisie.  */
-function szukajPrzeterminuj() {
-  szukajZrodlo.czas = 0;
+/* Po zapisie nic nie trzeba unieważniać: każde szukanie pyta program o stan bieżący. Funkcja zostaje, bo woła ją
+   API.zadanie() po każdym zapisie (miejsce na przyszłą pamięć wyników). */
+function szukajPrzeterminuj() { /* szukanie bez własnej pamięci — zawsze świeże */ }
+
+/* Mapowanie wierszy list na wyniki {rodzaj, id, pojazd, tytul, opis} — bez filtrowania (to robi program). */
+function szukajMapuj(dane) {
+  const auta = (dane.auta || dane.pojazdy || []).map(p => {
+    const t = p.terminy && p.terminy.najblizszy;
+    return { rodzaj: 'auto', id: p.id, pojazd: p.id, tytul: p.rejestracja,
+      opis: [p.marka || p.model ? nazwaPojazdu(p) : '', p.kierowca_imie, p.aktywny ? '' : 'wycofane',
+        t ? t.nazwa + ' — ' + opisTerminu(p.terminy.dni) : ''].filter(Boolean).join(' · ') };
+  });
+  const usterki = (dane.usterki || []).map(u => ({ rodzaj: 'usterka', id: u.id, pojazd: u.pojazd,
+    tytul: (u.rejestracja || '') + ' — ' + u.opis,
+    opis: [opisKodu(OPIS_USTERKI, u.status), u.zglosil_imie ? 'zgłosił ' + u.zglosil_imie : ''].filter(Boolean).join(' · ') }));
+  const przeglady = (dane.przeglady || []).map(g => ({ rodzaj: 'przeglad', id: g.id, pojazd: g.pojazd,
+    tytul: (g.rejestracja || '') + ' — ' + (g.okres || ''),
+    opis: [opisKodu(OPIS_STATUSU, g.status), g.kierowca_imie].filter(Boolean).join(' · ') }));
+  const terminy = (dane.terminy || []).map(t => ({ rodzaj: 'termin', id: t.id, pojazd: t.pojazd,
+    tytul: (t.rejestracja || '') + ' — ' + (t.nazwa || '') + ' ' + polskaData(t.termin),
+    opis: t.dni == null ? '' : opisTerminu(t.dni) }));
+  return { auta, usterki, przeglady, terminy };
 }
 
-/* Jedna lista nie może zepsuć całości: błąd przeglądów nie kasuje wyników aut.
-   Zwraca { dane, braki: ['przeglądy', …], siec: true/false } albo null, gdy w międzyczasie
-   zmieniła się osoba (wynik poprzedniej osoby nigdy nie trafia do następnej). */
-async function szukajPobierzDane() {
-  if (szukajZrodlo.dane && Date.now() - szukajZrodlo.czas < SZUKAJ_ZRODLO_MS) return szukajZrodlo.dane;
-  if (!szukajWLocie) {
-    const epoka = szukajEpoka;
-    const adresy = [['auta', '/api/pojazdy?wszystkie=1'], ['usterki', '/api/usterki?status=wszystkie&ile=500'],
-                    ['przeglądy', '/api/przeglady?ile=500']];
-    const p = Promise.all(adresy.map(([, a]) => API.get(a).then(w => ({ w: w || [] }), e => ({ e }))))
-      .then(wyniki => {
-        if (epoka !== szukajEpoka) return null;
-        const braki = [];
-        let siec = false;
-        wyniki.forEach((r, i) => { if (r.e) { braki.push(adresy[i][0]); if (r.e.kod == null) siec = true; } });
-        if (braki.length === wyniki.length) {
-          const blad = new Error(siec ? 'Szukanie wymaga połączenia z programem w biurze.' : 'Nie udało się wyszukać — spróbuj za chwilę.');
-          blad.siec = siec;
-          throw blad;
-        }
-        const dane = { pojazdy: wyniki[0].w || [], usterki: wyniki[1].w || [], przeglady: wyniki[2].w || [], braki };
-        // Niepełnych danych nie trzymamy w pamięci: następne szukanie spróbuje jeszcze raz.
-        szukajZrodlo = { czas: braki.length ? 0 : Date.now(), dane };
-        return dane;
-      })
-      .finally(() => { if (szukajWLocie === p) szukajWLocie = null; });
-    szukajWLocie = p;
-  }
-  return szukajWLocie;
-}
-
-/* Czysta funkcja: wyniki {rodzaj, id, pojazd, tytul, opis} dla wpisanego tekstu. */
+/* Filtr bez programu (te same reguły co a_szukaj w flotex.py) na danych z pamięci urządzenia. */
 function szukajWDanych(tekst, dane, biuro) {
   const slowa = normalizujSzukane(tekst).split(/\s+/).filter(Boolean);
   const pasuje = pola => {
     const s = normalizujSzukane(pola.filter(x => x != null && x !== '').join(' '));
     return slowa.every(w => s.includes(w));
   };
-  // Terminy i polisy: z tych samych list aut, bez nowych zapytań. Daty szukamy i jako
-  // „10.12.2026” (jak na ekranie), i jako „2026-12-10”. Numer polisy i ubezpieczyciel
-  // serwer oddaje tylko biuru (kierowca ich nie dostaje, więc ich też nie przeszuka).
-  const terminy = p => {
+  // Terminy i polisy z list aut: daty i jako „10.12.2026” (jak na ekranie), i jako „2026-12-10”. Numer polisy
+  // i ubezpieczyciela program oddaje tylko biuru (kierowca ich nie dostaje, więc ich też nie przeszuka).
+  const terminyAuta = p => {
     const t = p.terminy && p.terminy.najblizszy;
     return [t ? t.nazwa : '', biuro ? polskaData(p.data_badania) : '', biuro ? p.data_badania : '',
       biuro ? polskaData(p.data_oc) : '', biuro ? p.data_oc : '',
       biuro ? polskaData(p.polisa_ac_do) : '', biuro ? p.polisa_ac_do : '',
       biuro ? p.polisa_nr : '', biuro ? p.ubezpieczyciel : ''];
   };
-  const auta = (dane.pojazdy || []).filter(p => pasuje([p.rejestracja, p.marka, p.model, p.rok,
-      biuro ? p.vin : '', p.kierowca_imie, p.aktywny ? '' : 'wycofane'].concat(terminy(p))))
-    .map(p => {
-      const t = p.terminy && p.terminy.najblizszy;
-      return { rodzaj: 'auto', id: p.id, pojazd: p.id, tytul: p.rejestracja,
-        opis: [p.marka || p.model ? nazwaPojazdu(p) : '', p.kierowca_imie, p.aktywny ? '' : 'wycofane',
-          t ? t.nazwa + ' — ' + opisTerminu(p.terminy.dni) : ''].filter(Boolean).join(' · ') };
-    });
   // Usterki i przeglądy po rejestracji, a nie po marce i modelu auta: „mast” nie ma
   // zwracać wszystkich usterek każdego Mastera, tylko to, co ktoś o tym napisał.
-  const usterki = (dane.usterki || []).filter(u => pasuje([u.rejestracja, u.opis, u.rozwiazanie,
-      u.zglosil_imie, opisKodu(OPIS_USTERKI, u.status), opisKodu(OPIS_WAGI, u.waga)]))
-    .map(u => ({ rodzaj: 'usterka', id: u.id, pojazd: u.pojazd, tytul: (u.rejestracja || '') + ' — ' + u.opis,
-      opis: [opisKodu(OPIS_USTERKI, u.status), u.zglosil_imie ? 'zgłosił ' + u.zglosil_imie : ''].filter(Boolean).join(' · ') }));
-  const przeglady = (dane.przeglady || []).filter(g => pasuje([g.rejestracja, g.kierowca_imie,
-      g.okres, g.uwagi, g.powod, opisKodu(OPIS_STATUSU, g.status)]))
-    .map(g => ({ rodzaj: 'przeglad', id: g.id, pojazd: g.pojazd, tytul: (g.rejestracja || '') + ' — ' + (g.okres || ''),
-      opis: [opisKodu(OPIS_STATUSU, g.status), g.kierowca_imie].filter(Boolean).join(' · ') }));
-  return { auta, usterki, przeglady };
+  return szukajMapuj({
+    auta: (dane.pojazdy || []).filter(p => pasuje([p.rejestracja, p.marka, p.model, p.rok,
+      biuro ? p.vin : '', p.kierowca_imie, p.aktywny ? '' : 'wycofane'].concat(terminyAuta(p)))),
+    usterki: (dane.usterki || []).filter(u => pasuje([u.rejestracja, u.opis, u.rozwiazanie,
+      u.zglosil_imie, opisKodu(OPIS_USTERKI, u.status), opisKodu(OPIS_WAGI, u.waga)])),
+    przeglady: (dane.przeglady || []).filter(g => pasuje([g.rejestracja, g.kierowca_imie,
+      g.okres, g.uwagi, g.powod, opisKodu(OPIS_STATUSU, g.status)])),
+    terminy: (dane.terminy || []).filter(t => pasuje([t.rejestracja, t.nazwa, polskaData(t.termin), t.termin,
+      biuro ? t.dokument : '', biuro ? t.ubezpieczyciel : ''])),
+  });
+}
+
+/* Listy z pamięci odpowiedzi tej osoby (app.js: odpowiedzZPamieci — klucz z id osoby, więc nigdy cudze).
+   Pierwszy adres, który jest w pamięci, wygrywa. null = nic nie ma. */
+const SZUKAJ_ADRESY_PAMIECI = {
+  pojazdy: ['/api/pojazdy?wszystkie=1', '/api/pojazdy'],
+  usterki: ['/api/usterki?status=wszystkie&ile=500', '/api/usterki?status=wszystkie', '/api/usterki'],
+  przeglady: ['/api/przeglady?ile=500', '/api/przeglady'],
+  terminy: ['/api/terminy'],
+};
+async function szukajZPamieci() {
+  if (typeof odpowiedzZPamieci !== 'function') return null;
+  const dane = {};
+  let cos = false;
+  for (const [grupa, adresy] of Object.entries(SZUKAJ_ADRESY_PAMIECI)) {
+    dane[grupa] = [];
+    for (const a of adresy) {
+      const w = await odpowiedzZPamieci(a).catch(() => null);
+      if (w && Array.isArray(w.dane)) { dane[grupa] = w.dane; cos = true; break; }
+    }
+  }
+  return cos ? dane : null;
+}
+
+/* Wyniki dla tekstu: z programu, a bez niego — z pamięci (zPamieci: true). null = w międzyczasie zmieniła się
+   osoba (wynik poprzedniej osoby nigdy nie trafia do następnej). */
+async function szukajPobierz(tekst, ile) {
+  const epoka = szukajEpoka;
+  let w;
+  try {
+    w = await API.get('/api/szukaj?q=' + encodeURIComponent(tekst) + '&ile=' + ile);
+  } catch (e) {
+    if (epoka !== szukajEpoka) return null;
+    const bezProgramu = !e || e.kod == null
+      || (typeof KODY_BEZ_PROGRAMU !== 'undefined' && KODY_BEZ_PROGRAMU.indexOf(e.kod) >= 0);
+    if (!bezProgramu) throw new Error('Nie udało się wyszukać — spróbuj za chwilę.');
+    const zPamieci = await szukajZPamieci();
+    if (epoka !== szukajEpoka) return null;
+    if (!zPamieci) throw new Error('Szukanie wymaga połączenia z programem w biurze.');
+    const m = szukajWDanych(tekst, zPamieci, jestBiuro());
+    return Object.assign(m, { zPamieci: true,
+      ile: { auta: m.auta.length, usterki: m.usterki.length, przeglady: m.przeglady.length, terminy: m.terminy.length } });
+  }
+  if (epoka !== szukajEpoka) return null;
+  return Object.assign(szukajMapuj(w || {}), { ile: (w && w.ile) || {} });
 }
 
 function szukajOtworz(w, biuro) {
@@ -440,6 +455,8 @@ function szukajOtworz(w, biuro) {
     if (biuro) pokazEkran('protokol', { id: w.id }); else pokazEkran('przeglady');
   } else if (w.rodzaj === 'usterka' && !biuro) {
     pokazEkran('usterki');
+  } else if (w.rodzaj === 'termin' && biuro) {
+    pokazEkran('terminy', { pojazd: w.pojazd });
   } else {
     pokazEkran('pojazd', { id: w.pojazd });
   }
@@ -462,25 +479,28 @@ function podepnijSzukajGora() {
     const tekst = pole.value.trim();
     const moj = ++licznik;
     if (tekst.length < SZUKAJ_MIN) { zamknij(); return; }
-    let dane;
-    try { dane = await szukajPobierzDane(); }
+    let w;
+    try { w = await szukajPobierz(tekst, rozwiniete.size ? SZUKAJ_WSZYSTKIE : SZUKAJ_W_GRUPIE); }
     catch (e) { if (moj === licznik) komunikatPanelu(e && e.message || 'Nie udało się wyszukać.'); return; }
-    if (!dane || moj !== licznik) return;           // zmieniła się osoba albo wpisano już coś nowszego
+    if (!w || moj !== licznik) return;              // zmieniła się osoba albo wpisano już coś nowszego
     const biuro = jestBiuro();
-    const w = szukajWDanych(tekst, dane, biuro);
-    const grupy = [['Auta', w.auta], ['Usterki', w.usterki], ['Przeglądy', w.przeglady]];
-    const braki = (dane.braki && dane.braki.length)
-      ? `<div class="szukaj-pusto">Nie wczytało się: ${escHtml(dane.braki.join(', '))} — wyniki są niepełne.</div>` : '';
-    if (!grupy.some(g => g[1].length)) { komunikatPanelu('Nic nie znaleziono.'); panel.insertAdjacentHTML('beforeend', braki); return; }
+    const grupy = [['Auta', 'auta'], ['Usterki', 'usterki'], ['Przeglądy', 'przeglady'], ['Terminy', 'terminy']]
+      .map(([nazwa, klucz]) => [nazwa, w[klucz] || [], Math.max((w.ile || {})[klucz] || 0, (w[klucz] || []).length)]);
+    const dopisek = w.zPamieci
+      ? '<div class="szukaj-pusto">Bez połączenia z programem — wyniki z danych zapamiętanych w tym urządzeniu.</div>' : '';
+    if (!grupy.some(g => g[1].length)) { komunikatPanelu('Nic nie znaleziono.'); panel.insertAdjacentHTML('beforeend', dopisek); return; }
     const wyniki = [];
-    panel.innerHTML = grupy.filter(g => g[1].length).map(([nazwa, lista]) => {
-      const wszystkie = rozwiniete.has(nazwa) || lista.length <= SZUKAJ_W_GRUPIE;
+    panel.innerHTML = dopisek + grupy.filter(g => g[1].length).map(([nazwa, lista, razem]) => {
+      const pokaz = rozwiniete.has(nazwa) ? lista : lista.slice(0, SZUKAJ_W_GRUPIE);
+      const wiecej = razem > pokaz.length && !rozwiniete.has(nazwa);
       return `
-      <div class="szukaj-grupa">${nazwa} (${lista.length})</div>
-      ${(wszystkie ? lista : lista.slice(0, SZUKAJ_W_GRUPIE)).map(x => { wyniki.push(x); return `<button type="button" class="szukaj-wynik"
+      <div class="szukaj-grupa">${nazwa} (${razem})</div>
+      ${pokaz.map(x => { wyniki.push(x); return `<button type="button" class="szukaj-wynik"
         data-nr="${wyniki.length - 1}"><b>${escHtml(x.tytul)}</b><span>${escHtml(x.opis)}</span></button>`; }).join('')}
-      ${wszystkie ? '' : `<button type="button" class="szukaj-wiecej" data-grupa="${escHtml(nazwa)}">Pokaż wszystkie (${lista.length})</button>`}`;
-    }).join('') + braki;
+      ${wiecej ? `<button type="button" class="szukaj-wiecej" data-grupa="${escHtml(nazwa)}">Pokaż wszystkie (${razem})</button>` : ''}
+      ${rozwiniete.has(nazwa) && razem > pokaz.length
+        ? `<div class="szukaj-pusto">Pokazano ${pokaz.length} z ${razem} — wpisz więcej, żeby zawęzić.</div>` : ''}`;
+    }).join('');
     panel.hidden = false;
     panel.querySelectorAll('.szukaj-wynik').forEach(b => {
       b.onclick = () => { const x = wyniki[Number(b.dataset.nr)]; zamknij(); pole.value = ''; szukajOtworz(x, biuro); };
@@ -490,7 +510,7 @@ function podepnijSzukajGora() {
     });
   }
 
-  pole.addEventListener('input', () => { clearTimeout(zegar); rozwiniete.clear(); zegar = setTimeout(szukaj, 200); });
+  pole.addEventListener('input', () => { clearTimeout(zegar); rozwiniete.clear(); zegar = setTimeout(szukaj, 250); });
   pole.addEventListener('focus', () => { if (pole.value.trim().length >= SZUKAJ_MIN) szukaj(); });
   pole.addEventListener('keydown', e => {
     if (e.key === 'Escape') { zamknij(); pole.blur(); }
@@ -751,6 +771,7 @@ function oknoPojazdu(p) {
   const nowy = !p;
   okno({
     tytul: nowy ? 'Nowe auto' : 'Auto ' + p.rejestracja,
+    szkic: nowy ? 'auto-nowe' : 'auto-' + p.id,
     szerokie: true,
     tresc: `
       <div class="dwie-kolumny">
@@ -965,7 +986,7 @@ EKRANY.terminy = {
       b.onclick = (e) => {
         e.stopPropagation();          // odnowienie, a nie przejście do karty auta
         const t = wpis(Number(b.dataset.odnow));
-        oknoOdnowienia(Number(b.dataset.odnow), null, t && t.rodzaj);
+        oknoOdnowienia(Number(b.dataset.odnow), null, t && t.rodzaj, t);
       };
     });
     pole.querySelectorAll('[data-popraw]').forEach(b => {
@@ -1018,7 +1039,8 @@ function listaTerminow(lista) {
         <span class="plakietka p-${escHtml(t.stan)}">${escHtml(opisTerminu(t.dni))}</span>
         ${t.id ? `<span class="uchwyty"><button data-popraw="${t.id}">Popraw</button>
           <button data-odnow="${t.id}">Załatwione</button></span>`
-          : '<span class="slaby male">data z karty auta</span>'}
+          : (t.czeka ? '<span class="slaby male">czeka na wysłanie do programu</span>'
+            : '<span class="slaby male">data z karty auta</span>')}
       </span>
     </div>`).join('');
 }
@@ -1083,6 +1105,76 @@ function polaczTerminy(ewidencja, flota) {
   return wynik.sort((a, b) => String(a.termin || '').localeCompare(String(b.termin || '')));
 }
 
+/* ------------------------------------------- terminy bez programu (D10, 26.11)
+
+   Poprawka i odnowienie terminu idą przez zapisBiura: bez programu czekają w tym komputerze, a ekran od razu
+   pokazuje zmianę. Konflikt („ktoś to zmienił, gdy nie było połączenia”) sprawdzamy tylko na TYM wpisie i tylko
+   na polach, które człowiek może zmienić — `dni` i `stan` liczy program względem dzisiejszej daty i zmieniają się
+   o północy same (app.js → kluczZrodla, odciskWpisuZrodla). Endpointy i ich format bez zmian.               */
+const POLA_TERMINU_DO_POROWNANIA = ['pojazd', 'rodzaj', 'termin', 'dokument', 'koszt', 'uwagi', 'zamkniete_o'];
+function zrodloTerminu(t) {
+  // Z zamkniętymi i z wycofanymi autami: zamknięty przez kogoś innego wpis ma być „zmieniony”, a nie „zniknął”.
+  return { sciezka: `/api/terminy?stan=wszystkie&wszystkie=1&pojazd=${Number(t.pojazd)}`, id: t.id,
+           pola: POLA_TERMINU_DO_POROWNANIA, dane: t };
+}
+/* Dni do daty liczone jak w programie (pozycja_terminu): względem dzisiejszego dnia, bez godzin. */
+function dniDoTerminu(iso, dzis) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return null;
+  const [r, m, d] = iso.split('-').map(Number);
+  const [r0, m0, d0] = (dzis || dzisiaj()).split('-').map(Number);
+  return Math.round((Date.UTC(r, m - 1, d) - Date.UTC(r0, m0 - 1, d0)) / 86400000);
+}
+/* stan_z_dni z flotex.py: po_terminie / pilne (ćwierć okna ostrzegania) / blisko / ok. */
+function stanTerminuZDni(dni, ostrzegaj) {
+  const okno = Math.max(1, Math.min(365, Number(ostrzegaj) || 30));
+  if (dni === null || dni === undefined) return 'ok';
+  if (dni < 0) return 'po_terminie';
+  if (dni <= Math.max(1, Math.floor(okno / 4))) return 'pilne';
+  if (dni <= okno) return 'blisko';
+  return 'ok';
+}
+/* przesun_miesiace z flotex.py: 31 stycznia + 1 miesiąc = ostatni dzień lutego, nigdy 1 marca. */
+function przesunMiesiace(iso, ile) {
+  const [r, m, d] = (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? iso : dzisiaj()).split('-').map(Number);
+  const miesiace = m - 1 + Number(ile);
+  const rok = r + Math.floor(miesiace / 12);
+  const miesiac = ((miesiace % 12) + 12) % 12 + 1;
+  const ostatni = new Date(Date.UTC(rok, miesiac, 0)).getUTCDate();
+  return `${rok}-${String(miesiac).padStart(2, '0')}-${String(Math.min(d, ostatni)).padStart(2, '0')}`;
+}
+function ostrzegajDni() {
+  return (stan.ustawienia && stan.ustawienia.ostrzegaj_dni) || 30;
+}
+/* Wpis listy po poprawce (to samo, co zrobi program w a_termin_zapisz). */
+function poprawionyTermin(x, dane, rodzaje) {
+  const dni = dniDoTerminu(dane.termin);
+  const zmiany = { rodzaj: dane.rodzaj, nazwa: rodzaje[dane.rodzaj] || x.nazwa, termin: dane.termin,
+    dokument: dane.dokument, koszt: dane.koszt, uwagi: dane.uwagi, dni,
+    stan: x.zamkniete_o ? 'ok' : stanTerminuZDni(dni, ostrzegajDni()) };
+  if (dane.rodzaj === 'oc' && 'ubezpieczyciel' in dane && !x.zamkniete_o) {
+    zmiany.ubezpieczyciel = dane.ubezpieczyciel;
+    zmiany.polisa_nr = dane.dokument;
+  }
+  return zmiany;
+}
+/* Lista terminów po odnowieniu (a_termin_odnow): stary zamknięty (na liście otwartych znika), nowy bez numeru —
+   „czeka na wysłanie”, bez przycisków (Popraw/Załatwione potrzebują numeru od programu). Zwraca nową listę. */
+function poOdnowieniu(sciezka, lista, id, dane, cyklDomyslny) {
+  if (!Array.isArray(lista)) return undefined;
+  const i = lista.findIndex(x => x && x.id === id);
+  if (i < 0) return undefined;
+  const stary = lista[i];
+  const nowyTermin = dane.termin || przesunMiesiace(dane.zalatwiono || dzisiaj(), Number(dane.cykl_mies) || cyklDomyslny || 12);
+  const dni = dniDoTerminu(nowyTermin);
+  const nowy = Object.assign({}, stary, { id: null, czeka: true, termin: nowyTermin, dokument: '', koszt: null,
+    uwagi: '', zamkniete_o: null, dni, stan: stanTerminuZDni(dni, ostrzegajDni()) });
+  const zamkniety = Object.assign({}, stary, { zamkniete_o: czasTeraz(), stan: 'ok',
+    koszt: dane.koszt != null ? dane.koszt : stary.koszt, dokument: dane.dokument || stary.dokument });
+  const wstaw = /[?&]stan=zamkniete(&|$)/.test(sciezka) ? [zamkniety]
+    : (/[?&]stan=wszystkie(&|$)/.test(sciezka) ? [zamkniety, nowy] : [nowy]);
+  return lista.slice(0, i).concat(wstaw, lista.slice(i + 1));
+}
+
 /* `termin` podany = poprawka istniejącego wpisu (zła data, literówka w numerze
    polisy). Wysyłamy wtedy jego `id` — serwer nadpisuje wpis zamiast dopisywać
    drugi; „Załatwione” zamknęłoby termin i założyło następny, a to nie to samo.
@@ -1103,6 +1195,7 @@ async function oknoTerminu(termin, pojazd) {
   const polisaWpisu = t.dokument || (t.rodzaj === 'oc' ? t.polisa_nr || '' : '');
   okno({
     tytul: termin ? 'Popraw termin' : 'Nowy termin',
+    szkic: termin ? 'termin-' + termin.id : 'termin-nowy' + (pojazd ? '-' + pojazd.id : ''),
     tresc: `
       <label class="pole">Auto
         <select id="t-pojazd"${pojazdStaly ? ' disabled' : ''}>
@@ -1166,7 +1259,18 @@ async function oknoTerminu(termin, pojazd) {
         // numer polisy oraz ubezpieczyciela do karty auta.
         if (dane.rodzaj === 'oc') dane.ubezpieczyciel = we('t-ubezpieczyciel').value.trim();
         if (termin && termin.id) dane.id = termin.id;
-        const w = await sprobuj(() => API.post('/api/terminy', dane),
+        // D10: poprawka istniejącego wpisu może poczekać na program (zapisBiura); nowy wpis — tylko z programem
+        // (numer nadaje program, a „Załatwione” go potrzebuje).
+        const w = await sprobuj(() => (dane.id
+          ? zapisBiura('POST', '/api/terminy', dane, {
+            opis: 'termin ' + (rodzaje[dane.rodzaj] || dane.rodzaj) + (termin.rejestracja ? ' ' + termin.rejestracja : ''),
+            zrodla: [zrodloTerminu(termin)],
+            popraw: (sciezka, d) => {
+              if (!sciezka.startsWith('/api/terminy')) return;
+              wPamieci(d, dane.id, x => Object.assign(x, poprawionyTermin(x, dane, rodzaje)));
+            },
+          })
+          : API.post('/api/terminy', dane)),
           termin ? 'Termin poprawiony' : 'Termin dopisany');
         if (!w) return;
         zamknij();
@@ -1180,14 +1284,16 @@ async function oknoTerminu(termin, pojazd) {
    od DZIŚ (albo od dnia, w którym rzecz naprawdę załatwiono), a nie od starego
    terminu — badanie zrobione dwa tygodnie po czasie ważne jest rok od badania,
    nie rok od daty, którą przegapiono.                                         */
-function oknoOdnowienia(id, pojazd, rodzaj) {
+function oknoOdnowienia(id, pojazd, rodzaj, wpis) {
   // Cykl podpowiada serwer dla rodzaju terminu (CYKLE_TERMINOW: opony 6,
   // tachograf 24) — sztywne 12 przesuwało wymianę opon o pół roku za daleko.
   // Człowiek dalej może wpisać własny.
   const cykle = (stan.ustawienia && stan.ustawienia.cykle_terminow) || {};
   const cykl = Number(cykle[rodzaj]) || 12;
+  const rodzaje = (stan.ustawienia && stan.ustawienia.rodzaje_terminow) || {};
   okno({
     tytul: 'Termin załatwiony',
+    szkic: 'odnowienie-' + id,
     tresc: `
       <div class="dwie-kolumny">
         <label class="pole">Kiedy załatwione
@@ -1207,12 +1313,20 @@ function oknoOdnowienia(id, pojazd, rodzaj) {
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zapisz', klasa: 'glowny', klik: async (zamknij) => {
         const we = i => document.getElementById(i);
-        const w = await sprobuj(() => API.post(`/api/terminy/${id}/odnow`, {
+        const dane = {
           zalatwiono: we('o-zalatwiono').value,
           cykl_mies: Number(we('o-cykl').value) || cykl,
           termin: we('o-termin').value,
           koszt: we('o-koszt').value ? Number(we('o-koszt').value) : null,
           dokument: we('o-dokument').value.trim(),
+        };
+        // D10: odnowienie może poczekać na program (zapisBiura). Ekran od razu pokazuje następny termin (bez numeru,
+        // „czeka na wysłanie”), a stary znika z listy otwartych. Program sprawdza jeszcze raz, czy termin jest
+        // otwarty (409 „już zamknięty” trafia na wstęgę z powodem — nic nie zakłada się podwójnie).
+        const w = await sprobuj(() => zapisBiura('POST', `/api/terminy/${id}/odnow`, dane, {
+          opis: 'odnowienie: ' + (rodzaje[rodzaj] || rodzaj || 'termin') + (wpis && wpis.rejestracja ? ' ' + wpis.rejestracja : ''),
+          zrodla: wpis ? [zrodloTerminu(wpis)] : [],
+          popraw: (sciezka, d) => (sciezka.startsWith('/api/terminy') ? poOdnowieniu(sciezka, d, id, dane, cykl) : undefined),
         }), 'Termin odnowiony');
         if (!w) return;
         zamknij();

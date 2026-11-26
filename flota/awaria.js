@@ -122,6 +122,7 @@ function oknoPunktuAwarii(p) {
   const nowy = !p;
   okno({
     tytul: nowy ? 'Nowy punkt instrukcji' : 'Punkt: ' + p.tytul,
+    szkic: nowy ? 'punkt-awarii-nowy' : 'punkt-awarii-' + p.id,
     szerokie: true,
     tresc: `
       <label class="pole">Tytuł *

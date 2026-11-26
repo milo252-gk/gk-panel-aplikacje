@@ -382,9 +382,12 @@ function trescZgloszeniaUsterki(auta) {
       </div>`;
 }
 
+const MAKS_ZDJEC_USTERKI = 6;
+
 function podepnijZgloszenieUsterki(tresc, zdjecia) {
   const pojemnik = tresc.querySelector('#u-miniatury');
-  const opcje = { maks: 3, nazwa: 'Usterka' };
+  // Decyzja właściciela 26.11: do 6 zdjęć przy zgłoszeniu (program przyjmuje do 12 w paczce — MAKS_ZDJEC we flotex.py).
+  const opcje = { maks: MAKS_ZDJEC_USTERKI, nazwa: 'Usterka' };
   ['#u-aparat', '#u-galeria'].forEach(sel => {
     const we = tresc.querySelector(sel);
     we.onchange = () => Zdjecia.dodaj(we.files, zdjecia, pojemnik, we, opcje);
@@ -435,6 +438,7 @@ async function oknoZgloszeniaUsterki(pojazd) {
   const zdjecia = [];
   okno({
     tytul: 'Zgłoszenie usterki',
+    szkic: 'usterka-nowa',
     tresc: trescZgloszeniaUsterki(auta),
     poOtwarciu: (tresc) => {
       podepnijZgloszenieUsterki(tresc, zdjecia);
@@ -481,8 +485,12 @@ async function formularzUsterkiNaEkranie(kontener) {
       <div class="przyciski"><button class="glowny duzy" id="u-wyslij">Zgłoś</button></div>
     </div>`;
   podepnijZgloszenieUsterki(kontener, zdjecia);
+  // Szkic opisu (D10/D11): ten sam co w oknie zgłoszenia — wraca po odświeżeniu strony. Zdjęcia do szkicu nie idą.
+  Szkice.przypnij(kontener, 'usterka-nowa', { filtr: /^u-(opis|pojazd)$/ }).catch(() => {});
   kontener.querySelector('#u-wyslij').onclick = async () => {
-    if (await wyslijZgloszenieUsterki(kontener, auta, zdjecia)) odswiezEkran();
+    if (!await wyslijZgloszenieUsterki(kontener, auta, zdjecia)) return;
+    Szkice.usun('usterka-nowa');
+    odswiezEkran();
   };
 }
 
