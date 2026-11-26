@@ -1,6 +1,6 @@
 {
   "hub": "https://broken-plus-midnight-basin.trycloudflare.com",
-  "zmieniono": "2026-11-26T15:34:04.980Z",
+  "zmieniono": "2026-11-26T15:34:58.002Z",
   "wersje": {
     "wspolne": "wspolne-1d17b61f3895",
     "panel": "panel-ff375c72bb4e",
@@ -9,6 +9,7 @@
     "kj": "kj-c174668a8067"
   },
   "programy": {
-    "szkolenia": "https://highs-webster-gps-dome.trycloudflare.com"
+    "szkolenia": "https://highs-webster-gps-dome.trycloudflare.com",
+    "wycena": "https://oral-fluid-university-wanna.trycloudflare.com"
   }
 }
