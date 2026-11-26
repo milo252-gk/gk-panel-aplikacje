@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-1c225492bb3c';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-a7baee9dc270';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -1077,6 +1077,9 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   .pasek-narzedzi{flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding-bottom:2px}
   .pasek-narzedzi::-webkit-scrollbar{display:none}
   .pasek-narzedzi > *{flex:none}
+  /* Rząd przewijany: pola mają swoją szerokość (inaczej „Rodzaj” kurczył się do 44 px i nie było widać wybranej wartości). */
+  .pasek-narzedzi select,.pasek-narzedzi input:not([type=checkbox]){min-width:132px; width:auto}
+  .pasek-narzedzi label{flex:none}
   .pasek-narzedzi .chipy{flex-wrap:nowrap; margin:0}
   .pasek-narzedzi .chip{white-space:nowrap}
   .flota-karty{display:block}
@@ -1084,6 +1087,12 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   /* cele dotyku (ocena UX, poz. 9): przyciski tekstowe i odnośniki w wierszach */
   button.tekstowy{min-height:var(--dotyk-maly); padding:8px 6px}
   .pozycja .uchwyty button,.pozycja button.maly{min-height:var(--dotyk-maly)}
+}
+/* Terminy na wąskim telefonie: plakietka i przyciski pod tekstem, tytuł na całą szerokość (nie 90 px). */
+@media (max-width:480px){
+  div.pozycja{flex-wrap:wrap}
+  div.pozycja .prawo{flex:1 1 100%; max-width:100%; flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:8px}
+  div.pozycja .prawo .uchwyty{flex-direction:row; gap:8px}
 }
 @media (min-width:821px){
   .menu{transform:none; width:224px}
