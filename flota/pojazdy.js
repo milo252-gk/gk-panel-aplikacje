@@ -245,19 +245,17 @@ EKRANY.pojazdy = {
   poSynchronizacji() { if (stan.ekran === 'pojazdy') odswiezEkran(); },
 
   async rysuj(pole) {
-    const f = filtrOsoby('_filtrFloty', { szukaj: '', rodzaj: '', wszystkie: false });
+    const f = filtrOsoby('_filtrFloty', { rodzaj: '', wszystkie: false, sortuj: '' });
     const pyt = new URLSearchParams();
-    if (f.szukaj) pyt.set('szukaj', f.szukaj);
     if (f.rodzaj) pyt.set('rodzaj', f.rodzaj);
     if (f.wszystkie) pyt.set('wszystkie', '1');
-    const lista = await sprobuj(() => API.get('/api/pojazdy?' + pyt.toString())) || [];
+    const biuro = jestBiuro();
+    const lista = posortujFlote(await sprobuj(() => API.get('/api/pojazdy?' + pyt.toString())) || [],
+      biuro ? f.sortuj : '');
     stan.pojazdy = lista;
 
-    const biuro = jestBiuro();
     pole.innerHTML = `
       <div class="pasek-narzedzi">
-        <label>Szukaj<input id="p-szukaj" value="${escHtml(f.szukaj)}"
-               placeholder="rejestracja, marka${biuro ? ', VIN' : ''}"></label>
         ${biuro ? `<label>Rodzaj<select id="p-rodzaj">
           <option value="">wszystkie</option>
           ${RODZAJE_POJAZDU.map(r => `<option value="${r}"${f.rodzaj === r ? ' selected' : ''}>${
@@ -265,29 +263,25 @@ EKRANY.pojazdy = {
         </select></label>
         <label class="male"><input type="checkbox" id="p-wszystkie"${
           f.wszystkie ? ' checked' : ''}> pokaż wycofane</label>
+        ${polaSortowania(f.sortuj, OPCJE_SORTOWANIA_FLOTY)}
         <button class="glowny" id="p-nowy">+ Dodaj auto</button>` : ''}
       </div>
       ${lista.length ? tabelaFloty(lista, biuro) : `<div class="pusto">
         <span class="duza-ikona">${GKIkony.html('pojazd', 38)}</span>
-        ${f.szukaj || f.rodzaj ? 'Nic nie pasuje do tych warunków.'
+        ${f.rodzaj ? 'Nic nie pasuje do tych warunków.'
           : (biuro ? 'Nie ma jeszcze żadnego auta — dodaj pierwsze.'
                    : 'Nie masz przypisanego żadnego auta. Zgłoś to biuru.' + kontaktBiura())}</div>`}
     `;
 
-    const szukaj = pole.querySelector('#p-szukaj');
-    // Szukanie po naciśnięciu Enter, a nie po każdej literze: kartoteka jedzie
-    // z dysku sieciowego, a zapytanie na każdy znak wieszało pole na wpisaniu
-    // rejestracji.
-    szukaj.onkeydown = e => {
-      if (e.key !== 'Enter') return;
-      f.szukaj = szukaj.value.trim();
-      odswiezEkran();
-    };
+    // Szukanie po tekście jest tylko w nagłówku (#gora-szukaj): jedno pole, jedno
+    // zachowanie (wyniki w trakcie pisania, skok do auta, usterki albo przeglądu).
+    // Drugie pole „Szukaj” (z Enter) obok niego było mylące, więc go tu nie ma.
     if (biuro) {
       pole.querySelector('#p-rodzaj').onchange = e => { f.rodzaj = e.target.value; odswiezEkran(); };
       pole.querySelector('#p-wszystkie').onchange = e => {
         f.wszystkie = e.target.checked; odswiezEkran();
       };
+      pole.querySelector('#sortowanie').onchange = e => { f.sortuj = e.target.value; odswiezEkran(); };
       pole.querySelector('#p-nowy').onclick = () => oknoPojazdu(null);
     }
     pole.querySelectorAll('[data-pojazd]').forEach(el => {
@@ -296,13 +290,222 @@ EKRANY.pojazdy = {
   },
 };
 
-/* Lupa w górnym pasku (app.js, #btn-szukaj). Osobnej wyszukiwarki nie ma —
-   kartoteka floty ma pole „Szukaj” (rejestracja, marka, VIN), więc lupa
-   otwiera ją i stawia kursor w tym polu.                                    */
-async function oknoSzukania() {
-  if (stan.ekran !== 'pojazdy') await pokazEkran('pojazdy');
-  const pole = document.getElementById('p-szukaj');
-  if (pole) { pole.focus(); pole.select(); }
+/* D15 (decyzja właściciela 2026-11-25): sortowanie kartoteki i Terminów na wierzchu, jak w Przeglądach i Usterkach
+   (STYL-GK §6): „Domyślnie” zostawia kolejność z programu, obok jawne tryby. Wybór jest pamiętany na osobę razem
+   z filtrami (filtrOsoby, klucz `sortuj`); nieznana zapisana wartość wraca do „Domyślnie”. Tylko klient. */
+const OPCJE_SORTOWANIA_FLOTY = [['', 'Domyślnie'], ['rejestracja', 'Rejestracja A → Z'],
+  ['termin', 'Najpilniejszy termin'], ['przebieg', 'Przebieg: od największego'], ['kierowca', 'Kierowca A → Z']];
+const OPCJE_SORTOWANIA_TERMINOW = [['', 'Domyślnie'], ['pozne', 'Najpóźniejsze najpierw'],
+  ['rejestracja', 'Rejestracja A → Z']];
+function porownajTekst(a, b) {
+  return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), 'pl', { sensitivity: 'base', numeric: true });
+}
+/* Auta bez kierowcy / bez terminu / bez przebiegu zawsze na końcu. */
+function posortujFlote(lista, tryb) {
+  const dni = p => (p.terminy && typeof p.terminy.dni === 'number') ? p.terminy.dni : Infinity;
+  const porownania = {
+    rejestracja: (a, b) => porownajTekst(a.rejestracja, b.rejestracja),
+    termin: (a, b) => (dni(a) === dni(b) ? 0 : (dni(a) < dni(b) ? -1 : 1)),
+    przebieg: (a, b) => ((a.przebieg == null) - (b.przebieg == null))
+      || (Number(b.przebieg) || 0) - (Number(a.przebieg) || 0),
+    kierowca: (a, b) => (!a.kierowca_imie - !b.kierowca_imie) || porownajTekst(a.kierowca_imie, b.kierowca_imie),
+  };
+  const cmp = porownania[tryb];
+  if (!cmp) return lista;
+  return lista.map((x, i) => [x, i]).sort((a, b) => cmp(a[0], b[0]) || a[1] - b[1]).map(x => x[0]);
+}
+function posortujTerminy(lista, tryb) {
+  if (tryb === 'pozne') return lista.slice().reverse();
+  if (tryb === 'rejestracja') {
+    return lista.map((x, i) => [x, i])
+      .sort((a, b) => porownajTekst(a[0].rejestracja, b[0].rejestracja) || a[1] - b[1]).map(x => x[0]);
+  }
+  return lista;
+}
+
+/* Stałe pole „Szukaj” w nagłówku (#gora-szukaj, index.html; podpina je app.js).
+   Szuka w jednym miejscu: aut (rejestracja, marka, model, VIN dla biura,
+   kierowca, najbliższy termin; dla biura też daty badania/OC/AC, numer polisy
+   i ubezpieczyciel — z tych samych list aut, bez nowych zapytań), usterek (opis,
+   rejestracja, kto zgłosił, status) i przeglądów (rejestracja, kierowca, miesiąc,
+   status). Dane osoby znikają przy zmianie osoby (szukajZapomnij) i po zapisie
+   stają się „do odświeżenia” (szukajPrzeterminuj). Zakres danych robi serwer — te same
+   listy co na ekranach (kierowca dostaje tylko swoje), więc nie ma tu nowego
+   endpointu ani nowego klucza w pamięci przeglądarki. Dopasowanie po stronie
+   programu, bez rozróżniania wielkości liter i polskich znaków; brak sieci =
+   komunikat, a nie puste wyniki. Wyniki są klikalne: auto → karta auta,
+   usterka → karta jej auta (kierowca: lista usterek), przegląd → protokół
+   (kierowca: lista przeglądów).                                             */
+const SZUKAJ_MIN = 2;
+const SZUKAJ_ZRODLO_MS = 30000;    // listy usterek i przeglądów pobieramy najwyżej co 30 s
+const SZUKAJ_W_GRUPIE = 8;         // tyle wyników w grupie na start; reszta pod „Pokaż wszystkie”
+let szukajZrodlo = { czas: 0, dane: null };
+let szukajEpoka = 0;               // rośnie przy zmianie osoby: odpowiedzi „w locie” poprzedniej osoby giną
+let szukajWLocie = null;           // jedno pobranie naraz (wpisywanie nie mnoży zapytań)
+let szukajWyczysc = null;          // ustawia podepnijSzukajGora: czyści pole, wyniki i licznik
+
+function normalizujSzukane(t) {
+  return String(t == null ? '' : t).toLowerCase()
+    .replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/* Zmiana osoby (wylogowanie, inne logowanie): cała pamięć szukania poprzedniej osoby
+   znika — listy (z cudzymi autami, usterkami, przeglądami), tekst w polu, wyniki
+   i odpowiedzi, które jeszcze nie doszły. Woła zapomnijStanOsoby() z app.js.  */
+function szukajZapomnij() {
+  szukajEpoka++;
+  szukajZrodlo = { czas: 0, dane: null };
+  szukajWLocie = null;
+  if (szukajWyczysc) szukajWyczysc();
+}
+
+/* Po zapisie (nowa usterka, przegląd, edycja auta) pamięć jest nieaktualna — następne
+   szukanie pobierze listy od nowa, zamiast pokazywać stan sprzed 30 s. Dane zostają
+   (do czasu pobrania), więc nic nie znika z oczu. Woła API.zadanie() po zapisie.  */
+function szukajPrzeterminuj() {
+  szukajZrodlo.czas = 0;
+}
+
+/* Jedna lista nie może zepsuć całości: błąd przeglądów nie kasuje wyników aut.
+   Zwraca { dane, braki: ['przeglądy', …], siec: true/false } albo null, gdy w międzyczasie
+   zmieniła się osoba (wynik poprzedniej osoby nigdy nie trafia do następnej). */
+async function szukajPobierzDane() {
+  if (szukajZrodlo.dane && Date.now() - szukajZrodlo.czas < SZUKAJ_ZRODLO_MS) return szukajZrodlo.dane;
+  if (!szukajWLocie) {
+    const epoka = szukajEpoka;
+    const adresy = [['auta', '/api/pojazdy?wszystkie=1'], ['usterki', '/api/usterki?status=wszystkie&ile=500'],
+                    ['przeglądy', '/api/przeglady?ile=500']];
+    const p = Promise.all(adresy.map(([, a]) => API.get(a).then(w => ({ w: w || [] }), e => ({ e }))))
+      .then(wyniki => {
+        if (epoka !== szukajEpoka) return null;
+        const braki = [];
+        let siec = false;
+        wyniki.forEach((r, i) => { if (r.e) { braki.push(adresy[i][0]); if (r.e.kod == null) siec = true; } });
+        if (braki.length === wyniki.length) {
+          const blad = new Error(siec ? 'Szukanie wymaga połączenia z programem w biurze.' : 'Nie udało się wyszukać — spróbuj za chwilę.');
+          blad.siec = siec;
+          throw blad;
+        }
+        const dane = { pojazdy: wyniki[0].w || [], usterki: wyniki[1].w || [], przeglady: wyniki[2].w || [], braki };
+        // Niepełnych danych nie trzymamy w pamięci: następne szukanie spróbuje jeszcze raz.
+        szukajZrodlo = { czas: braki.length ? 0 : Date.now(), dane };
+        return dane;
+      })
+      .finally(() => { if (szukajWLocie === p) szukajWLocie = null; });
+    szukajWLocie = p;
+  }
+  return szukajWLocie;
+}
+
+/* Czysta funkcja: wyniki {rodzaj, id, pojazd, tytul, opis} dla wpisanego tekstu. */
+function szukajWDanych(tekst, dane, biuro) {
+  const slowa = normalizujSzukane(tekst).split(/\s+/).filter(Boolean);
+  const pasuje = pola => {
+    const s = normalizujSzukane(pola.filter(x => x != null && x !== '').join(' '));
+    return slowa.every(w => s.includes(w));
+  };
+  // Terminy i polisy: z tych samych list aut, bez nowych zapytań. Daty szukamy i jako
+  // „10.12.2026” (jak na ekranie), i jako „2026-12-10”. Numer polisy i ubezpieczyciel
+  // serwer oddaje tylko biuru (kierowca ich nie dostaje, więc ich też nie przeszuka).
+  const terminy = p => {
+    const t = p.terminy && p.terminy.najblizszy;
+    return [t ? t.nazwa : '', biuro ? polskaData(p.data_badania) : '', biuro ? p.data_badania : '',
+      biuro ? polskaData(p.data_oc) : '', biuro ? p.data_oc : '',
+      biuro ? polskaData(p.polisa_ac_do) : '', biuro ? p.polisa_ac_do : '',
+      biuro ? p.polisa_nr : '', biuro ? p.ubezpieczyciel : ''];
+  };
+  const auta = (dane.pojazdy || []).filter(p => pasuje([p.rejestracja, p.marka, p.model, p.rok,
+      biuro ? p.vin : '', p.kierowca_imie, p.aktywny ? '' : 'wycofane'].concat(terminy(p))))
+    .map(p => {
+      const t = p.terminy && p.terminy.najblizszy;
+      return { rodzaj: 'auto', id: p.id, pojazd: p.id, tytul: p.rejestracja,
+        opis: [p.marka || p.model ? nazwaPojazdu(p) : '', p.kierowca_imie, p.aktywny ? '' : 'wycofane',
+          t ? t.nazwa + ' — ' + opisTerminu(p.terminy.dni) : ''].filter(Boolean).join(' · ') };
+    });
+  // Usterki i przeglądy po rejestracji, a nie po marce i modelu auta: „mast” nie ma
+  // zwracać wszystkich usterek każdego Mastera, tylko to, co ktoś o tym napisał.
+  const usterki = (dane.usterki || []).filter(u => pasuje([u.rejestracja, u.opis, u.rozwiazanie,
+      u.zglosil_imie, opisKodu(OPIS_USTERKI, u.status), opisKodu(OPIS_WAGI, u.waga)]))
+    .map(u => ({ rodzaj: 'usterka', id: u.id, pojazd: u.pojazd, tytul: (u.rejestracja || '') + ' — ' + u.opis,
+      opis: [opisKodu(OPIS_USTERKI, u.status), u.zglosil_imie ? 'zgłosił ' + u.zglosil_imie : ''].filter(Boolean).join(' · ') }));
+  const przeglady = (dane.przeglady || []).filter(g => pasuje([g.rejestracja, g.kierowca_imie,
+      g.okres, g.uwagi, g.powod, opisKodu(OPIS_STATUSU, g.status)]))
+    .map(g => ({ rodzaj: 'przeglad', id: g.id, pojazd: g.pojazd, tytul: (g.rejestracja || '') + ' — ' + (g.okres || ''),
+      opis: [opisKodu(OPIS_STATUSU, g.status), g.kierowca_imie].filter(Boolean).join(' · ') }));
+  return { auta, usterki, przeglady };
+}
+
+function szukajOtworz(w, biuro) {
+  if (w.rodzaj === 'przeglad') {
+    if (biuro) pokazEkran('protokol', { id: w.id }); else pokazEkran('przeglady');
+  } else if (w.rodzaj === 'usterka' && !biuro) {
+    pokazEkran('usterki');
+  } else {
+    pokazEkran('pojazd', { id: w.pojazd });
+  }
+}
+
+function podepnijSzukajGora() {
+  const pole = document.getElementById('gora-szukaj');
+  const panel = document.getElementById('szukaj-wyniki');
+  if (!pole || !panel || pole.dataset.podpiete) return;
+  pole.dataset.podpiete = '1';
+  let licznik = 0, zegar = null;
+  const rozwiniete = new Set();                     // grupy z klikniętym „Pokaż wszystkie”
+  const zamknij = () => { panel.hidden = true; panel.innerHTML = ''; };
+  const komunikatPanelu = tekst => { panel.innerHTML = `<div class="szukaj-pusto">${escHtml(tekst)}</div>`; panel.hidden = false; };
+  // Zmiana osoby: wynik wpisany przez poprzednią osobę nie może zostać w polu ani w panelu,
+  // a odpowiedź, która jeszcze nie doszła, ma być odrzucona (licznik rośnie).
+  szukajWyczysc = () => { licznik++; clearTimeout(zegar); rozwiniete.clear(); pole.value = ''; zamknij(); };
+
+  async function szukaj() {
+    const tekst = pole.value.trim();
+    const moj = ++licznik;
+    if (tekst.length < SZUKAJ_MIN) { zamknij(); return; }
+    let dane;
+    try { dane = await szukajPobierzDane(); }
+    catch (e) { if (moj === licznik) komunikatPanelu(e && e.message || 'Nie udało się wyszukać.'); return; }
+    if (!dane || moj !== licznik) return;           // zmieniła się osoba albo wpisano już coś nowszego
+    const biuro = jestBiuro();
+    const w = szukajWDanych(tekst, dane, biuro);
+    const grupy = [['Auta', w.auta], ['Usterki', w.usterki], ['Przeglądy', w.przeglady]];
+    const braki = (dane.braki && dane.braki.length)
+      ? `<div class="szukaj-pusto">Nie wczytało się: ${escHtml(dane.braki.join(', '))} — wyniki są niepełne.</div>` : '';
+    if (!grupy.some(g => g[1].length)) { komunikatPanelu('Nic nie znaleziono.'); panel.insertAdjacentHTML('beforeend', braki); return; }
+    const wyniki = [];
+    panel.innerHTML = grupy.filter(g => g[1].length).map(([nazwa, lista]) => {
+      const wszystkie = rozwiniete.has(nazwa) || lista.length <= SZUKAJ_W_GRUPIE;
+      return `
+      <div class="szukaj-grupa">${nazwa} (${lista.length})</div>
+      ${(wszystkie ? lista : lista.slice(0, SZUKAJ_W_GRUPIE)).map(x => { wyniki.push(x); return `<button type="button" class="szukaj-wynik"
+        data-nr="${wyniki.length - 1}"><b>${escHtml(x.tytul)}</b><span>${escHtml(x.opis)}</span></button>`; }).join('')}
+      ${wszystkie ? '' : `<button type="button" class="szukaj-wiecej" data-grupa="${escHtml(nazwa)}">Pokaż wszystkie (${lista.length})</button>`}`;
+    }).join('') + braki;
+    panel.hidden = false;
+    panel.querySelectorAll('.szukaj-wynik').forEach(b => {
+      b.onclick = () => { const x = wyniki[Number(b.dataset.nr)]; zamknij(); pole.value = ''; szukajOtworz(x, biuro); };
+    });
+    panel.querySelectorAll('.szukaj-wiecej').forEach(b => {
+      b.onclick = () => { rozwiniete.add(b.dataset.grupa); szukaj(); };
+    });
+  }
+
+  pole.addEventListener('input', () => { clearTimeout(zegar); rozwiniete.clear(); zegar = setTimeout(szukaj, 200); });
+  pole.addEventListener('focus', () => { if (pole.value.trim().length >= SZUKAJ_MIN) szukaj(); });
+  pole.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { zamknij(); pole.blur(); }
+    if (e.key === 'Enter') { clearTimeout(zegar); szukaj(); }
+    if (e.key === 'ArrowDown') { const p = panel.querySelector('.szukaj-wynik'); if (p) { e.preventDefault(); p.focus(); } }
+  });
+  panel.addEventListener('keydown', e => {
+    const b = [...panel.querySelectorAll('.szukaj-wynik, .szukaj-wiecej')], i = b.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' && i < b.length - 1) { e.preventDefault(); b[i + 1].focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); (i > 0 ? b[i - 1] : pole).focus(); }
+    if (e.key === 'Escape') { zamknij(); pole.focus(); }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.gora-szukaj') && !e.target.closest('#szukaj-wyniki')) zamknij();
+  });
 }
 
 /* D2 (2026-11-17): na telefonie lista aut to KARTY, nie tabela — w tabeli
@@ -638,9 +841,19 @@ async function oknoPrzypisania(p) {
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Przypisz', klasa: 'glowny', klik: async (zamknij) => {
-        const kto = document.getElementById('w-kto').value;
-        const w = await sprobuj(() => API.post(`/api/pojazdy/${p.id}/przypisz`,
-          { kierowca: kto ? Number(kto) : null }), 'Zapisane');
+        const wybor = document.getElementById('w-kto');
+        const kto = wybor.value;
+        const imie = kto ? wybor.options[wybor.selectedIndex].text : null;
+        // Zmiana kierowcy istniejącego auta może poczekać na program (zapisBiura); ekran od razu pokazuje nową osobę.
+        const w = await sprobuj(() => zapisBiura('POST', `/api/pojazdy/${p.id}/przypisz`,
+          { kierowca: kto ? Number(kto) : null }, {
+            opis: 'kierowca auta ' + p.rejestracja,
+            zrodla: ['/api/pojazdy/' + p.id],
+            popraw: (sciezka, d) => {
+              if (!sciezka.startsWith('/api/pojazdy')) return;
+              wPamieci(d, p.id, x => Object.assign(x, { kierowca: kto ? Number(kto) : null, kierowca_imie: imie }));
+            },
+          }), 'Zapisane');
         if (!w) return;
         zamknij();
         odswiezEkran();
@@ -679,7 +892,7 @@ EKRANY.terminy = {
      auta (i tego terminu). Filtr auta żyje w parametrach, a nie w pamięci
      filtra: wejście z menu pokazuje znów całą flotę.                         */
   async rysuj(pole, param) {
-    const f = filtrOsoby('_filtrTerminow', { rodzaj: '', widok: 'lista' });
+    const f = filtrOsoby('_filtrTerminow', { rodzaj: '', widok: 'lista', sortuj: '' });
     const p = param || {};
     const autoFiltra = Number(p.pojazd) || null;
     if (p.rodzaj !== undefined) {
@@ -694,7 +907,7 @@ EKRANY.terminy = {
     ]);
     const wszystkie = polaczTerminy(ewidencja || [], flota || [])
       .filter(t => !autoFiltra || t.pojazd === autoFiltra);
-    const lista = f.rodzaj ? wszystkie.filter(t => t.rodzaj === f.rodzaj) : wszystkie;
+    const lista = posortujTerminy(f.rodzaj ? wszystkie.filter(t => t.rodzaj === f.rodzaj) : wszystkie, f.sortuj);
     const rodzaje = (stan.ustawienia && stan.ustawienia.rodzaje_terminow) || {};
     const chipy = chipyTerminow(rodzaje, wszystkie, f.rodzaj);
     const nazwaWidoku = f.rodzaj ? (rodzaje[f.rodzaj] || f.rodzaj) : 'Wszystkie terminy';
@@ -717,6 +930,7 @@ EKRANY.terminy = {
           <button class="chip${f.widok === 'kalendarz' ? ' wybrany' : ''}"
                   data-widok="kalendarz">Kalendarz</button>
         </div>
+        ${polaSortowania(f.sortuj, OPCJE_SORTOWANIA_TERMINOW)}
         <button class="glowny" id="t-nowy">+ Dodaj termin</button>
       </div>
       <h3>${escHtml(nazwaWidoku)} <span class="slaby male">— ${lista.length}
@@ -726,6 +940,8 @@ EKRANY.terminy = {
     pole.querySelectorAll('[data-rodzaj]').forEach(b => {
       b.onclick = () => { f.rodzaj = b.dataset.rodzaj; odswiezEkran(); };
     });
+
+    pole.querySelector('#sortowanie').onchange = e => { f.sortuj = e.target.value; odswiezEkran(); };
 
     pole.querySelectorAll('[data-widok]').forEach(b => {
       b.onclick = () => { f.widok = b.dataset.widok; odswiezEkran(); };

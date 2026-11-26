@@ -77,8 +77,12 @@ EKRANY.przeglady = {
     }
     let zInnych = 0;
     if (biuro && f.okres && f.status === 'wykonany') {
-      const wszystkie = await API.get('/api/przeglady?status=wykonany').catch(() => []);
-      zInnych = (wszystkie || []).filter(g => g.okres !== f.okres).length;
+      // Liczba „do sprawdzenia” z pulpitu (wszystkie miesiące, bez limitu 200 z listy) minus ta
+      // z wybranego miesiąca (recenzja 25.11, D8): dokładna, a lista nie jedzie drugi raz.
+      const pulpit = await API.get('/api/pulpit').catch(() => null);
+      const wszystkieDoSprawdzenia = pulpit && pulpit.kafelki ? Number(pulpit.kafelki.do_zatwierdzenia) || 0 : 0;
+      // Własnych przeglądów (których ta osoba nie zatwierdzi) pulpit nie liczy — nie odejmujemy ich od listy.
+      zInnych = Math.max(0, wszystkieDoSprawdzenia - lista.filter(g => !wlasnyProtokol(g)).length);
     }
 
     const stany = ['', 'wykonany', 'oczekuje', 'odrzucony', 'zatwierdzony', 'zalegly'];
@@ -150,8 +154,8 @@ function okresDzis(d = new Date()) {
    „Najnowsze → najstarsze” i „Najstarsze → najnowsze”. Nieznana zapisana wartość wraca do „Domyślnie”.
    Wybór jest pamiętany na osobę razem z filtrami (filtrOsoby). Tylko klient — serwer i dane bez zmian. */
 const OPCJE_SORTOWANIA = [['', 'Domyślnie'], ['nowe', 'Najnowsze → najstarsze'], ['stare', 'Najstarsze → najnowsze']];
-function polaSortowania(wybrane) {
-  return `<label>Sortowanie<select id="sortowanie">${OPCJE_SORTOWANIA.map(([w, o]) =>
+function polaSortowania(wybrane, opcje) {
+  return `<label>Sortowanie<select id="sortowanie">${(opcje || OPCJE_SORTOWANIA).map(([w, o]) =>
     `<option value="${w}"${w === (wybrane || '') ? ' selected' : ''}>${o}</option>`).join('')}</select></label>`;
 }
 function posortujListe(lista, tryb, dataRekordu) {
@@ -302,12 +306,15 @@ EKRANY.protokol = {
           <span>${escHtml(u.opis)} <span class="plakietka p-${escHtml(u.status)}">${
             escHtml(opisKodu(OPIS_USTERKI, u.status))}</span></span></div>`).join('')}</div>` : ''}
 
+      ${biuro && (g.status === 'wykonany' || g.status === 'odrzucony') && wlasnyProtokol(g)
+        ? `<p class="slaby" id="pr-wlasny">Ten przegląd oddałeś(aś) Ty — zatwierdzić go musi ktoś inny z biura
+            albo administrator.</p>` : ''}
       <div class="przyciski rozstaw">
         <button id="pr-wroc">${ikonka('strzalka-lewo')}Wróć</button>
         <span class="przyciski">
           ${biuro && (g.status === 'wykonany' || g.status === 'zatwierdzony')
             ? '<button class="niszczacy" id="pr-odrzuc">Zwróć kierowcy</button>' : ''}
-          ${biuro && (g.status === 'wykonany' || g.status === 'odrzucony')
+          ${biuro && (g.status === 'wykonany' || g.status === 'odrzucony') && !wlasnyProtokol(g)
             ? '<button class="glowny" id="pr-zatwierdz">Zatwierdź</button>' : ''}
         </span>
       </div>`;
@@ -355,6 +362,11 @@ function checklistaOdczyt(punkty) {
     </li>`).join('')}</ul>`;
 }
 
+/* D14: własny przegląd zatwierdza ktoś inny (serwer też tego pilnuje — 403). */
+function wlasnyProtokol(g) {
+  return !!(g && stan.uz && g.kierowca && g.kierowca === stan.uz.id);
+}
+
 /* Zatwierdzenie bez pytania „na pewno?” — nic nie niszczy, a „Odrzuć” cofa je
    w każdej chwili. Pytanie przy każdym z kilkudziesięciu przeglądów w miesiącu
    uczyło klikać „Zatwierdź” dwa razy bez czytania. Po zatwierdzeniu od razu
@@ -379,11 +391,12 @@ async function zatwierdzProtokol(g) {
    Bez programu w biurze lista bywa kopią sprzed zatwierdzenia, stąd `pomin`. */
 async function nastepnyDoSprawdzenia(pomin) {
   const lista = await API.get('/api/przeglady?status=wykonany').catch(() => null);
-  return wybierzNastepnyDoSprawdzenia(lista, pomin);
+  return wybierzNastepnyDoSprawdzenia(lista, pomin, stan.uz ? stan.uz.id : 0);
 }
-function wybierzNastepnyDoSprawdzenia(lista, pomin) {
+function wybierzNastepnyDoSprawdzenia(lista, pomin, ja) {
+  // Własnych przeglądów (D14) nie podsuwamy — zatwierdza je ktoś inny.
   const nastepny = (Array.isArray(lista) ? lista : [])
-    .find(x => x && x.status === 'wykonany' && x.id !== pomin);
+    .find(x => x && x.status === 'wykonany' && x.id !== pomin && !(ja && x.kierowca === ja));
   return nastepny ? nastepny.id : null;
 }
 

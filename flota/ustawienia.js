@@ -16,10 +16,10 @@ EKRANY.ustawienia = {
   /* Na wierzchu tylko to, co biuro zmienia na co dzień: firma, okno
      ostrzegania i cykle, checklista, zestawienia do Excela. Wszystko
      techniczne (poczta, tunel, GitHub Pages, kopie, klucze połączeń z Panelem
-     i GK Trasy, trzymanie danych) leży w jednej zwiniętej sekcji
-     „Zaawansowane” (etap 2 poprawek UI, decyzja właściciela) — ustawia się to
+     i GK Trasy, trzymanie danych) leży w jednej zwiniętej karcie
+     „Poczta, kopie i połączenia” (etap 2 poprawek UI, decyzja właściciela) — ustawia się to
      raz, a na wierzchu straszyło i zasłaniało resztę. Alarm, który prowadzi
-     do takiej sekcji (kopia, tunel, adres na Pages), rozwija „Zaawansowane”
+     do takiej sekcji (kopia, tunel, adres na Pages), rozwija „Poczta, kopie i połączenia”
      i przewija do niej: param.sekcja = id karty (pokazSekcjeUstawien).      */
   async rysuj(pole, param) {
     const u = await sprobuj(() => API.get('/api/ustawienia'));
@@ -88,7 +88,7 @@ EKRANY.ustawienia = {
       </div>
 
       <details class="karta karta-zwijana zaawansowane" id="u-zaawansowane">
-        <summary>Zaawansowane</summary>
+        <summary>Poczta, kopie i połączenia</summary>
         <div class="zwijana-tresc">
       <p class="slaby male" style="margin-top:0">Poczta, tunel i adres dla telefonów, kopie
         zapasowe, połączenia z Panelem Zarządczym GK i GK Trasy, trzymanie danych — ustawia się
@@ -194,12 +194,12 @@ EKRANY.ustawienia = {
     pole.querySelectorAll('[data-eksport]').forEach(b => {
       b.onclick = () => pobierzZestawienie(b.dataset.eksport);
     });
-    // „Zaawansowane” fabrycznie zwinięte; raz rozwinięte zostaje rozwinięte
+    // Karta „Poczta, kopie i połączenia” fabrycznie zwinięta; raz rozwinięte zostaje rozwinięte
     // po zapisie i odświeżeniu ekranu (do końca tej wizyty w programie).
     const zaawansowane = pole.querySelector('#u-zaawansowane');
     zaawansowane.open = !!stan._zaawansowaneOtwarte;
     zaawansowane.ontoggle = () => { stan._zaawansowaneOtwarte = zaawansowane.open; };
-    // Wejście z alarmu: rozwinąć „Zaawansowane” i pokazać tę jedną sekcję —
+    // Wejście z alarmu: rozwinąć kartę „Poczta, kopie i połączenia” i pokazać tę jedną sekcję —
     // raz; odświeżenie po zapisie nie przewija drugi raz.
     const p = param || {};
     if (p.sekcja) {
@@ -210,7 +210,7 @@ EKRANY.ustawienia = {
   },
 };
 
-/* Sekcje „Zaawansowane”, do których prowadzą alarmy programu (alarmy_systemu
+/* Sekcje karty „Poczta, kopie i połączenia”, do których prowadzą alarmy programu (alarmy_systemu
    we flotex.py, pole `kod`). Alarm bez sekcji (mało miejsca na dysku) nie ma
    czego otworzyć w Ustawieniach.                                             */
 const SEKCJE_ALARMOW = {
@@ -223,7 +223,7 @@ function naUstawieniach() {
   return stan.ekran === 'ustawienia' || (stan.ekran === 'administracja' && stan.adminZakladka === 'ustawienia');
 }
 
-/* Rozwija „Zaawansowane” i przewija do karty `id`. Z innego ekranu (wstęga
+/* Rozwija kartę „Poczta, kopie i połączenia” i przewija do karty `id`. Z innego ekranu (wstęga
    alarmu na pulpicie) najpierw otwiera Ustawienia z tym samym celem.        */
 function pokazSekcjeUstawien(id) {
   const zaawansowane = document.getElementById('u-zaawansowane');
@@ -807,7 +807,7 @@ async function pobierzZestawienie(nazwa) {
    je sam (alarmy_systemu) i wysyła też push do biura, raz na 6 godzin.       */
 function wstegiAlarmow(alarmy) {
   return (alarmy || []).map(a => {
-    // Sekcje techniczne leżą od etapu 2 w zwiniętych „Zaawansowanych” —
+    // Sekcje techniczne leżą od etapu 2 w zwiniętej karcie „Poczta, kopie i połączenia” —
     // bez tego przycisku administrator szukałby kopii czy tunelu po omacku.
     const sekcja = jestAdministratorem() ? SEKCJE_ALARMOW[a.kod] : '';
     return `<div class="wstega ${a.push ? 'blad' : 'uwaga'}">

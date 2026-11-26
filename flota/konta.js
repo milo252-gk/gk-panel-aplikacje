@@ -102,7 +102,7 @@ EKRANY.konta = {
     pole.innerHTML = `
       ${stan.kontaZPanelu ? `<div class="wstega info">Konta zakłada się w <b>Panelu
         Kierownika → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
-        GK. GK Flota pobiera je sama co kilka minut (Administracja → Ustawienia → Zaawansowane → Konta GK). ${stan.zespolGk
+        GK. GK Flota pobiera je sama co kilka minut (Administracja → Ustawienia → Konta GK). ${stan.zespolGk
           ? `Konta <b>biura i kierowców</b> zakładasz też tutaj — „+ Dodaj konto” zapisuje
             je w Panelu.` : `Tutaj zostaje tylko awaryjny administrator.${zespol.powod
             ? `<br>${escHtml(zespol.powod)}` : ''}`}</div>` : ''}

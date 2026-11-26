@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-14811db65ec2';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-1c225492bb3c';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -981,6 +981,15 @@ function odciskZrodla(dane) {
     (klucz, wartosc) => (klucz === 'terminy' ? undefined : wartosc))));
 }
 
+/* Kolejkowanie zapisów biura jest domyślnie włączone — dla biura i administratora (jak w GK Trasy). Kierowca nie
+   używa zapisBiura (jego zapisy idą przez kolejkę telefonu, kolejka.js). Wyłączenie: Moje konto → „Zapisy bez
+   połączenia” (klucz tylko tego urządzenia, 'gk-flota.zapis-bez-polaczenia'); zapisy już czekające i tak się wyślą. */
+const USTAWIENIE_ZAPISU_BEZ_POLACZENIA = 'zapis-bez-polaczenia';
+function kolejkowanieBiuraWlaczone() {
+  if (typeof jestBiuro === 'function' && !jestBiuro()) return false;
+  return typeof przypomnijSobie !== 'function' || przypomnijSobie(USTAWIENIE_ZAPISU_BEZ_POLACZENIA) !== '0';
+}
+
 function bezPolaczeniaZProgramem(e) {
   return !!(e && (e.bezPolaczenia || KODY_BEZ_PROGRAMU.indexOf(e.kod) >= 0));
 }
@@ -1021,6 +1030,13 @@ async function poprawPamiec(popraw) {
    popraw(sciezka, dane) }. Zwraca odpowiedź programu albo { wKolejce: true }. */
 async function zapisBiura(metoda, sciezka, dane, opcje) {
   const o = opcje || {};
+  // Opcja „Zapisy bez połączenia” wyłączona (Moje konto) — zwyczajny zapis, a bez programu komunikat „nie zapisano”.
+  if (!kolejkowanieBiuraWlaczone()) {
+    // Opcję można wyłączyć tylko przy pustej kolejce, ale kolejka mogła urosnąć z innej karty: najpierw dowieź zaległe,
+    // żeby starszy zapis z kolejki nie nadpisał nowego (to samo auto, ta sama usterka) ani nie zgłosił fałszywego konfliktu.
+    if ((await zapisyBiuraOsoby().catch(() => [])).some(op => !op.blad)) await wyslijZapisyBiura().catch(() => {});
+    return API.zadanie(metoda, sciezka, dane);
+  }
   const op = { uuid: numerOperacji(), metoda, sciezka, dane: dane === undefined ? null : dane,
                opis: o.opis || sciezka, uzytkownik: stan.uz ? stan.uz.id : null,
                dodano: new Date().toISOString(), zrodla: [] };
@@ -1181,6 +1197,8 @@ const API = {
       throw blad;
     }
     programOdpowiada();
+    // Zapis zmienia dane, które przeszukuje pole „Szukaj” — nie trzymaj ich jeszcze 30 s.
+    if (metoda !== 'GET' && typeof szukajPrzeterminuj === 'function') szukajPrzeterminuj();
     if (metoda === 'GET') zapamietajOdpowiedz(sciezka, wynik).catch(() => { /* pamięć to tylko zapas */ });
     return wynik;
   },
@@ -1240,7 +1258,16 @@ async function doKolejki(op, komunikatSukcesu) {
     // dźwięk potwierdzenia, jak w hali i GK Trasy.
     Dzwiek.zagraj('sukces');
   }
-  synchronizuj();
+  const wysylka = synchronizuj();
+  // Słaby zasięg: telefon uważa, że jest online, ale zapis nie wyszedł. Dźwięk i „zgłoszone”
+  // padły przed wysyłką, więc po jej końcu mówimy prawdę — zapis jest w telefonie i czeka.
+  if (komunikatSukcesu && stan.online && !stan.trybOffline) {
+    wysylka.then(async () => {
+      if (stan.synchronizuje) return;                   // trwa inna wysyłka — ona zabierze i ten zapis
+      const wciaz = await Kolejka.lista().then(l => l.some(o => o.uuid === op.uuid), () => false);
+      if (wciaz) komunikat('Zapisane w telefonie — wyślę, gdy wróci zasięg', 'ok');
+    }).catch(() => { /* komunikat dodatkowy, nie może nic zepsuć */ });
+  }
   return op;
 }
 
@@ -1631,6 +1658,13 @@ function zarejestrujSyncKolejki() {
    (zapamiętany stary miesiąc ukrywałby bieżące przeglądy). Zapis przy wylogowaniu, zmianie osoby i schowaniu karty. */
 const FILTRY_OSOBY = ['_filtrFloty', '_filtrProtokolow', '_filtrUsterek', '_filtrTerminow'];
 const FILTRY_BEZ_PAMIECI = ['szukaj', 'okres'];
+// Przeglądy: status też bez pamięci. Biuro, które raz wybrało „zatwierdzone”, następnego dnia
+// otwierałoby Przeglądy bez kolejki „do sprawdzenia” (recenzja 25.11, D9); wejście z pulpitu
+// ustawia status samo, a bez niego ekran zaczyna od „do sprawdzenia”.
+const FILTRY_BEZ_PAMIECI_NA_EKRANIE = { _filtrProtokolow: ['status'] };
+function filtrBezPamieci(nazwa, klucz) {
+  return FILTRY_BEZ_PAMIECI.includes(klucz) || (FILTRY_BEZ_PAMIECI_NA_EKRANIE[nazwa] || []).includes(klucz);
+}
 function kluczFiltrowOsoby() {
   return stan.uz && stan.uz.login ? 'filtry.' + String(stan.uz.login).toLowerCase() : '';
 }
@@ -1640,7 +1674,7 @@ function zapiszFiltryOsoby() {
   const paczka = {};
   for (const nazwa of FILTRY_OSOBY) {
     if (!stan[nazwa]) continue;
-    paczka[nazwa] = Object.fromEntries(Object.entries(stan[nazwa]).filter(([k]) => !FILTRY_BEZ_PAMIECI.includes(k)));
+    paczka[nazwa] = Object.fromEntries(Object.entries(stan[nazwa]).filter(([k]) => !filtrBezPamieci(nazwa, k)));
   }
   if (Object.keys(paczka).length) pamietaj(klucz, JSON.stringify(paczka));
 }
@@ -1652,7 +1686,7 @@ function filtrOsoby(nazwa, domyslny) {
   try {
     const zapis = JSON.parse(przypomnijSobie(kluczFiltrowOsoby()) || '{}')[nazwa] || {};
     for (const k of Object.keys(domyslny)) {
-      if (!FILTRY_BEZ_PAMIECI.includes(k) && k in zapis && typeof zapis[k] === typeof domyslny[k]) f[k] = zapis[k];
+      if (!filtrBezPamieci(nazwa, k) && k in zapis && typeof zapis[k] === typeof domyslny[k]) f[k] = zapis[k];
     }
   } catch (e) { /* uszkodzony zapis — zostają wartości domyślne */ }
   return (stan[nazwa] = f);
@@ -1666,6 +1700,12 @@ function zapomnijStanOsoby() {
   delete stan._filtrProtokolow; delete stan._filtrFloty;
   delete stan._filtrUsterek; delete stan._pojazdProtokolu;
   delete stan._filtrTerminow; delete stan._zaawansowaneOtwarte;
+  // Pole „Szukaj” w nagłówku: listy, tekst w polu, wyniki i odpowiedzi „w locie”
+  // poprzedniej osoby nie mogą trafić do następnej na tym samym telefonie.
+  if (typeof szukajZapomnij === 'function') szukajZapomnij();
+  // Wstęga „Połączenie z programem wróciło” dotyczyła poprzedniej osoby i jej ekranu.
+  const wrocilo = document.getElementById('wstega-bez-programu');
+  if (wrocilo && wrocilo.classList.contains('ok')) wrocilo.remove();
 }
 
 async function przyjmijLogowanie(odpowiedz, wpisany) {
@@ -1905,7 +1945,7 @@ function pokazLogowanie() {
   pokazInfoKont();
 }
 
-/* „Konto zakłada administrator w Panelu Zarządczym GK → Administracja.” — tylko
+/* „Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja.” — tylko
    gdy konta naprawdę przychodzą z Panelu. Pyta /api/zyje (bez logowania);
    brak odpowiedzi = brak linii, logowanie na to nie czeka. */
 async function pokazInfoKont() {
@@ -2091,7 +2131,10 @@ async function pokazEkran(nazwa, parametry) {
   stan.parametryEkranu = parametry || {};
   document.getElementById('tytul-ekranu').textContent = ekran.tytul;
   document.querySelectorAll('.menu button[data-ekran], .pasek-dolny button[data-ekran]')
-    .forEach(b => b.classList.toggle('wybrany', b.dataset.ekran === nazwa));
+    .forEach(b => {
+      b.classList.toggle('wybrany', b.dataset.ekran === nazwa);
+      if (b.dataset.ekran === nazwa) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
   zamknijMenu();
   tresc.innerHTML = '<div class="pusto">Wczytuję…</div>';
   window.scrollTo(0, 0);
@@ -2184,7 +2227,7 @@ function trybOffline() {
       wyjasnienie: 'Aplikacja trzyma zdjęcia i odczyty bez zasięgu i wysyła je po powrocie, '
         + 'ale musi być otwarta od wyjazdu. Otwórz ją jeszcze na firmowym wifi. '
         + 'Pełną pracę bez zasięgu włącza dopiero adres z https:// — biuro uruchamia go '
-        + 'w Administracji → Ustawienia → Zaawansowane → „Adres HTTPS dla kierowców".',
+        + 'w Administracji → Ustawienia → „Adres HTTPS dla kierowców".',
     };
   }
   return {
@@ -2262,7 +2305,7 @@ function stempelWersji() {
       </div>
       ${doPublikacji && osobno ? `<div class="male" style="margin-top:6px">
         Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź
-        Administracja → Ustawienia → Zaawansowane → <b>Stały adres dla kierowców</b>.</div>` : ''}
+        Administracja → Ustawienia → <b>Stały adres dla kierowców</b>.</div>` : ''}
       ${naprawialne ? `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>` : ''}
     </div>`;
@@ -2308,7 +2351,7 @@ async function sprawdzSpojnoscWersji() {
     // i dostałby ostrzeżenie, z którym nie ma co zrobić.
     if (osobneAdresy && znanyDysk && dysk !== skrypt && jestBiuro()) {
       komunikat('Kierowcy mają starszą wersję aplikacji niż program w biurze. '
-        + 'Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź Administracja → Ustawienia → Zaawansowane → Stały adres dla kierowców.', 'blad');
+        + 'Aplikację na GitHub Pages wysyła Panel Zarządczy GK — sprawdź Administracja → Ustawienia → Stały adres dla kierowców.', 'blad');
     }
     return;
   }
@@ -2633,6 +2676,12 @@ function oknoKonta() {
         ${poleDzwieku()}
       </fieldset>
       <fieldset><legend>Dane w tym urządzeniu</legend>
+        ${jestBiuro() ? `<p class="konto-drobne">Gdy program w biurze nie odpowiada (np. trwa aktualizacja serwera), zatwierdzenie
+            i zwrot przeglądu, zmiany usterek, auta, kierowcy i terminu czekają w tym komputerze, a po powrocie połączenia wysyłają
+            się same. Nowych aut, terminów i przeglądów oraz zmian w Administracji to nie dotyczy — tych bez programu nie zapiszesz.</p>
+          <div class="przyciski-konta">
+            <button type="button" id="btn-zapis-bez-polaczenia" aria-pressed="${kolejkowanieBiuraWlaczone()}">${napisZapisuBezPolaczenia()}</button>
+          </div>` : ''}
         <p class="konto-drobne">Czeka na wysłanie: <span id="ile-w-kolejce">…</span></p>
         <p class="konto-drobne ${stan.obceWKolejce ? '' : 'ukryty'}" id="obce-w-kolejce"></p>
         <div id="odrzucone-zapisy"></div>
@@ -2653,6 +2702,21 @@ function oknoKonta() {
         Motyw.ustaw(b.dataset.wyglad);
         pigulki.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       });
+      const bezPolaczenia = pole.querySelector('#btn-zapis-bez-polaczenia');
+      if (bezPolaczenia) bezPolaczenia.onclick = async () => {
+        // Wyłączenie wraca do komunikatu „nie zapisano” przy braku programu. Przy niepustej kolejce biura nie pozwalamy wyłączyć:
+        // nowe zapisy szłyby bezpośrednio, a starsze z kolejki mogłyby je później nadpisać.
+        if (kolejkowanieBiuraWlaczone()) {
+          const czekajace = (await zapisyBiuraOsoby().catch(() => [])).length;
+          if (czekajace) {
+            komunikat('Najpierw zaległe zmiany muszą dojść do programu (czeka: ' + czekajace + '). Wyłączysz tę opcję, gdy kolejka będzie pusta.', 'uwaga');
+            return;
+          }
+          pamietaj(USTAWIENIE_ZAPISU_BEZ_POLACZENIA, '0');
+        } else zapomnijKlucz(USTAWIENIE_ZAPISU_BEZ_POLACZENIA);
+        bezPolaczenia.innerHTML = napisZapisuBezPolaczenia();
+        bezPolaczenia.setAttribute('aria-pressed', String(kolejkowanieBiuraWlaczone()));
+      };
       pokazKolejkeWKoncie(pole);
       if (stan.obceWKolejce) {
         pole.querySelector('#obce-w-kolejce').innerHTML =
@@ -2718,6 +2782,9 @@ function poleDzwieku() {
       <button type="button" id="btn-dzwiek" aria-pressed="${Dzwiek.wlaczony()}">${napisDzwieku()}</button>
       <button type="button" id="btn-sprawdz-dzwieki">${ikonka('glos')}Sprawdź dźwięki</button>
     </div>`;
+}
+function napisZapisuBezPolaczenia() {
+  return ikonka('zapisz') + (kolejkowanieBiuraWlaczone() ? 'Zapisy bez połączenia: włączone' : 'Zapisy bez połączenia: wyłączone');
 }
 function napisDzwieku() {
   return Dzwiek.wlaczony() ? ikonka('alerty') + 'Dźwięk powiadomień: włączony'
@@ -3096,12 +3163,9 @@ async function uruchom() {
   // Podpowiedź w atrybucie title jest na telefonie niewidzialna, a to właśnie
   // kierowca ma się dowiedzieć, że coś nie przeszło. Kropka musi być klikalna.
   document.getElementById('stan-sieci-btn').onclick = oknoKonta;
-  // oknoSzukania() dostarcza pojazdy.js. Gdyby tego pliku zabrakło, lupa ma
-  // powiedzieć dlaczego nie działa, a nie milczeć pod palcem.
-  document.getElementById('btn-szukaj').onclick = () => {
-    if (typeof oknoSzukania === 'function') oknoSzukania();
-    else komunikat('Wyszukiwarka floty nie została wczytana', 'blad');
-  };
+  // Pole „Szukaj” w nagłówku dostarcza pojazdy.js (podepnijSzukajGora); bez tego pliku
+  // zostaje nieczynne, ale reszta programu działa.
+  if (typeof podepnijSzukajGora === 'function') podepnijSzukajGora();
   document.getElementById('btn-wyloguj').onclick = () => wyloguj();
   document.querySelectorAll('.menu button[data-ekran]').forEach(b =>
     b.onclick = () => pokazEkran(b.dataset.ekran));
