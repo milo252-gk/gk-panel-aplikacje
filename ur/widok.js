@@ -33,6 +33,12 @@
   const wieleLinii = slowniki => linie(slowniki).length > 1;
   const nazwaLinii = (slowniki, kod) => (((slowniki || {}).linie || {})[kod] || {}).nazwa || kod || '—';
   const nazwaMaszyny = (slowniki, kod) => (((slowniki || {}).maszyny || {})[kod] || {}).nazwa || kod || '—';
+  // Karty na listach: kod, którego nie ma w słowniku maszyn (maszyna usunięta, stara kolejka offline), dostaje podpis zamiast „NIE-MA NIE-MA”.
+  // Zgłoszenia przez to niczego nie odrzucamy — tylko mówimy, co widać. Bez załadowanego słownika maszyn (start) — sam kod, jak dotąd.
+  const nazwaMaszynyKarty = (slowniki, kod) => {
+    const zn = (slowniki || {}).maszyny || {};
+    return kod && Object.keys(zn).length && !zn[kod] ? `${kod} (nieznana maszyna)` : nazwaMaszyny(slowniki, kod);
+  };
   const nazwaStanowiska = (slowniki, kod) => (((slowniki || {}).stanowiska || {})[kod] || {}).nazwa || kod || null;
   const nazwaKarty = (slowniki, kod) => (((slowniki || {}).karty_przegladow || {})[kod] || {}).nazwa || kod || '—';
 
@@ -177,7 +183,7 @@
     const pr = priorytetInfo(stale, d.priorytet);
     const w = {
       id: a.id, numer: numer(a), status: a.status, etykieta: a.etykieta || a.status, aktywny: a.aktywny !== false,
-      maszyna: d.maszyna || '—', maszynaNazwa: nazwaMaszyny(slowniki, d.maszyna),
+      maszyna: d.maszyna || '—', maszynaNazwa: nazwaMaszynyKarty(slowniki, d.maszyna),
       linia: a.linia || d.linia || null, liniaNazwa: nazwaLinii(slowniki, a.linia || d.linia),
       stanowiskoNazwa: nazwaStanowiska(slowniki, d.stanowisko),
       opis: d.opis || '', zdjec: (d.zdjecia || []).length, priorytet: pr.kod, priorytetNazwa: nazwaPriorytetu(pr, slowniki), zatrzymuje: !!pr.zatrzymuje, kolejnosc: pr.kolejnosc || 9,
@@ -276,10 +282,10 @@
     return wierzch.length ? { wierzch, wiecej } : { wierzch: wiecej, wiecej: [] };
   }
 
-  /* Lider UR (albo admin) — Plan i KPI. Mechanik KPI nie ogląda (UI etap 2): liczby są dla tego, kto rozlicza dział. */
+  /* Lider Utrzymania Ruchu (albo admin) — Plan i KPI. Mechanik KPI nie ogląda (UI etap 2): liczby są dla tego, kto rozlicza dział. */
   const kierownikUR = p => !!p && (p.role || []).some(r => r === 'kierownik_ur' || r === 'admin');
 
-  /* R3 (właściciel 2026-11-09): KPI i zestawienia CSV ma TYLKO kierownik zakładu i administrator — także w UR. Lider UR
+  /* R3 (właściciel 2026-11-09): KPI i zestawienia CSV ma TYLKO kierownik zakładu i administrator — także w UR. Lider Utrzymania Ruchu
      i mechanik KPI nie widzą (wcześniej: lider UR; kierownik zakładu nie widział go w UR, choć hub mu pozwalał). Plan
      przeglądów zostaje przy liderze UR (kierownikUR). Serwer: tryb „tylko loguj” (HALA_KPI_CSV_TYLKO_KIEROWNIK=1 = odmowa). */
   const mozeKpi = p => !!p && (p.role || []).some(r => r === 'kierownik' || r === 'admin');
@@ -554,7 +560,7 @@
     const post = postepPrzegladu(p, karta);
     return {
       id: p.id, numer: numer(p), status: p.status, stan: statusPrzegladu(p, teraz),
-      maszyna: d.maszyna, maszynaNazwa: nazwaMaszyny(slowniki, d.maszyna), liniaNazwa: nazwaLinii(slowniki, p.linia || d.linia),
+      maszyna: d.maszyna, maszynaNazwa: nazwaMaszynyKarty(slowniki, d.maszyna), liniaNazwa: nazwaLinii(slowniki, p.linia || d.linia),
       karta: d.karta, kartaNazwa: nazwaKarty(slowniki, d.karta), termin: d.termin || null, dzien: d.termin ? dzienZakladu(d.termin) : null,
       mechanik: d.mechanik || null, mechanikNazwa: nazwaPracownika(pracownicy, d.mechanik || d.wykonawca),
       moj: !!ja && (d.mechanik === ja || d.wykonawca === ja), postep: post, oczekuje: !!p._oczekuje,
@@ -776,7 +782,7 @@
 
   /* Przykładowe karty: wzór dla typów maszyn zakładu (pilarka, wiertarka, CNC, okleiniarka — D51) i danych testowych,
      karta „<Typ> — przegląd miesięczny” dla każdego innego typu i ogólna karta dla maszyn bez typu.
-     Lider UR wstawia je jednym dotknięciem i poprawia pod swoje maszyny. */
+     Lider Utrzymania Ruchu wstawia je jednym dotknięciem i poprawia pod swoje maszyny. */
   const OK = (nazwa) => ({ nazwa, rodzaj: 'ok_nok' });
   const POMIAR = (nazwa, jednostka, min, max) => Object.assign({ nazwa, rodzaj: 'pomiar', jednostka }, min !== null ? { min } : {}, max !== null ? { max } : {});
   const WZORY_KART = {

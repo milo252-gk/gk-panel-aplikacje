@@ -272,7 +272,7 @@
     el.innerHTML = `<section class="admin-linia" data-karta="kody">
         <h3>Kody QR</h3>
         <p class="slaby">Kody aplikacji, maszyn, punktów skanu, linii i identyfikatorów osób — każdy osobno albo wszystkie z kategorii.
-          Okno to samo co wszędzie, gdzie są kody (Kierownik i Menedżer).</p>
+          Okno to samo co wszędzie, gdzie są kody (Kierownik zakładu i Menedżer).</p>
         <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-kody">${P.ik('drukuj')}Kody QR</button></div>
       </section>`;
   }

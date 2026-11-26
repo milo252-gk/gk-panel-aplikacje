@@ -25,9 +25,9 @@
 
   UR.ja = () => (hala.pracownik ? hala.pracownik.id : null);
   UR.mozna = (typ, slownik) => W.mozna(hala.kontrakt, hala.pracownik, typ, slownik);
-  // Plan przeglądów: lider UR (UI etap 2) — jedna reguła w widok.js (W.kierownikUR, testowana).
+  // Plan przeglądów: lider Utrzymania Ruchu (UI etap 2) — jedna reguła w widok.js (W.kierownikUR, testowana).
   UR.kierownikUR = () => W.kierownikUR(hala.pracownik);
-  // R3 (2026-11-09): KPI i CSV tylko kierownik zakładu i administrator (W.mozeKpi) — nie lider UR ani mechanik.
+  // R3 (2026-11-09): KPI i CSV tylko kierownik zakładu i administrator (W.mozeKpi) — nie lider Utrzymania Ruchu ani mechanik.
   UR.mozeKpi = () => W.mozeKpi(hala.pracownik);
   UR.stale = () => (hala.kontrakt && hala.kontrakt.stale) || {};
   UR.kontekst = () => ({ slowniki: hala.slowniki, pracownicy: hala.pracownicy, stale: UR.stale(), teraz: hala.teraz(),
@@ -65,7 +65,7 @@
     // tekstowym „kliknąłby” pierwszy przycisk, czyli właśnie Anuluj.
     o.innerHTML = `<form class="okno-tresc">
       <h2>${esc(tytul)}</h2><div class="okno-cialo">${tresc || ''}</div>
-      <p class="blad" hidden></p>
+      <p class="blad" role="alert" hidden></p>
       <div class="okno-przyciski">${lista.map((p, i) =>
         `<button type="${p.wartosc === false ? 'button' : 'submit'}" value="${i}" class="${p.glowny ? 'glowny' : ''} ${p.zielony ? 'zielony' : ''} ${p.alarm ? 'alarm' : ''}">${esc(p.tekst)}</button>`).join('')}</div></form>`;
     const f = o.querySelector('form');
@@ -77,10 +77,12 @@
       const p = lista[i];
       if (p && p.sprawdz) {
         const blad = p.sprawdz(new FormData(f), f);
-        if (blad) { const b = f.querySelector('.blad'); b.textContent = blad; b.hidden = false; return; }
+        if (blad) { const b = f.querySelector('.blad'); b.textContent = blad; b.hidden = false; b.scrollIntoView({ block: 'nearest' }); return; }
       }
       zamknij(p ? { wartosc: p.wartosc, dane: new FormData(f), form: f } : null);
     });
+    // Komunikat walidacji znika, gdy człowiek zaczyna poprawiać (inaczej wisiał do następnego kliknięcia).
+    for (const zd of ['input', 'change']) f.addEventListener(zd, () => { const b = f.querySelector('.blad'); if (b && !b.hidden) b.hidden = true; });
     // Enter w polu tekstowym nie wysyła okna (czytnik kodów kończy Enterem) — tylko przycisk.
     f.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') ev.preventDefault(); });
     o.oncancel = ev => { ev.preventDefault(); zamknij(null); };      // Esc / „wstecz” — jedna obsługa na okno
@@ -401,7 +403,7 @@
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
-    if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo lidera UR.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo lidera Utrzymania Ruchu.';
     // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Złe imię i nazwisko albo PIN”, blokada na 5 min).
     return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i PIN.';
   }
@@ -491,7 +493,7 @@
     // Tuż po otwarciu strumień dopiero się łączy — bez okresu łaski każde odświeżenie mignęłoby „Brak sieci”.
     const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
     // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia); tylko zapisy zalogowanej osoby (moje).
-    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska, zadzwon: 'do lidera UR',
+    const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska, zadzwon: 'do lidera Utrzymania Ruchu',
                                             komputer: !global.matchMedia('(max-width: 820px)').matches });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
@@ -549,6 +551,7 @@
           <a class="przycisk" href="#liczniki">Liczniki maszyn (motogodziny, cykle)</a>
           ${UR.mozeKpi() ? '<a class="przycisk" href="#kpi">KPI: wskaźniki Utrzymania Ruchu</a>' : ''}
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
+          ${global.Hala.skrotyDoPanelu(hala.pracownik).map(s => `<a class="przycisk" href="${s.adres}">${s.tekst}</a>`).join('')}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#wyniki">Moje wyniki</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>

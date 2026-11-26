@@ -61,7 +61,7 @@
     // tekstowym „kliknąłby” pierwszy przycisk, czyli właśnie Anuluj.
     o.innerHTML = `<form class="okno-tresc">
       <h2>${esc(tytul)}</h2><div class="okno-cialo">${tresc || ''}</div>
-      <p class="blad" hidden></p>
+      <p class="blad" role="alert" hidden></p>
       <div class="okno-przyciski">${lista.map((p, i) =>
         `<button type="${p.wartosc === false ? 'button' : 'submit'}" value="${i}" class="${p.glowny ? 'glowny' : ''} ${p.alarm ? 'alarm' : ''}">${esc(p.tekst)}</button>`).join('')}</div></form>`;
     const f = o.querySelector('form');
@@ -72,11 +72,13 @@
       const p = lista[i];
       if (p && p.sprawdz) {
         const blad = p.sprawdz(new FormData(f));
-        if (blad) { ev.preventDefault(); const b = f.querySelector('.blad'); b.textContent = blad; b.hidden = false; return; }
+        if (blad) { ev.preventDefault(); const b = f.querySelector('.blad'); b.textContent = blad; b.hidden = false; b.scrollIntoView({ block: 'nearest' }); return; }
       }
       ev.preventDefault();
       zamknij(p ? { wartosc: p.wartosc, dane: new FormData(f) } : null);
     });
+    // Komunikat walidacji znika, gdy człowiek zaczyna poprawiać (inaczej wisiał do następnego kliknięcia).
+    for (const zd of ['input', 'change']) f.addEventListener(zd, () => { const b = f.querySelector('.blad'); if (b && !b.hidden) b.hidden = true; });
     // Enter w polu (klawiatura „OK”, czytnik kodów kończący Enterem) NIE wysyła okna — jak w formularzach
     // (przyZapisie): skan numeru partii w oknie „Partia brakowa” od razu oznaczał partię, zanim wpisano ilość.
     f.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') ev.preventDefault(); });
@@ -282,7 +284,7 @@
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
-    if (e.kod === 403) return 'To konto nie ma dostępu do Kontroli Jakości. Zaloguj się kontem kontrolera albo kierownika KJ.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do Kontroli Jakości. Zaloguj się kontem kontrolera albo kierownika Kontroli Jakości.';
     // 400/401/429: hub mówi po polsku i co zrobić („Złe imię i nazwisko albo PIN”, blokada na 5 minut) — wprost (D24).
     return e.message || 'Nie udało się zalogować. Spróbuj jeszcze raz.';
   }
@@ -365,7 +367,7 @@
     const laska = Date.now() - START < LASKA_MS && p.online && !p.blad;
     // D64: wspólne słowa Lidera, UR i KJ (Hala.pasekPolaczenia); tylko zapisy zalogowanej osoby (moje).
     const w = global.Hala.pasekPolaczenia({ zalogowany: hala.zalogowany(), polaczenie: p, kolejka, laska,
-                                            komputer: !global.matchMedia('(max-width: 820px)').matches, zadzwon: 'do kierownika KJ' });
+                                            komputer: !global.matchMedia('(max-width: 820px)').matches, zadzwon: 'do kierownika Kontroli Jakości' });
     pasek.className = 'hala-polaczenie ' + w.klasa;
     pasek.textContent = w.tekst;
     pasek.disabled = !(kolejka.odrzucone || kolejka.plikiOdrzucone);
@@ -422,6 +424,7 @@
           <a class="przycisk" href="#pareto">Pareto wad</a>
           <a class="przycisk" href="#partie">Partie brakowe</a>
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
+          ${global.Hala.skrotyDoPanelu(hala.pracownik).map(s => `<a class="przycisk" href="${s.adres}">${s.tekst}</a>`).join('')}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#wyniki">Moje wyniki</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>

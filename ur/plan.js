@@ -1,4 +1,4 @@
-/* Plan przeglądów (lider UR): karty przeglądów z punktami kontrolnymi i harmonogram.
+/* Plan przeglądów (lider Utrzymania Ruchu): karty przeglądów z punktami kontrolnymi i harmonogram.
    Oba to słowniki z rozszerzenia UR (karty_przegladow, harmonogram_przegladow), więc zapis
    to zdarzenie slownik.zapisany — z historią, offline i przez ten sam strumień do telefonów.
 
@@ -37,7 +37,7 @@
 
   UR.ekran('plan', {
     rysuj(el) {
-      if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Plan przeglądów prowadzi lider UR.</p>'; return; }
+      if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Plan przeglądów prowadzi lider Utrzymania Ruchu.</p>'; return; }
       const sl = hala.slowniki;
       const karty = Object.entries(sl.karty_przegladow || {}).map(([kod, k]) => Object.assign({ kod }, k))
         .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
@@ -177,7 +177,7 @@
   }
 
   async function rysujEdytor(el, kod) {
-    if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Karty przeglądów prowadzi lider UR.</p>'; return; }
+    if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Karty przeglądów prowadzi lider Utrzymania Ruchu.</p>'; return; }
     const sl = hala.slowniki;
     const nowa = !kod || kod === 'nowa';
     const istn = nowa ? null : (sl.karty_przegladow || {})[kod];

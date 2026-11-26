@@ -57,7 +57,7 @@
                 <span class="nazwa">${esc(s.nazwa)}${s.calaLinia || !kody ? '' : ` <span class="slaby">${esc(s.kod)}</span>`}</span>
                 <span class="stan">${s.gotowe ? KJ.ik('haczyk', 14) : ''}${s.zrobione}/${s.plan}</span>
               </a>`).join('')}
-          </section>`).join('') || '<p class="pusto">Brak planu próbkowania. Kierownik KJ ustawia go w „Więcej → Katalog, wyroby, plan → Plan próbkowania”.</p>'}
+          </section>`).join('') || '<p class="pusto">Brak planu próbkowania. Kierownik Kontroli Jakości ustawia go w „Więcej → Katalog, wyroby, plan → Plan próbkowania”.</p>'}
         ${plan.pozaPlanem ? `<p class="slaby">Poza planem na tej zmianie: ${plan.pozaPlanem}</p>` : ''}
         ${partie.tej.length || partie.starsze.length ? `<section class="grupa"><h2>Partie brakowe — ta zmiana <span class="znacznik ${partie.tej.length ? 'alarm' : 'neutral'}">${partie.tej.length}</span></h2>
           ${partie.tej.map(kartaPartii).join('')}
@@ -140,7 +140,7 @@
   KJ.ekran('proba', {
     formularz: true,
     async rysuj(el, parametr) {
-      if (!KJ.mozna('proba.zarejestrowana')) { el.innerHTML = '<p class="pusto">Próby rejestruje kontroler albo kierownik KJ.</p>'; return; }
+      if (!KJ.mozna('proba.zarejestrowana')) { el.innerHTML = '<p class="pusto">Próby rejestruje kontroler albo kierownik Kontroli Jakości.</p>'; return; }
       // Braki zawsze z wad (UI etap 2) — także w brudnopisie sprzed zmiany, gdzie wpisywało się je ręcznie.
       // D56: miejsce ze skanu (linia, stanowisko, maszyna) tylko z tej samej sesji — po ponownym logowaniu skanuje się od nowa.
       f = W.brakiZWad(Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS,

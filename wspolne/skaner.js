@@ -141,7 +141,7 @@
     const s = global.document.createElement('style');
     s.id = 'hala-skaner-arkusz';
     s.textContent = `
-.hala-skaner { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.92); color: #fff;
+.hala-skaner { position: fixed; inset: 0; z-index: 1000; background: #000; color: #fff;
   display: flex; flex-direction: column; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); gap: 10px; }
 .hala-skaner h2 { margin: 0; font-size: 1.2em; text-align: center; }
 .hala-skaner .hala-skaner-kadr { position: relative; flex: 1; min-height: 0; border-radius: var(--promien, 10px); overflow: hidden; background: #000; }

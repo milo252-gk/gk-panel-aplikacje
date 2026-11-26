@@ -26,6 +26,8 @@
   const nazwaLinii = (slowniki, kod) => (((slowniki || {}).linie || {})[kod] || {}).nazwa || kod || '—';
   const nazwaStanowiska = (slowniki, kod) => (((slowniki || {}).stanowiska || {})[kod] || {}).nazwa || kod || '—';
   const nazwaWyrobu = (slowniki, kod) => (((slowniki || {}).wyroby || {})[kod] || {}).nazwa || null;
+  // Pareto: kod, którego nie ma w katalogu (usunięty ze słownika albo przysłany starą kolejką) — nie wiemy, czy był „wycofany”.
+  const PODPIS_SPOZA_KATALOGU = '(spoza katalogu)';
   const WADA_INNA = { kod: 'inne', nazwa: 'Brak / inna wada' };      // D56: braki także bez katalogu wad
   const nazwaWady = (slowniki, kod) => (((slowniki || {}).katalog_wad || {})[kod] || {}).nazwa || (kod === WADA_INNA.kod ? WADA_INNA.nazwa : kod);
 
@@ -457,7 +459,10 @@
   /* Linie, których dotyczy alert: pusta lista = wszystkie linie ze słownika. */
   const linieAlertu = (alert, slowniki) => {
     const l = (alert.dane && alert.dane.linie) || [];
-    return l.length ? l.slice() : linie(slowniki).map(x => x.kod);
+    // Linia, której nie ma już w słowniku (usunięta, albo stara kolejka offline), nie ma lidera, który mógłby potwierdzić —
+    // nie liczymy jej do „brak”, bo alert wisiałby bez końca. Zdarzenia przy tym niczego nie odrzucamy (kolejka offline).
+    const znane = linie(slowniki).map(x => x.kod);
+    return l.length ? (znane.length ? l.filter(k => znane.includes(k)) : l.slice()) : znane;
   };
 
   function postepAlertu(alert, slowniki, pracownicy) {
@@ -711,7 +716,7 @@
     koniecDnia, mozna, sumaWad, MAKS_ZDJEC, skanZInnejZmiany, bledyProby, daneProby, podpowiedzPartii, powodPartii, korektaProby,
     liczbaZPola, korektaZFormularza, dzisZakladu, probyLiderowPonadProgiem, komunikatReklamacji,
     planZmiany, stanPaskaPlanu, probyZmiany, pareto, okres, stopkaPareto, linieAlertu, postepAlertu, bledyAlertu, daneAlertu, listaAlertow,
-    liniaWyrobu, bledyReklamacji, daneReklamacji, odczytyReklamacji, listaReklamacji, listaPartii, partieZmiany, kodZNazwy, katalogWad, wadyDoProby, WADA_INNA,
+    liniaWyrobu, bledyReklamacji, daneReklamacji, odczytyReklamacji, listaReklamacji, listaPartii, partieZmiany, kodZNazwy, katalogWad, wadyDoProby, WADA_INNA, PODPIS_SPOZA_KATALOGU,
     jedynaLinia, miejscaDoWyboru, miejsceZWyboru, domyslneMiejsce, napisSkanu, miejsceZeSkanu, nazwaMiejsca, wierszePlanu,
     liniaPoWyrobie, liniaKliknieta, naglowekOdczytow, bladIlosci, kolejnoscWOknie, procent, opisWad, wysylaNaZywo, komunikatBleduZapisu,
     brakiZWad, kluczPominietych, pominiete, pomin, bezPominietych, pokazZleceniaNaPlanie,

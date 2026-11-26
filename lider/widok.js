@@ -76,9 +76,9 @@
   const jestMistrzem = role => (role || []).includes('mistrz') || (role || []).includes(ROLA_BRYGADZISTY);
   const dzialMistrza = role => (role || []).includes('mistrz') ? 'mistrz' : (role || []).includes(ROLA_BRYGADZISTY) ? DZIAL_BRYGADZISTY : null;
 
-  /* Magazyn (D92, właściciel 2026-11-19): Kierownik MAG i Pracownik MAG pracują w tej samej aplikacji, która dla nich nazywa się
+  /* Magazyn (D92, właściciel 2026-11-19): Kierownik Magazynu i Pracownik Magazynu pracują w tej samej aplikacji, która dla nich nazywa się
      „GK Magazyn” — tylko zlecenia, checklisty i zgłoszenia działu „magazyn” (bez linii, ekranu Zmiana, raportu zmiany, jakości
-     i awarii maszyn). Profil magazynu ma osoba z rolą MAG BEZ żadnej roli produkcji (lider, mistrz, Lider SP) ani kierownika
+     i awarii maszyn). Profil magazynu ma osoba z rolą MAG BEZ żadnej roli produkcji (lider, mistrz, Lider Produkcji SP) ani kierownika
      zakładu / admina — ci zostają w zwykłym „GK Produkcja” (kody ról bez zmian). Uprawnienia egzekwuje hub (kontrakt 1.31.0). */
   const ROLE_MAGAZYNU = ['kierownik_mag', 'pracownik_mag'], DZIAL_MAGAZYNU = 'magazyn';
   const ROLE_GK_LIDER = ['lider', 'mistrz', ROLA_BRYGADZISTY, 'kierownik', 'admin'];
@@ -147,14 +147,18 @@
     // więc lista zmiany jest pusta (bez blokady „najpierw przyjmij” i bez przypomnień checklisty lidera).
     if (profilMagazynu(pracownik)) return H().checklistaZmiany([], null, zmiana, DZIAL_MAGAZYNU);
     const kat = kategorieOsoby(pracownik);
-    const lider = () => H().checklistaZmiany(zlecenia, linia, zmiana, 'produkcja');
+    // Lider i mistrz pracują tylko na swoich zleceniach (przydzielone komuś innemu nie wchodzą do „Mojej zmiany”); kierownik i admin
+    // tylko oglądają całość.
+    const role = (pracownik && pracownik.role) || [];
+    const ja = pracownik && pracownik.id && (role.includes('lider') || jestMistrzem(role)) ? pracownik.id : null;
+    const lider = () => H().checklistaZmiany(zlecenia, linia, zmiana, 'produkcja', ja);
     const mistrz = () => {
       const d = dzialZlecen(pracownik, linia, slowniki);
       return H().checklistaZmiany(bezKopiiLinii((zlecenia || []).filter(z => !d.linie || !((z.dane || {}).linia) || d.linie.includes(z.dane.linia))),
-                                  null, zmiana, d.dzial);
+                                  null, zmiana, d.dzial, ja);
     };
     if (kat.length === 1) return kat[0] === 'mistrz' ? mistrz() : lider();
-    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz GK', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider GK', lista: lider() }]);
+    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz Produkcji GK', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider produkcji GK', lista: lider() }]);
   }
 
   function polaczListy(czesci) {

@@ -284,7 +284,7 @@
   }
 
   // D55: kierownicy widzą zlecenia osobiste całego działu (np. lider UR — zadania swoich mechaników).
-  const ROLE_WIDZA_WSZYSTKO = ['kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'admin'];   // D92: + Kierownik MAG
+  const ROLE_WIDZA_WSZYSTKO = ['kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'admin'];   // D92: + Kierownik Magazynu
   function dzisiaj(H, teraz) {
     if (!H || !H.lokalny) return null;
     const l = H.lokalny(teraz), d = n => String(n).padStart(2, '0');
@@ -399,21 +399,45 @@
   }
   /* Dodanie zdjęć wybranych w formularzu: po jednym (zmniejszanie jednego naraz — pamięć telefonu), każde od razu do IndexedDB i na listę
      podglądów. Limit MAKS_ZDJEC; nadmiar — komunikat. Błąd zapisu (brak miejsca, brak pamięci) — komunikat po polsku, dotychczasowe zostają. */
-  async function dodajZdjeciaDoFormularza(el, hala, rodzaj, f, wybrane) {
+  function dodajZdjeciaDoFormularza(el, hala, rodzaj, f, wybrane) {
+    // Wybory idą PO KOLEI (jeden łańcuch na formularz): drugi wybór w trakcie pierwszego liczył wolne miejsce od zera i przekraczał limit;
+    // f.dodaje > 0 blokuje „Wyślij” — zdarzenie szło z tym, co już było (np. 1 z 3), a reszta po cichu znikała z telefonu
+    // (zgłoszenie liderów 2026-11-25: zlecenie „wywala się” przy kończeniu z wieloma zdjęciami).
+    f.dodaje = (f.dodaje || 0) + 1;
+    rysuj(el, hala, stan(el).opcje);
+    const praca = () => dodajZdjeciaPoKolei(el, hala, rodzaj, f, wybrane).catch(() => {}).then(() => {
+      f.dodaje = Math.max(0, (f.dodaje || 1) - 1);
+      if (stan(el)[rodzaj] === f) rysuj(el, hala, stan(el).opcje);
+    });
+    f.lancuch = (f.lancuch || Promise.resolve()).then(praca);
+    return f.lancuch;
+  }
+  /* Jedno zdjęcie: zapis do IndexedDB + adres podglądu, ale najwyżej LIMIT_ZDJECIA.ms. IndexedDB po powrocie z tła potrafi nie odpowiedzieć
+     (patrz adresPliku w hala.js) — bez limitu przycisk „Wyślij” / „Odhacz” zostawał wyłączony na stałe (f.dodaje), a jedynym wyjściem
+     było „Anuluj” z utratą tekstu. Po limicie: komunikat, przyciski wracają; plik, który dojdzie spóźniony, jest sprzątany. */
+  const LIMIT_ZDJECIA = { ms: 30000 };
+  function dodajPlikZLimitem(hala, plik) {
+    const praca = (async () => { const id = await hala.dodajPlik(plik); const url = await hala.adresPliku(id); return { id, url }; })();
+    let minal = false;
+    return new Promise((ok, nie) => {
+      const t = setTimeout(() => { minal = true; nie(new Error('Zdjęcie nie zapisało się. Spróbuj jeszcze raz.')); }, LIMIT_ZDJECIA.ms);
+      praca.then(w => { clearTimeout(t); if (minal) { if (hala.usunPlik) hala.usunPlik(w.id).catch(() => {}); } else ok(w); },
+                 e => { clearTimeout(t); if (!minal) nie(e); });
+    });
+  }
+  async function dodajZdjeciaPoKolei(el, hala, rodzaj, f, wybrane) {
     const wolne = Math.max(0, MAKS_ZDJEC - f.pliki.length);
     const biore = wybrane.slice(0, wolne);
     f.blad = wybrane.length > biore.length ? `Limit to ${MAKS_ZDJEC} zdjęć — nadmiaru nie dodano.` : null;
     for (const plik of biore) {
       try {
-        const id = await hala.dodajPlik(plik);
-        const url = await hala.adresPliku(id);
+        const { id, url } = await dodajPlikZLimitem(hala, plik);
         if (stan(el)[rodzaj] !== f) { if (hala.usunPlik) hala.usunPlik(id).catch(() => {}); return; }      // formularz zamknięty w trakcie
         f.pliki.push({ id, url });
         await zapiszSzkic(hala, f, true);
       } catch (e) { f.blad = (e && e.message) || 'Nie udało się zapisać zdjęcia. Spróbuj jeszcze raz.'; break; }
       rysuj(el, hala, stan(el).opcje);
     }
-    if (stan(el)[rodzaj] === f) rysuj(el, hala, stan(el).opcje);
   }
   /* Po powrocie do aplikacji (nowa karta po zabiciu poprzedniej) odtwarza otwarty formularz: tekst, skany i zdjęcia z IndexedDB. Szkic
      starszy niż 36 h albo do zlecenia, którego już nie ma do zrobienia, jest sprzątany razem ze zdjęciami. Gdy lista zleceń jeszcze się nie
@@ -472,15 +496,15 @@
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}">
             <button type="button" data-akcja="usun-zdjecie" data-nr="${i}" aria-label="Usuń zdjęcie ${i + 1}">${ikona('zamknij', 16)}</button></span>`).join('')}
           ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length && !juz.zdjecia ? 'brak' : ''}">${ikona('aparat')}${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
-            <input type="file" accept="image/*" capture="environment" multiple data-zdjecie hidden></label>` : ''}</div></div>` : ''}
+            <input type="file" accept="image/*" capture="environment" multiple data-zdjecie hidden></label>` : ''}</div>${f.dodaje ? '<p class="slaby" role="status">Dodaję zdjęcia…</p>' : ''}</div>` : ''}
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${zrobione ? pole(w.wymagajNotatki && !juz.notatka, 'Notatka') : 'Dlaczego nie da się tego zrobić?'}</span>
-        <textarea data-pole rows="3" maxlength="2000" placeholder="${zrobione ? 'Co zrobione, co zauważone' : 'Kierownik to zobaczy'}">${esc(f.tekst)}</textarea></label>
+        <textarea data-pole rows="3" maxlength="2000" placeholder="${zrobione ? 'Co zrobione, co zauważone' : 'Kierownik zakładu to zobaczy'}">${esc(f.tekst)}</textarea></label>
       ${zrobione ? polePilne(f) : ''}
       <p class="hala-zlecenie-brakuje" data-brakuje ${brak.length ? '' : 'hidden'}>${esc(tekstBraku(brak))}</p>
       <p class="hala-zlecenie-blad" ${f.blad ? '' : 'hidden'}>${esc(f.blad || '')}</p>
       <div class="hala-zlecenie-akcje">
         <button type="button" data-akcja="anuluj-formularz">Anuluj</button>
-        <button type="button" class="${zrobione ? 'zielony' : 'czerwony'}" data-akcja="wyslij" ${brak.length || f.wysyla ? 'disabled' : ''}>${zrobione ? 'Wyślij: zrobione' : 'Wyślij: nie mogę'}</button>
+        <button type="button" class="${zrobione ? 'zielony' : 'czerwony'}" data-akcja="wyslij" ${brak.length || f.wysyla || f.dodaje ? 'disabled' : ''}>${zrobione ? 'Wyślij: zrobione' : 'Wyślij: nie mogę'}</button>
       </div></div>`;
   }
 
@@ -489,7 +513,7 @@
     const brak = brakuje(f.wymagania, f);
     const b = el.querySelector('.hala-zlecenie-formularz [data-akcja="wyslij"]');
     const p = el.querySelector('.hala-zlecenie-formularz [data-brakuje]');
-    if (b) b.disabled = !!brak.length || !!f.wysyla;
+    if (b) b.disabled = !!brak.length || !!f.wysyla || !!f.dodaje;
     if (p) { p.textContent = tekstBraku(brak); p.hidden = !brak.length; }
   }
 
@@ -533,6 +557,50 @@
         ${otwarte ? `<div class="hala-zlecenie-wiecej-menu">${ukryte.join('')}</div>` : ''}`;
   }
 
+  /* Wybór plików z aparatu / galerii (trzy pola: formularz, pozycja checklisty, krok postępu). Wołane z pola BEZPOŚREDNIO (podpięte po
+     każdym rysowaniu) — przerysowanie ekranu przy otwartym aparacie podmienia <input>, a „change” z odpiętego pola nie dochodzi do
+     rodzica (delegowany nasłuch), więc zdjęcie znikało bez śladu — i z rodzica jako zapas (ev.halaWybor chroni przed podwójną obsługą). */
+  function wyborPlikow(ev, el, hala) {
+    const s = stan(el), t = ev.target;
+    if (!t || !t.matches) return null;
+    if (t.matches('[data-postep-zdjecie]')) {
+      // D56: zdjęcie krokiem postępu — od razu do kierownika, bez „Zrobione”.
+      const art = t.closest('[data-id]');
+      const pliki = Array.from(t.files || []).slice(0, MAKS_ZDJEC);
+      t.value = '';
+      if (!art || !pliki.length) return null;
+      const o = s.opcje || {};
+      // Jak w formularzu: kolejne wybory idą PO KOLEI (jeden łańcuch na ekran), nie równolegle.
+      const praca = async () => {
+        try {
+          const ids = [];
+          for (const p of pliki) ids.push((await dodajPlikZLimitem(hala, p)).id);
+          await dopiszPostep(hala, art.dataset.id, { zdjecia: ids });
+          s.info = `Dodano ${ids.length === 1 ? 'zdjęcie' : `${ids.length} zdjęcia`} — kierownik już je widzi`;
+        } catch (e) { s.info = (e && e.message) || 'Nie udało się dodać zdjęcia. Spróbuj jeszcze raz.'; }
+        rysuj(el, hala, o);
+      };
+      s.lancuchPostepu = (s.lancuchPostepu || Promise.resolve()).then(praca, praca);
+      return s.lancuchPostepu;
+    }
+    if (t.matches('[data-pozycja-zdjecie]') && s.poz) {
+      const wybrane = Array.from(t.files || []);
+      t.value = '';
+      return dodajZdjeciaDoFormularza(el, hala, 'poz', s.poz, wybrane);
+    }
+    if (!t.matches('[data-zdjecie]') || !s.formularz) return null;
+    // Zdjęcie od razu do IndexedDB (zmniejszone) — po powrocie z tła formularz je odtworzy (przywrocSzkice).
+    const wybrane = Array.from(t.files || []);
+    t.value = '';
+    return dodajZdjeciaDoFormularza(el, hala, 'formularz', s.formularz, wybrane);
+  }
+  function podepnijPolaPlikow(el, hala) {
+    if (!el.querySelectorAll) return;
+    for (const inp of el.querySelectorAll('input[data-zdjecie], input[data-pozycja-zdjecie], input[data-postep-zdjecie]')) {
+      inp.addEventListener('change', ev => { ev.halaWybor = true; return wyborPlikow(ev, el, hala); });
+    }
+  }
+
   function rysuj(el, hala, opcje) {
     const s = stan(el);
     s.opcje = opcje;
@@ -561,7 +629,7 @@
         </div>
         ${z.opis ? `<p class="hala-zlecenie-opis">${esc(z.opis)}</p>` : ''}
         ${z.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(z.zdjecia)}</div>` : ''}
-        ${z.uwagiZwrotu && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Kierownik: ${esc(z.uwagiZwrotu)}</p>` : ''}
+        ${z.uwagiZwrotu && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Kierownik zakładu: ${esc(z.uwagiZwrotu)}</p>` : ''}
         ${z.uwagiPrzekazania && z.doZrobienia ? `<p class="hala-zlecenie-zwrot">Od kierownika: ${esc(z.uwagiPrzekazania)}</p>` : ''}
         ${z.rozdzial ? `<p class="hala-zlecenie-skan" aria-label="Postęp części"><b>${esc(z.rozdzial.tekst)}</b> ${z.rozdzial.osoby.map(o =>
           `<span class="hala-krok-wymogu ${o.znak === '✓' ? 'ok' : ''}">${znakHtml(o.znak)} ${esc(o.kto)}</span>`).join(' ')}</p>` : ''}
@@ -569,7 +637,7 @@
           `<li><b>${znakHtml(c.znak)} ${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? `<p class="hala-zlecenie-zwrot">Nie może: ${esc(c.powod)}</p>` : ''}${c.notatka ? `<p class="hala-zlecenie-opis">${ikona('notatka', 14)}${esc(c.notatka)}</p>` : ''}${c.zdjecia.length ? `<div class="hala-zlecenie-zdjecia">${miniatury(c.zdjecia)}</div>` : ''}</li>`).join('')}</ul></details>` : ''}
         ${z.pozycje.length ? checklista(z, maszyny, s, opcje) : z.doZrobienia ? wymogiNaZywo(z, maszyny, s) : ''}
         ${z.terminOpis || z.zalegle ? `<div class="hala-zlecenie-termin ${z.zalegle ? 'po-terminie-tekst' : ''}">${ikona('zegar', 16)}${esc(z.terminOpis || z.zalegleOpis)}</div>` : ''}
-        <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
+        <div class="hala-zlecenie-kiedy slaby">${esc(z.zlecil || 'Kierownik zakładu')} · ${esc(z.kiedy || '—')}${z.termin && !z.doZrobienia ? ` · termin ${esc(z.termin)}` : ''}</div>
         ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">${ikona('klepsydra', 16)}Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
         : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${z.doKierownika && z.dzialania.przekaz && z.status === 'nowe' && !z.poCzasie ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
@@ -614,6 +682,7 @@
           <button type="button" class="hala-zlecenie-tytul" data-historia>${esc(g.tytul)}</button>
           <span class="znacznik ${esc(g.klasa)}">${esc(g.status)}</span>${g.odpowiedz ? `<p class="hala-zlecenie-opis">${esc(g.odpowiedz)}</p>` : ''}</div>`).join('')}` : ''}
     </div>`;
+    podepnijPolaPlikow(el, hala);
     for (const img of el.querySelectorAll('img[data-plik]')) hala.adresPliku(img.dataset.plik).then(u => { img.src = u; }).catch(() => {});
     if (wPolu) { const p = el.querySelector(poleZFocusem); if (p) { p.focus(); p.setSelectionRange(p.value.length, p.value.length); } }
     if (!el.dataset.halaZlecenia) {
@@ -630,32 +699,8 @@
           if (f) { f.pilne = !!ev.target.checked; zapiszSzkic(hala, f); }
           return;
         }
-        if (zNaszejTresci(ev, el) && ev.target.matches('[data-postep-zdjecie]')) {
-          // D56: zdjęcie krokiem postępu — od razu do kierownika, bez „Zrobione”.
-          const art = ev.target.closest('[data-id]');
-          const pliki = Array.from(ev.target.files || []).slice(0, MAKS_ZDJEC);
-          ev.target.value = '';
-          if (!art || !pliki.length) return;
-          const st = stan(el), o = st.opcje || {};
-          try {
-            const ids = [];
-            for (const p of pliki) ids.push(await hala.dodajPlik(p));
-            await dopiszPostep(hala, art.dataset.id, { zdjecia: ids });
-            st.info = `Dodano ${ids.length === 1 ? 'zdjęcie' : `${ids.length} zdjęcia`} — kierownik już je widzi`;
-          } catch (e) { st.info = (e && e.message) || 'Nie udało się dodać zdjęcia. Spróbuj jeszcze raz.'; }
-          rysuj(el, hala, o);
-          return;
-        }
-        if (zNaszejTresci(ev, el) && ev.target.matches('[data-pozycja-zdjecie]') && s.poz) {
-          const wybrane = Array.from(ev.target.files || []);
-          ev.target.value = '';
-          return dodajZdjeciaDoFormularza(el, hala, 'poz', s.poz, wybrane);
-        }
-        if (!zNaszejTresci(ev, el) || !ev.target.matches('[data-zdjecie]') || !s.formularz) return;
-        // Zdjęcie od razu do IndexedDB (zmniejszone) — po powrocie z tła formularz je odtworzy (przywrocSzkice).
-        const wybrane = Array.from(ev.target.files || []);
-        ev.target.value = '';
-        return dodajZdjeciaDoFormularza(el, hala, 'formularz', s.formularz, wybrane);
+        if (ev.halaWybor || !zNaszejTresci(ev, el)) return;
+        return wyborPlikow(ev, el, hala);
       });
     }
   }
@@ -744,6 +789,8 @@
         return rysuj(el, hala, s.opcje || opcje);
       }
       if (b.dataset.akcja === 'usun-zdjecie' && s.formularz) {
+        // W trakcie dodawania łańcuch uzupełnia tę samą tablicę — usuwanie po indeksie trafiłoby w inne zdjęcie.
+        if (s.formularz.dodaje) { s.formularz.blad = 'Poczekaj chwilę — zdjęcia jeszcze się dodają.'; return rysuj(el, hala, s.opcje || opcje); }
         const [p] = s.formularz.pliki.splice(+b.dataset.nr, 1);
         if (p && p.id && hala.usunPlik) hala.usunPlik(p.id).catch(() => {});
         zapiszSzkic(hala, s.formularz, true);
@@ -752,6 +799,7 @@
       if (b.dataset.akcja === 'anuluj-formularz') { zwolnij(s.formularz); s.formularz = null; return rysuj(el, hala, s.opcje || opcje); }
       if (b.dataset.akcja === 'wyslij' && s.formularz) {
         const f = s.formularz, tekst = f.tekst.trim();
+        if (f.dodaje) { f.blad = 'Poczekaj chwilę — zdjęcia jeszcze się dodają.'; return rysuj(el, hala, s.opcje || opcje); }
         const brak = brakuje(f.wymagania, f);
         if (brak.length) { f.blad = tekstBraku(brak); return rysuj(el, hala, s.opcje || opcje); }
         // Stan „wysyła” w formularzu, a nie tylko na przycisku: zmniejszanie kilku zdjęć trwa sekundy, a każde zdarzenie
@@ -781,7 +829,13 @@
       }
     } catch (e) {
       if (s.formularz) { s.formularz.wysyla = false; s.formularz.blad = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.'; rysuj(el, hala, s.opcje || opcje); }
-      else alert((e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.');
+      else {
+        // Bez formularza (np. szybkie „Zrobione”): komunikat GK (toast aplikacji) i napis w karcie, nie alert() przeglądarki.
+        const tekstBledu = (e && e.message) || 'Nie udało się zapisać. Spróbuj jeszcze raz.';
+        s.info = tekstBledu;
+        rysuj(el, hala, o);
+        if (o.komunikat) o.komunikat(tekstBledu, 'blad');
+      }
     }
   }
 
@@ -901,7 +955,7 @@
       ? `<p class="hala-zlecenie-czynnosc">${q.czynnosc === 'proba' ? ikona('proba', 16) + 'Odhaczy się samo, gdy zapiszesz próbę' : ikona('przeglady', 16) + 'Odhaczy się samo po przeglądzie UR'}${q.maszyna ? ` na: ${esc(nazwaM(q.maszyna))}` : ''}</p>` : '';
     return `<div class="hala-pozycja-panel">
       ${opisPozycji}
-      ${q.zwrot ? `<p class="hala-pozycja-zwrot-opis">Kierownik zwrócił tę pozycję do poprawy${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</p>` : ''}
+      ${q.zwrot ? `<p class="hala-pozycja-zwrot-opis">Kierownik zakładu zwrócił tę pozycję do poprawy${q.zwrot.uwagi ? `: ${esc(q.zwrot.uwagi)}` : ''}</p>` : ''}
       ${q.stan === 'pominieta' ? `<p class="slaby">Pominięte: ${esc((q.wpis || {}).powod || '')} — możesz jednak odhaczyć.</p>` : ''}
       ${cz ? `<button type="button" class="glowny szeroki" data-akcja="pozycja-czynnosc">${ikona('odtworz', 16)}${esc(cz)}</button>` : samo}
       ${w.wymagajSkanu && wielo ? (() => {
@@ -916,7 +970,7 @@
       <div class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajZdjecia && !f.pliki.length, 'Zdjęcie')}</span>
         <div class="hala-zlecenie-miniatury">${f.pliki.map((p, i) => `<span class="hala-zlecenie-miniatura"><img src="${esc(p.url)}" alt="Zdjęcie ${i + 1}"></span>`).join('')}
           ${f.pliki.length < MAKS_ZDJEC ? `<label class="hala-zlecenie-zdjecie ${w.wymagajZdjecia && !f.pliki.length ? 'brak' : ''}">${ikona('aparat')}${f.pliki.length ? 'Jeszcze jedno' : 'Zrób zdjęcie'}
-            <input type="file" accept="image/*" capture="environment" multiple data-pozycja-zdjecie hidden></label>` : ''}</div></div>
+            <input type="file" accept="image/*" capture="environment" multiple data-pozycja-zdjecie hidden></label>` : ''}</div>${f.dodaje ? '<p class="slaby" role="status">Dodaję zdjęcia…</p>' : ''}</div>
       <label class="hala-zlecenie-pole"><span class="hala-zlecenie-etykieta">${pole(w.wymagajNotatki, 'Notatka')} <span class="slaby">— przy „Pomiń” to powód</span></span>
         <textarea data-pozycja-pole rows="2" maxlength="1000" placeholder="Co zrobione, co zauważone">${esc(f.tekst)}</textarea></label>
       ${polePilne(f)}
@@ -925,7 +979,7 @@
       <div class="hala-zlecenie-akcje">
         <button type="button" data-akcja="pozycja-zamknij">Anuluj</button>
         ${q.stan === 'pominieta' ? '' : '<button type="button" data-akcja="pozycja-pomin">Pomiń</button>'}
-        <button type="button" class="zielony" data-akcja="pozycja-odhacz" ${brak.length || f.wysyla ? 'disabled' : ''}>${ikona('haczyk', 16)}Odhacz</button>
+        <button type="button" class="zielony" data-akcja="pozycja-odhacz" ${brak.length || f.wysyla || f.dodaje ? 'disabled' : ''}>${ikona('haczyk', 16)}Odhacz</button>
       </div></div>`;
   }
 
@@ -933,7 +987,7 @@
     const brak = brakuje(f.wymagania, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan });
     const b = el.querySelector('.hala-pozycja-panel [data-akcja="pozycja-odhacz"]');
     const p = el.querySelector('.hala-pozycja-panel [data-pozycja-brakuje]');
-    if (b) b.disabled = !!brak.length || !!f.wysyla;
+    if (b) b.disabled = !!brak.length || !!f.wysyla || !!f.dodaje;
     if (p) { p.textContent = tekstBraku(brak); p.hidden = !brak.length; }
   }
 
@@ -1044,6 +1098,7 @@
       return rysuj(el, hala, o);
     }
     if (a === 'pozycja-odhacz') {
+      if (f.dodaje) { f.blad = 'Poczekaj chwilę — zdjęcia jeszcze się dodają.'; return rysuj(el, hala, o); }
       const brak = brakuje(f.wymagania, { rodzaj: 'wykonane', tekst: f.tekst, pliki: f.pliki, skan: f.skan });
       if (brak.length) { f.blad = tekstBraku(brak); return rysuj(el, hala, o); }
       if (f.wysyla) return;
@@ -1097,7 +1152,7 @@
       if (d.zglosil !== ja || Date.parse(d.czas_zgloszenia) < od) continue;
       wynik.push({ typ: 'zgloszenie', id: g.id, tytul: d.tytul || '', czas: d.czas_zgloszenia, status: g.etykieta || g.status,
                    klasa: g.status === 'przyjete' ? 'ok' : g.status === 'odrzucone' ? 'alarm' : 'info',
-                   odpowiedz: g.status === 'odrzucone' ? `Kierownik: ${d.powod_odrzucenia || ''}` : d.uwagi_przyjecia ? `Kierownik: ${d.uwagi_przyjecia}` : '' });
+                   odpowiedz: g.status === 'odrzucone' ? `Kierownik zakładu: ${d.powod_odrzucenia || ''}` : d.uwagi_przyjecia ? `Kierownik zakładu: ${d.uwagi_przyjecia}` : '' });
     }
     for (const n of obiekty('narzedzia')) {
       const d = n.dane || {};
@@ -1263,7 +1318,7 @@
 
   const HalaZlecenia = { etykietaStatusu, maszynyZlecenia, juzZrobione, wymaganiaZ, zaliczSkan, dopiszPostep, wiersze, wierszeDla, przepadlo, poCzasieDoZrobienia, widoczneDla, krokiStatusu, otworzFormularz, mojeZgloszenia,
                          brakuje, tekstBraku, skanMaszyny, doZrobienia, zalegle, rysujZalegle, rysuj, sledz, formularz, opisPowiadomienia,
-                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, doZamkniecia, zapytajOZamknieciu, pilnujZamkniecia, odlozZamkniecie: odloz, odlozoneZamkniecie: odlozoneTeraz, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia, akcjeKarty };
+                         pozycjeWiersza, odhaczPozycje, zakonczJesliGotowe, otworzPozycje, doZamkniecia, zapytajOZamknieciu, pilnujZamkniecia, odlozZamkniecie: odloz, odlozoneZamkniecie: odlozoneTeraz, OPIS_CZYNNOSCI, daneRozdzialu, rozdzialWiersza, mozeOdlozycNarzedzia, akcjeKarty, LIMIT_ZDJECIA };
   global.HalaZlecenia = HalaZlecenia;
   if (typeof module !== 'undefined' && module.exports) module.exports = HalaZlecenia;
 })(typeof window !== 'undefined' ? window : globalThis);

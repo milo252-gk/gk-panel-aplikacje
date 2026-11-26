@@ -373,6 +373,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
   }
   .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny) {
     color: var(--granat-tekst); box-shadow: none;
+    /* D6 (2026-11-25): zaznaczona zakładka wyraźniejsza niż sama cienka kreska — jasne pomarańczowe tło i pogrubiony napis
+       (w Liderze „Awarie” nie jest już stale czerwoną płytką, więc nie przykrywa zaznaczenia innych zakładek). */
+    background: color-mix(in srgb, var(--pomarancz) 16%, var(--tlo-podniesione)); font-weight: 800;
   }
   /* STYL-GK §1: zaznaczony ekran ma pomarańczową kreskę 3 px u góry dolnego paska (jak w GK Szkolenia i GK Wycena). */
   .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny)::before {

@@ -87,13 +87,13 @@
       przekazanie: 'Napisz notatkę dla następnej zmiany', zadanie: 'Zrobione',
     }[p.typ] || 'Zrobione';
     const m = k.lista.mapa[p.id] || {};
-    if (!m.zlecenie) { L.komunikat('Kierownik zmienił tę listę — pozycji już nie ma. Odśwież ekran.', 'blad', 'pozycja-zniknela'); return; }
+    if (!m.zlecenie) { L.komunikat('Kierownik zakładu zmienił tę listę — pozycji już nie ma. Odśwież ekran.', 'blad', 'pozycja-zniknela'); return; }
     L.okno({
       tytul: p.nazwa,
       html: `<p><span class="znacznik ${esc({ wykonana: 'ok', pominieta: 'neutral', opozniona: 'alarm', bliska: 'uwaga' }[p.stan] || 'info')}">${esc(OPIS_STANU[p.stan] || 'Do zrobienia')}</span>
           Termin <b>${esc(p.godz)}</b>${p.wymaga_qr ? ' · wymaga skanu QR' : ''}${p.cel ? ` · punkt ${esc(p.cel)}` : ''}${p.wymagaj_zdjecia ? ' · zdjęcie' : ''}${p.wymagaj_notatki ? ' · notatka' : ''}</p>
         ${p.opis ? `<p class="opis-pozycji">${esc(p.opis)}</p>` : ''}
-        ${p.zwrot !== null && p.zwrot !== undefined ? `<p class="tekst-alarm">Kierownik zwrócił tę pozycję do poprawy${p.zwrot ? `: ${esc(p.zwrot)}` : ''}</p>` : ''}
+        ${p.zwrot !== null && p.zwrot !== undefined ? `<p class="tekst-alarm">Kierownik zakładu zwrócił tę pozycję do poprawy${p.zwrot ? `: ${esc(p.zwrot)}` : ''}</p>` : ''}
         ${zrobiona ? `<p class="ok-tekst">Zrobione ${esc(W.godzina(wpis.czas))}${kto ? ' · ' + esc(kto) : ''}${p.poTerminie ? ' (po terminie)' : ''}</p>
           ${wpis.qr ? `<p class="slaby">Kod: ${esc(wpis.qr)}</p>` : ''}${wpis.uwagi ? `<p>${esc(wpis.uwagi)}</p>` : ''}` : ''}
         ${p.stan === 'pominieta' ? `<p>Pominięte: ${esc(wpis.powod || '')}</p>` : ''}
@@ -222,7 +222,7 @@
   /* Dział do wpisania w Panelu → Zlecenia → Zapisane → „+ Nowe” → „Checklista” zależnie od roli (pusty ekran). */
   function opisDzialuListy(pracownik) {
     const kat = W.kategorieOsoby(pracownik);
-    return kat.length > 1 ? 'dział Lider GK albo Mistrz GK' : kat[0] === 'mistrz' ? 'dział Mistrz GK' : 'dział Lider GK';
+    return kat.length > 1 ? 'dział Lider produkcji GK albo Mistrz Produkcji GK' : kat[0] === 'mistrz' ? 'dział Mistrz Produkcji GK' : 'dział Lider produkcji GK';
   }
 
   const wierszHtml = w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">
@@ -255,7 +255,7 @@
         <article class="karta otwarcie">
           <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))}</p>
-          <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik układa ją w Panelu → Zlecenia → ${window.GKIkony ? window.GKIkony.html('zapisane', 16) + ' ' : ''}Zapisane → „+ Nowe” → „Checklista”
+          <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik zakładu układa ją w Panelu → Zlecenia → ${window.GKIkony ? window.GKIkony.html('zapisane', 16) + ' ' : ''}Zapisane → „+ Nowe” → „Checklista”
             (${esc(opisDzialuListy(hala.pracownik))}) — pojawi się tu sama na początku zmiany.</p>
         </article>
         ${przyciskiZmiany([])}

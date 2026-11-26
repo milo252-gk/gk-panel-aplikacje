@@ -1,5 +1,5 @@
 /* Dane podstawowe KJ (KONTRAKT §6.5): katalog wad, wyroby z linią, plan próbkowania.
-   Zapisuje kierownik KJ (i admin) zdarzeniami slownik.zapisany / slownik.usuniety,
+   Zapisuje kierownik Kontroli Jakości (i admin) zdarzeniami slownik.zapisany / slownik.usuniety,
    więc zmiana dociera do liderów i Panelu tym samym strumieniem co reszta.
 
    KODÓW SIĘ NIE ZMIENIA ANI NIE KASUJE. Kod wady i wyrobu to klucz historii
@@ -70,7 +70,7 @@
   function rysujWady(box) {
     const lista = W.katalogWad(hala.slowniki);
     const edycja = moznaPisac('katalog_wad');
-    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowa-wada">+ Dodaj wadę</button>' : '<p class="slaby">Katalog zmienia kierownik KJ.</p>'}
+    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowa-wada">+ Dodaj wadę</button>' : '<p class="slaby">Katalog zmienia kierownik Kontroli Jakości.</p>'}
       <div class="lista">${lista.map(w => `
         <div class="karta wiersz-katalogu">
           <div><b>${esc(w.nazwa)}</b>${w.kategoria ? ` <span class="slaby">${esc(w.kategoria)}</span>` : ''}</div>

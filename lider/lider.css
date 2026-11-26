@@ -47,11 +47,16 @@ body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
 .naglowek .linia { font-size: 17px; }
 .naglowek .linia { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .naglowek .linia span { font-weight: 400; opacity: .85; }
+/* Cel dotyku „Zmień linię” (rękawice): nie węższy niż pole dotyku, nawet gdy długa nazwa linii jest ucinana wielokropkiem. */
+.naglowek .linia { min-width: var(--dotyk, 52px); flex-shrink: 0; }
 /* Jedna linia w zakładzie (D51): sama nazwa, nic do kliknięcia (app.js → rysujNaglowek). */
 .naglowek .linia.jedna { pointer-events: none; }
 .naglowek .linia.jedna span { font-weight: 600; opacity: 1; }
 .naglowek .opis-zmiany { flex: 1; text-align: center; font-size: .9em; line-height: 1.2; }
 .naglowek .opis-zmiany span { opacity: .8; display: block; }
+/* Tytuł zmiany na wąskim telefonie: „Zmiana II” i „14:00–22:00” w jednym wierszu każde, bez łamania „14:00–” / „22:00” na cztery linie. */
+.naglowek .opis-zmiany { min-width: 0; }
+.naglowek .opis-zmiany b, .naglowek .opis-zmiany span { white-space: nowrap; }
 
 /* ---------------------------------------------------------------- wezwania (na każdym ekranie) */
 
@@ -229,11 +234,13 @@ details.wiecej[open] { display: grid; gap: 12px; }
 /* ---------------------------------------------------------------- dolna nawigacja */
 
 /* Dolny pasek / menu po lewej: hala.css. Tu tylko czerwony AWARIA (lider dotyka go w rękawicach, w hałasie). */
-.hala-uklad > .dolny > button.awaria { background: var(--czerwony); color: var(--na-barwie); font-weight: 800; }
+/* D6 (2026-11-25): niezaznaczona AWARIA to czerwony napis i ikona na tle paska (nie pełna czerwona płytka) — pełna czerwień
+   przykrywała zaznaczenie innej zakładki i wyglądało, że aktywne są „Awarie”. Zaznaczona wraca do pełnej czerwieni. */
+.hala-uklad > .dolny > button.awaria { color: var(--czerwony); font-weight: 800; }
 /* UI etap 2: AWARIA to zwykła zakładka (zgłoszenie + lista) — otwarta dostaje białą kreskę, a plakietka liczby awarii
    jest biała z czerwoną cyfrą (czerwona na czerwonym przycisku by zniknęła). */
-.hala-uklad > .dolny > button.awaria[aria-current="page"] { box-shadow: inset 0 -4px 0 var(--na-barwie); }
-.hala-uklad > .dolny > button.awaria .plakietka { background: var(--na-barwie); color: var(--czerwony); }
+.hala-uklad > .dolny > button.awaria[aria-current="page"] { background: var(--czerwony); color: var(--na-barwie); box-shadow: inset 0 -4px 0 var(--na-barwie); }
+.hala-uklad > .dolny > button.awaria[aria-current="page"] .plakietka { background: var(--na-barwie); color: var(--czerwony); }
 .plakietka { position: absolute; top: 6px; right: calc(50% - 26px); min-width: 20px; height: 20px; border-radius: 10px; background: var(--czerwony);
   color: var(--na-barwie); font-size: .85em; line-height: 20px; padding: 0 5px; box-sizing: border-box; }
 

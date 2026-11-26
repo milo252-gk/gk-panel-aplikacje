@@ -105,7 +105,7 @@
     // UI etap 3: Checklisty są częścią Administracji — menu widać też samemu edytującemu szablony.
     const czesciAdm = z ? W.czesciAdministracji(Panel.dostepAdministracji()) : [];
     $('menu-administracja').hidden = !czesciAdm.length;
-    // Lider UR i Kierownik KJ mają tu tylko urlopy swoich ludzi — pozycja nazywa się wtedy „Urlopy” (W.nazwaAdministracji).
+    // Lider Utrzymania Ruchu i Kierownik Kontroli Jakości mają tu tylko urlopy swoich ludzi — pozycja nazywa się wtedy „Urlopy” (W.nazwaAdministracji).
     const nazwaAdm = W.nazwaAdministracji(czesciAdm);
     const wstawNazwe = (el, nazwa) => { if (el && el.textContent !== nazwa) el.textContent = nazwa; };
     wstawNazwe(document.querySelector('#menu-administracja span:not(.ikona)'), nazwaAdm);
@@ -296,7 +296,7 @@
   // „Więcej”: Wskaźniki i Raporty — zakładki menu (na telefonie schowane, ale klik programowy działa), Nie wysłane — to samo okno co pasek.
   Panel.pokazOdrzucone = () => pokazOdrzucone();
   /* Wskaźniki i Raporty (wykresy, KPI) — tylko kierownik zakładu i administrator (właściciel 2026-10-27); serwer też odmawia
-     (GET /api/v1/panel/wskazniki → 403). Lider UR, Kierownik KJ i ekran widzą Na żywo i Zlecenia. */
+     (GET /api/v1/panel/wskazniki → 403). Lider Utrzymania Ruchu, Kierownik Kontroli Jakości i ekran widzą Na żywo i Zlecenia. */
   function pokazAnalityke() {
     const ok = !!(hala.pracownik && (hala.pracownik.role || []).some(r => r === 'kierownik' || r === 'admin'));
     for (const w of ['wskazniki', 'raporty', 'rcp']) {       // RCP: ta sama grupa ról (serwer: /api/v1/panel/rcp/… tylko kierownik i admin)
@@ -519,14 +519,18 @@
         <div class="numer slaby">${esc(w.numer)}<br> od ${esc(w.godzZgloszenia)}</div>
       </article>`).join('') || '<p class="pusto ok">Brak aktywnych awarii</p>';
     for (const e of $('lista-awarii').querySelectorAll('img[data-plik]'))
-      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+      zaladujZdjecie(e);
   }
 
   /* „Pilne od zespołu” (2026-11-25): trwałe wpisy z „Pilne — powiadom kierownika”, ostatnie 48 godzin (W.pilneOdZespolu). Konto „ekran”
      (monitor) ich nie widzi — to wiadomość do kierownika i Menedżera. */
   function rysujPilne(d, zlecenia) {
     const sekcja = $('pulpit-pilne');
-    const wiersze = ((hala.pracownik && (hala.pracownik.role || []).includes('ekran')) ? [] : W.pilneOdZespolu({ zlecenia, pracownicy: d.pracownicy, teraz: d.teraz }));
+    const ja = hala.pracownik && hala.pracownik.id;
+    // Klucz jako literał „hala.panel.pilneUkryte.” + id osoby (test t_dostep pilnuje przedrostka „hala.” w kodzie). Pamiętamy czas najnowszego ukrytego wpisu.
+    const ukryteDo = ja ? Number(pamiec.czytaj('hala.panel.pilneUkryte.' + ja)) || 0 : 0;
+    const wszystkie = ((hala.pracownik && (hala.pracownik.role || []).includes('ekran')) ? [] : W.pilneOdZespolu({ zlecenia, pracownicy: d.pracownicy, teraz: d.teraz, dzialy: mojeDzialy() }));
+    const wiersze = W.pilneBezUkrytych(wszystkie, ukryteDo);
     sekcja.hidden = !wiersze.length;
     $('licznik-pilnych').innerHTML = wiersze.length ? `<span class="znacznik alarm">${wiersze.length}</span>` : '';
     $('lista-pilnych').innerHTML = wiersze.map(w => {
@@ -540,6 +544,13 @@
     }).join('');
     ladujZdjeciaLeniwie($('lista-pilnych'));
   }
+  $('ukryj-pilne').addEventListener('click', () => {
+    const ja = hala.pracownik && hala.pracownik.id;
+    const wiersze = (hala.pracownik && (hala.pracownik.role || []).includes('ekran')) ? [] : W.pilneOdZespolu({ zlecenia: hala.obiekty('zlecenie'), pracownicy: dane().pracownicy, teraz: dane().teraz, dzialy: mojeDzialy() });
+    if (!ja || !wiersze.length) return;
+    pamiec.zapisz('hala.panel.pilneUkryte.' + ja, String(Math.max(...wiersze.map(x => x.ms))));
+    rysujPilne(dane(), hala.obiekty('zlecenie'));
+  });
   $('lista-pilnych').addEventListener('click', ev => {
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis);
@@ -737,12 +748,19 @@
      Adres czyścimy, żeby następne powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie
      przełączało widoku. Przed zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
   function obsluzAdres() {
-    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#checklisty', '#bhp', '#pilne'].includes(location.hash)) return;
+    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#urlopy', '#checklisty', '#bhp', '#pilne'].includes(location.hash)) return;
     const adres = location.hash;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* stary adres zostanie — bez szkody */ }
     // #administracja = dotknięty alarm huba (etap 2: kopia, adres na Pages, token, miejsce) — tylko administrator ma ten widok.
     // Nad częściami świeci czerwona wstęga, a przy każdym alarmie „Pokaż” prowadzi tam, gdzie się go naprawia.
     if (adres === '#administracja') { if (!$('menu-administracja').hidden) $('menu-administracja').click(); return; }
+    // #urlopy — przejście z „Więcej” w UR i KJ (D3, 2026-11-25): Administracja → Urlopy (lider UR i kierownik KJ widzą tylko tę część, nazwaną „Urlopy”).
+    if (adres === '#urlopy') {
+      if ($('menu-administracja').hidden) return;
+      $('menu-administracja').click();
+      setTimeout(() => { const c = document.querySelector('#administracja .chip[data-czesc="urlopy"]'); if (c && !c.hidden) c.click(); }, 0);
+      return;
+    }
     // #checklisty — dawna pozycja menu (UI etap 3: część Administracji); stare zakładki i linki dalej trafiają w szablony.
     if (adres === '#checklisty') {
       // D60: szablony checklisty lidera są w Zlecenia → Zapisane (stare zakładki i linki trafiają tam).
@@ -841,7 +859,7 @@
   function zaznaczZnalezione() {
     if (!zaznaczZlecenie) return;
     const sel = `[data-id="${CSS.escape(zaznaczZlecenie)}"]`;
-    const el = $('lista-zlecen').querySelector(sel) || $('kafelki').querySelector(sel);
+    const el = $('lista-zlecen').querySelector(sel) || $('kafelki').querySelector(sel) || $('lista-zlecen-zmiany').querySelector(sel);
     if (!el) return;
     zaznaczZlecenie = null;
     const wKarcie = el.closest('details.kafelek-odbior');
@@ -926,6 +944,7 @@
   function rysujBiezace(d, lista) {
     const ekran = document.body.classList.contains('tryb-ekran');
     $('filtry-biezace').hidden = ekran;
+    $('pulpit-zlecenia-zmiany').hidden = true;                // monitor (konto „ekran”) nie ma bloku zleceń — tylko karty checklist
     if (ekran) { if (!$('kafelki').children.length) $('kafelki').innerHTML = `<p class="pusto">${esc($('kafelki').dataset.pustyTekst || '')}</p>`; return; }
     const ZG = Panel.widoki.zgloszenia;
     rysujFiltryBiezace(d);
@@ -933,19 +952,43 @@
       .filter(z => !((z.pozycje || []).length && wKartach.has(z.id)))
       .map(z => Object.assign(z, { html: wierszZlecenia(z) }));
     const wToku = dla('otwarte'), doOdbioru = dla('do-zamkniecia');
-    // Właściciel 2026-11-23: kart zleceń działów („Lider GK · Zlecenia · W toku”) na Pulpicie nie ma — wystarczy rozwinięcie karty checklisty
+    // Właściciel 2026-11-23: kart zleceń działów („Lider produkcji GK · Zlecenia · W toku”) na Pulpicie nie ma — wystarczy rozwinięcie karty checklisty
     // (lista pozycji, odbiór). Wiersze zostają w zlecBufor, bo okno szczegółów pozycji czyta stamtąd.
     for (const el of $('kafelki').querySelectorAll('.zlecenia-dzialu, .pusto')) el.remove();
-    if (!$('kafelki').children.length) {
+    // Właściciel 2026-11-25: obok checklist pojedyncze zlecenia tej zmiany i dzisiejszego dnia — osobny blok pod kartami (filtry rzędu Pulpitu działają też na nie).
+    const naZmiane = W.filtrujZlecenia(W.zleceniaNaZmiane({ zlecenia: lista, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz,
+      zmiana: d.zmiana, ja: hala.pracownik }), Object.assign({}, biezace, { dzial: biezaceDzial(), mojeDzialy: mojeDzialy() || [], ja: hala.pracownik && hala.pracownik.id }));
+    rysujZleceniaZmiany(naZmiane);
+    if (!$('kafelki').children.length && !naZmiane.length) {
       const filtrAktywny = !$('biezace-czysc').hidden;
       $('kafelki').innerHTML = `<p class="pusto">${filtrAktywny ? 'Nic nie pasuje do filtrów — wyczyść je.' : esc($('kafelki').dataset.pustyTekst || 'Żadne zlecenie nie jest w toku ani nie czeka na odbiór.')}${!filtrAktywny && mozeWyslac('zlecenie.utworzone') ? ' Dodasz je przyciskiem „Nowe zlecenie”.' : ''}</p>`;
     }
-    zlecBufor = new Map([...zlecBufor, ...[...wToku, ...doOdbioru].map(z => [z.id, z])]);      // okno szczegółów pozycji czyta stąd
+    zlecBufor = new Map([...zlecBufor, ...[...wToku, ...doOdbioru, ...naZmiane].map(z => [z.id, z])]);      // okno szczegółów pozycji czyta stąd
     if (okPoz.open) rysujPozycje();
     ladujZdjeciaLeniwie($('kafelki'));
     if (zaznaczZlecenie && wKartach.has(zaznaczZlecenie)) zaznaczZlecenie = null;      // checklista z karty — jej wiersza tu nie ma
     zaznaczZnalezione();
   }
+  /* Blok „Zlecenia na tę zmianę” (W.zleceniaNaZmiane): wiersze jak na ekranie Zlecenia (te same akcje), na wierzchu to, co do zrobienia
+     (po terminie, do odbioru, w toku, zaplanowane na dziś), a Odebrane i Przepadło w zwiniętej części. Pusty blok jest schowany. */
+  let zakonczoneZmianyOtwarte = false, ostatniHtmlZmiany = null;     // ostatni HTML w zmiennej, nie w atrybucie DOM (bez duplikatu w pamięci)
+  function rysujZleceniaZmiany(wiersze) {
+    const blok = $('pulpit-zlecenia-zmiany'), el = $('lista-zlecen-zmiany');
+    blok.hidden = !wiersze.length;
+    const aktywne = wiersze.filter(z => z.otwarte || z.zaplanowane || z.doZamkniecia), koniec = wiersze.filter(z => !(z.otwarte || z.zaplanowane || z.doZamkniecia));
+    $('licznik-zlecen-zmiany').innerHTML = aktywne.length ? `<span class="znacznik ${aktywne.some(z => z.poTerminie || z.zalegle) ? 'alarm' : 'neutral'}">${aktywne.length}</span>` : '';
+    const html = aktywne.map(z => wierszZlecenia(z)).join('')
+      + (koniec.length ? `<details class="zlecenia-zakonczone"${zakonczoneZmianyOtwarte ? ' open' : ''}><summary>Odebrane i przepadłe <span class="znacznik neutral">${koniec.length}</span></summary>
+          <div class="lista-zmiany">${koniec.map(z => wierszZlecenia(z)).join('')}</div></details>` : '');
+    if (ostatniHtmlZmiany === html) return;                // bez zmian — nie rysujemy od nowa (zdjęcia, przewinięcie, rozwinięte części)
+    el.innerHTML = html;
+    ostatniHtmlZmiany = html;
+    przywrocRozwiniecia(el);
+    ladujZdjeciaLeniwie(el);
+  }
+  $('lista-zlecen-zmiany').addEventListener('toggle', ev => {
+    if (ev.target.classList && ev.target.classList.contains('zlecenia-zakonczone')) zakonczoneZmianyOtwarte = ev.target.open;
+  }, true);
   $('filtry-biezace').addEventListener('change', ev => {
     const f = $('filtry-biezace');
     Object.assign(biezace, { dzial: f.dzial.value, osoba: f.osoba.value, spoznione: f.spoznione.checked });
@@ -1195,13 +1238,22 @@
       if (!w.isIntersecting) continue;
       const e = w.target;
       obserwatorZdjec.unobserve(e);
-      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+      zaladujZdjecie(e);
     }
   }, { rootMargin: '200px' }) : null;
+  /* Zdjęcie dochodzi do huba po zdarzeniu (telefon wysyła najpierw zapis, potem plik), a słaby zasięg też bywa chwilowy — jedno
+     ładowanie z błędem zostawiłoby pustą miniaturę do następnego przerysowania. Ponawiamy po 15 s i po 60 s (tylko gdy obrazek nadal jest na stronie). */
+  const PONOWIENIA_ZDJEC_MS = [15000, 60000];
+  function zaladujZdjecie(e, proba) {
+    const n = proba || 0;
+    hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {
+      if (n < PONOWIENIA_ZDJEC_MS.length) setTimeout(() => { if (e.isConnected && !e.getAttribute('src')) zaladujZdjecie(e, n + 1); }, PONOWIENIA_ZDJEC_MS[n]);
+    });
+  }
   function ladujZdjeciaLeniwie(korzen) {
     for (const e of korzen.querySelectorAll('img[data-plik]')) {
       if (obserwatorZdjec) obserwatorZdjec.observe(e);
-      else hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+      else zaladujZdjecie(e);
     }
   }
 
@@ -1234,7 +1286,7 @@
       if (z.zwrotDozwolony !== false) obok.push(p('zwroc', lista ? 'Zwróć całą' : 'Zwróć'));
     }
     // Audyt ról 2026-11-09 (D80): „Odwołaj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
-    // i admin). Lider UR i Kierownik KJ widzieli przycisk, a hub odpowiadał 403.
+    // i admin). Lider Utrzymania Ruchu i Kierownik Kontroli Jakości widzieli przycisk, a hub odpowiadał 403.
     const anuluj = z.moznaAnulowac && mozeWyslac('zlecenie.anulowane') ? p('anuluj', 'Odwołaj') : '';
     const zapisz = stale && !z.stale && !z.zaplanowane
       ? p('jako-stale', `${ik('zapisane')}Do zapisanych`, '', 'Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)') : '';
@@ -1385,7 +1437,7 @@
           + (z.zwrotDozwolony === false ? '' : b('zwroc', 'Zwróć całą')) + b('zamknij', z.odbior && z.odbior.odebrane > 0 ? 'Odbierz resztę' : 'Odbierz całą', p.odebrana || p.stan === 'czeka' ? 'glowny' : '')
       : (z.zwrotDozwolony === false ? '' : b('zwroc', cala ? 'Zwróć całą' : 'Zwróć zlecenie')) + b('zamknij', z.status === 'wykonane' ? 'Odbierz zlecenie' : 'Zamknij zlecenie', 'glowny');
     for (const e of $('pozycja-zlecenia-tresc').querySelectorAll('img[data-plik]'))
-      hala.adresPliku(e.dataset.plik).then(u => { e.src = u; }).catch(() => {});
+      zaladujZdjecie(e);
   }
   Panel.pokazPozycje = (zlecenie, pozycja) => {
     pozOtwarta = { zlecenie, pozycja };
@@ -1467,6 +1519,14 @@
     await akcjaZlecenia(b, id);
   }
   $('lista-zlecen').addEventListener('click', obsluzKlikZlecenia);
+  $('lista-zlecen-zmiany').addEventListener('click', obsluzKlikZlecenia);
+  $('lista-zlecen-zmiany').addEventListener('click', ev => {         // pamięć rozwinięć sekcji w wierszach (jak na liście Zleceń)
+    const sum = ev.target.closest('summary');
+    const det = sum && sum.parentElement;
+    if (!det || det.tagName !== 'DETAILS' || det.classList.contains('zlecenia-zakonczone')) return;
+    const k = kluczRozwiniecia(det);
+    if (k) rozwiniecia.set(k, !det.open);
+  });
 
   /* Odbiór jednej pozycji checklisty (D87). Po ostatniej odebranej zlecenie zamyka się samo — z paskiem „Cofnij”, jak „Odbierz całą”;
      hub ma siatkę bezpieczeństwa (porzadkuj_odebrane) na wypadek, gdyby to zamknięcie się nie wysłało. */
@@ -1807,7 +1867,7 @@
       if (fz.plan_dzien.value) {
         const pl = W.planZFormularza({ dzien: fz.plan_dzien.value, godzina: fz.plan_godzina.value, zmiany: hala.slowniki.zmiany, teraz: hala.teraz() });
         if (pl.blad) { blad(pl.blad); return; }
-        if (!mozeWyslac('zlecenie.zaplanowane')) { blad('Na później zleca tylko Kierownik.'); return; }
+        if (!mozeWyslac('zlecenie.zaplanowane')) { blad('Na później zleca tylko Kierownik zakładu.'); return; }
         planNa = pl.na;
         planPo = W.terminPoZFormularza(fz.termin_po.value, fz.termin_po_jedn.value);
         if (planPo.blad) { blad(planPo.blad); return; }
@@ -1821,7 +1881,7 @@
       // D76: „Też dla działów” — każdy dział swoje; zlecenie kierownika zakładu dla UR/KJ bez osoby — do kierownika działu.
       const tez = [...fz.querySelectorAll('input[name="tez_dzialy"]:checked')].map(x => x.value);
       const doZapisu = W.zleceniaDzialow(dane, { dzialy: [dane.dzial, ...tez], osoby, role: roleJa(), stale: hala.kontrakt.stale || {} });
-      if (!doZapisu.length) { blad('Ten dział zleca Kierownik — wybierz swój dział.'); return; }
+      if (!doZapisu.length) { blad('Ten dział zleca Kierownik zakładu — wybierz swój dział.'); return; }
       // Zdjęcia wysyłamy dopiero po wszystkich sprawdzeniach — błąd w formularzu nie zostawia osieroconych plików.
       const zdjeciaIds = await zdjeciaPola(fz.zdjecie);
       for (const d1 of doZapisu) {
@@ -1984,7 +2044,7 @@
 
   // ------------------------------------------------------------ sygnał: nowe zatrzymanie albo alert jakości
 
-  /* Kierownik nie patrzy na monitor bez przerwy. Nowe zatrzymanie i nowy alert jakości (Quality Alert) migają
+  /* Kierownik zakładu nie patrzy na monitor bez przerwy. Nowe zatrzymanie i nowy alert jakości (Quality Alert) migają
      na ekranie przez minutę i (gdy dźwięk jest włączony) dają krótki sygnał. Dźwięk przeglądarka
      wpuszcza dopiero po kliknięciu albo klawiszu na stronie — dlatego przycisk w nagłówku mówi,
      kiedy trzeba kliknąć. Na monitorze w biurze można tego uniknąć flagą Chrome (INSTRUKCJA §7). */

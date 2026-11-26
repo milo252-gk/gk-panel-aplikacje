@@ -105,11 +105,17 @@
       <!-- Właściciel 2026-11-25: „Pilne — powiadom kierownika” przy „Zrobione” (push z huba do kierownika zakładu i Menedżera) zostawia tu trwały wpis
            z notatką i zdjęciami (ostatnie 48 godzin). Tylko informacja — bez potwierdzania; blok chowa się, gdy nic nie ma. -->
       <div class="pilne" id="pulpit-pilne" hidden>
-        <h3 id="t-pilne"><span class="ik" data-ikona="ostrzezenie" data-rozmiar="18"></span>Pilne od zespołu <span id="licznik-pilnych" class="licznik"></span></h3>
+        <h3 id="t-pilne"><span class="ik" data-ikona="ostrzezenie" data-rozmiar="18"></span>Pilne od zespołu <span id="licznik-pilnych" class="licznik"></span><button type="button" class="maly" id="ukryj-pilne" title="Ukryj te wpisy na tym urządzeniu — wrócą przy nowym pilnym">Ukryj</button></h3>
         <div id="lista-pilnych" class="lista"></div>
       </div>
       <h2 id="t-biezace">Aktualna zmiana</h2>
       <div id="kafelki" class="kafelki"></div>
+      <!-- Właściciel 2026-11-25: pojedyncze zlecenia (bez checklist) zlecone na bieżącą zmianę albo zaplanowane / z terminem na dziś — W.zleceniaNaZmiane,
+           panel.js: rysujZleceniaZmiany. Wiersze jak na ekranie Zlecenia; blok chowa się, gdy nic nie ma; konto „ekran” go nie ma. -->
+      <div class="zlecenia-zmiany" id="pulpit-zlecenia-zmiany" hidden>
+        <h3 id="t-zlecenia-zmiany"><span class="ik" data-ikona="lista" data-rozmiar="18"></span>Zlecenia na tę zmianę <span id="licznik-zlecen-zmiany" class="licznik"></span></h3>
+        <div id="lista-zlecen-zmiany" class="lista-zmiany"></div>
+      </div>
     </section>
     <section class="awarie" aria-labelledby="t-awarie">
       <h2 id="t-awarie">Awarie <span id="licznik-awarii" class="licznik"></span></h2>

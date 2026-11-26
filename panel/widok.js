@@ -75,11 +75,13 @@
   function pilneOdZespolu(w) {
     const teraz = w.teraz, nazwa = id => ((w.pracownicy || []).find(p => p && p.id === id) || {}).nazwa || id || '';
     const wyniki = [];
-    for (const z of w.zlecenia || []) {
+    // 1.42.0 (D4): kierownik działu (Kierownik Magazynu, Lider UR, Kierownik KJ) widzi tylko pilne z zleceń SWOJEGO działu — w.dzialy
+    // to kody działów (null/brak = wszystkie: kierownik zakładu, Menedżer). Tak samo jak adresaci pusha po stronie huba.
+    for (const z of (w.zlecenia || []).filter(x => !w.dzialy || w.dzialy.includes(((x && x.dane) || {}).dzial))) {
       const d = z.dane || {};
       const poz = new Map((d.pozycje || []).filter(p => p && p.id).map(p => [p.id, p]));
       const wpisy = Object.entries(d.wykonane || {}).filter(([, e]) => e && e.pilne)
-        .map(([pid, e]) => ({ pozycja: pid, nazwaPozycji: (poz.get(pid) || {}).nazwa || pid, czas: e.czas, autor: e.autor, uwagi: e.uwagi || '', zdjecia: [].concat(e.zdjecia || []) }));
+        .map(([pid, e]) => ({ pozycja: pid, nazwaPozycji: (poz.get(pid) || {}).nazwa || pid, czas: e.pilne_czas || e.czas, autor: e.autor, uwagi: e.pilne_uwagi || e.uwagi || '', zdjecia: [].concat(e.zdjecia || []) }));
       if (d.pilne_wykonania) wpisy.push({ pozycja: '', nazwaPozycji: '', czas: d.czas_wykonania, autor: d.wykonal, uwagi: d.uwagi_wykonania || '', zdjecia: [].concat(d.zdjecia_wykonania || []) });
       for (const e of wpisy) {
         const ms = Date.parse(e.czas);
@@ -91,6 +93,12 @@
     return wyniki.sort((a, b) => b.ms - a.ms).slice(0, 20);
   }
 
+  /* D5 (2026-11-25): „Ukryj” na „Pilne od zespołu” — pamiętamy tylko czas NAJNOWSZEGO ukrytego wpisu (ms); ukryte są wpisy nie nowsze
+     od niego, więc nowy pilny (późniejszy czas) pokazuje sekcję znowu. Pamięć: klucz hala.panel.pilneUkryte.<id osoby> w tej przeglądarce. */
+  function pilneBezUkrytych(wiersze, ukryteDoMs) {
+    const prog = Number(ukryteDoMs) || 0;
+    return (wiersze || []).filter(x => !(prog && x.ms <= prog));
+  }
   function przyjecieListy(lista, pracownicy) {
     const zl = (lista && lista.zlecenia) || [];
     const doPrzyjecia = zl.filter(z => z.status === 'nowe').length;
@@ -139,8 +147,8 @@
   /* Działy z własną kartą obchodu na Pulpicie (właściciel 2026-11-18): dane-napędzane — karta pojawia się tylko, gdy dział ma na bieżącą
      zmianę zlecenia-checklisty (z pozycjami). Kolejność: mistrz, UR, KJ, brygadzista SP, potem karty lidera (linie). Dział „brygadzista-sp”
      (Strefa Płyt, aplikacja Lider) jest obsłużony po kodzie; musi go jeszcze mieć kontrakt/hub (stale.dzialy) — bez tego nie powstaną zlecenia. */
-  const DZIALY_OBCHODOW = [['mistrz', 'Checklista Mistrza GK', 'Mistrz GK'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
-                           ['brygadzista-sp', 'Checklista Lidera SP', 'Lider SP'], ['magazyn', 'Checklista Magazynu', 'Magazyn']];
+  const DZIALY_OBCHODOW = [['mistrz', 'Checklista Mistrza Produkcji GK', 'Mistrz Produkcji GK'], ['ur', 'Checklista UR', 'UR'], ['kj', 'Checklista KJ', 'KJ'],
+                           ['brygadzista-sp', 'Checklista Lidera Produkcji SP', 'Lider Produkcji SP'], ['magazyn', 'Checklista Magazynu', 'Magazyn']];
   function obchodyMistrza(arg) { return obchodyDzialow(Object.assign({}, arg, { tylko: ['mistrz'] })); }
   /* Karty obchodów działów innych niż lider. `ja` + `stale`: lider UR i kierownik KJ widzą tylko kartę swojego działu (Hala.dzialyKierownika),
      kierownik zakładu i admin wszystkie. `tylko` — zawężenie kodów (test, mistrz). */
@@ -866,7 +874,7 @@
   /* D76 / P18 (właściciel 2026-10-19: „Tak, stałe też przez kierownika”): działy zapisanego, w których hub da wystąpienie
      kierownikowi działu (do_kierownika) — autor (s.autor: kierownik zakładu albo admin), tryb „dział” bez osoby, dział
      z kierownikiem (UR, KJ). Ta sama reguła co hub (do_kierownika w _zlec_wystapienie ↔ Hala.doKierownika).
-     [{ kod, nazwa, kierownik }] — kierownik = nazwa roli („Lider UR”). */
+     [{ kod, nazwa, kierownik }] — kierownik = nazwa roli („Lider Utrzymania Ruchu”). */
   function kierownicyStalego(s, stale, pracownicy) {
     const x = s || {};
     if (x.kazdy === true || x.wykonawca || (Array.isArray(x.wykonawcy) && x.wykonawcy.length)) return [];
@@ -880,7 +888,7 @@
   }
 
   /* „Dla kogo” jednym zdaniem: „Wszystkie działy · każdy osobno”, „UR, KJ · po jednym zleceniu na dział”,
-     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”, D76: „Utrzymanie Ruchu → Lider UR”. */
+     „3 osoby: Jan K., Ewa M., Piotr N.”, „UR · Jan Kowalski”, D76: „Utrzymanie Ruchu → Lider Utrzymania Ruchu”. */
   function dlaKogoPoLudzku(s, stale, pracownicy) {
     const zwykle = dlaKogoBezKierownika(s, stale, pracownicy);
     const k = kierownicyStalego(s, stale, pracownicy);
@@ -2002,9 +2010,9 @@
                              szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
   // Nazwy funkcji (D92, 2026-11-19 — tylko napisy; kody ról bez zmian). Kody bez słownika kontraktu (biuro, kierowca, kierownik-ur…)
   // przychodzą z dziennika logowań programów.
-  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik', biuro: 'Biuro', lider: 'Lider GK', mistrz: 'Mistrz GK', brygadzista_sp: 'Lider SP', mechanik: 'Pracownik UR',
-                              kontroler: 'Pracownik KJ', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Lider UR', 'kierownik-kj': 'Kierownik KJ',
-                              kierownik_ur: 'Lider UR', kierownik_kj: 'Kierownik KJ', kierownik_mag: 'Kierownik MAG', pracownik_mag: 'Pracownik MAG' };
+  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik zakładu', biuro: 'Biuro', lider: 'Lider produkcji GK', mistrz: 'Mistrz Produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu',
+                              kontroler: 'Pracownik Kontroli Jakości', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Lider Utrzymania Ruchu', 'kierownik-kj': 'Kierownik Kontroli Jakości',
+                              kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu', pracownik_mag: 'Pracownik Magazynu' };
   function logowania(odp) {
     const o = odp || {};
     if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.', startowe: [], startowePodsumowanie: '', niespojnosci: [] };
@@ -2588,7 +2596,7 @@
     // Właściciel 2026-11-17: kierownik zakładu ma też „Kody QR” (okno kody.js: kierownik albo administrator).
     if (admin) c.push('maszyny', 'dane', 'logowania');
     // Panel bez „☰ Więcej” (2026-11-17, decyzja właściciela: „tylko dla obecnych ról Administracji”): Wskaźniki, Raporty (na telefonie),
-    // „Role i uprawnienia” i „Nie wysłane” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Lider UR i Kierownik KJ
+    // „Role i uprawnienia” i „Nie wysłane” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Lider Utrzymania Ruchu i Kierownik Kontroli Jakości
     // i konto ekranu zostają bez nich (UR/KJ — przy samych Urlopach; „Nie wysłane” mają w pasku połączenia). Chipy Wskaźniki/Raporty
     // ukrywa CSS na komputerze (są w menu po lewej).
     // Kolejność jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia, Nie wysłane.
@@ -2597,7 +2605,7 @@
     if (admin || analityka) c.push('raporty');
     if (admin || kody) c.push('kody');
     if (admin || analityka) c.push('role', 'niewyslane');
-    if (admin || plan) c.push('plan');                    // D95: plan zmian zakładu — Menedżer i Kierownik (kontrakt: slowniki.plan_zmian.zapis)
+    if (admin || plan) c.push('plan');                    // D95: plan zmian zakładu — Menedżer i Kierownik zakładu (kontrakt: slowniki.plan_zmian.zapis)
     if (admin) c.push('ustawienia');
     // D60 (właściciel 2026-10-14: „checklisty nie powinny być schowane w ustawieniach, tylko w zleceniach”):
     // szablony checklisty lidera są w Zlecenia → Zapisane, nie w Administracji (parametr szablony zostaje dla zgodności).
@@ -2870,6 +2878,63 @@
                opis: biezaca ? `${z.nazwa || nr} — trwa, do ${godzina(koniec)}` : `${z.nazwa || nr} — ${dzienPoLudzku(start, teraz)} ${godzina(start)}–${godzina(koniec)}` };
     }
     return null;
+  }
+
+  /* „Zlecenia na tę zmianę” na Pulpicie (właściciel 2026-11-25: „na pulpicie, w aktualnej zmianie chcę widzieć poza checklistami też
+     pojedyncze zlecenia, które zleciłem na nią lub do wykonania na konkretny dzień”). Czysta funkcja: dostaje listę zleceń, którą klient
+     już ma (nic nowego z serwera), i zwraca wiersze W.zlecenia (te same akcje co na ekranie Zlecenia) tylko dla zleceń bez pozycji
+     (checklisty mają własne karty), które:
+       1. są zlecone NA TĘ ZMIANĘ (`zmiana` = numer bieżącej zmiany, a zlecenie wypada w jej godzinach: start planu albo chwila zlecenia),
+          także cykliczne (D71/D72) — ich koniec zmiany (`wazne_do`) to koniec bieżącej zmiany; albo
+       2. są zaplanowane NA DZIŚ (start `zaplanowane_na` w dobie zakładu bieżącej zmiany — także na późniejszą zmianę tego dnia), albo
+       3. nie są przypięte do zmiany, a ich TERMIN wypada dziś (do wykonania na ten dzień).
+     Doba zakładu = doba, w której zaczęła się bieżąca zmiana (zmiana należy do dnia startu, D95); poza zmianą — doba z `teraz`.
+     4. ZALEGŁE (decyzja właściciela): nieodebrane (w toku, zaplanowane, do odbioru) z terminem — a bez terminu z planem — sprzed bieżącej doby; wiersz ma `zalegle`
+        i napis „po terminie”, stoją na górze. Odebrane i przepadłe z poprzednich dób nie wracają. Zlecenia przypięte do innej zmiany bez planu na dziś tu nie trafiają.
+     Magazyn liczy zmianę wg własnych godzin (D104, zmianaKarty). Kolejność jak W.zlecenia. */
+  const STATUSY_NA_ZMIANE = new Set(['nowe', 'przyjete', 'rozdzielone', 'zaplanowane', 'wykonane', 'odrzucone', 'zamkniete', 'przepadlo']);
+  function zleceniaNaZmiane({ zlecenia: lista, slowniki, pracownicy, stale, teraz, zmiana, ja }) {
+    const ms = x => { const t = Date.parse(x); return isNaN(t) ? null : t; };
+    const pierwsze = (...a) => { for (const x of a) if (x !== null && x !== undefined) return x; return null; };
+    const szablony = (slowniki && slowniki.zlecenia_stale) || {};
+    const l = H().lokalny(zmiana && ms(zmiana.od) !== null ? ms(zmiana.od) : teraz);
+    const dzienOd = H().zLokalnego(l.rok, l.miesiac, l.dzien, 0, 0), dzienDo = H().zLokalnego(l.rok, l.miesiac, l.dzien + 1, 0, 0);
+    const wDobie = t => t !== null && t >= dzienOd && t < dzienDo;
+    const wybrane = new Set(), zalegle = new Set();
+    for (const z of (lista || []).filter(Boolean)) {
+      const d = z.dane || {};
+      if (!STATUSY_NA_ZMIANE.has(z.status)) continue;
+      if ((Array.isArray(d.pozycje) && d.pozycje.length) || ['checklista', 'podsumowanie'].includes(rodzajZlecenia(d, szablony))) continue;
+      const zm = zmiana ? zmianaKarty(zmiana, d.dzial, slowniki, teraz) : null;
+      const od = zm ? ms(zm.od) : null, doMs = zm ? ms(zm.do) : null;
+      const plan = ms(d.zaplanowane_na), termin = ms(d.termin), wazne = ms(d.wazne_do);
+      let ok = false;
+      if (od !== null && doMs !== null) {
+        if (d.zmiana && String(d.zmiana) === String(zm.nr)) {
+          const kiedy = pierwsze(plan, ms(d.czas_zlecenia), ms(d.czas_zaplanowania), ms(z.zmieniono));
+          ok = kiedy !== null && kiedy >= od - 60000 && kiedy < doMs;
+        } else if (wazne !== null) ok = wazne > od && wazne <= doMs + 60000;
+      }
+      if (!ok && z.status === 'zaplanowane') ok = wDobie(plan);
+      if (!ok && !d.zmiana && wazne === null) ok = wDobie(plan) || wDobie(termin);
+      // Zaległe (decyzja właściciela 2026-11-25): jeszcze nieodebrane (w toku, zaplanowane, do odbioru), z terminem albo — bez terminu — z planem
+      // sprzed bieżącej doby. Odebrane i przepadłe z poprzednich dób tu nie wracają.
+      if (!ok && (OTWARTE.has(z.status) || z.status === 'zaplanowane' || DO_ZAMKNIECIA.has(z.status))) {
+        if (termin !== null ? termin < dzienOd : (plan !== null && plan < dzienOd)) { ok = true; zalegle.add(z.id); }
+      }
+      if (ok) wybrane.add(z.id);
+    }
+    if (!wybrane.size) return [];
+    // Zaległe na górze aktywnych (kolejność W.zlecenia zachowana w grupach), z napisem „po terminie”, gdy wiersz nie ma własnego opisu spóźnienia.
+    // Przeliczamy tylko wybrane zlecenia z ich częściami i całościami (rozdział i ukrywanie części patrzą na rodzeństwo), nie całą
+    // listę z historią przy każdym przerysowaniu Pulpitu.
+    const nad = z => (z && z.dane && z.dane.nadrzedne) || null;
+    const baza = new Set(wybrane);
+    for (const z of lista || []) if (z && wybrane.has(z.id) && nad(z)) baza.add(nad(z));
+    const okno = (lista || []).filter(z => z && (baza.has(z.id) || (nad(z) && baza.has(nad(z)))));
+    const wiersze = zlecenia({ zlecenia: okno, slowniki, pracownicy, stale, teraz, filtr: 'wszystkie', ja }).filter(z => wybrane.has(z.id))
+      .map(z => zalegle.has(z.id) ? Object.assign(z, { zalegle: true, spoznione: true, spoznienie: z.spoznienie || 'po terminie' }) : z);
+    return [...wiersze.filter(z => z.zalegle), ...wiersze.filter(z => !z.zalegle)];
   }
 
   /* Dni urlopu osoby w okresie [od, do) (ms) — do statystyk („żeby nie psuć mu statystyk”). */
@@ -3298,7 +3363,7 @@
   /* Karty obchodów na Pulpicie — JEDNA KARTA NA KAŻDĄ CHECKLISTĘ (właściciel 2026-11-18): tytuł = nazwa checklisty (tytuł zlecenia z huba),
      pod nim podpis działu („Mistrz”, „Lider · Linia 1”, „Brygadzista SP”, „UR”, „KJ”). Kolejność: mistrz, lider (linie jak dotąd), brygadzista SP,
      UR, KJ; w obrębie działu wg najwcześniejszego terminu pozycji i nazwy. Linia lidera bez żadnej checklisty zostaje jedną kartą jak dawniej
-     (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Lider UR i Kierownik KJ widzą z kart działów tylko swój. */
+     (migawka zmiany / szablon). Awarie i „Stoi” linii liczą się raz — na pierwszej karcie linii. Lider Utrzymania Ruchu i Kierownik Kontroli Jakości widzą z kart działów tylko swój. */
   /* 2026-11-24: + magazyn (D92) — bez niego aktywna checklista Magazyniera nie miała karty na Pulpicie. */
   // D104: zmiana, wg której liczy się karta działu — Magazyn ma własne zmiany (słownik `zmiany_magazyn`), reszta zmianę zakładu.
   const zmianaKarty = (zmiana, dzial, slowniki, teraz) => (H().zmianaDzialu && dzial && H().zmianyDzialu(slowniki, dzial)
@@ -3336,7 +3401,7 @@
     for (const dzial of KOLEJNOSC_KART) {
       if (dzial === 'produkcja') {
         for (const lin of liniowe) {
-          const podpis = wiele ? `Lider GK · ${lin.nazwa}` : 'Lider GK';       // D92: nazwa funkcji „Lider GK”
+          const podpis = wiele ? `Lider produkcji GK · ${lin.nazwa}` : 'Lider produkcji GK';       // D92: nazwa funkcji „Lider produkcji GK”
           const checklisty = sortuj((zlecenia || []).filter(z => ((z.dane || {}).dzial === 'produkcja') && maPozycje(z)
             && H().checklistaZmiany([z], lin.linia, zmiana, 'produkcja').zlecenia.length > 0));
           const karty = checklisty.map((z, i) => karta(z, 'produkcja', lin.linia, podpis,
@@ -3502,8 +3567,8 @@
     return { od: dzienZakladu(ms - 6 * 86400000), do: dzienZakladu(ms) };
   }
 
-  const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, pilneOdZespolu, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
+  const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, zleceniaNaZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+                       pilneBezUkrytych, checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, pilneOdZespolu, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,

@@ -97,7 +97,7 @@
     zakladka: 'alerty',
     formularz: true,
     async rysuj(el) {
-      if (!KJ.mozna('alert.opublikowany')) { el.innerHTML = '<p class="pusto">Alerty publikuje kontroler albo kierownik KJ.</p>'; return; }
+      if (!KJ.mozna('alert.opublikowany')) { el.innerHTML = '<p class="pusto">Alerty publikuje kontroler albo kierownik Kontroli Jakości.</p>'; return; }
       f = Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS)) || {});
       const wyroby = Object.entries(hala.slowniki.wyroby || {}).sort(([a], [b]) => a.localeCompare(b, 'pl'));
       el.innerHTML = `

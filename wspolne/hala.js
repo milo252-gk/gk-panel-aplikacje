@@ -301,6 +301,30 @@
   const UWAGA_PO_PRZERWIE = 'zapis z telefonu po długiej przerwie — czas z telefonu';
   const jestKonflikt = uwaga => !!uwaga && uwaga !== UWAGA_CZASU && uwaga !== UWAGA_PO_PRZERWIE;
 
+  /* Kontrakt 1.41.0, reguła `mapa.zachowaj_pierwsze`: pozycja checklisty zrobiona drugi raz NIE podmienia pierwszego dowodu.
+     Zostaje pierwszy wpis; z nowego dochodzą tylko brakujące pola, zdjęcia (suma bez powtórek) i `pilne` (wystarczy jedno „tak”).
+     Bliźniak: hala.py → scal_wpis_mapy. */
+  function scalWpisMapy(stary, nowy) {
+    const wynik = kopia(stary);
+    for (const [p, v] of Object.entries(nowy)) {
+      if (p === 'autor' || p === 'czas' || p === 'zdarzenie') continue;
+      if (p === 'pilne') {
+        if (v === true && wynik.pilne !== true) {      // pilne_czas / pilne_uwagi: patrz hala.py → scal_wpis_mapy
+          wynik.pilne = true;
+          if (nowy.czas) wynik.pilne_czas = nowy.czas;
+          if (!puste(nowy.uwagi)) wynik.pilne_uwagi = nowy.uwagi;
+        }
+      }
+      else if (p === 'zdjecia') {
+        if (Array.isArray(v)) {
+          const obecne = Array.isArray(wynik.zdjecia) ? wynik.zdjecia : [];
+          wynik.zdjecia = obecne.concat(v.filter(x => !obecne.some(o => JSON.stringify(o) === JSON.stringify(x))));
+        }
+      } else if (puste(wynik[p]) && !puste(v)) wynik[p] = kopia(v);
+    }
+    return wynik;
+  }
+
   function zastosuj(kontrakt, stan, zd) {
     const spec = kontrakt.zdarzenia[zd.typ];
     if (!spec) return [stan, `nieznany typ zdarzenia '${zd.typ}'`];
@@ -351,7 +375,8 @@
         const wpis = {};
         for (const p of spec.mapa.pola || []) if (p in dane) wpis[p] = kopia(dane[p]);
         Object.assign(wpis, { autor: meta.autor, czas: meta.czas, zdarzenie: meta.zdarzenie });
-        (d[spec.mapa.pole] = d[spec.mapa.pole] || {})[k] = wpis;
+        const stary = spec.mapa.zachowaj_pierwsze && d[spec.mapa.pole] ? d[spec.mapa.pole][k] : null;
+        (d[spec.mapa.pole] = d[spec.mapa.pole] || {})[k] = stary && typeof stary === 'object' ? scalWpisMapy(stary, wpis) : wpis;   // 1.41.0
       }
     }
     if (spec.usun_z_mapy) {
@@ -449,7 +474,7 @@
   /* Checklisty działu na linii i zmianie złożone w jedną listę pozycji. Id pozycji = „<id zlecenia>|<id pozycji>”
      (kilka checklist naraz nie miesza odhaczeń); mapa → { zlecenie, pozycja } do zapisu. typ jak w dawnej checkliście
      lidera (obsada, obchod, proba, bhp, przekazanie, zadanie) — ekrany Lidera rysują ikony i formularze po nim. */
-  function checklistaZmiany(zlecenia, linia, zmiana, dzial) {
+  function checklistaZmiany(zlecenia, linia, zmiana, dzial, osoba) {
     const dz = dzial || 'produkcja';
     const wynik = { dane: { pozycje: [], wykonane: {}, pominiete: {} }, zlecenia: [], mapa: {} };
     if (!zmiana) return wynik;
@@ -458,6 +483,9 @@
       if (!Array.isArray(d.pozycje) || !d.pozycje.length || d.dzial !== dz) continue;
       if (z.status === 'anulowane' || z.status === 'zaplanowane' || z.status === 'odrzucone') continue;      // „Nie mogę” nie czerwieni zmiany
       if (d.linia && linia && d.linia !== linia) continue;
+      // `osoba` (id) — ekran „Moja zmiana”: zlecenie przydzielone KOMUŚ INNEMU nie jest moją pracą (nie liczy się do postępu
+      // i spóźnień, a serwer i tak odrzuciłby odhaczenie). Bez `osoba` (Panel, kierownik, admin) — wszystkie, jak dotąd.
+      if (osoba && d.wykonawca && d.wykonawca !== osoba) continue;
       if (!zlecenieZmiany(d, zmiana)) continue;
       wynik.zlecenia.push(z);
       for (const p of d.pozycje) {
@@ -929,7 +957,7 @@
   }
 
   /* Nowe zlecenie: czy idzie „do kierownika działu” (pole do_kierownika). Tylko kierownik zakładu (i admin), dział
-     z kierownikiem (UR, KJ), bez wybranej osoby. Lider UR dla swojego działu zleca wprost — jest tym kierownikiem.
+     z kierownikiem (UR, KJ), bez wybranej osoby. Lider Utrzymania Ruchu dla swojego działu zleca wprost — jest tym kierownikiem.
      Bliźniak: do_kierownika w hala.py — ta sama reguła dla wystąpień zapisanych z harmonogramu (P18, 2026-10-19). */
   // D102 (właściciel 2026-11-24): Magazyn nie idzie „do kierownika działu” — widzą go i biorą wszyscy z magazynu. Bliźniak: hala.py → DZIALY_BEZ_DO_KIEROWNIKA.
   const DZIALY_BEZ_DO_KIEROWNIKA = ['magazyn'];
@@ -947,6 +975,16 @@
     if (!pracownik) return false;
     if ((pracownik.role || []).some(r => ROLE_ANULUJACE_AWARIE.includes(r))) return true;
     return ((awaria && awaria.dane) || {}).zglosil === pracownik.id;
+  }
+
+  /* D3 (2026-11-25): „Urlopy” (lider UR, kierownik KJ — urlopy swojego działu) i „Administracja” (Menedżer) w „Więcej” aplikacji UR i KJ.
+     Ekrany już są w Panelu Zarządczym GK i dzielą z nim konto — UR i KJ dają tylko przejście (adres względny ../panel/, jak w STYL-GK §8),
+     bez powielania ekranu i bez nowych endpointów. Czysta funkcja: [{ tekst, adres }] zależnie od roli (Menedżer ma Urlopy w Administracji). */
+  function skrotyDoPanelu(pracownik) {
+    const role = (pracownik && pracownik.role) || [];
+    if (role.includes('admin')) return [{ tekst: 'Administracja (w Panelu Zarządczym GK)', adres: '../panel/#administracja' }];
+    if (role.includes('kierownik_ur') || role.includes('kierownik_kj')) return [{ tekst: 'Urlopy zespołu (w Panelu Zarządczym GK)', adres: '../panel/#urlopy' }];
+    return [];
   }
 
   /* Etap 6a (2026-11-10): „Moje zgłoszenia” w Liderze, UR i KJ — awarie i zgłoszenia nieprawidłowości zgłoszone przez zalogowaną
@@ -996,7 +1034,7 @@
       const wiersz = { rodzaj, id: x.id, numer: x.numer || '', status: slowo, statusKod: x.status, klasa, aktywny: !!x.aktywny,
                        tytul: rodzaj === 'awaria' ? `Awaria${m ? ' — ' + m : ''}` : (d.tytul || 'Nieprawidłowość'), maszyna: d.maszyna || '',
                        opis: d.opis || '', czas: d.czas_zgloszenia || x.utworzono || '', czasMs: isNaN(czasMs) ? 0 : czasMs,
-                       godzina: godzinaZgloszenia(czasMs), szczegol: czesci.filter(Boolean).join(' · '), oczekuje: !!x._oczekuje, zmieniono: x.zmieniono || '' };
+                       godzina: godzinaZgloszenia(czasMs), mozeAnulowac: rodzaj === 'awaria' && d.zglosil === op.ja && (x.status === 'zgloszona' || x.status === 'przyjeta'), szczegol: czesci.filter(Boolean).join(' · '), oczekuje: !!x._oczekuje, zmieniono: x.zmieniono || '' };
       const klucz = rodzaj + '|' + x.id;
       const byl = wyniki.get(klucz);
       // Ten sam obiekt z widoku telefonu i z serwera: bierzemy świeższy (zapis z kolejki jest zawsze świeższy).
@@ -1032,14 +1070,14 @@
   /* Nagłówek menu (właściciel 2026-11-23): pod imieniem osoby stoi NAZWA ROLI, a pod nią stała nazwa programu. Rola = etykieta z
      kontraktu (stale.role, bez nawiasu na końcu: „Ekran”, nie „Ekran (konto urządzenia…)”). Osoba z kilkoma rolami: najwyższa
      z kolejności NAJWYZSZA_ROLA, ale tylko spośród ról, które dana aplikacja przyjmuje (kontrakt.aplikacje.<kod>.role) — mechanik
-     z dodatkową rolą lidera w GK Utrzymanie Ruchu pokazuje „Pracownik UR”. Bez ról — pusty napis. Tylko napis, nic nie egzekwuje. */
+     z dodatkową rolą lidera w GK Utrzymanie Ruchu pokazuje „Pracownik Utrzymania Ruchu”. Bez ról — pusty napis. Tylko napis, nic nie egzekwuje. */
   const NAJWYZSZA_ROLA = ['admin', 'kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'mistrz', 'lider', 'brygadzista_sp', 'mechanik', 'kontroler', 'pracownik_mag', 'ekran'];
   /* Gdy kontraktu jeszcze nie ma (pierwszy start bez sieci i bez kopii) — te same nazwy co stale.role w zdarzenia.json. */
-  const NAZWY_ROL_AWARYJNE = { admin: 'Menedżer', kierownik: 'Kierownik', kierownik_ur: 'Lider UR', kierownik_kj: 'Kierownik KJ', kierownik_mag: 'Kierownik MAG',
-    mistrz: 'Mistrz GK', lider: 'Lider GK', brygadzista_sp: 'Lider SP', mechanik: 'Pracownik UR', kontroler: 'Pracownik KJ', pracownik_mag: 'Pracownik MAG', ekran: 'Ekran' };
-  /* Nagłówek menu ma miejsce na pełną nazwę (właściciel 2026-11-23): Lider UR pokazuje się tam jako „Lider Utrzymania Ruchu”; skrót „Lider UR”
-     zostaje w ciasnych miejscach (chipy, tabele, dolny pasek) — tam stale.role z kontraktu. */
-  const NAZWY_ROL_W_MENU = { kierownik_ur: 'Lider Utrzymania Ruchu' };
+  const NAZWY_ROL_AWARYJNE = { admin: 'Menedżer', kierownik: 'Kierownik zakładu', kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu',
+    mistrz: 'Mistrz Produkcji GK', lider: 'Lider produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu', kontroler: 'Pracownik Kontroli Jakości', pracownik_mag: 'Pracownik Magazynu', ekran: 'Ekran' };
+  /* Od 2026-11-25 pełne nazwy ról są w kontrakcie (stale.role: „Lider Utrzymania Ruchu” itd.), więc menu nie potrzebuje osobnych;
+     mapa zostaje pusta jako miejsce na ewentualny wyjątek tylko dla nagłówka menu. */
+  const NAZWY_ROL_W_MENU = {};
   function nazwaRoliMenu(pracownik, kontrakt, aplikacja) {
     const role = [].concat((pracownik && pracownik.role) || []);
     if (!role.length) return '';
@@ -1992,7 +2030,7 @@
 
     /* Zdjęcie (albo PDF) do kolejki. Zwraca id do wpisania w pole typu 'pliki'. */
     h.dodajPlik = async (plik, opcjePliku) => {
-      const op = Object.assign({ maks: 1600, jakosc: 0.8 }, opcjePliku || {});
+      const op = Object.assign({ maks: 1280, jakosc: 0.75 }, opcjePliku || {});     // D13 (2026-11-25): 1280 px / 0,75 — lżejsze zdjęcie dojdzie przy słabym zasięgu
       let blob = plik;
       if (plik.type && plik.type.startsWith('image/') && op.maks) blob = await zmniejszZdjecie(plik, op.maks, op.jakosc);
       const id = uuid();
@@ -2112,14 +2150,19 @@
     h.stanKolejki = () => ({ oczekuje: kolejkaCache.length, moje: mojeWKolejce(), pozycje: kolejkaCache.map(w => w.zd),
                              pliki: plikiLiczniki.czeka, plikiOdrzucone: plikiLiczniki.odrzucone });
 
-    // --- synchronizacja: najpierw pliki, potem zdarzenia, potem to, co nowego w hubie
+    // --- synchronizacja: najpierw zdarzenia (D13), potem pliki, potem to, co nowego w hubie
     /* Pliki (zdjęcia) osoby `autor` — tym tokenem, który jest teraz. Zwraca błąd plików (czekają) albo null.
        tylkoAutora: przy przekazaniu (D78) tylko pliki tej osoby (bez starych plików bez autora). */
     async function wyslijPliki(autor, innaOsoba, tylkoAutora) {
       const pliki = await dzialanie(db, 'pliki', 'readonly', s => s.getAll());
       let bladPlikow = null, ruszono = false;
+      // Numery wpisów tej osoby, które już były w kolejce na starcie pętli: przerywamy dopiero na NOWYM wpisie (nie na zatkanym starym).
+      const bylo = new Set(kolejkaCache.filter(w => w.autor === autor).map(w => w.nr));
       for (const p of pliki.filter(p => !p.wyslany && !p.odrzucony && (tylkoAutora ? p.autor === autor : (!p.autor || p.autor === autor)))) {
         if (innaOsoba()) break;
+        // D13: w trakcie wysyłki zdjęć doszedł nowy zapis tej osoby (np. zgłoszenie awarii) — przerywamy pętlę zdjęć; zapis idzie
+        // następnym przebiegiem (zapisz() zawsze prosi o ponowienie), a reszta zdjęć dojdzie zaraz po nim.
+        if (ruszono && kolejkaCache.some(w => w.autor === autor && !bylo.has(w.nr))) break;
         ruszono = true;
         try {
           await api('PUT', `/api/v1/pliki/${encodeURIComponent(p.id)}`, p.blob, { naglowki: { 'Content-Type': p.mime || 'image/jpeg' } });
@@ -2189,7 +2232,7 @@
       return { wyslane, odrzucone };
     }
 
-    h.synchronizuj = async () => {
+    h.synchronizuj = async zaswiezoMs => {      // zaswiezoMs (liczba, tylko z logowania): pomiń dociąganie tuż po dociągnięciu przez strumień
       // D78: tryb bez sieci nie ma tokenu — tylko sprawdzamy, czy hub wrócił (i logujemy tę osobę jej PIN-em).
       if (trybOffline) { await sprobujWrocic(); return; }
       if (!token || !db) return;
@@ -2202,9 +2245,15 @@
       const mojToken = token, ja = h.pracownik.id;
       const innaOsoba = () => token !== mojToken;
       try {
+        // D13 (2026-11-25): zdarzenie (np. zgłoszenie awarii) idzie PRZED zdjęciami — przy słabym zasięgu zdjęcia potrafią zająć całą
+        // synchronizację; hub przyjmuje zdarzenie z id pliku, który dojdzie chwilę później (sprawdza tylko kształt id), a kolejka
+        // plików i zdarzeń ma ten sam format co dotąd.
+        // Błąd zdarzeń (np. 5xx huba) nie blokuje zdjęć — jak dotąd każda część idzie osobno; błąd zdarzeń rzucamy dalej po zdjęciach.
+        let bladZdarzen = null;
+        try { await wyslijZdarzenia(ja, innaOsoba, false); } catch (e) { if (e.kod === 401) throw e; bladZdarzen = e; }
         const bladPlikow = await wyslijPliki(ja, innaOsoba, false);
-        await wyslijZdarzenia(ja, innaOsoba, false);
-        await dociagnij();
+        if (bladZdarzen) throw bladZdarzen;
+        await dociagnij(typeof zaswiezoMs === 'number' ? zaswiezoMs : 0);
         h.polaczenie.ostatniaSynchronizacja = iso(Date.now());
         h.polaczenie.blad = null;
         // Zdarzenia doszły, zdjęcia czekają — osobne pole, bo `blad` aplikacje czytają jako „brak połączenia z hubem”.
@@ -2253,8 +2302,8 @@
       const mojToken = token;
       const innaOsoba = () => token !== mojToken;
       try {
+        const wynik = await wyslijZdarzenia(autor, innaOsoba, true);      // D13: zdarzenia przed plikami
         await wyslijPliki(autor, innaOsoba, true);
-        const wynik = await wyslijZdarzenia(autor, innaOsoba, true);
         zglosKolejke(true).catch(() => {});
         return wynik;
       } finally {
@@ -2292,7 +2341,19 @@
       } catch (e) { /* stara przeglądarka — wyśle się przy otwarciu */ }
     }
 
-    async function dociagnij() {
+    /* Jedno dociąganie naraz i bez powtórki zaraz po udanym: po zalogowaniu synchronizacja i strumień pytały o to samo (do 500
+       zdarzeń) dwa razy — na słabym LTE podwójny transfer. Drugie wywołanie dostaje wynik trwającego; strumień (`zaswiezo`) pomija
+       dociąganie, gdy ta sama sesja dociągnęła przed chwilą — i tak otwiera się z `po=seq`, a hub odtwarza wszystko, co nowsze
+       (przy dużej zaległości event „za_duzo”), więc nic nie ginie. */
+    let dociaganie = null, dociagnietoOk = { token: null, kiedy: 0 };
+    function dociagnij(zaswiezoMs) {
+      if (dociaganie) return dociaganie;
+      if (zaswiezoMs && dociagnietoOk.token === token && Date.now() - dociagnietoOk.kiedy < zaswiezoMs) return Promise.resolve();
+      const mojToken = token;
+      dociaganie = dociagnijRaz().then(() => { dociagnietoOk = { token: mojToken, kiedy: Date.now() }; }).finally(() => { dociaganie = null; });
+      return dociaganie;
+    }
+    async function dociagnijRaz() {
       for (let i = 0; i < 50; i++) {
         const r = await api('GET', `/api/v1/zdarzenia?po=${seq}&stan=1&limit=500`);
         // Hub ma MNIEJ zdarzeń, niż telefon już widział: baza odtworzona z kopii albo nowa. Kursor
@@ -2331,7 +2392,7 @@
         try {
           if (!navigator.onLine) { await new Promise(ok => global.addEventListener('online', ok, { once: true })); }
           if (!h.kontrakt) await wczytajKontrakt();      // logowanie przerwane w połowie (sieć mrugnęła)
-          await dociagnij();
+          await dociagnij(1500);
           if (token !== mojToken) continue;
           if (hub !== mojHub) continue;                   // adres huba zmienił się w trakcie dociągania
           let r;
@@ -2662,7 +2723,7 @@
         // Sesja jest, nawet gdy sieć mrugnęła w trakcie wczytywania: synchronizacja i strumień muszą ruszyć
         // (strumień dociągnie kontrakt i stan). Wcześniej aplikacja stała bez połączenia do przeładowania.
         emituj('sesja', { zalogowany: true, pracownik: h.pracownik });
-        h.synchronizuj(); strumien();
+        h.synchronizuj(1500); strumien();
         odnowPush();
         poprosOTrwalaPamiec();
       }
@@ -2965,7 +3026,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, zmianyDzialu, zmianaDzialu, dzialZmianOsoby, planBezGodzin, DZIALY_Z_WLASNYMI_ZMIANAMI, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, minutyPytaniaZamkniecia, pozycjeBezWykonania, oknoZamknieciaZmiany, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, zmianyPlanowe, zmianyDnia, planDnia, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, nazwaRoliMenu, NAJWYZSZA_ROLA, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu, terminowoscZlecenia, ktoPracowal,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, skrotyDoPanelu, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, nazwaRoliMenu, NAJWYZSZA_ROLA, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu, terminowoscZlecenia, ktoPracowal,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
     mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec, limitZapytania, pilnujBledow, opisBledu, NIE_ZAPISANO,
   };

@@ -252,7 +252,7 @@
   function zglos(hala, opcje) {
     const o = opcje || {};
     okno(`<form method="dialog"><h2>Zgłoś nieprawidłowość</h2>
-      <p class="hala-okno-opis">Trafi do Kierownika — przyjmie je (i zrobi zlecenie) albo odrzuci z powodem.</p>
+      <p class="hala-okno-opis">Trafi do Kierownika zakładu — przyjmie je (i zrobi zlecenie) albo odrzuci z powodem.</p>
       <label>Co jest nie tak?<input name="tytul" required maxlength="200" placeholder="np. Cieknie olej spod osłony"></label>
       <label>Maszyna (opcjonalnie)<select name="maszyna">${opcjeMaszyn(hala.slowniki, o.maszyna)}</select></label>
       <label>Szczegóły (opcjonalnie)<textarea name="opis" rows="3" maxlength="4000"></textarea></label>
@@ -438,7 +438,7 @@
   function odlozNarzedzia(hala, opcje) {
     const o = opcje || {};
     okno(`<form method="dialog"><h2>${global.GKIkony ? `<span class="hala-ikona">${global.GKIkony.html('narzedzia', 20)}</span>` : ''}Odłóż zużyte narzędzia</h2>
-      <p class="hala-okno-opis">Zrób zdjęcie narzędzi w miejscu odbioru. Kierownik dostanie powiadomienie i potwierdzi odbiór zdjęciem.</p>
+      <p class="hala-okno-opis">Zrób zdjęcie narzędzi w miejscu odbioru. Kierownik zakładu dostanie powiadomienie i potwierdzi odbiór zdjęciem.</p>
       <label>Co odkładasz?<input name="co" required maxlength="200" placeholder="np. 3 frezy Ø12, piła tarczowa"></label>
       <label>Gdzie (miejsce odbioru)<input name="miejsce" maxlength="200" value="${esc(czytajMiejsce())}" placeholder="np. regał przy biurze mistrza"></label>
       <label>Uwagi (opcjonalnie)<textarea name="uwagi" rows="2" maxlength="2000"></textarea></label>
@@ -467,7 +467,7 @@
     });
   }
 
-  /* Kierownik: odbiór narzędzi — zdjęcie obowiązkowe (Panel). */
+  /* Kierownik zakładu: odbiór narzędzi — zdjęcie obowiązkowe (Panel). */
   function odbierzNarzedzia(hala, id, opcje) {
     const o = opcje || {};
     const n = hala.obiekt('narzedzia', id) || {};
@@ -629,19 +629,43 @@
     const l = H().lokalny(ms), t = H().lokalny(teraz), g = `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`;
     return l.rok === t.rok && l.miesiac === t.miesiac && l.dzien === t.dzien ? `dziś ${g}` : `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${g}`;
   }
+  /* Odwołanie własnej awarii (pomyłka, fałszywy alarm): powód obowiązkowy jak w kontrakcie; serwer i tak odrzuca cudze. */
+  function odwolajAwarie(hala, id, po) {
+    okno(`<form method="dialog"><h2>Odwołaj awarię</h2>
+      <label>Dlaczego odwołujesz? (np. pomyłka)<textarea name="powod" rows="2" maxlength="1000" required></textarea></label>
+      <p class="hala-okno-blad" hidden></p>
+      <div class="hala-okno-przyciski"><button type="button" data-zamknij>Zostaw</button><button type="submit" class="czerwony">Odwołaj awarię</button></div></form>`,
+    (d, zamknij) => {
+      const f = d.querySelector('form');
+      f.addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const b = f.querySelector('[type="submit"]');
+        const powod = f.powod.value.trim();
+        if (b.disabled || !powod) return;
+        b.disabled = true;
+        try { await hala.zapisz('awaria.anulowana', id, { powod }); zamknij(); if (po) po(); }
+        catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się odwołać. Spróbuj jeszcze raz.'); b.disabled = false; }
+      });
+    });
+  }
+
   function mojeZgloszenia(el, hala) {
     const ja = hala.pracownik && hala.pracownik.id;
     if (mojeCache.ja !== ja) { mojeCache.ja = ja; mojeCache.kiedy = 0; mojeCache.lista = []; }
     const wiersze = H().wierszeMoichZgloszen(['awaria', 'zgloszenie'].flatMap(t => hala.obiekty(t) || []).concat(mojeCache.lista),
       { ja, pracownicy: hala.pracownicy, slowniki: hala.slowniki });
     const teraz = hala.teraz();
+    // 1.42.0 (D1): własną awarię (zgłoszona/przyjęta) odwołuje też kontroler i kierownik KJ — przycisk tylko, gdy kontrakt serwera tę rolę przepuszcza.
+    const mozeOdwolac = (((hala.kontrakt.zdarzenia || {})['awaria.anulowana'] || {}).role || []).some(r => ((hala.pracownik || {}).role || []).includes(r));
     el.innerHTML = `<h1 data-moje-ekran>Moje zgłoszenia</h1>${wiersze.length ? `<ul class="hala-moje">${wiersze.map(w => `
       <li class="hala-moje-wiersz">
         <div class="gora"><b>${esc(w.tytul)}</b><span class="znacznik ${esc(w.klasa)}">${esc(w.status)}</span></div>
         <div class="slaby">${esc([w.numer, kiedyMoje(w.czasMs, teraz)].filter(Boolean).join(' · '))}${w.oczekuje ? ' · czeka na wysłanie' : ''}</div>
         ${w.opis ? `<div class="opis">${esc(w.opis)}</div>` : ''}
         ${w.szczegol ? `<div class="slaby">${esc(w.szczegol)}</div>` : ''}
+        ${w.mozeAnulowac && mozeOdwolac ? `<div><button type="button" class="maly" data-odwolaj="${esc(w.id)}">Odwołaj zgłoszenie</button></div>` : ''}
       </li>`).join('')}</ul>` : '<p class="pusto">Nie zgłaszałeś jeszcze niczego.</p>'}`;
+    for (const b of el.querySelectorAll('[data-odwolaj]')) b.addEventListener('click', () => odwolajAwarie(hala, b.dataset.odwolaj, () => mojeZgloszenia(el, hala)));
     if (!mojeCache.trwa && ja && teraz - mojeCache.kiedy > MOJE_TTL_MS && hala.mojeZgloszenia) {
       mojeCache.trwa = true;
       hala.mojeZgloszenia().then(lista => { mojeCache.lista = lista; mojeCache.kiedy = hala.teraz(); },
