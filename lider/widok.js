@@ -168,7 +168,7 @@
                                   null, zmiana, d.dzial, ja);
     };
     if (kat.length === 1) return kat[0] === 'mistrz' ? mistrz() : lider();
-    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz Produkcji GK', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider produkcji GK', lista: lider() }]);
+    return polaczListy([{ dzial: 'mistrz', nazwa: 'Mistrz Produkcji GK', lista: mistrz() }, { dzial: 'lider', nazwa: 'Lider Produkcji GK', lista: lider() }]);
   }
 
   function polaczListy(czesci) {

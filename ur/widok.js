@@ -260,6 +260,13 @@
     // (recenzja 2026-10-05).
     const prowadzi = ((awaria.dane || {}).mechanik) || null;
     const cudza = !!prowadzi && prowadzi !== pracownik.id;
+    // W3 (właściciel 2026-11-26; bliźniak hala.py → blad_cudzej_awarii): awarię kolegi kontynuuje i kończy on albo nadzór (Lider UR,
+    // kierownik zakładu, Menedżer). Mechanik nie dostaje przy niej kroków przejmujących ani „Przekaż koledze” — hub by je odrzucił;
+    // zostają notatka, priorytet i „Fałszywy alarm”. Nadzór dalej przejmuje z pytaniem „Przejąć awarię?”.
+    const nadzor = (pracownik.role || []).some(r => ['kierownik_ur', 'kierownik', 'admin'].includes(r));
+    if (cudza && !nadzor && (pracownik.role || []).includes('mechanik')) {
+      lista = lista.filter(k => !KROKI_PRZEJMUJACE.includes(k.typ) && k.typ !== 'awaria.przypisana');
+    }
     // Na liście jest tylko jeden główny krok — ten pierwszy.
     let byl = false;
     return lista.map(k => {

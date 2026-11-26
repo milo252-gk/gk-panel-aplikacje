@@ -92,14 +92,22 @@ body.tryb-ekran .pulpit-gora > .kafelki-liczb { flex: 1 1 320px; grid-auto-flow:
 .filtry-biezace label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
 .filtry-biezace label.zaznacz { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; color: var(--tekst); min-height: var(--dotyk); white-space: nowrap; }
 .filtry-biezace select { min-width: 0; width: 132px; }
+/* Recenzja 25.11 (W1): w przewijanym rzędzie „tylko spóźnione” wychodziło za prawą krawędź karty (375 i 360 px) i nie było widać, że rząd
+   się przewija. Na Pulpicie są tylko trzy pola, więc na telefonie: Dział i Osoba obok siebie, „tylko spóźnione” pod nimi — wszystko na widoku. */
 @media (max-width: 600px) {
-  .filtry-biezace { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
-  .filtry-biezace::-webkit-scrollbar { display: none; }
-  .filtry-biezace > label { flex: none; width: 140px; }
-  .filtry-biezace > label.zaznacz { width: auto; }
+  .filtry-biezace { flex-wrap: wrap; overflow: visible; }
+  .filtry-biezace > label { flex: 1 1 0; min-width: 0; }
+  .filtry-biezace > label.zaznacz { flex: 1 1 100%; }
   .filtry-biezace select { width: 100%; }
 }
 .awarie { grid-area: awarie; }
+/* „Czeka na Ciebie” (właściciel 2026-11-26): na samej górze Pulpitu, nad „Aktualna zmiana”. Wiersz siatki istnieje tylko, gdy sekcja jest
+   widoczna (:has) — pusta nie zostawia odstępu; monitor (tryb-ekran) jej nie ma. */
+.czeka-na-ciebie { grid-area: czeka; border-left: 6px solid var(--czerwony); }
+.czeka-na-ciebie.bez-pilnych { border-left-color: var(--zolty); }
+.czeka-na-ciebie .lista { display: grid; gap: 8px; }
+body:not(.tryb-ekran) .na-zywo:has(> #pulpit-czeka:not([hidden])) { grid-template-areas: "liczby" "czeka" "obchody" "awarie"; grid-template-rows: auto auto auto auto; }
+.kafelki-liczb > button[data-kafel="czeka"] { cursor: pointer; }
 section { background: var(--karta); box-shadow: var(--obrys-gorny), var(--cien); border: 1px solid var(--ramka); border-radius: var(--promien); padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 section h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--tekst); }
 section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform: none; letter-spacing: 0; }
@@ -661,9 +669,6 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 .tabela-osob th { font-size: 13px; color: var(--tekst-slaby); }
 .tabela-osob td.dobrze { color: var(--zielony); font-weight: 700; }
 .tabela-osob td.zle { color: var(--czerwony); font-weight: 700; }
-.urlop-formularz { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; margin-bottom: 14px; }
-.urlop-formularz label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
-.urlop-formularz .blad { flex-basis: 100%; }
 #zlecenie-osoby .zaznaczenia { max-height: 180px; overflow: auto; }
 
 /* D55/D67: pozycje checklisty w oknie „Checklista”. */
@@ -798,6 +803,11 @@ dialog.okno .mies-tryb label.zaznacz input[type="radio"] { flex: 0 0 auto; }
   }
 }
 @media (min-width: 821px) { .chip-telefon { display: none; } }
+/* 1.44.0: Prezes — pozycja „Więcej” (same drzwi do Wskaźników, Wyników, Raportów i RCP) jest potrzebna tylko na telefonie;
+   na komputerze te ekrany są w menu po lewej. */
+@media (min-width: 821px) { .zakladki > button.tylko-telefon { display: none; } }
+.admin-drzwi { display: grid; gap: 10px; max-width: 420px; }
+.admin-drzwi-przycisk { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; text-align: left; font-weight: 600; }
 
 /* Kilka zdjęć w formularzu (zlecenie, awaria): miniatury z ✕ w jednym rzędzie, zawijane. */
 .hala-zdjecie-lista { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
@@ -981,6 +991,8 @@ dialog.okno .sobota-lista { grid-template-columns: 1fr; }
 .pilne h3 .licznik + button { margin-left: 0; flex: none; }
 .pilne-wpis { background: var(--karta); border: 1px solid var(--ramka); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .pilne-wpis .tekst-opisu { margin-top: 2px; white-space: pre-line; }
+/* 26.11: „Widziałem” chowa ten jeden wpis u tej osoby (pilne.js) — wtórny przycisk pod opisem (wysokość z button.maly: 52 px na telefonie). */
+.pilne-wpis .widzialem { justify-self: start; padding: 0 14px; }
 
 /* „Zlecenia na tę zmianę” (2026-11-25): blok pod kartami checklist — nagłówek jak „Pilne od zespołu”, wiersze to zwykłe wiersze zleceń. */
 .zlecenia-zmiany { margin-top: 12px; }

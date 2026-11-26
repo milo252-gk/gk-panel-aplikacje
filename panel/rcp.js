@@ -18,6 +18,9 @@
   const ODSWIEZ_MS = 60000;
 
   const api = (metoda, sciezka, cialo) => hala.zapytaj(metoda, '/api/v1/panel/rcp/' + sciezka, cialo);
+  // 1.44.0 (właściciel 2026-11-26): Prezes — RCP tylko do podglądu: lista dni (godziny, spóźnienia, braki odbić) bez zatwierdzania,
+  // korekt, grafiku, breloków, wniosków i pliku dla płac. Serwer i tak odmawia mu każdego POST i GET poza dniami i brakami odbić.
+  const podglad = () => !!(hala.pracownik && Hala.jestPrezesem(hala.pracownik.role));
   const tekstBledu = e => (e && e.odHuba && e.message) ? e.message : P.komunikatBledu(e);
 
   // ---- daty (dni zakładu jako „RRRR-MM-DD”; rachunek w UTC, żeby strefa przeglądarki nie przesuwała dnia)
@@ -35,12 +38,12 @@
         const r = await api('GET', `dni?od=${S.od}&do=${S.do}`);
         S.dni = r.dni; S.potwierdzenia = r.potwierdzenia || [];
       }
-      if (S.czesc === 'karty' || S.czesc === 'grafik' || S.karty === null) {
+      if (!podglad() && (S.czesc === 'karty' || S.czesc === 'grafik' || S.karty === null)) {
         const r = await api('GET', 'karty');
         S.karty = r.karty;
       }
-      if (S.czesc === 'wnioski' || S.wnioski === null) S.wnioski = (await api('GET', 'wnioski')).wnioski;
-      if (S.czesc === 'wnioski') S.pule = await api('GET', 'pule');
+      if (!podglad() && (S.czesc === 'wnioski' || S.wnioski === null)) S.wnioski = (await api('GET', 'wnioski')).wnioski;
+      if (S.czesc === 'wnioski' && !podglad()) S.pule = await api('GET', 'pule');
       if (S.czesc === 'karty') S.nieznane = (await api('GET', 'nieznane')).nieznane;
       if (S.czesc === 'dni') S.brak = await api('GET', 'brak-odbic');
       if (S.czesc === 'grafik') {
@@ -72,7 +75,7 @@
       .filter(Boolean).map(t => `<span>${esc(t)}</span>`).join('');
     const odbicia = w.odbicia.map(o => `<li>${esc(W.godzina(o.czas))} — ${esc(nazwaRodzaju(o.rodzaj))}
         <span class="slaby">${o.zrodlo === 'korekta' ? `· ręcznie: ${esc(o.powod || '')}` : '· terminal'}</span>
-        ${zat || !o.id ? '' : `<button type="button" class="maly" data-akcja="anuluj" data-odbicie="${esc(o.id)}">Anuluj odbicie</button>`}</li>`).join('');
+        ${zat || !o.id || podglad() ? '' : `<button type="button" class="maly" data-akcja="anuluj" data-odbicie="${esc(o.id)}">Anuluj odbicie</button>`}</li>`).join('');
     return `<article class="zlecenie rcp-dzien" data-klucz="${esc(w.klucz)}" data-pracownik="${esc(w.pracownik)}" data-dzien="${esc(w.dzien)}">
       <div class="opis">
         <div class="tytul"><b>${esc(w.nazwa)}</b> <span class="slaby">${esc(w.dzienOpis)}</span></div>
@@ -81,7 +84,7 @@
         ${sprawdzone(w)}
         ${otwarty ? `<div class="rcp-popraw">
           <ul class="rcp-odbicia">${odbicia}</ul>
-          ${zat ? '<p class="slaby">Dzień jest zatwierdzony — najpierw wycofaj zatwierdzenie, żeby go poprawić.</p>' : `<form class="rcp-korekta" autocomplete="off">
+          ${podglad() ? '' : zat ? '<p class="slaby">Dzień jest zatwierdzony — najpierw wycofaj zatwierdzenie, żeby go poprawić.</p>' : `<form class="rcp-korekta" autocomplete="off">
             <label>Brakujące odbicie<select name="rodzaj"><option value="wyjscie">Wyjście</option><option value="wejscie">Wejście</option></select></label>
             <label>Kiedy<input name="czas" type="datetime-local" required></label>
             <label>Powód<input name="powod" maxlength="300" required placeholder="np. zapomniał odbić"></label>
@@ -90,7 +93,7 @@
         </div>` : ''}
       </div>
       <div class="akcje">
-        ${zat ? '<button type="button" class="maly" data-akcja="wycofaj">Wycofaj</button>'
+        ${podglad() ? '' : zat ? '<button type="button" class="maly" data-akcja="wycofaj">Wycofaj</button>'
               : (wPracy || !w.odbicia.length) ? '' : `<button type="button" class="${w.uwagi.length ? 'maly' : 'glowny maly'}" data-akcja="zatwierdz">${w.uwagi.length ? 'Zatwierdź mimo uwag' : 'Zatwierdź'}</button>`}
         <button type="button" class="maly" data-akcja="popraw" aria-expanded="${otwarty}">${otwarty ? 'Zwiń' : 'Odbicia'}</button>
       </div></article>`;
@@ -279,7 +282,8 @@
   }
 
   // ---- szkielet i rysowanie
-  const CZESCI = [['dni', 'Dni'], ['grafik', 'Grafik'], ['karty', 'Breloki'], ['wnioski', 'Wnioski urlopowe'], ['eksport', 'Plik dla płac']];
+  const CZESCI_PELNE = [['dni', 'Dni'], ['grafik', 'Grafik'], ['karty', 'Breloki'], ['wnioski', 'Wnioski urlopowe'], ['eksport', 'Plik dla płac']];
+  const czesci = () => (podglad() ? CZESCI_PELNE.filter(([k]) => k === 'dni') : CZESCI_PELNE);
 
   function rysujTresc() {
     if (!korzen) return;
@@ -305,9 +309,11 @@
 
   function zbudujSzkielet(el) {
     el.innerHTML = `<section class="rcp" aria-label="Rejestracja czasu pracy">
-      <div class="chipy" role="group" aria-label="Część RCP">${CZESCI.map(([k, n]) => `<button type="button" class="chip" data-rcp-czesc="${k}" aria-pressed="${k === S.czesc}">${esc(n)}</button>`).join('')}</div>
+      <div class="chipy" role="group" aria-label="Część RCP"${czesci().length < 2 ? ' hidden' : ''}>${czesci().map(([k, n]) => `<button type="button" class="chip" data-rcp-czesc="${k}" aria-pressed="${k === S.czesc}">${esc(n)}</button>`).join('')}</div>
+      ${podglad() ? '<p class="slaby opis-widoku">Tylko podgląd: godziny pracy, spóźnienia i braki odbić. Dni zatwierdza i poprawia Kierownik zakładu.</p>' : ''}
       <div class="rcp-tresc"></div></section>`;
     korzen = el.querySelector('.rcp');
+    korzen.dataset.podglad = String(podglad());
 
     korzen.addEventListener('click', async ev => {
       const cz = ev.target.closest('[data-rcp-czesc]');
@@ -426,7 +432,11 @@
   }
 
   function rysuj(el) {
-    if (!korzen || !el.contains(korzen)) { korzen = null; zbudujSzkielet(el); rysujTresc(); wczytaj(); return; }
+    // Inna osoba na tym samym ekranie (Prezes ↔ kierownik) — szkielet i dane od nowa, Prezes zawsze na „Dni”.
+    if (!korzen || !el.contains(korzen) || korzen.dataset.podglad !== String(podglad())) {
+      if (podglad()) { S.czesc = 'dni'; S.karty = null; S.wnioski = null; }
+      korzen = null; zbudujSzkielet(el); rysujTresc(); wczytaj(); return;
+    }
     // Panel woła rysuj() przy każdym zdarzeniu z huba — dane odświeżamy tylko co minutę i tylko na liście dni.
     if ((S.czesc === 'dni' || S.czesc === 'wnioski') && Date.now() - ostatnieOdswiezenie > ODSWIEZ_MS) wczytaj();
   }

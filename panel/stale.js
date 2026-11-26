@@ -32,7 +32,8 @@
 
   function rysuj(d) {
     ostatnieD = d;
-    const lista = W.zleceniaStale({ slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz,
+    // 1.44.0: Prezes widzi i zmienia tylko swoje zapisane (hub odrzuca cudze) — W.zapisaneDlaOsoby.
+    const lista = W.zleceniaStale({ slowniki: W.zapisaneDlaOsoby(d.slowniki, hala.pracownik), pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz,
                                     roleZlecajacych: ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || [] });
     const pisze = P.mozeZapisacStale();
     const zlecaj = pisze && (hala.pracownik.role || []).some(r => r === 'admin'
@@ -740,9 +741,12 @@
   // codziennie klikać ZLEĆ”) — kierownik zawęża dni i zmiany w tym samym oknie.
   // Dla kogo (właściciel 2026-11-16): domyślnie dwa działy — Lider i Mistrzowie — i „Dział — zrobi jedna osoba”: jedno zlecenie
   // na zmianę na dział, bierze je ten, kto jest na zmianie. Dział, którego kierownik nie może zlecać, odpada z domyślnych.
+  // 1.44.0: Prezes nie zleca Liderom ani Mistrzom — domyślnym działem jest wtedy pierwszy dostępny (Kierownik zakładu).
+  const dzialyNowejChecklisty = () => { const dom = W.DZIALY_NOWEJ_CHECKLISTY.filter(k => dzialyKontraktu().some(d => d.kod === k));
+    return dom.length ? dom : dzialyKontraktu().slice(0, 1).map(d => d.kod); };
   $('nowa-checklista-zlecen').addEventListener('click', () => otworz({
     checklista: true, dzial: (dzialyKontraktu()[0] || {}).kod || 'produkcja',
-    dzialy: W.DZIALY_NOWEJ_CHECKLISTY.filter(k => dzialyKontraktu().some(d => d.kod === k)), kto: 'dzial', linia: W.LINIA_KAZDA, rodzaj: 'dni_tygodnia', dni: [1, 2, 3, 4, 5, 6],
+    dzialy: dzialyNowejChecklisty(), kto: 'dzial', linia: W.LINIA_KAZDA, rodzaj: 'dni_tygodnia', dni: [1, 2, 3, 4, 5, 6],
     zmiany: Object.keys(zmianySlownik()), termin_rodzaj: 'koniec_zmiany', wymagaj_zdjecia: false, wymagaj_notatki: false, bez_swiat: false,
     aktywny: true, pozycje: [{ godzina: '0:30' }, {}] }, null, 'Nowa checklista'));
 

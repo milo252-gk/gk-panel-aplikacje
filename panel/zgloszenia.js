@@ -30,6 +30,7 @@
           <div class="tytul"><button type="button" class="tytul-historii" data-akcja="historia">${esc(g.tytul)}</button> <span class="slaby">${esc(g.numer)}</span></div>
           <div class="szczegoly">
             ${znacznikRodzaju('zgloszenie')}
+            ${g.pilne && g.nowe ? '<span class="znacznik alarm">Pilne</span>' : ''}
             <span class="znacznik ${g.nowe ? 'alarm' : g.status === 'przyjete' ? 'ok' : 'neutral'}">${esc(g.etykieta)}</span>
             ${g.dzialNazwa ? `<span class="znacznik neutral">${esc(g.dzialNazwa)}</span>` : ''}
             ${g.maszynaNazwa ? `<span>${esc(g.maszynaNazwa)}</span>` : ''}${g.kto ? `<span>· ${esc(g.kto)}</span>` : ''}
@@ -87,7 +88,9 @@
   }
 
   /* Wiersze innych rodzajów dla filtra stanu ('otwarte' | 'do-zamkniecia' | 'zamkniete') — pola jak w wierszu zlecenia,
-     żeby działały te same filtry: dzial, osoby, spoznione, rodzaj; czeka (na kierownika), alarm, czas, html. */
+     żeby działały te same filtry: dzial, osoby, spoznione, rodzaj; czeka (na kierownika), alarm, czas, html.
+     decyzja — ta osoba ma przy wierszu przyciski decyzji (ten sam warunek, który je rysuje); pilne — zgłoszenie „pilne” albo pilne BHP
+     (sekcja „Czeka na Ciebie” na Pulpicie, W.czekaNaCiebie, właściciel 2026-11-26). */
   function wiersze(d, filtr) {
     if (filtr === 'otwarte') return [];               // W toku — robota działów; to, co czeka na kierownika, jest w „Do odbioru”
     const chce = r => (filtr === 'do-zamkniecia' ? r.czeka : !r.czeka);
@@ -95,15 +98,18 @@
     const moze = P.mozeWyslac ? P.mozeWyslac('bhp.zamkniete') : kier;
     const zgl = W.zgloszeniaLista({ zgloszenia: hala.obiekty('zgloszenie'), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale })
       .map(g => ({ rodzaj: 'zgloszenie', id: g.id, czas: g.kiedy, dzial: g.dzial, osoby: [(hala.obiekt('zgloszenie', g.id) || { dane: {} }).dane.zglosil].filter(Boolean),
-                   czeka: g.nowe, alarm: false, spoznione: false, html: htmlZgloszenia(g, kier) }));
+                   czeka: g.nowe, alarm: g.nowe && g.pilne, pilne: g.nowe && g.pilne, decyzja: g.nowe && kier, tytul: g.tytul,
+                   spoznione: false, html: htmlZgloszenia(g, kier) }));
     const nz = hala.obiekty('narzedzia').map(n => {
       const x = n.dane || {};
       return { rodzaj: 'narzedzia', id: n.id, czas: x.czas_odlozenia, dzial: 'mistrz', osoby: [x.odlozyl, x.odebral].filter(Boolean),
-               czeka: n.status === 'do_odbioru', alarm: false, spoznione: false, html: htmlNarzedzi(n, d, kier) };
+               czeka: n.status === 'do_odbioru', alarm: false, pilne: false, decyzja: n.status === 'do_odbioru' && kier, tytul: x.co || '',
+               spoznione: false, html: htmlNarzedzi(n, d, kier) };
     });
     const bhp = W.bhpLista({ zgloszenia: hala.obiekty('bhp_zgloszenie'), slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale })
       .map(b => ({ rodzaj: 'bhp', id: b.id, czas: b.kiedy, dzial: 'produkcja', osoby: [(hala.obiekt('bhp_zgloszenie', b.id) || { dane: {} }).dane.zglosil].filter(Boolean),
-                   czeka: b.otwarte, alarm: b.otwarte && b.pilne, spoznione: false, html: htmlBhp(b, moze) }));
+                   czeka: b.otwarte, alarm: b.otwarte && b.pilne, pilne: b.otwarte && b.pilne, decyzja: b.otwarte && moze, tytul: b.rodzajNazwa,
+                   spoznione: false, html: htmlBhp(b, moze) }));
     return [...zgl, ...nz, ...bhp].filter(chce);
   }
 
@@ -200,5 +206,8 @@
     return { czeka: zg + nz + otwarteBhp.length, alarm: pilne };
   }
 
-  P.widoki.zgloszenia = { wiersze, akcja, wykonaj, odswiezWykonanie, liczby, jestKierownikiem };
+  /* „Czeka na Ciebie” na Pulpicie (właściciel 2026-11-26): te same wiersze co w Zlecenia → Do odbioru, tylko z przyciskami tej osoby. */
+  const czekaNaMnie = d => W.czekaNaCiebie(wiersze(d, 'do-zamkniecia'));
+
+  P.widoki.zgloszenia = { wiersze, akcja, wykonaj, odswiezWykonanie, liczby, jestKierownikiem, czekaNaMnie };
 })();

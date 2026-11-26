@@ -463,6 +463,8 @@
       : filtr === 'przepadlo' ? z.status === 'przepadlo'
       : filtr === 'zamkniete' ? !z.aktywny && z.status !== 'przepadlo' : true;
     const zZakladu = ((ja && ja.role) || []).some(r => r === 'kierownik' || r === 'admin');
+    // 1.44.0: Prezes — wgląd jak kierownik zakładu (dowody, pozycje, historia), odbiór i odwołanie tylko swoich zleceń.
+    const jaPrezes = !!(H().jestPrezesem && H().jestPrezesem(ja && ja.role));
     const wszystkie = (lista || []).filter(Boolean);
     const zakresKier = H().dzialyKierownika ? H().dzialyKierownika(ja && ja.role, (stale && stale.dzialy) || []) : null;
     const kierDzialu = !!zakresKier && zakresKier.length > 0;
@@ -480,7 +482,11 @@
       const postep = postepZlecenia(d);
       const odbior = H().odbiorPozycji(d);
       const koncowka = H().koniecOdbioru(d, H().karencjaOdbioru(stale));
-      const prawoOdbioru = H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true;
+      const prawoOdbioru = H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || [], pracownicy || []) : true;
+      // Wgląd w dowody i historię: ci, którzy odbierają (bez reguły „zlecenie Prezesa” — kierownik zakładu dalej widzi dowody), i Prezes.
+      const prawoWgladu = jaPrezes || (H().mozeOdebracZlecenie ? H().mozeOdebracZlecenie(z, ja, (stale && stale.dzialy) || []) : true);
+      // Zlecenie Prezesa zmienia (jak odbiera i odwołuje) on albo Menedżer — kierownik zakładu nie.
+      const cudzePrezesa = !!(H().zlecilPrezes && H().zlecilPrezes(z, pracownicy) && !(ja && (ja.id === d.zlecil || (ja.role || []).includes('admin'))));
       const koniecZwrotuMs = H().koniecZwrotu ? H().koniecZwrotu(d) : null;
       const koniecOdbioru = DO_ZAMKNIECIA.has(z.status) && koncowka !== null && (teraz === undefined ? Date.now() : teraz) >= koncowka;
       return {
@@ -534,7 +540,7 @@
         // D60: rodzaj zadania — znacznik na wierszu i filtr „Rodzaj” (jedna lista zamiast osobnych zakładek).
         rodzaj: rodzajZlecenia(d, szablony), checklista: Array.isArray(d.pozycje) && d.pozycje.length ? H().postepPozycji(d) : null,
         maszynyPostep: maszynyPostepZlecenia(d), okno: d.od ? `od ${godzina(d.od)}` : null,
-        moznaEdytowac: (z.status === 'nowe' || z.status === 'przyjete') && !d.nadrzedne,
+        moznaEdytowac: (z.status === 'nowe' || z.status === 'przyjete') && !d.nadrzedne && !cudzePrezesa,
         pozycje: Array.isArray(d.pozycje) ? d.pozycje.map(p => ({ nazwa: p.nazwa || '', opis: p.opis || '', godz: p.termin ? godzina(p.termin) : '',
           terminMs: p.termin && !isNaN(Date.parse(p.termin)) ? Date.parse(p.termin) : null,
           od: p.od ? godzina(p.od) : '', maszynyPostep: maszynyPostepPozycji(d, p),
@@ -561,7 +567,7 @@
         zdjecia: [...new Set([].concat(d.zdjecia_wykonania || [], postep ? postep.zdjecia : []))],
         otwarte: OTWARTE.has(z.status), doZamkniecia: DO_ZAMKNIECIA.has(z.status),
         // R2 (2026-11-09, D82): lider UR i kierownik KJ przyjmują, zamykają i zwracają tylko zlecenia swojego działu (hub: blad_odbioru_zlecenia).
-        prawoOdbioru, moznaOdebrac: prawoOdbioru && !koniecOdbioru,
+        prawoOdbioru, prawoWgladu, moznaOdebrac: prawoOdbioru && !koniecOdbioru,
         // D88 (właściciel 2026-11-18): zwrot zlecenia zmianowego (całego i pozycji) tylko do końca zmiany — w karencji tylko Odbierz.
         // Hub też odrzuci (koniec_zwrotu_zmianowego); panel.js chowa „Zwróć”, gdy z.zwrotDozwolony === false.
         zwrotDozwolony: prawoOdbioru && !koniecOdbioru && (koniecZwrotuMs === null || (teraz === undefined ? Date.now() : teraz) < koniecZwrotuMs),
@@ -570,7 +576,7 @@
         zatwierdzoneAuto: d.zatwierdzone_automatycznie || null,
         // Audyt ról 2026-11-09 (D80): zlecenie anuluje tylko kierownik zakładu i admin (kontrakt: zlecenie.anulowane) — kierownik
         // UR/KJ widział „Anuluj” przy swoich zleceniach, a hub odmawiał (403). moznaAnulowacZlecenie zostaje regułą D45 „czyje”.
-        moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && zZakladu && H().moznaAnulowacZlecenie(z, ja, pracownicy),
+        moznaAnulowac: (OTWARTE.has(z.status) || zaplanowane) && (zZakladu || jaPrezes) && H().moznaAnulowacZlecenie(z, ja, pracownicy),
         // D47: zaplanowane — kiedy hub je zleci i jaki dostanie termin; zmienia i „Zleć teraz” tylko kierownik zakładu (admin).
         zaplanowane, zaplanowaneMs: zaplanowane && !isNaN(start) ? start : null,
         zaplanowaneNa: zaplanowane && !isNaN(start) ? `${dataDluga(start)} ${godzina(start)}` : null,
@@ -721,7 +727,7 @@
     }));
   }
 
-  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: wszystkieZlecenia, teraz, bezRaportu, slowniki, bhp, urzadzenia }) {
+  function kafelki({ kafelkiLinii, wierszeAwarii, incydenty: inc, zlecenia: wszystkieZlecenia, teraz, bezRaportu, slowniki, bhp, urzadzenia, czeka }) {
     const lista = bezCzesci(wszystkieZlecenia);           // D76: rozdzielone zlecenie to jedno zadanie, nie N
     // „Stoi linii” liczy LINIE (etap 3): dwie zatrzymane maszyny na jednej linii to jedna stojąca linia.
     // D51: zakład z jedną linią (slowniki podane, linia jedna) — liczą się MASZYNY, a kafelek mówi „Maszyna stoi”.
@@ -735,7 +741,11 @@
     // UI etap 4: jeden kolor znaczy jedno — czerwona liczba = problem, zwykła (neutralne) = stan bez alarmu, szara = zero.
     // Wcześniej żółte, zielone i czerwone liczby obok siebie nie mówiły, co jest pilne.
     const klasa = (n, zla) => (!n ? 'zero' : zla);
-    return [
+    // Właściciel 2026-11-26: „Do decyzji · N” — to, co czeka na decyzję tej osoby (W.czekaNaCiebie); czerwony, gdy jest coś pilnego. Pierwszy w rzędzie.
+    const doDecyzji = czeka === undefined ? [] : [{ kod: 'czeka', etykieta: 'Do decyzji', liczba: (czeka || []).length,
+      dopisek: (czeka || []).some(w => w.pilne) ? `${(czeka || []).filter(w => w.pilne).length} pilne` : null,
+      klasa: klasa((czeka || []).length, (czeka || []).some(w => w.pilne) ? 'pilne' : 'neutralne') }];
+    return doDecyzji.concat([
       { kod: 'stoi', etykieta: naMaszyny ? MASZYNA_STOI : 'Stoi linii', liczba: stoi, klasa: klasa(stoi, 'pilne') },
       { kod: 'awarie', etykieta: 'Aktywne awarie', liczba: (wierszeAwarii || []).length, klasa: klasa((wierszeAwarii || []).length, 'pilne') },
       { kod: 'obchody', etykieta: 'Opóźnione checklisty', liczba: opoznione, klasa: klasa(opoznione, 'pilne') },
@@ -755,7 +765,15 @@
       const ile = u.reduce((s, x) => s + x.oczekuje, 0);
       return [{ kod: 'urzadzenia', etykieta: 'Urządzenia z niewysłanymi zapisami', liczba: u.length,
                 dopisek: ile ? H().czekaNaWyslanie(ile) : null, klasa: klasa(u.length, 'pilne') }];
-    })());
+    })()));
+  }
+
+  /* „Czeka na Ciebie” (właściciel 2026-11-26): z wierszy innych rodzajów listy Zleceń (zgloszenia.js → wiersze, filtr „do-zamkniecia”) tylko te,
+     przy których zalogowana osoba ma przyciski decyzji (pole `decyzja` — liczy je ten sam kod, który rysuje przyciski). Pilne na górze,
+     w grupach od najnowszych (jak w Zleceniach). */
+  function czekaNaCiebie(wiersze) {
+    return (wiersze || []).filter(w => w && w.decyzja)
+      .sort((a, b) => (!!b.pilne - !!a.pilne) || String(b.czas || '').localeCompare(String(a.czas || '')));
   }
 
   /* Które kafelki pokazać (szlif UI 2026-10-12): rząd zer na monitorze to szum, w którym ginie jedyna ważna liczba —
@@ -1220,7 +1238,8 @@
     const nazwyRol = (k.stale || {}).role || {};
     const zdarzenia = k.zdarzenia || {}, slowniki = k.slowniki || {}, aplikacje = k.aplikacje || {}, zespoly = (k.stale || {}).zespoly || {};
     // Kierownicy działów z kontraktu (stale.dzialy[].rola_kierownika: UR, KJ, od D92 także MAG) — „◐ swój dział”.
-    const DZIALOWE = new Set(['kierownik_ur', 'kierownik_kj'].concat(((k.stale || {}).dzialy || []).map(d => d && d.rola_kierownika).filter(Boolean)));
+    // 1.44.0: Prezes też „◐” — zleca tylko Kierownikowi zakładu i Menedżerowi, odbiera tylko swoje (opis w wierszu).
+    const DZIALOWE = new Set(['kierownik_ur', 'kierownik_kj', 'prezes'].concat(((k.stale || {}).dzialy || []).map(d => d && d.rola_kierownika).filter(Boolean)));
     const komorka = (wiersz, rola) => {
       if (rola === 'admin' && !wiersz.aplikacja) return 'tak';
       let rolePozwolone = [];
@@ -1668,10 +1687,6 @@
       .sort(([ka, a], [kb, b]) => String((a || {}).nazwa || ka).localeCompare(String((b || {}).nazwa || kb), 'pl', { numeric: true }));
   }
 
-  // Ta sama lista co hub (hala.py → PINY_ODRZUCANE, D35): każda cyfra powtórzona 4–8 razy i proste ciągi. Od D46 tylko dla
-  // konta samego ekranu — PIN osoby (4 cyfry) może być dowolny, także 1234 i 0000 (właściciel 2026-10-08).
-  const OCZYWISTE_PINY = new Set(['1234', '4321', '1122', '2580', '123456', '654321', '12345678', '87654321']);
-  const oczywistyPin = p => /^(\d)\1{3,7}$/.test(p) || OCZYWISTE_PINY.has(p);
   // Biuro i administrator GK Trasy / GK Flota (D32, GK-KONTA.md §1): hasło min. 8 znaków zamiast PIN-u.
   const ROLE_BIUROWE = ['trasy_biuro', 'trasy_admin', 'flota_biuro', 'flota_admin'];
   const biuroTransportu = role => [].concat(role || []).some(r => ROLE_BIUROWE.includes(r));
@@ -1709,16 +1724,18 @@
     if (!istniejacy && id) { const baza = id; let i = 2; while (inni.some(p => p.id === id)) id = `${baza}${i++}`; }
     const role = [].concat(f.role || []).filter(Boolean);
     if (!role.length) bledy.push('Zaznacz co najmniej jedną rolę.');
-    // D43: człowiek — hasło (startowe haslo123 albo wpisane przez administratora) + PIN 4 cyfry (nieobowiązkowy);
-    // konto samego ekranu — jeden PIN 4–8 cyfr (bez hasła).
+    // D43: człowiek — hasło (startowe haslo123 albo wpisane przez administratora). Od 2026-11-26 bez PIN-u: konto samego
+    // ekranu ma jedno HASŁO (min. 8 znaków, pole formularza dalej „pin”) — idzie do huba jako „haslo”; człowiekowi pola PIN
+    // nie wysyłamy wcale (hub by je odrzucił).
     const ekran = role.length === 1 && role[0] === 'ekran';
-    const pin = String(f.pin || '').trim();
+    const sekretEkranu = ekran ? String(f.pin || '').trim() : '';
     const haslo = String(f.haslo || '').trim();
     if (ekran) {
-      if (!pin && (!istniejacy || !istniejacy.ekran)) bledy.push('Konto ekranu potrzebuje PIN-u (4–8 cyfr).');
-      if (pin && !/^\d{4,8}$/.test(pin)) bledy.push('PIN ekranu to 4–8 cyfr.');
-    } else if (pin && !/^\d{4}$/.test(pin)) bledy.push('PIN to dokładnie 4 cyfry.');
-    if (ekran && pin && oczywistyPin(pin)) bledy.push('Ten PIN jest zbyt oczywisty — wybierz inny.');
+      if (!sekretEkranu && (!istniejacy || !istniejacy.ekran)) bledy.push('Konto ekranu potrzebuje hasła (min. 8 znaków).');
+      if (sekretEkranu && sekretEkranu.length < 8) bledy.push('Hasło ekranu: min. 8 znaków (litery, cyfry, znaki).');
+      else if (sekretEkranu && sekretEkranu.length > 128) bledy.push('Hasło ekranu: najwyżej 128 znaków.');
+      else if (sekretEkranu && sekretEkranu.toLowerCase() === 'haslo123') bledy.push('„haslo123” to hasło startowe — wpisz inne.');
+    }
     const startowe = !ekran && (!istniejacy || f.haslo_startowe === true);
     if (startowe && haslo) {
       const b = bladHasla(haslo, nazwa, true);
@@ -1726,14 +1743,13 @@
     }
     // Hub nie zna długości hasła sprzed D43 (import z programu) — rola biura dochodzi tylko z hasłem startowym.
     if (biuroTransportu(role) && istniejacy && !startowe && !istniejacy.dlugie_haslo)
-      bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — kliknij „Resetuj tylko hasło”.');
+      bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — kliknij „Resetuj hasło”.');
     const telefon = String(f.telefon || '').trim();
     if (!/^[0-9+()\- ]{0,30}$/.test(telefon)) bledy.push('Telefon: cyfry, spacje, + i myślnik, np. 600 100 200.');
     const dane = { id, nazwa, role, linie: [].concat(f.linie || []).filter(Boolean), aktywny: f.aktywny !== false, telefon };
-    if (pin) dane.pin = pin;
+    if (sekretEkranu) dane.haslo = sekretEkranu;
     if (startowe && haslo) dane.haslo = haslo;
     if (istniejacy && startowe) dane.haslo_startowe = true;
-    if (istniejacy && startowe && f.zachowaj_pin === true) dane.zachowaj_pin = true;     // „Resetuj tylko hasło”: PIN osoby zostaje
     const karta = String(f.karta || '').trim();
     if (karta) dane.karta = karta; else if (f.usun_karte) dane.usun_karte = true;
     return { bledy, dane };
@@ -1749,21 +1765,16 @@
     return null;
   }
 
-  /* Stan hasła i PIN-u osoby w Administracji (D43): znacznik na liście (pusty = nic do zrobienia) i zdanie w oknie osoby.
-     p: wiersz GET /admin/pracownicy ({ekran, haslo_do_zmiany, pin_do_zmiany, ma_pin, ma_haslo}). D46: po „Resetuj PIN”
-     — PIN startowy 1234, osoba ustawi nowy przy logowaniu. */
+  /* Stan hasła osoby w Administracji (D43): znacznik na liście (pusty = nic do zrobienia) i zdanie w oknie osoby.
+     p: wiersz GET /admin/pracownicy ({ekran, haslo_do_zmiany, ma_haslo, ma_pin}). Od 2026-11-26 bez PIN-u (pola ma_pin
+     i pin_do_zmiany hub dalej podaje, ale nic nie znaczą); konto ekranu ma jedno hasło (ma_haslo, u starszego huba ma_pin). */
   function stanHasla(p) {
     if (!p) return { znacznik: '', klasa: '', opis: '' };
-    if (p.ekran) return p.ma_pin ? { znacznik: '', klasa: '', opis: 'Konto ekranu — jeden PIN (4–8 cyfr).' }
-      : { znacznik: 'bez PIN-u', klasa: 'tekst-alarm', opis: 'Konto ekranu bez PIN-u — wpisz go i zapisz.' };
-    if (p.haslo_do_zmiany && p.pin_do_zmiany && p.ma_pin) return { znacznik: 'hasło i PIN startowe', klasa: 'slaby',
-      opis: 'Hasło i PIN startowe (haslo123, 1234) — przy pierwszym logowaniu osoba ustawi oba.' };
+    if (p.ekran) return (p.ma_haslo || p.ma_pin) ? { znacznik: '', klasa: '', opis: 'Konto ekranu — jedno hasło (zmienia je Menedżer w tym oknie).' }
+      : { znacznik: 'bez hasła', klasa: 'tekst-alarm', opis: 'Konto ekranu bez hasła — wpisz je i zapisz.' };
     if (p.haslo_do_zmiany) return { znacznik: 'hasło startowe', klasa: 'slaby',
-      opis: 'Hasło startowe — przy pierwszym logowaniu osoba ustawi własne hasło' + (p.ma_pin ? ' (PIN już jest).' : ' i PIN.') };
-    if (!p.ma_pin) return { znacznik: 'bez PIN-u', klasa: 'slaby', opis: 'Hasło ustawione, PIN-u jeszcze nie ma — osoba ustawi go przy logowaniu.' };
-    if (p.pin_do_zmiany) return { znacznik: 'PIN startowy', klasa: 'slaby',
-      opis: 'PIN zresetowany (startowy 1234) — przy następnym logowaniu osoba ustawi nowy.' };
-    return { znacznik: '', klasa: '', opis: 'Hasło i PIN ustawione.' };
+      opis: 'Hasło startowe (haslo123) — przy pierwszym logowaniu osoba ustawi własne hasło.' };
+    return { znacznik: '', klasa: '', opis: 'Hasło ustawione.' };
   }
 
   /* Status połączenia programu (Administracja → Połączenia GK) po ludzku. lokalny (D42): klucz zrobił hub dla programu
@@ -1886,7 +1897,7 @@
       mozna: !sr.prosba };
   }
 
-  /* Logowanie z internetu (D35) po ludzku: alarm sieci zakładu (z tym, co zrobić), licznik złych PIN-ów z internetu
+  /* Logowanie z internetu (D35) po ludzku: alarm sieci zakładu (z tym, co zrobić), licznik złych haseł z internetu
      i konta zablokowane z internetu. l = GET /api/v1/admin/dostep → logowanie. alarm.wpis = co dopisać do sieci zakładu
      przyciskiem „Wpisz mój adres” (IPv6 jako sieć /64); pusty, gdy hub nie widzi stąd adresu internetu. */
   function logowanieZInternetu(l, teraz) {
@@ -1897,14 +1908,14 @@
       + `Ten komputer łączy się z sieci lokalnej (${l.twoj_adres || '?'}), więc serwer nie widzi stąd adresu internetu biura. `
       + 'Otwórz Panel z adresu na GitHub Pages (kod QR niżej) na komputerze w biurze i tam naciśnij „Wpisz mój adres”.' };
     else if (l.alarm === 'pusta') alarm = { wpis, opis: 'Sieć zakładu nie jest ustawiona, a telefony łączą się przez internet — '
-      + `złe PIN-y obcych mogą zablokować logowanie telefonom w firmie. Jesteś teraz w firmowej sieci? Wpisz jej adres: ${wpis}.` };
+      + `złe hasła obcych mogą zablokować logowanie telefonom w firmie. Jesteś teraz w firmowej sieci? Wpisz jej adres: ${wpis}.` };
     else if (l.alarm === 'inny_adres') alarm = { wpis, opis: `Łączysz się z adresu ${wpis}, którego nie ma w sieci zakładu `
       + `(${(l.siec_zakladu || []).join(', ')}). Jesteś teraz w firmowej sieci (np. biuro dostało nowy adres)? Dopisz go.` };
     const n = l.zle_proby_godzina || 0;
-    const licznik = { tekst: `Złe PIN-y z internetu w ostatniej godzinie: ${n}`, kolor: n >= 30 ? 'alarm' : n ? 'uwaga' : 'ok' };
+    const licznik = { tekst: `Złe hasła z internetu w ostatniej godzinie: ${n}`, kolor: n >= 30 ? 'alarm' : n ? 'uwaga' : 'ok' };
     const zablokowane = (l.zablokowane || []).map(z => ({ id: z.id, nazwa: z.nazwa || z.id, konto: z.rodzaj === 'konto',
       opis: z.rodzaj === 'konto' ? `zablokowane z internetu do ${kiedyKrotko(z.do, teraz)} albo do odblokowania — w firmowym wifi loguje się`
-        : `z internetu czeka do ${kiedyKrotko(z.do, teraz)} (10 złych PIN-ów)` }));
+        : `z internetu czeka do ${kiedyKrotko(z.do, teraz)} (10 złych haseł)` }));
     return { alarm, licznik, zablokowane };
   }
 
@@ -1959,34 +1970,6 @@
                    gdzie: gdzieAlarmu(a.kod) }));
   }
 
-  /* Etap 1 (2026-11-10): ekran „Odrzucone zdarzenia” (Administracja → Dane). Odpowiedź GET /api/v1/admin/zdarzenia-odrzucone
-     → to, co pokazać: zapisy z hali, których serwer nie przyjął (telefon pokazał powód i wyrzucił je z kolejki), 90 dni.
-     nazwaTypu — funkcja Panelu (typ zdarzenia → nazwa po ludzku). Niedostępne = migracja bazy nie przeszła (jest też alarm). */
-  function odrzuconeZdarzenia(odp, nazwaTypu) {
-    const o = odp || {};
-    const nazwa = typeof nazwaTypu === 'function' ? nazwaTypu : t => t;
-    const lista = Array.isArray(o.zdarzenia) ? o.zdarzenia : [];
-    if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.' };
-    const czeka = Number(o.oczekuje) || 0;
-    const wiersze = lista.map(z => ({
-      id: z.id,
-      kiedy: `${dataKrotka(z.czas)} ${godzina(z.czas)}`,
-      kto: z.kto_nazwa || z.kto || '—',
-      typ: nazwa(z.typ) || z.typ || '—',
-      powod: z.powod || '',
-      ponowione: !!z.ponowiono,
-      wynik: z.wynik || '',
-      mozePonowic: !!z.mozna_ponowic,
-      surowe: JSON.stringify(z.zdarzenie, null, 1),
-    }));
-    let podsumowanie = '';
-    if (wiersze.length) {
-      podsumowanie = czeka ? `Do sprawdzenia: ${czeka}.` : 'Wszystko ponowione.';
-      if (o.ucieto) podsumowanie += ` Pokazano ${wiersze.length} z ${o.razem} najnowszych.`;
-    }
-    return { niedostepne: false, wiersze, pusto: !wiersze.length, podsumowanie };
-  }
-
   /* Komunikat o liście uciętej limitem (etap 1): GET /api/v1/stan/<typ> niesie ucieto/razem/pokazano, gdy pasuje więcej
      obiektów, niż zmieścił limit (5000 w Panelu). Pusty tekst, gdy lista jest kompletna. */
   function komunikatUciecia(odp) {
@@ -2001,16 +1984,16 @@
     ok: ['Zalogowano', 'ok'], zle_haslo: ['Złe hasło', 'alarm'], zly_pin: ['Zły PIN', 'alarm'], wymagane_haslo: ['Wymagane hasło', 'uwaga'],
     pauza: ['Pauza po złych próbach', 'alarm'], seria: ['Seria złych prób', 'alarm'], limit_adresu: ['Limit prób z adresu', 'alarm'],
     konto_wylaczone: ['Konto wyłączone', 'alarm'], startowe_wygaslo: ['Hasło startowe wygasło', 'uwaga'], nieznany: ['Nieznany identyfikator', 'uwaga'],
-    ustawienie: ['Ustawiono hasło lub PIN', 'ok'], wylogowanie: ['Wylogowano', 'ok'], inny: ['Inna odmowa', 'uwaga'],
+    ustawienie: ['Ustawiono hasło', 'ok'], wylogowanie: ['Wylogowano', 'ok'], inny: ['Inna odmowa', 'uwaga'],
   };
   const ZRODLA_LOGOWAN = { zaklad: 'sieć zakładu', internet: 'internet', lokalny: 'ten komputer' };
   const PROGRAMY_LOGOWAN = { panel: 'Panel', lider: 'Lider', ur: 'Utrzymanie Ruchu', kj: 'Kontrola Jakości', trasy: 'Trasy', flota: 'Flota',
                              szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
   // Nazwy funkcji (D92, 2026-11-19 — tylko napisy; kody ról bez zmian). Kody bez słownika kontraktu (biuro, kierowca, kierownik-ur…)
   // przychodzą z dziennika logowań programów.
-  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik zakładu', biuro: 'Biuro', lider: 'Lider produkcji GK', mistrz: 'Mistrz Produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu',
+  const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik zakładu', biuro: 'Biuro', lider: 'Lider Produkcji GK', mistrz: 'Mistrz Produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu',
                               kontroler: 'Pracownik Kontroli Jakości', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Lider Utrzymania Ruchu', 'kierownik-kj': 'Kierownik Kontroli Jakości',
-                              kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu', pracownik_mag: 'Pracownik Magazynu' };
+                              kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu', pracownik_mag: 'Pracownik Magazynu', prezes: 'Prezes' };
   function logowania(odp) {
     const o = odp || {};
     if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.', startowe: [], startowePodsumowanie: '', niespojnosci: [] };
@@ -2458,8 +2441,10 @@
   /* Co jest NOWE od poprzedniego rysowania: zatrzymanie (linii albo maszyny) albo alert jakości. Przy pierwszym
      rysowaniu (znane === null) niczego nie ogłaszamy — to, co już było, kierownik zobaczy na ekranie,
      a sygnał po każdym odświeżeniu strony przestałby cokolwiek znaczyć. */
-  function noweAlarmy(znane, wierszeAwarii, incydentyLista) {
+  function noweAlarmy(znane, wierszeAwarii, incydentyLista, pilneZgloszenia) {
     const teraz = new Map();
+    // Właściciel 2026-11-26: pilne zgłoszenie do decyzji tej osoby = dźwięk „pilne” (jak alert jakości), nie przy pierwszym rysowaniu.
+    for (const z of pilneZgloszenia || []) teraz.set('zgloszenie|' + z.id, { rodzaj: 'zgloszenie', id: z.id, opis: z.tytul || '' });
     for (const w of wierszeAwarii || []) if (w.zatrzymuje) teraz.set('awaria|' + w.id, { rodzaj: 'zatrzymanie', id: w.id, opis: [w.maszynaNazwa, w.liniaNazwa].filter(Boolean).join(' · ') });
     for (const i of incydentyLista || []) if (i.rodzaj === 'alert') teraz.set('alert|' + i.id, { rodzaj: 'alert', id: i.id, opis: i.tytul });
     const nowe = znane ? Array.from(teraz).filter(([k]) => !znane.has(k)).map(([, v]) => v) : [];
@@ -2475,7 +2460,7 @@
     const p = polaczenie || {}, k = kolejka || {};
     let klasa = 'ok', tekst = '';
     if (zalogowany && p.trybOffline) {
-      // D78: kierownik zalogowany PIN-em bez sieci — nic nie idzie do serwera, zlecenia czekają w urządzeniu.
+      // D78: kierownik zalogowany bez sieci (hasłem) — nic nie idzie do serwera, zlecenia czekają w urządzeniu.
       klasa = 'offline';
       tekst = 'Tryb bez połączenia — dane mogą być nieaktualne' + (k.moje ? ` · ${H().czekaNaWyslanie(k.moje)}` : '')
         + ' · wyślą się po powrocie sieci';
@@ -2551,7 +2536,7 @@
     const polaczenie = 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (!e || e instanceof TypeError) return polaczenie;
     if (!e.kod) return e.name === 'Error' && e.message ? e.message : polaczenie;
-    if (e.ustawione) return e.message;               // D43: hasło i PIN ustawione, ale rola nie otwiera Panelu
+    if (e.ustawione) return e.message;               // D43: hasło ustawione, ale rola nie otwiera Panelu
     if (e.kod === 403 && e.powod) return e.message;  // np. stara_wersja — tekst huba mówi, co zrobić
     if (e.kod === 403) return 'To konto nie ma dostępu do Panelu. Zaloguj się kontem kierownika albo ekranu.';
     if (e.kod === 429) return e.message || 'Za dużo prób. Odczekaj 5 minut i spróbuj ponownie.';
@@ -2575,34 +2560,41 @@
   /* Nazwa pozycji menu i nagłówka: lider UR i kierownik KJ i mistrz mają w „Administracji” tylko urlopy swoich ludzi — „Administracja”
      obiecywała więcej, niż jest w środku. Wszystkie inne zestawy części (kierownik zakładu, administrator) zostają „Administracją”. */
   function nazwaAdministracji(czesci) {
+    // 1.44.0: same drzwi do ekranów (Prezes: Wskaźniki, Wyniki, Raporty, RCP) — to „Więcej” (STYL-GK §8), nie Administracja.
+    if ((czesci || []).length && czesci.every(c => DRZWI_TELEFONU.includes(c))) return 'Więcej';
     return (czesci || []).filter(c => c !== 'wyniki').join() === 'urlopy' ? 'Urlopy' : 'Administracja';
   }
+
+  /* Części Administracji, które są tylko drzwiami do ekranów z menu po lewej (na komputerze ich chipy znikają — .chip-telefon). */
+  const DRZWI_TELEFONU = ['wskazniki', 'wyniki', 'raporty', 'rcp'];
 
   /* Części Administracji dla tej osoby, w kolejności chipów. Checklisty (szablony obchodów lidera) zeszły z górnego menu
      do Administracji — zmienia się je raz na kilka tygodni, a w menu zabierały miejsce codziennym pozycjom.
      admin — wszystko (Pracownicy, Urlopy, Maszyny, Dane, Logowania, Kody QR, Progi i godziny, Ustawienia); zespol (D49: kierownik zakładu / UR / KJ) — Pracownicy; maszyny (R10, kontrakt: zapis
      słownika maszyn — kierownik zakładu) — Maszyny; szablony (kontrakt: zapis szablony_checklist) — Checklisty. */
-  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny, kody, analityka, plan, wyniki } = {}) {
+  function czesciAdministracji({ admin, zespol, szablony, urlopy, maszyny, kody, analityka, plan, wyniki, podglad } = {}) {
     const c = [];
+    // 1.44.0 (właściciel 2026-11-26): Prezes — bez Administracji; na telefonie dochodzi tu tylko do Wskaźników, Wyników, Raportów i RCP
+    // (chipy .chip-telefon, na komputerze są w menu po lewej). Dolny pasek zostaje: Pulpit, Zlecenia, ta pozycja (STYL-GK §8: najwyżej 4).
+    if (podglad && !admin && !analityka) return ['wskazniki', 'wyniki', 'raporty', 'rcp'];
     if (admin || zespol) c.push('pracownicy');
     if (admin || urlopy) c.push('urlopy');                // D55: urlopy pracowników (kierownicy — swoich ludzi)
     // R10 (2026-11-09): słownik maszyn zapisuje też kierownik zakładu (kontrakt: slowniki.maszyny.zapis = admin, kierownik).
-    // Admin dostaje je niżej razem z Danymi, Kodami QR i Ustawieniami (kolejność chipów jak dotąd).
+    // Admin dostaje je niżej razem z Logowaniami, Kodami QR i Ustawieniami (kolejność chipów jak dotąd).
     if (maszyny && !admin) c.push('maszyny');
-    // STYL-GK §8 (2026-11-04): „Dane” (czyszczenie zleceń) i „Kody QR” mają wejście także tutaj — to te same okna co
-    // Zlecenia → 🧹 i Administracja → Kody QR (chip tylko je otwiera). Zespół (kierownicy) ich nie dostaje: D49 — tylko Pracownicy.
-    // Właściciel 2026-11-17: kierownik zakładu ma też „Kody QR” (okno kody.js: kierownik albo administrator).
-    if (admin) c.push('maszyny', 'dane', 'logowania');
+    // Właściciel 2026-11-26: chipu „Dane” (czyszczenie zleceń + Odrzucone zdarzenia) już nie ma — czyszczenie zostaje tylko w Zlecenia → Czyszczenie.
+    // „Kody QR” (okno kody.js) — kierownik zakładu i administrator (właściciel 2026-11-17).
+    if (admin) c.push('maszyny', 'logowania');
     // Panel bez „☰ Więcej” (2026-11-17, decyzja właściciela: „tylko dla obecnych ról Administracji”): Wskaźniki, Raporty (na telefonie),
-    // „Role i uprawnienia” i „Nie wysłane” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Lider Utrzymania Ruchu i Kierownik Kontroli Jakości
-    // i konto ekranu zostają bez nich (UR/KJ — przy samych Urlopach; „Nie wysłane” mają w pasku połączenia). Chipy Wskaźniki/Raporty
-    // ukrywa CSS na komputerze (są w menu po lewej).
-    // Kolejność jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia, Nie wysłane.
+    // „Role i uprawnienia” — administrator i kierownik zakładu (analityka = rola kierownik albo admin). Lider Utrzymania Ruchu i Kierownik Kontroli Jakości
+    // i konto ekranu zostają bez nich (UR/KJ — przy samych Urlopach). Chipy Wskaźniki/Raporty ukrywa CSS na komputerze (są w menu po lewej).
+    // Właściciel 2026-11-26: chipu „Nie wysłane” już nie ma — niewysłane zapisy pokazuje pasek połączenia („Odrzucone: N — dotknij”) i Moje konto.
+    // Kolejność jak dawniej w „Więcej”: Wskaźniki, Raporty, Kody QR, Role i uprawnienia.
     if (admin || analityka) c.push('wskazniki');
     if (wyniki) c.push('wyniki');          // D98: także lider UR i kierownik KJ (swój dział)
-    if (admin || analityka) c.push('raporty');
+    if (admin || analityka) c.push('raporty', 'rcp');     // RCP na telefonie (na komputerze — menu po lewej), jak Wskaźniki i Raporty
     if (admin || kody) c.push('kody');
-    if (admin || analityka) c.push('role', 'niewyslane');
+    if (admin || analityka) c.push('role');
     if (admin || plan) c.push('plan');                    // D95: plan zmian zakładu — Menedżer i Kierownik zakładu (kontrakt: slowniki.plan_zmian.zapis)
     if (admin) c.push('ustawienia');
     // D60 (właściciel 2026-10-14: „checklisty nie powinny być schowane w ustawieniach, tylko w zleceniach”):
@@ -2794,8 +2786,37 @@
      UR/KJ — tylko swój (hub i tak odrzuca resztę, 403). [{kod, nazwa, …}] w kolejności kontraktu. */
   function dzialyDoZlecania(stale, role) {
     const dz = (stale && stale.dzialy) || [];
+    // 1.44.0: Prezes zleca tylko działowi Kierownika zakładu (osoby: Kierownik zakładu albo Menedżer — osobyDoZlecenia). Hub: _blad_prezesa.
+    if (H().jestPrezesem && H().jestPrezesem(role)) return dz.filter(d => d.kod === DZIAL_PREZESA);
     const zakres = H().dzialyKierownika(role, dz);
     return zakres === null ? dz.slice() : dz.filter(d => zakres.includes(d.kod));
+  }
+
+  /* Osoby działu do wyboru w „Nowe zlecenie” i w zapisanych: [[id, nazwa]] aktywnych osób z rolą działu. Prezes (1.44.0) w dziale
+     Kierownika zakładu widzi też Menedżerów (rola admin) — zleca obu; inni bez zmian (Menedżer nie jest w dziale „kierownik”). */
+  const DZIAL_PREZESA = 'kierownik';
+  function osobyDoZlecenia(kod, pracownicy, stale, role) {
+    const dzial = ((stale && stale.dzialy) || []).find(d => d.kod === kod);
+    if (!dzial) return [];
+    const role_ = (H().jestPrezesem && H().jestPrezesem(role) && kod === DZIAL_PREZESA) ? ['kierownik', 'admin'] : (dzial.role || []);
+    return (pracownicy || []).filter(p => p && p.aktywny !== false && (p.role || []).some(r => role_.includes(r))).map(p => [p.id, p.nazwa]);
+  }
+
+  /* Czy ta osoba może zmieniać ten zapisany wpis (Kalendarz: Pomiń / Przywróć / Zakończ / Zmień): Prezes (1.44.0) tylko swoje
+     (hub odrzuca cudze — Hub._blad_prezesa); inni — jak dotąd (prawo zapisu sprawdza Panel.mozeZapisacStale). */
+  function moznaZmieniacZapisane(wpis, ja) {
+    if (!(H().jestPrezesem && H().jestPrezesem(ja && ja.role))) return true;
+    return !!wpis && !!ja && wpis.autor === ja.id;
+  }
+
+  /* Zapisane zlecenia widoczne na liście Zapisanych: Prezes (1.44.0) widzi i zmienia tylko swoje (hub odrzuca cudze); inni — wszystkie.
+     Zwraca słowniki z przefiltrowanym `zlecenia_stale` (ten sam obiekt, gdy nic nie trzeba zmieniać). */
+  function zapisaneDlaOsoby(slowniki, ja) {
+    if (!(H().jestPrezesem && H().jestPrezesem(ja && ja.role))) return slowniki;
+    const st = (slowniki && slowniki.zlecenia_stale) || {};
+    const wlasne = {};
+    for (const [k, w] of Object.entries(st)) if (w && w.autor === (ja && ja.id)) wlasne[k] = w;
+    return Object.assign({}, slowniki, { zlecenia_stale: wlasne });
   }
 
   /* D76: „Nowe zlecenie” → dane zleceń do zapisu (po jednym na adresata). Pierwszy dział: każda zaznaczona osoba osobno
@@ -3001,37 +3022,11 @@
       .sort((a, b) => b.razem - a.razem || a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
 
-  /* Urlopy: lista (najbliższe/trwające na górze, minione na dole) i formularz → {bledy, kod, wartosc}. */
-  function urlopyLista(slowniki, pracownicy, teraz) {
-    const dzis = dzienZakladu(teraz);
-    return Object.entries((slowniki && slowniki.urlopy) || {}).filter(([, u]) => u && u.osoba).map(([kod, u]) => {
-      const p = (pracownicy || []).find(x => x.id === u.osoba);
-      const stan = u.do < dzis ? 'minal' : u.od <= dzis ? 'trwa' : 'przyszly';
-      return { kod, osoba: u.osoba, nazwa: p ? p.nazwa : u.osoba, od: u.od, do: u.do, uwagi: u.uwagi || '', stan,
-               opis: stan === 'trwa' ? 'Trwa' : stan === 'minal' ? 'Minął' : 'Zaplanowany' };
-    }).sort((a, b) => ((a.stan === 'minal') - (b.stan === 'minal')) || a.od.localeCompare(b.od) || a.nazwa.localeCompare(b.nazwa, 'pl'));
-  }
-  /* R5 (2026-11-09, D82): kto może dostać urlop od tej osoby — kierownik zakładu i admin: wszyscy z działami hali; lider UR i kierownik KJ:
-     tylko osoby z jego działu (hub: blad_urlopu_osoby). Lista i formularz Urlopów pokazują tylko te osoby. */
-  function osobyDoUrlopow(pracownicy, ja, dzialy) {
-    // D97: Pracownik produkcji nie ma działu (nie otwiera aplikacji), ale jego urlop wpisuje kierownik zakładu (kierownik UR/KJ — nie: mozeUrlopOsoby).
-    const wDzialach = (p) => (p.role || []).includes('pracownik_prod') || (p.role || []).some(r => (dzialy || []).some(d => (d.role || []).includes(r)));
-    return (pracownicy || []).filter(p => p && p.aktywny !== false && wDzialach(p) && H().mozeUrlopOsoby(p, ja, dzialy))
-      .sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
-  }
-  function urlopZFormularza(f, slowniki) {
-    const bledy = [];
-    const data = t => /^\d{4}-\d{2}-\d{2}$/.test(String(t || ''));
-    if (!f.osoba) bledy.push('Wybierz osobę.');
-    if (!data(f.od) || !data(f.do)) bledy.push('Podaj daty od i do.');
-    else if (f.do < f.od) bledy.push('Data „do” jest przed „od”.');
-    const wartosc = { osoba: f.osoba, od: f.od, do: f.do };
-    if (String(f.uwagi || '').trim()) wartosc.uwagi = String(f.uwagi).trim().slice(0, 500);
-    const zajete = new Set(Object.keys((slowniki && slowniki.urlopy) || {}));
-    let kod = `${f.osoba}-${f.od}`, n = 2;
-    while (zajete.has(kod)) kod = `${f.osoba}-${f.od}-${n++}`;
-    return { bledy, kod, wartosc };
-  }
+  /* Urlopy: lista, osoby i formularz — od 2026-11-26 wspólne z ekranem „Urlopy zespołu” w UR i KJ (wspolne/klient/hala.js:
+     Hala.urlopyLista, Hala.osobyDoUrlopow, Hala.urlopZFormularza). Tu tylko te same nazwy dla dotychczasowych wywołań i testów. */
+  const urlopyLista = (...a) => H().urlopyLista(...a);
+  const osobyDoUrlopow = (...a) => H().osobyDoUrlopow(...a);
+  const urlopZFormularza = (...a) => H().urlopZFormularza(...a);
 
   /* Zgłoszenia nieprawidłowości dla kierownika zakładu: czekające na górze, potem rozpatrzone; w obu grupach od
      najnowszych (właściciel 2026-11-19 — dawniej czekające od najstarszych). */
@@ -3045,6 +3040,7 @@
                maszyna: d.maszyna || '', maszynaNazwa: d.maszyna ? ((maszyny[d.maszyna] || {}).nazwa || d.maszyna) : '',
                kto: nazwaPracownika(pracownicy, d.zglosil), kiedy: d.czas_zgloszenia, kiedyOpis: `${dataKrotka(d.czas_zgloszenia)} ${godzina(d.czas_zgloszenia)}`,
                zdjecia: [].concat(d.zdjecia || []), odpowiedz: d.powod_odrzucenia ? `Odrzucone: ${d.powod_odrzucenia}` : d.uwagi_przyjecia || '',
+               pilne: d.pilne === true,       // 1.44.0: „Pilne — powiadom od razu” przy zgłoszeniu
                zlecenie: d.zlecenie || null, stale: d.stale || null };
     }).sort((a, b) => (b.nowe - a.nowe) || String(b.kiedy).localeCompare(String(a.kiedy)));
   }
@@ -3409,7 +3405,7 @@
     for (const dzial of KOLEJNOSC_KART) {
       if (dzial === 'produkcja') {
         for (const lin of liniowe) {
-          const podpis = wiele ? `Lider produkcji GK · ${lin.nazwa}` : 'Lider produkcji GK';       // D92: nazwa funkcji „Lider produkcji GK”
+          const podpis = wiele ? `Lider Produkcji GK · ${lin.nazwa}` : 'Lider Produkcji GK';       // D92: nazwa funkcji „Lider Produkcji GK”
           const checklisty = sortuj((zlecenia || []).filter(z => ((z.dane || {}).dzial === 'produkcja') && maPozycje(z)
             && H().checklistaZmiany([z], lin.linia, zmiana, 'produkcja').zlecenia.length > 0));
           const karty = checklisty.map((z, i) => karta(z, 'produkcja', lin.linia, podpis,
@@ -3461,7 +3457,7 @@
         && !(d.linia && linia && d.linia !== linia) && naZmianie(d) && (!zlecenieId || z.id === zlecenieId);
     });
     return zlecenia({ zlecenia: pasujace, slowniki, pracownicy, stale, teraz, filtr: 'wszystkie', ja })
-      .filter(z => !z.czesc && z.prawoOdbioru && z.pozycje.length)
+      .filter(z => !z.czesc && z.prawoWgladu && z.pozycje.length)
       .map(z => Object.assign({}, z, { pozycje: z.pozycje.map(p => Object.assign({}, p, { spozniona: p.stan === 'czeka' && p.terminMs !== null && p.terminMs < nowMs })) }));
   }
 
@@ -3576,14 +3572,14 @@
   }
 
   const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, zleceniaNaZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
-                       pilneBezUkrytych, checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, pilneOdZespolu, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
+                       pilneBezUkrytych, checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, DRZWI_TELEFONU, osobyDoZlecenia, zapisaneDlaOsoby, moznaZmieniacZapisane, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, pilneOdZespolu, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
-                       zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, odrzuconeZdarzenia, komunikatUciecia, logowania,
+                       zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, komunikatUciecia, logowania,
                        zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, zmianaKarty, czyZamknacPoOdbiorze, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        planDoFormularza, planZeStanu, planZmianZapisy, skutkiPlanu, zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
-                       brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
+                       brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, czekaNaCiebie, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
                        bezCzesci, rozdzialZlecenia, MOJE_DZIALY, szukaj, NAZWY_WYNIKOW, maszynyAdmin, dzialyDoZlecania, opisDlaKogo, podsumowanieDlaKogo, objasnienieDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;

@@ -105,6 +105,16 @@
     // UI etap 3: Checklisty są częścią Administracji — menu widać też samemu edytującemu szablony.
     const czesciAdm = z ? W.czesciAdministracji(Panel.dostepAdministracji()) : [];
     $('menu-administracja').hidden = !czesciAdm.length;
+    // 1.44.0: same drzwi do ekranów z menu (Prezes) — na komputerze pozycja znika (ekrany są po lewej), na telefonie to „Więcej”.
+    const sameDrzwi = !!czesciAdm.length && czesciAdm.every(c => W.DRZWI_TELEFONU.includes(c));
+    $('menu-administracja').classList.toggle('tylko-telefon', sameDrzwi);
+    // Ikona jak „Więcej” w innych aplikacjach GK (STYL-GK §8) — wstawiana tylko przy zmianie, bez przerysowania co 20 s.
+    const ikonaAdm = $('menu-administracja').querySelector('.ikona');
+    const ikonaChciana = sameDrzwi ? 'wiecej' : 'administracja';
+    if (ikonaAdm && ikonaAdm.getAttribute('data-ikona') !== ikonaChciana && window.GKIkony) {
+      ikonaAdm.setAttribute('data-ikona', ikonaChciana);
+      window.GKIkony.wypelnij(ikonaAdm.parentNode);
+    }
     // Lider Utrzymania Ruchu i Kierownik Kontroli Jakości mają tu tylko urlopy swoich ludzi — pozycja nazywa się wtedy „Urlopy” (W.nazwaAdministracji).
     const nazwaAdm = W.nazwaAdministracji(czesciAdm);
     const wstawNazwe = (el, nazwa) => { if (el && el.textContent !== nazwa) el.textContent = nazwa; };
@@ -132,10 +142,9 @@
   // Zasady w widok.js (W.tekstBledu — testowane): sieć → instrukcja, błąd z telefonu → jego polski tekst.
   function komunikatBledu(e) { return W.tekstBledu(e); }
 
-  /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (czytnik „pisze” go jak
-     klawiatura i kończy Enterem) albo login — konto monitora w biurze nie ma karty. Enter z czytnika
-     przenosi do drugiego pola, zamiast wysyłać pusty sekret. Drugie pole: „Hasło (raz na 16 godzin na tym
-     urządzeniu)” albo „PIN (4 cyfry)” — zależnie od tego, czy ta osoba ma na tym urządzeniu ważny znacznik (konto.js). */
+  /* Logowanie identyfikatorem i hasłem (D24, D43; od 2026-11-26 bez PIN-u): identyfikator to kod z karty (czytnik „pisze”
+     go jak klawiatura i kończy Enterem) albo login — konto monitora w biurze nie ma karty. Enter z czytnika przenosi do
+     drugiego pola, zamiast wysyłać pusty sekret. Drugie pole: zawsze „Hasło” (konto.js → poleLogowania). */
   const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
                                                 przelacz: $('przelacz-sekret') });
   $('formularz-logowania').addEventListener('submit', async ev => {
@@ -144,7 +153,7 @@
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
     if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
-      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz hasło.'; $('blad-logowania').hidden = false;
       $('identyfikator').focus(); return;
     }
     const blad = $('blad-logowania');
@@ -162,7 +171,7 @@
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
-      // D43: 16 h minęło albo 5 złych PIN-ów — hala.js zapomniał znacznik, pole wraca do hasła.
+      // Wpisany dawny PIN („Logowanie PIN-em wyłączone”) — hala.js zapomniał znacznik; pole zostaje polem hasła.
       if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();
       $('pin').focus();
     } finally {
@@ -176,7 +185,7 @@
     const ekran = document.body.classList.contains('tryb-ekran');
     const k = hala.stanKolejki().moje;
     if (k && !(await Panel.potwierdz('Wylogować?', `Czeka na wysłanie: ${k}. Wyślą się, gdy znowu zalogujesz się na tym urządzeniu.`, 'Wyloguj'))) return;
-    if (!k && ekran && !(await Panel.potwierdz('Wylogować ekran?', 'Trzeba będzie wpisać imię i nazwisko konta ekranu i PIN ponownie.', 'Wyloguj'))) return;
+    if (!k && ekran && !(await Panel.potwierdz('Wylogować ekran?', 'Trzeba będzie wpisać imię i nazwisko konta ekranu i hasło ponownie.', 'Wyloguj'))) return;
     const konto = document.getElementById('hala-okno-konta');
     if (konto && konto.open) konto.close();
     await hala.wyloguj();
@@ -202,9 +211,9 @@
   Panel.nazwaTypu = nazwaTypu;
 
   /* „Moje konto” — JEDNO okno z Liderem, UR i KJ (../wspolne/konto.js → HalaKonto.mojeKonto, STYL-GK §3 runda 2):
-     ten sam wygląd, szerokość 440 px, Wygląd, Zmień PIN/hasło, Dane w tym urządzeniu, „wersja X”, Zamknij + Wyloguj.
+     ten sam wygląd, szerokość 440 px, Wygląd, Zmień hasło, Dane w tym urządzeniu, „wersja X”, Zamknij + Wyloguj.
      Rzecz Panelu (dodatki): Powiadomienia — push, gdy zlecenie tej osoby jest po terminie (wspólna sekcja z Liderem).
-     Monitor w biurze (konto ekranu) nikomu nic nie zleca — nie ma czego mu przypominać, nie ma też Zmień PIN. */
+     Monitor w biurze (konto ekranu) nikomu nic nie zleca — nie ma czego mu przypominać, nie ma też Zmień hasło (hasło monitora zmienia Menedżer w Administracji). */
   function otworzKonto() {
     const ekran = (hala.pracownik && hala.pracownik.role || []).includes('ekran');
     HalaKonto.mojeKonto(hala, {
@@ -279,7 +288,9 @@
              plan: W.obslugujeZmianyWgDni(hala.kontrakt) && role.some(r => ((((hala.kontrakt || {}).slowniki || {}).plan_zmian || {}).zapis || []).includes(r)),
              // kody.dostepne(): kierownik albo administrator; analityka (Wskaźniki, Raporty): to samo grono (pokazAnalityke).
              wyniki: HalaWyniki.dostep(role, (hala.kontrakt || {}).stale).tryb === 'zarzad',
-             kody: role.some(r => r === 'kierownik' || r === 'admin'), analityka: role.some(r => r === 'kierownik' || r === 'admin') };
+             kody: role.some(r => r === 'kierownik' || r === 'admin'), analityka: role.some(r => r === 'kierownik' || r === 'admin'),
+             // 1.44.0: Prezes — sam wgląd (Wskaźniki, Wyniki, Raporty, RCP), bez Administracji.
+             podglad: Hala.jestPrezesem(role) };
   };
 
   const WIDOKI = ['na-zywo', 'zlecenia', 'wskazniki', 'wyniki', 'raporty', 'rcp', 'administracja'];
@@ -298,7 +309,8 @@
   /* Wskaźniki i Raporty (wykresy, KPI) — tylko kierownik zakładu i administrator (właściciel 2026-10-27); serwer też odmawia
      (GET /api/v1/panel/wskazniki → 403). Lider Utrzymania Ruchu, Kierownik Kontroli Jakości i ekran widzą Na żywo i Zlecenia. */
   function pokazAnalityke() {
-    const ok = !!(hala.pracownik && (hala.pracownik.role || []).some(r => r === 'kierownik' || r === 'admin'));
+    // 1.44.0: Prezes też (wgląd); RCP ma u niego tylko podgląd (rcp.js), serwer odmawia zapisów.
+    const ok = !!(hala.pracownik && ((hala.pracownik.role || []).some(r => r === 'kierownik' || r === 'admin') || Hala.jestPrezesem(hala.pracownik.role)));
     for (const w of ['wskazniki', 'raporty', 'rcp']) {       // RCP: ta sama grupa ról (serwer: /api/v1/panel/rcp/… tylko kierownik i admin)
       const t = document.querySelector(`.zakladki [data-widok="${w}"]`);
       if (t) t.hidden = !ok;
@@ -310,17 +322,10 @@
     if (!wyniki && widokAktywny === 'wyniki') { const n = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (n) n.click(); }
     if (!ok && (widokAktywny === 'wskazniki' || widokAktywny === 'raporty' || widokAktywny === 'rcp')) { const n = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (n) n.click(); }
   }
-  /* Liczba „Nie wysłane” (odrzucone zapisy i zdjęcia): plakietka na pozycji Administracja w pasku i licznik na chipie „Nie wysłane”.
-     Plakietka tylko tam, gdzie chip jest (administrator, kierownik zakładu — W.czesciAdministracji); lider UR i kierownik KJ mają „Urlopy” i swój
-     pasek połączenia. */
+  /* Właściciel 2026-11-26: chipu „Nie wysłane” w Administracji (i plakietki z liczbą na jej pozycji w pasku) już nie ma — niewysłane zapisy
+     pokazuje pasek połączenia („Odrzucone: N — dotknij”, to samo okno: Panel.pokazOdrzucone) i Moje konto. Zostaje sam pokazAnalityke. */
   function rysujPlakietkiAdministracji() {
     pokazAnalityke();
-    const n = ((kolejka && kolejka.odrzucone) || 0) + ((kolejka && kolejka.plikiOdrzucone) || 0);
-    const maChip = !!hala.pracownik && W.czesciAdministracji(Panel.dostepAdministracji()).includes('niewyslane');
-    const chip = $('chip-niewyslane-tekst');
-    if (chip) chip.textContent = n ? `Nie wysłane (${n})` : 'Nie wysłane';
-    $('plakietka-administracja').hidden = !(n && maChip);
-    $('plakietka-administracja').textContent = n && maChip ? String(n) : '';
   }
 
   function mozeWyslac(typ) {
@@ -522,6 +527,21 @@
       zaladujZdjecie(e);
   }
 
+  /* „Czeka na Ciebie” (właściciel 2026-11-26): na górze Pulpitu to, co czeka na decyzję zalogowanej osoby — te same wiersze i przyciski co w Zleceniach
+     (html z zgloszenia.js), pilne na górze. Pusta lista = sekcja schowana (monitor nie ma przycisków, więc nigdy jej nie widzi). Rysujemy tylko przy zmianie. */
+  let ostatniHtmlCzeka = null;
+  function rysujCzeka(czeka) {
+    const lista = document.body.classList.contains('tryb-ekran') ? [] : (czeka || []);
+    $('pulpit-czeka').hidden = !lista.length;
+    $('pulpit-czeka').classList.toggle('bez-pilnych', !lista.some(w => w.pilne));
+    $('licznik-czeka').innerHTML = lista.length ? `<span class="znacznik ${lista.some(w => w.pilne) ? 'alarm' : 'neutral'}">${lista.length}</span>` : '';
+    const html = lista.map(w => w.html).join('');
+    if (html === ostatniHtmlCzeka) return;
+    ostatniHtmlCzeka = html;
+    $('lista-czeka').innerHTML = html;
+    ladujZdjeciaLeniwie($('lista-czeka'));
+  }
+
   /* „Pilne od zespołu” (2026-11-25): trwałe wpisy z „Pilne — powiadom kierownika”, ostatnie 48 godzin (W.pilneOdZespolu). Konto „ekran”
      (monitor) ich nie widzi — to wiadomość do kierownika i Menedżera. */
   function rysujPilne(d, zlecenia) {
@@ -530,7 +550,7 @@
     // Klucz jako literał „hala.panel.pilneUkryte.” + id osoby (test t_dostep pilnuje przedrostka „hala.” w kodzie). Pamiętamy czas najnowszego ukrytego wpisu.
     const ukryteDo = ja ? Number(pamiec.czytaj('hala.panel.pilneUkryte.' + ja)) || 0 : 0;
     const wszystkie = ((hala.pracownik && (hala.pracownik.role || []).includes('ekran')) ? [] : W.pilneOdZespolu({ zlecenia, pracownicy: d.pracownicy, teraz: d.teraz, dzialy: mojeDzialy() }));
-    const wiersze = W.pilneBezUkrytych(wszystkie, ukryteDo);
+    const wiersze = PanelPilne.bezWidzianych(W.pilneBezUkrytych(wszystkie, ukryteDo), PanelPilne.widziane(ja));   // 26.11: „Widziałem” przy wpisie (pilne.js)
     sekcja.hidden = !wiersze.length;
     $('licznik-pilnych').innerHTML = wiersze.length ? `<span class="znacznik alarm">${wiersze.length}</span>` : '';
     $('lista-pilnych').innerHTML = wiersze.map(w => {
@@ -538,7 +558,7 @@
       return `<article class="pilne-wpis" data-id="${esc(w.id)}">
         <div class="opis"><div><b>${esc(w.nazwaPozycji || w.tytul || 'Zlecenie')}</b>${w.nazwaPozycji && w.tytul ? ` <span class="slaby">${esc(w.tytul)}</span>` : ''}</div>
           <div class="slaby">${esc(w.kto)} · ${esc(W.godzina(w.czas))}</div>
-          ${w.uwagi ? `<div class="tekst-opisu">${esc(w.uwagi)}</div>` : ''}</div>
+          ${w.uwagi ? `<div class="tekst-opisu">${esc(w.uwagi)}</div>` : ''}</div>${PanelPilne.przycisk(w)}
         ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
       </article>`;
     }).join('');
@@ -552,6 +572,8 @@
     rysujPilne(dane(), hala.obiekty('zlecenie'));
   });
   $('lista-pilnych').addEventListener('click', ev => {
+    const widzialem = ev.target.closest('[data-widzialem]');
+    if (widzialem) { PanelPilne.oznacz(hala.pracownik && hala.pracownik.id, widzialem.dataset.widzialem); rysujPilne(dane(), hala.obiekty('zlecenie')); return; }
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis);
   });
@@ -648,7 +670,9 @@
       const wiersze = W.awarie({ awarie, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale,
                                  teraz: d.teraz, alarmMin: hala.ustawienie('alarm_potwierdzenia_min', 30), ja: hala.pracownik });
       const jakosc = W.incydenty({ partie: hala.obiekty('partia'), alerty: hala.obiekty('alert'), slowniki: d.slowniki, zmiana: d.zmiana, teraz: d.teraz });
-      sprawdzAlarmy(wiersze, jakosc.lista);
+      // Właściciel 2026-11-26: „Czeka na Ciebie” — liczone zawsze (dźwięk pilnego zgłoszenia także na innych zakładkach).
+      const czeka = Panel.widoki.zgloszenia ? Panel.widoki.zgloszenia.czekaNaMnie(d) : [];
+      sprawdzAlarmy(wiersze, jakosc.lista, czeka.filter(w => w.pilne && w.rodzaj === 'zgloszenie'));
       const zlecenia = hala.obiekty('zlecenie');
       const doZamkniecia = zlecenia.filter(z => z.status === 'wykonane' || z.status === 'odrzucone').length;
       $('plakietka-zlecen').hidden = !doZamkniecia;
@@ -657,9 +681,10 @@
         const linie = rysujKafelki(d, awarie);
         rysujAwarie(wiersze);
         rysujPilne(d, zlecenia);
+        rysujCzeka(czeka);
         rysujBiezace(d, zlecenia);
         rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
-                                slowniki: d.slowniki, urzadzenia }));
+                                slowniki: d.slowniki, urzadzenia, czeka }));
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {
         rysujZlecenia(d, zlecenia);
@@ -695,6 +720,7 @@
     if (k && k.dataset.kafel === 'bez-raportu') document.querySelector('.zakladki [data-widok="raporty"]').click();      // zakładka Raporty (na telefonie schowana — klik programowy działa)
     if (k && k.dataset.kafel === 'bhp') Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp');
     if (k && k.dataset.kafel === 'urzadzenia') pokazUrzadzenia();
+    if (k && k.dataset.kafel === 'czeka') pokazCzeka();
   });
 
   /* D78: „Urządzenia z niewysłanymi zapisami” — telefony meldują swoją kolejkę (hala.js → /api/v1/urzadzenie/kolejka),
@@ -747,8 +773,14 @@
      otwartemu Panelowi {typ:'otworz'}): od razu Zlecenia „W toku” — spóźnione stoją tam na górze z ⏰ (UI etap 2).
      Adres czyścimy, żeby następne powiadomienie z tym samym adresem znowu zadziałało, a odświeżenie strony nie
      przełączało widoku. Przed zalogowaniem adres czeka — pokazSesje woła to jeszcze raz po zalogowaniu. */
+  /* Kafelek „Do decyzji” i powiadomienie o pilnym zgłoszeniu (#czeka): Pulpit, przewinięty do sekcji „Czeka na Ciebie”. */
+  function pokazCzeka() {
+    const z = document.querySelector('.zakladki [data-widok="na-zywo"]');
+    if (z && widokAktywny !== 'na-zywo') z.click();
+    setTimeout(() => { const s = $('pulpit-czeka'); if (s && !s.hidden) s.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 50);
+  }
   function obsluzAdres() {
-    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#urlopy', '#checklisty', '#bhp', '#pilne'].includes(location.hash)) return;
+    if (!hala.zalogowany() || !['#zlecenia', '#administracja', '#urlopy', '#checklisty', '#bhp', '#pilne', '#czeka'].includes(location.hash)) return;
     const adres = location.hash;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* stary adres zostanie — bez szkody */ }
     // #administracja = dotknięty alarm huba (etap 2: kopia, adres na Pages, token, miejsce) — tylko administrator ma ten widok.
@@ -769,6 +801,8 @@
     }
     // #pilne — dotknięte powiadomienie „Pilne — powiadom kierownika” (2026-11-25): Pulpit, gdzie stoi sekcja „Pilne od zespołu”.
     if (adres === '#pilne') { const z = document.querySelector('.zakladki [data-widok="na-zywo"]'); if (z) z.click(); return; }
+    // #czeka — dotknięte powiadomienie o pilnym zgłoszeniu (2026-11-26): Pulpit, sekcja „Czeka na Ciebie”.
+    if (adres === '#czeka') { pokazCzeka(); return; }
     // #bhp — dotknięte powiadomienie o zgłoszeniu BHP (D59): lista ⛑ BHP, otwarte na górze.
     if (adres === '#bhp') { Panel.pokazZlecenia('do-zamkniecia', 'biezace', 'bhp'); return; }
     Panel.pokazZlecenia('otwarte', 'biezace');
@@ -952,7 +986,7 @@
       .filter(z => !((z.pozycje || []).length && wKartach.has(z.id)))
       .map(z => Object.assign(z, { html: wierszZlecenia(z) }));
     const wToku = dla('otwarte'), doOdbioru = dla('do-zamkniecia');
-    // Właściciel 2026-11-23: kart zleceń działów („Lider produkcji GK · Zlecenia · W toku”) na Pulpicie nie ma — wystarczy rozwinięcie karty checklisty
+    // Właściciel 2026-11-23: kart zleceń działów („Lider Produkcji GK · Zlecenia · W toku”) na Pulpicie nie ma — wystarczy rozwinięcie karty checklisty
     // (lista pozycji, odbiór). Wiersze zostają w zlecBufor, bo okno szczegółów pozycji czyta stamtąd.
     for (const el of $('kafelki').querySelectorAll('.zlecenia-dzialu, .pusto')) el.remove();
     // Właściciel 2026-11-25: obok checklist pojedyncze zlecenia tej zmiany i dzisiejszego dnia — osobny blok pod kartami (filtry rzędu Pulpitu działają też na nie).
@@ -1288,14 +1322,15 @@
     // Audyt ról 2026-11-09 (D80): „Odwołaj” tylko tam, gdzie kontrakt pozwala roli (zlecenie.anulowane — kierownik zakładu
     // i admin). Lider Utrzymania Ruchu i Kierownik Kontroli Jakości widzieli przycisk, a hub odpowiadał 403.
     const anuluj = z.moznaAnulowac && mozeWyslac('zlecenie.anulowane') ? p('anuluj', 'Odwołaj') : '';
-    const zapisz = stale && !z.stale && !z.zaplanowane
+    // 1.44.0: Prezes zapisuje tylko zlecenia dla Kierownika zakładu (hub odrzuca inne działy).
+    const zapisz = stale && !z.stale && !z.zaplanowane && (!Hala.jestPrezesem(roleJa()) || z.dzial === 'kierownik')
       ? p('jako-stale', `${ik('zapisane')}Do zapisanych`, '', 'Zapisz, żeby zlecać je znowu (pojedynczo albo według harmonogramu)') : '';
     // Bez czynności głównej (zlecenie czeka na dział) najczęstsze jest poprawienie treści — „Zmień” zostaje na wierzchu.
     const widoczne = glowne.concat(obok);
     // „Historia” (właściciel 2026-11-18, wzór: „Przebieg” w GK Trasy): oś zdarzeń zlecenia — kto i kiedy zlecił, przyjął, zrobił, odebrał,
     // zwrócił, pozycje, zatwierdzenie automatyczne, odwołanie. Dla tych, którzy odbierają (kierownik zakładu, admin, kierownik działu swój).
     // Na zamkniętych i odwołanych — od razu na wierzchu; przy zleceniach z własnymi przyciskami — pod „Więcej”. Okno to samo co klik w tytuł.
-    const historia = kier && z.prawoOdbioru && !z.zaplanowane ? p('historia', 'Historia', '', 'Przebieg zlecenia: kto i kiedy, notatki i zdjęcia') : '';
+    const historia = kier && z.prawoWgladu && !z.zaplanowane ? p('historia', 'Historia', '', 'Przebieg zlecenia: kto i kiedy, notatki i zdjęcia') : '';
     if (historia && !z.otwarte && !z.doZamkniecia) widoczne.push(historia); else reszta.push(historia);
     if (!widoczne.length && edytuj) widoczne.push(edytuj); else reszta.push(edytuj);
     const ukryte = reszta.concat(anuluj, zapisz).filter(Boolean);
@@ -1343,7 +1378,7 @@
     const poz = kier && z.moznaOdebrac && z.mozeOdbieracPozycje && mozeWyslac('zlecenie.pozycja_odebrana');
     // Wgląd w ZAMKNIĘTĄ checklistę (właściciel 2026-11-18): kto i kiedy, notatka, zdjęcia, powód pominięcia — tylko do odczytu, bez
     // Odbierz/Zwróć. Dla tych, którzy odbierają (kierownik zakładu, admin; lider UR i kierownik KJ tylko swój dział — prawoOdbioru); ekran nie.
-    const wglad = kier && z.prawoOdbioru && !z.doZamkniecia && z.pozycje.length > 0 && !z.otwarte;
+    const wglad = kier && z.prawoWgladu && !z.doZamkniecia && z.pozycje.length > 0 && !z.otwarte;
     const pokazDowody = p => p.stan !== 'czeka' && ((klik && poz) || wglad);
     const dowody = p => dowodyPozycji(z, p);
     const przyciskiPozycji = p => przyciskiPozycjiHtml(z, p, poz);
@@ -1384,14 +1419,14 @@
             z.rozdzial && z.rozdzial.czesci && z.rozdzial.czesci.length ? `<details class="pozycje-zlecenia czesci-zlecenia"${z.doZamkniecia ? ' open' : ''}><summary>Części — szczegóły</summary>
             <ul>${z.rozdzial.czesci.map(c => `<li class="stan-${c.znak === '✓' ? 'wykonana' : 'czeka'}"><span aria-hidden="true">${znakIk(c.znak)}</span> <b>${esc(c.kto)}</b> <span class="slaby">— ${esc(c.stan)}${c.kiedy ? ` ${esc(c.kiedy)}` : ''}</span>${c.powod ? ` <span class="tekst-alarm">— ${esc(c.powod)}</span>` : ''}${c.notatka ? `<div class="slaby">${ik('notatka', 14)}${esc(c.notatka)}</div>` : ''}${zdjecia(c.zdjecia, '', [z.tytul, c.kto, c.notatka].filter(Boolean).join(' · '))}</li>`).join('')}</ul></details>` : ''}
           ${/* Dowody zwykłego zlecenia (bez pozycji) — jak „Do odbioru”, tylko do odczytu: kto i kiedy zrobił i odebrał (notatka i zdjęcia niżej). */
-            kier && z.prawoOdbioru && !z.pozycje.length && z.wykonanoPrzez && !z.otwarte
+            kier && z.prawoWgladu && !z.pozycje.length && z.wykonanoPrzez && !z.otwarte
               ? `<div class="slaby poz-dowody">Zrobione przez ${esc(z.wykonanoPrzez)}${z.wykonanoKiedy ? ` ${esc(z.wykonanoKiedy)}` : ''}${z.odebranoKiedy && z.status === 'zamkniete' ? ` · odebrane ${esc(z.odebranoKiedy)}` : ''}</div>` : ''}
           ${/* „Nie mogę (N)” — kto, kiedy i powód każdego odrzucenia (zwarte, rozwijane); tylko do odczytu dla odbierających, na zamkniętych/odebranych. */
-            kier && z.prawoOdbioru && !z.otwarte && z.odrzucenia && z.odrzucenia.length
+            kier && z.prawoWgladu && !z.otwarte && z.odrzucenia && z.odrzucenia.length
               ? `<details class="slaby odrzucenia"><summary>Nie mogę (${z.odrzucenia.length})</summary><ul>${z.odrzucenia.map(o => `<li>${esc(o.kto)}${o.kiedy ? `, ${esc(o.kiedy)}` : ''}: ${esc(o.powod)}</li>`).join('')}</ul></details>` : ''}
           ${z.odpowiedz ? `<div class="odpowiedz">${esc(z.odpowiedz)}</div>` : ''}
           ${z.notatka ? `<div class="odpowiedz">${ik('notatka')}${esc(z.notatka)}</div>` : ''}
-          ${z.uwagiZwrotu && (z.otwarte || (kier && z.prawoOdbioru)) ? `<div class="slaby">Zwrócone${z.zwrotKiedy && !z.otwarte ? ` (${esc(z.zwrotKiedy)})` : ''}: ${esc(z.uwagiZwrotu)}</div>` : ''}
+          ${z.uwagiZwrotu && (z.otwarte || (kier && z.prawoWgladu)) ? `<div class="slaby">Zwrócone${z.zwrotKiedy && !z.otwarte ? ` (${esc(z.zwrotKiedy)})` : ''}: ${esc(z.uwagiZwrotu)}</div>` : ''}
           ${zdjecia(z.zdjecia, 'Od działu:', [z.tytul, z.kto, z.notatka].filter(Boolean).join(' · '))}${zdjecia(z.zdjeciaKierownika, 'Do zlecenia:', z.tytul)}
         </div>
         ${z.zaplanowane ? `<div class="numer slaby">zleci się<br><b class="tekst-planu">${esc(z.zaplanowaneNa || '—')}</b><br>${esc(z.terminPlanu)}${z.zlecil ? `<br>${esc(z.zlecil)}` : ''}</div>`
@@ -1520,6 +1555,7 @@
   }
   $('lista-zlecen').addEventListener('click', obsluzKlikZlecenia);
   $('lista-zlecen-zmiany').addEventListener('click', obsluzKlikZlecenia);
+  $('lista-czeka').addEventListener('click', obsluzKlikZlecenia);          // „Czeka na Ciebie” — te same przyciski co w Zleceniach
   $('lista-zlecen-zmiany').addEventListener('click', ev => {         // pamięć rozwinięć sekcji w wierszach (jak na liście Zleceń)
     const sum = ev.target.closest('summary');
     const det = sum && sum.parentElement;
@@ -1653,9 +1689,8 @@
   // Nowe zlecenie: dział → podpowiedź osób z ról tego działu; linia → maszyny tej linii.
   const fz = $('formularz-zlecenia');
   function osobyDzialu(kod) {
-    const dzial = ((hala.kontrakt.stale || {}).dzialy || []).find(d => d.kod === kod);
-    return (hala.pracownicy || []).filter(p => p.aktywny !== false && dzial && (p.role || []).some(r => dzial.role.includes(r)))
-      .map(p => [p.id, p.nazwa]);
+    // 1.44.0: W.osobyDoZlecenia — Prezes w dziale Kierownika zakładu widzi też Menedżerów; reszta jak dotąd (osoby z rolą działu).
+    return W.osobyDoZlecenia(kod, hala.pracownicy || [], hala.kontrakt.stale || {}, roleJa());
   }
   /* „Nowe zlecenie” — puste albo wypełnione zleceniem stałym („Zleć teraz”, D31). Wymagania domyślnie zaznaczone:
      egzekwowanie ma być zasadą, a kierownik odznacza je świadomie. D47: zlecenie zaplanowane wcześniej (zanim UI etap 2
@@ -2148,13 +2183,14 @@
   // D94: „Zamknąć zmianę?” także dla kierownika/menedżera, który sam przyjął checklistę zmianową.
   if (window.HalaZlecenia && window.HalaZlecenia.pilnujZamkniecia) window.HalaZlecenia.pilnujZamkniecia(hala, {});
 
-  function sprawdzAlarmy(wiersze, incydenty) {
-    const a = W.noweAlarmy(znaneAlarmy, wiersze, incydenty);
+  function sprawdzAlarmy(wiersze, incydenty, pilneZgloszenia) {
+    const a = W.noweAlarmy(znaneAlarmy, wiersze, incydenty, pilneZgloszenia);
     znaneAlarmy = a.znane;
     if (!a.nowe.length) return;
-    for (const n of a.nowe) swiezeDo.set((n.rodzaj === 'alert' ? 'alert|' : 'awaria|') + n.id, Date.now() + MIGANIE_MS);
+    for (const n of a.nowe) swiezeDo.set((n.rodzaj === 'alert' ? 'alert|' : n.rodzaj === 'zgloszenie' ? 'zgloszenie|' : 'awaria|') + n.id, Date.now() + MIGANIE_MS);
     // Alert jakości: „pilne” ze wspólnego zestawu (dawny osobny sygnał 2 × 660 Hz był trzecim dźwiękiem spoza D55).
-    if (a.nowe.some(n => n.rodzaj === 'alert') && !a.nowe.some(n => n.rodzaj === 'zatrzymanie') && GD()) GD().zagraj('pilne');
+    // Właściciel 2026-11-26: nowe pilne zgłoszenie do decyzji tej osoby — ten sam dźwięk „pilne”.
+    if (a.nowe.some(n => n.rodzaj === 'alert' || n.rodzaj === 'zgloszenie') && !a.nowe.some(n => n.rodzaj === 'zatrzymanie') && GD()) GD().zagraj('pilne');
     setTimeout(narysuj, MIGANIE_MS + 100);            // zdjąć miganie, gdy nic innego nie przerysuje
   }
 

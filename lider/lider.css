@@ -34,9 +34,6 @@ body.z-oknem, body.z-blokada { overflow: hidden; }
 /* ---------------------------------------------------------------- logowanie (karta GK z hala.css) */
 
 /* Pole identyfikatora z ikoną aparatu (.rzad): wspólne w hala.css — ten sam wzór w UR i KJ. */
-.pinpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.pinpad[hidden] { display: none; }   /* D43: przy haśle klawiatura cyfr schowana (pełna klawiatura telefonu) */
-.pinpad button { min-height: 60px; font-size: 1.4em; padding: 0; }
 .hala-karta-logowania .czeka-na { margin: 12px 0 0; }
 body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
 
@@ -57,6 +54,11 @@ body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
 /* Tytuł zmiany na wąskim telefonie: „Zmiana II” i „14:00–22:00” w jednym wierszu każde, bez łamania „14:00–” / „22:00” na cztery linie. */
 .naglowek .opis-zmiany { min-width: 0; }
 .naglowek .opis-zmiany b, .naglowek .opis-zmiany span { white-space: nowrap; }
+/* Recenzja 25.11 (pkt 3), 360 px: przy długiej nazwie linii („L3 Pakowanie”) godziny zmiany wychodziły poza swoje pole i wjeżdżały pod lupę.
+   Godziny nie ustępują (flex-shrink 0), a ustępuje nazwa linii — wielokropek na samej nazwie; kod linii i strzałka zostają, przycisk ≥ 52 px. */
+.naglowek .linia { flex-shrink: 1; }
+.naglowek .linia span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.naglowek .opis-zmiany { flex: 1 0 auto; }
 
 /* ---------------------------------------------------------------- wezwania (na każdym ekranie) */
 
@@ -282,7 +284,9 @@ details.wiecej[open] { display: grid; gap: 12px; }
 
 /* D74 „Więcej” (jak UR i KJ): przyciski jeden pod drugim, na całą szerokość. */
 .menu-wiecej { display: grid; gap: 10px; margin: 12px 0; }
-.menu-wiecej button { min-height: var(--dotyk); justify-content: flex-start; }
+.menu-wiecej button, .menu-wiecej .przycisk { min-height: var(--dotyk); justify-content: flex-start; }
+/* Menedżer: „Administracja (Panel Zarządczy GK)” to link do Panelu (2026-11-26) — wygląda jak pozostałe przyciski Więcej. */
+.menu-wiecej a.przycisk { display: flex; align-items: center; justify-content: center; text-decoration: none; }
 .opis-pozycji { margin: 8px 0; white-space: pre-line; }
 
 /* RCP: ludzie ze zmiany (D96) */

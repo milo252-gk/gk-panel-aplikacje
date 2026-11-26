@@ -257,6 +257,8 @@
       <label>Maszyna (opcjonalnie)<select name="maszyna">${opcjeMaszyn(hala.slowniki, o.maszyna)}</select></label>
       <label>Szczegóły (opcjonalnie)<textarea name="opis" rows="3" maxlength="4000"></textarea></label>
       ${poleZdjecia('zdjecie', false)}
+      <label class="hala-zlecenie-pilne"><input type="checkbox" name="pilne">
+        <span><b>Pilne — powiadom od razu</b><span class="slaby">Kierownik zakładu i Menedżer dostaną pilne powiadomienie z dźwiękiem.</span></span></label>
       <p class="hala-okno-blad" hidden></p>
       <div class="hala-okno-przyciski"><button type="button" data-zamknij>Anuluj</button><button type="submit" class="glowny">Wyślij do kierownika</button></div></form>`,
     (d, zamknij) => {
@@ -279,6 +281,10 @@
             if (l) dane.linia = l;
           }
           if (f.zdjecie.files[0]) dane.zdjecia = [await hala.dodajPlik(f.zdjecie.files[0])];
+          // 1.44.0: pole tylko wtedy, gdy zaznaczone (i gdy serwer je zna) — starszy serwer odrzuciłby nieznane pole.
+          const znaPilne = !!(((hala.kontrakt || {}).zdarzenia || {})['zgloszenie.utworzone'] || {}).pola
+            && !!hala.kontrakt.zdarzenia['zgloszenie.utworzone'].pola.pilne;
+          if (f.pilne.checked && znaPilne) dane.pilne = true;
           await hala.zapisz('zgloszenie.utworzone', hala.nowyId(), dane);
           zamknij();
           if (o.gotowe) o.gotowe('Zgłoszone — kierownik dostał powiadomienie');
@@ -629,19 +635,22 @@
     const l = H().lokalny(ms), t = H().lokalny(teraz), g = `${String(l.godz).padStart(2, '0')}:${String(l.min).padStart(2, '0')}`;
     return l.rok === t.rok && l.miesiac === t.miesiac && l.dzien === t.dzien ? `dziś ${g}` : `${String(l.dzien).padStart(2, '0')}.${String(l.miesiac).padStart(2, '0')} ${g}`;
   }
-  /* Odwołanie własnej awarii (pomyłka, fałszywy alarm): powód obowiązkowy jak w kontrakcie; serwer i tak odrzuca cudze. */
+  /* Odwołanie własnej awarii (pomyłka, fałszywy alarm): powód obowiązkowy jak w kontrakcie; serwer i tak odrzuca cudze.
+     Recenzja 25.11 (KJ): `novalidate` i własny komunikat w oknie zamiast dymka przeglądarki „Wypełnij to pole”, który zasłaniał przyciski. */
   function odwolajAwarie(hala, id, po) {
-    okno(`<form method="dialog"><h2>Odwołaj awarię</h2>
+    okno(`<form method="dialog" novalidate><h2>Odwołaj awarię</h2>
       <label>Dlaczego odwołujesz? (np. pomyłka)<textarea name="powod" rows="2" maxlength="1000" required></textarea></label>
       <p class="hala-okno-blad" hidden></p>
       <div class="hala-okno-przyciski"><button type="button" data-zamknij>Zostaw</button><button type="submit" class="czerwony">Odwołaj awarię</button></div></form>`,
     (d, zamknij) => {
       const f = d.querySelector('form');
+      f.powod.addEventListener('input', () => { if (f.powod.value.trim()) bladOkna(d, ''); });
       f.addEventListener('submit', async ev => {
         ev.preventDefault();
         const b = f.querySelector('[type="submit"]');
         const powod = f.powod.value.trim();
-        if (b.disabled || !powod) return;
+        if (b.disabled) return;
+        if (!powod) { bladOkna(d, 'Wpisz, dlaczego odwołujesz awarię.'); f.powod.focus(); return; }
         b.disabled = true;
         try { await hala.zapisz('awaria.anulowana', id, { powod }); zamknij(); if (po) po(); }
         catch (e) { bladOkna(d, (e && e.message) || 'Nie udało się odwołać. Spróbuj jeszcze raz.'); b.disabled = false; }
@@ -663,7 +672,7 @@
         <div class="slaby">${esc([w.numer, kiedyMoje(w.czasMs, teraz)].filter(Boolean).join(' · '))}${w.oczekuje ? ' · czeka na wysłanie' : ''}</div>
         ${w.opis ? `<div class="opis">${esc(w.opis)}</div>` : ''}
         ${w.szczegol ? `<div class="slaby">${esc(w.szczegol)}</div>` : ''}
-        ${w.mozeAnulowac && mozeOdwolac ? `<div><button type="button" class="maly" data-odwolaj="${esc(w.id)}">Odwołaj zgłoszenie</button></div>` : ''}
+        ${w.mozeAnulowac && mozeOdwolac ? `<div><button type="button" class="maly" data-odwolaj="${esc(w.id)}">Odwołaj awarię</button></div>` : ''}
       </li>`).join('')}</ul>` : '<p class="pusto">Nie zgłaszałeś jeszcze niczego.</p>'}`;
     for (const b of el.querySelectorAll('[data-odwolaj]')) b.addEventListener('click', () => odwolajAwarie(hala, b.dataset.odwolaj, () => mojeZgloszenia(el, hala)));
     if (!mojeCache.trwa && ja && teraz - mojeCache.kiedy > MOJE_TTL_MS && hala.mojeZgloszenia) {

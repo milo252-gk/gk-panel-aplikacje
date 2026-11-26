@@ -25,13 +25,13 @@
 <button id="pasek" class="hala-polaczenie ok" type="button" aria-live="polite"></button>
 
 <!-- ====================================================== LOGOWANIE -->
-<!-- Standard GK (D22) i identyfikator + PIN (D24). Czytnik kart „pisze” w pole identyfikatora i kończy
-     Enterem — Enter przenosi wtedy do PIN-u. PIN-pad jest dla rękawic; pisze w pole PIN. -->
+<!-- Standard GK (D22) i identyfikator + hasło (D24; od 2026-11-26 bez PIN-u i bez klawiatury cyfr). Czytnik kart „pisze”
+     w pole identyfikatora i kończy Enterem — Enter przenosi wtedy do pola hasła. -->
 <main id="logowanie" class="hala-logowanie" hidden>
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
     <h1>GK Produkcja</h1>
-    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
+    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;hasłem</p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko (albo karta)
         <span class="rzad">
@@ -39,19 +39,10 @@
           <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator"><span class="ik" data-ikona="aparat" data-rozmiar="22"></span></button>
         </span>
       </label>
-      <label><span id="pin-etykieta">Hasło (raz na 16 godzin na tym urządzeniu)</span>
+      <label><span id="pin-etykieta">Hasło</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
-      <!-- D43: „abc” — hasło z pełnej klawiatury (zapomniany PIN), „123” — z powrotem PIN z klawiatury cyfr. -->
-      <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>abc</button>
-      <button class="glowny" type="submit" id="zaloguj-haslem" hidden>Zaloguj</button>
-      <div class="pinpad" aria-label="Klawiatura PIN">
-        <button type="button" data-cyfra="1">1</button><button type="button" data-cyfra="2">2</button><button type="button" data-cyfra="3">3</button>
-        <button type="button" data-cyfra="4">4</button><button type="button" data-cyfra="5">5</button><button type="button" data-cyfra="6">6</button>
-        <button type="button" data-cyfra="7">7</button><button type="button" data-cyfra="8">8</button><button type="button" data-cyfra="9">9</button>
-        <button type="button" data-cyfra="C" aria-label="Usuń cyfrę"><span data-ikona="backspace" data-rozmiar="24"></span></button><button type="button" data-cyfra="0">0</button>
-        <button class="glowny" type="submit">Zaloguj</button>
-      </div>
+      <button class="glowny" type="submit" id="zaloguj-haslem">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
     <p class="hala-konto-skad">Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja albo Kierownik zakładu (GK Produkcja → Moje konto → Mój zespół).</p>

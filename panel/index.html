@@ -27,15 +27,14 @@
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
     <h1>Panel Zarządczy GK</h1>
-    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
+    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;hasłem</p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko
         <input id="identyfikator" name="identyfikator" autocapitalize="off" spellcheck="false" placeholder="np. Jan Kowalski">
       </label>
-      <label><span id="pin-etykieta">Hasło (raz na 16 godzin na tym urządzeniu)</span>
+      <label><span id="pin-etykieta">Hasło</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
-      <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>Zaloguj hasłem</button>
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
@@ -72,7 +71,7 @@
     <!-- Właściciel 2026-11-17: Panel nie ma „☰ Więcej” — ostatnia pozycja paska to Administracja (STYL-GK §8, wyjątek). Dolny pasek telefonu:
          Pulpit, Zlecenia, Awaria, Administracja; Wskaźniki i Raporty (.w-wiecej — schowane na telefonie przez wspólne hala.css) są tam
          chipami w Administracji, a na komputerze zostają w menu po lewej. Plakietka „Nie wysłane” siedzi na Administracji. -->
-    <button type="button" role="tab" data-widok="administracja" id="menu-administracja" aria-selected="false" hidden><span class="ikona" data-ikona="administracja" aria-hidden="true"></span><span>Administracja</span><span id="plakietka-administracja" class="plakietka" hidden></span></button>
+    <button type="button" role="tab" data-widok="administracja" id="menu-administracja" aria-selected="false" hidden><span class="ikona" data-ikona="administracja" aria-hidden="true"></span><span>Administracja</span></button>
     <div class="hala-menu-stopka"><button type="button" id="menu-wyloguj"><span class="ikona" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span>Wyloguj</span></button></div>
   </nav>
 
@@ -95,6 +94,13 @@
       <!-- Właściciel 2026-11-10: to samo okno co „+ Nowe zlecenie” w Zleceniach i pod tym samym warunkiem (kierownik zakładu, admin). -->
       <button type="button" id="pulpit-nowe-zlecenie" class="glowny" hidden>+ Nowe zlecenie</button>
     </div>
+    <!-- Właściciel 2026-11-26: „Czeka na Ciebie” — zgłoszenia (i inne wiersze z Zleceń → Do odbioru), przy których TA osoba ma przyciski decyzji:
+         te same wiersze i ten sam kod co w Zleceniach (zgloszenia.js → czekaNaMnie), pilne na górze. Pusta lista = sekcja schowana;
+         konto „ekran” nie ma przycisków, więc nie ma też tej sekcji. -->
+    <section class="czeka-na-ciebie" id="pulpit-czeka" aria-labelledby="t-czeka" hidden>
+      <h2 id="t-czeka"><span class="ik" data-ikona="ostrzezenie" data-rozmiar="18"></span>Czeka na Ciebie <span id="licznik-czeka" class="licznik"></span></h2>
+      <div id="lista-czeka" class="lista"></div>
+    </section>
     <!-- Właściciel 2026-11-18: sekcji „Jakość i BHP” i kafelka jakości już nie ma (BHP i jakość są w checklistach); kolejność Pulpitu: liczby → Obchody → Awarie (zwarty pasek).
          D87 (właściciel 2026-11-17): odbiór checklisty jest w karcie obchodu (panel.js: rysujKafelki → „Do odbioru”), nie w osobnej sekcji. -->
     <!-- Właściciel 2026-11-23: jedna sekcja „Aktualna zmiana” w układzie dawnych Obchodów — karty checklist (obchody) i karty zleceń działów (od 2026-11-23 bez nich)
@@ -262,16 +268,14 @@
       <p id="admin-zespol" class="slaby opis-widoku" hidden></p>
       <!-- UI etap 2: cztery części. Rzadkie rzeczy techniczne (dostęp z telefonów, logowanie z internetu, sieć zakładu,
            Połączenia GK, od 2026-11-10 także kopie i tunel) są razem w „Ustawienia” (kod części: serwis); progi alarmów i godziny
-           zmian to „Progi i godziny” (kod: ustawienia). Etykiety QR drukuje przycisk w Maszynach. STYL-GK §8 (2026-11-04): „Dane”
-           (czyszczenie zleceń) i „Kody QR” to wejścia do okien Zlecenia → 🧹 i okna kodów QR (kody.js). -->
+           zmian to „Progi i godziny” (kod: ustawienia). Etykiety QR drukuje przycisk w Maszynach. STYL-GK §8: „Kody QR” to wejście do okna kodów QR (kody.js).
+           Właściciel 2026-11-26: bez chipów „Dane” (czyszczenie tylko w Zlecenia → Czyszczenie) i „Nie wysłane” (pasek połączenia, Moje konto). -->
       <div class="chipy" id="admin-chipy" role="group" aria-label="Część administracji">
-        <!-- Unifikacja E7 (2026-11-23): stały rdzeń Administracji (STYL §7): Pracownicy · Dane i czyszczenie · Kody QR · Role i uprawnienia · Nie wysłane · Ustawienia; potem dodatki Panelu
-             (Urlopy, Maszyny, Plan zmian, Progi i godziny, Logowania); Wskaźniki, Wyniki i Raporty — chipy tylko na telefonie (na komputerze są w menu po lewej). -->
+        <!-- Unifikacja E7 (2026-11-23): stały rdzeń Administracji (STYL §7): Pracownicy · Kody QR · Role i uprawnienia · Ustawienia (Panel od 2026-11-26 bez „Dane i czyszczenie” i „Nie wysłane”);
+             potem dodatki Panelu (Urlopy, Maszyny, Plan zmian, Progi i godziny, Logowania); Wskaźniki, Wyniki, Raporty i RCP — chipy tylko na telefonie (na komputerze są w menu po lewej). -->
         <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true">Pracownicy</button>
-        <button type="button" class="chip" data-czesc="dane" aria-pressed="false">Dane i czyszczenie</button>
         <button type="button" class="chip" data-czesc="kody" aria-pressed="false"><span class="ik" data-ikona="kody" data-rozmiar="16"></span>Kody QR</button>
         <button type="button" class="chip" data-czesc="role" aria-pressed="false"><span class="ik" data-ikona="konta" data-rozmiar="16"></span>Role i uprawnienia</button>
-        <button type="button" class="chip" data-czesc="niewyslane" id="chip-niewyslane" aria-pressed="false"><span class="ik" data-ikona="powtarzaj" data-rozmiar="16"></span><span id="chip-niewyslane-tekst">Nie wysłane</span></button>
         <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Ustawienia</button>
         <button type="button" class="chip" data-czesc="urlopy" aria-pressed="false"><span class="ik" data-ikona="urlop" data-rozmiar="16"></span>Urlopy</button>
         <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
@@ -281,6 +285,7 @@
         <button type="button" class="chip chip-telefon" data-czesc="wskazniki" aria-pressed="false"><span class="ik" data-ikona="wskazniki" data-rozmiar="16"></span>Wskaźniki</button>
         <button type="button" class="chip chip-telefon" data-czesc="wyniki" aria-pressed="false"><span class="ik" data-ikona="trend" data-rozmiar="16"></span>Wyniki</button>
         <button type="button" class="chip chip-telefon" data-czesc="raporty" aria-pressed="false"><span class="ik" data-ikona="raporty" data-rozmiar="16"></span>Raporty</button>
+        <button type="button" class="chip chip-telefon" data-czesc="rcp" aria-pressed="false"><span class="ik" data-ikona="zegar" data-rozmiar="16"></span>RCP</button>
       </div>
       <div id="admin-tresc" class="admin-tresc"></div>
     </section>
@@ -653,11 +658,11 @@
     <fieldset class="pole-linii"><legend>Linie (lider widzi swoje)</legend><div id="osoba-linie" class="zaznaczenia"></div>
       <!-- D34 (2026-10-07): mistrz w GK Produkcja widzi tylko zaznaczone linie; pokazywane, gdy zaznaczona rola mistrza. -->
       <p class="slaby konto-drobne" id="osoba-linie-mistrz" hidden>Mistrz widzi tylko zaznaczone linie; bez zaznaczenia — wszystkie.</p></fieldset>
-    <!-- D43: hasło (raz na 16 godzin na urządzeniu) + PIN 4 cyfry. Nowa osoba dostaje hasło startowe haslo123 (albo wpisane
-         tutaj) i przy pierwszym logowaniu ustawia własne hasło i PIN. Konto samego ekranu — jeden PIN 4–8 cyfr. -->
+    <!-- D43: hasło (raz na 16 godzin na urządzeniu); od 2026-11-26 bez PIN-u. Nowa osoba dostaje hasło startowe haslo123
+         (albo wpisane tutaj) i przy pierwszym logowaniu ustawia własne. Konto samego ekranu — jedno hasło (pole „pin”). -->
     <div class="dwie" id="osoba-sekrety">
       <label id="osoba-haslo"><span>Hasło startowe (nieobowiązkowe)</span><input name="haslo" type="password" maxlength="128" autocomplete="new-password" placeholder="puste — haslo123"></label>
-      <label id="osoba-pin-pole"><span id="osoba-pin-etykieta">PIN (4 cyfry, nieobowiązkowy)</span><input name="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+      <label id="osoba-pin-pole"><span id="osoba-pin-etykieta">Hasło ekranu (min. 8 znaków)</span><input name="pin" type="password" maxlength="128" autocomplete="new-password"></label>
     </div>
     <p class="slaby konto-drobne" id="osoba-o-hasle"></p>
     <div class="dwie" id="osoba-karta-pole">
@@ -673,8 +678,7 @@
     <fieldset id="osoba-konto" hidden><legend>Hasło i dostęp</legend>
       <p class="slaby konto-drobne" id="osoba-stan-hasla"></p>
       <div class="konto-akcje">
-        <button type="button" id="osoba-reset">Resetuj tylko hasło</button>
-        <button type="button" id="osoba-resetuj-pin">Resetuj tylko PIN</button>
+        <button type="button" id="osoba-reset">Resetuj hasło</button>
         <button type="button" id="osoba-wyloguj">Wyloguj wszędzie</button>
         <button type="button" id="osoba-usun" class="czerwony">Usuń osobę</button>
       </div>
@@ -819,6 +823,7 @@
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="widok.js"></script>
+<script src="pilne.js"></script>
 <script src="panel.js"></script>
 <script src="rcp.js"></script>
 <script src="etykiety.js"></script>
@@ -834,6 +839,7 @@
 <script src="stale.js"></script>
 <script src="kalendarz.js"></script>
 <script src="zgloszenia.js"></script>
+<script src="../wspolne/urlopy.js"></script>
 <script src="urlopy.js"></script>
 <script src="proby.js"></script>
 </body>

@@ -375,13 +375,19 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--akcent); ou
     color: var(--granat-tekst); box-shadow: none;
     /* D6 (2026-11-25): zaznaczona zakładka wyraźniejsza niż sama cienka kreska — jasne pomarańczowe tło i pogrubiony napis
        (w Liderze „Awarie” nie jest już stale czerwoną płytką, więc nie przykrywa zaznaczenia innych zakładek). */
-    background: color-mix(in srgb, var(--pomarancz) 16%, var(--tlo-podniesione)); font-weight: 800;
+    background: color-mix(in srgb, var(--pomarancz) 16%, var(--tlo-podniesione)); font-weight: 700; letter-spacing: -.4px;
+    /* 26.11: 700 zamiast 800 i ciaśniejsze litery — pogrubione „Moja zmiana” (GK Produkcja) miało 79 px w polu 75 px (375 px) i było ucięte. */
   }
   /* STYL-GK §1: zaznaczony ekran ma pomarańczową kreskę 3 px u góry dolnego paska (jak w GK Szkolenia i GK Wycena). */
   .hala-uklad > .hala-menu > :is([aria-current="page"], [aria-current="true"], [aria-selected="true"], .wybrany, .aktywny)::before {
     content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--pomarancz);
   }
   .hala-uklad > .hala-menu .plakietka { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
+}
+/* Recenzja 25.11: na 360 px (KJ) „Próbkowanie” w pasku 5 pozycji (72 px) dotykało krawędzi ekranu — na najwęższych telefonach napis 12 px
+   (STYL-GK: najmniej 12 px) i ciaśniejsze litery; od 371 px bez zmian. */
+@media (max-width: 370px) {
+  .hala-uklad > .hala-menu > :is(a, button) { font-size: 12px; letter-spacing: -.35px; }
 }
 
 /* Kafelki liczb jak pulpit GK Flota: jedna biała karta, w niej szare pola z liczbą.
@@ -469,7 +475,8 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
 .hala-zlecenie-skan { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; color: var(--ok); font-weight: 700; }
 .hala-zlecenie-miniatura { position: relative; width: 92px; height: 92px; border-radius: 10px; overflow: hidden; border: 1px solid var(--ramka); }
 .hala-zlecenie-miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.hala-zlecenie-miniatura button { position: absolute; top: 0; right: 0; width: 36px; height: 36px; min-height: 36px; padding: 0;
+/* Recenzja 25.11 (W4): „Usuń zdjęcie N” 44×44 — najmniejszy cel dotyku (był 36×36); miniatura ma 92 px, zdjęcie dalej widać. */
+.hala-zlecenie-miniatura button { position: absolute; top: 0; right: 0; width: 44px; height: 44px; min-height: 44px; padding: 0;
                                   border-radius: 0 10px 0 10px; background: var(--grafit-ciemny); color: var(--na-barwie); border: 0; font-size: 16px; }
 .hala-zlecenie-brakuje { margin: 0; color: var(--czerwony); font-weight: 700; }
 /* „Pilne — powiadom kierownika” (2026-11-25): pole wyboru z opisem; ramka w kolorze ostrzeżenia, cel dotyku jak przyciski. */
@@ -478,6 +485,9 @@ button.hala-zlecenie-zdjecie { width: 100%; background: transparent; font: inher
 .hala-zlecenie-pilne input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--zolty); }
 .hala-zlecenie-pilne > span { display: grid; gap: 2px; min-width: 0; }
 .hala-zlecenie-pilne .slaby { font-weight: 400; font-size: 13px; }
+/* To samo pole w oknie „Zgłoś nieprawidłowość” (2026-11-26): okna HalaDzialania układają etykiety w siatkę — tu pole wyboru zostaje obok opisu. */
+dialog.hala-okno label.hala-zlecenie-pilne { display: flex; gap: 10px; color: var(--tekst); }
+dialog.hala-okno label.hala-zlecenie-pilne > input { min-height: 0; }
 /* Zaległe zlecenia (2026-10-02, jak „Zaległe dostawy” w GK Trasy): osobna sekcja z numerami 1, 2, 3… i czerwona karta
    na ekranie głównym działu (HalaZlecenia.rysujZalegle). Numer mówi, co zrobić najpierw — sam kolor tego nie mówi. */
 .hala-zlecenie.zalegle { border-left-color: var(--czerwony); background: var(--czerwony-tlo); }
@@ -958,6 +968,8 @@ body.hala-ma-skan :is(.hala-zlecenie-formularz, .hala-pozycja-panel) { padding-b
   .naglowek .kto > button { min-width: 44px; min-height: 44px; }
   .baner-dzwieku button { position: relative; }
   .baner-dzwieku button::after { content: ''; position: absolute; inset: -8px -6px; }
+  /* Recenzja 25.11 (W4): mały przycisk z samą ikoną (np. Panel → Pracownicy „Drukuj identyfikator”) miał 42 px szerokości. */
+  button.maly { min-width: 44px; }
 }
 .wyniki-karty { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .wyniki-karta { background: var(--karta); border: 1px solid var(--ramka); border-radius: var(--promien, 12px); padding: 12px 14px; display: grid; gap: 8px; }
@@ -983,3 +995,17 @@ dialog .okno-x:hover { background: var(--ramka); filter: none; }
 dialog .okno-x:focus-visible { outline: 2px solid var(--akcent); outline-offset: 1px; }
 dialog.ma-x :is(h2, h3):first-of-type { padding-right: 44px; }
 @media print { dialog .okno-x { display: none; } }
+
+/* Urlopy zespołu (urlopy.js, 2026-11-26): ten sam ekran w Panelu (Administracja → Urlopy) i w UR/KJ („Więcej” → Urlopy zespołu).
+   Formularz w jednym zawijanym rzędzie (na telefonie pola jedno pod drugim), wiersz urlopu: opis po lewej, „Usuń” po prawej. */
+.urlop-formularz { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; margin-bottom: 14px; }
+.urlop-formularz label { display: grid; gap: 3px; font-size: 13px; font-weight: 700; color: var(--tekst-slaby); }
+.urlop-formularz .blad { flex-basis: 100%; }
+.hala-urlopy .karta.hala-urlop { display: flex; align-items: center; gap: 10px; }
+.hala-urlopy .karta.hala-urlop .opis { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hala-urlopy .karta.hala-urlop .szczegoly { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
+.hala-urlopy .karta.hala-urlop.wyslane { opacity: .75; }
+@media (max-width: 600px) {
+  .hala-urlopy .urlop-formularz label { flex: 1 1 100%; }
+  .hala-urlopy .urlop-formularz :is(select, input, button[type="submit"]) { width: 100%; box-sizing: border-box; }
+}

@@ -59,6 +59,10 @@
     // D76: zlecenie kierownika zakładu dla działu „do kierownika działu” — dopóki go nie przekaże albo nie rozdzieli,
     // widzą je tylko kierownicy (mechanik czy kontroler dostanie swoją część, a nie całość do wyrywania sobie).
     if (d.do_kierownika === true && !d.wykonawca) return !o.ja || !!o.widziWszystkie;
+    // W3 (właściciel 2026-11-26; bliźniak hala.py → blad_cudzego_przyjecia): zlecenie UR przyjęte przez kolegę robi on albo nadzór —
+    // inny mechanik go nie widzi (hub i tak odrzuciłby jego „Zrobione”). Urlop przyjmującego oddaje zlecenie działowi.
+    if (d.dzial === 'ur' && d.przyjal && o.ja && d.przyjal !== o.ja && !o.widziWszystkie
+        && !(o.dzien && o.H && o.H.naUrlopie && o.H.naUrlopie(o.slowniki, d.przyjal, o.dzien))) return false;
     if (!d.wykonawca || !o.ja || d.wykonawca === o.ja || o.widziWszystkie) return true;
     return !!(o.dzien && o.H && o.H.naUrlopie && o.H.naUrlopie(o.slowniki, d.wykonawca, o.dzien));
   }

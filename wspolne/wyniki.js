@@ -145,6 +145,8 @@
 
   /* Kto co widzi: kierownik zakładu i Menedżer — wszystko; kierownik działu (UR, KJ…) — swój dział; reszta — tylko siebie. */
   function dostep(role, stale) {
+    // 1.44.0: Prezes ma wgląd jak Kierownik zakładu — wyniki całego zakładu (tylko odczyt; dane i tak z /stan).
+    if (H().jestPrezesem && H().jestPrezesem(role)) return { tryb: 'zarzad', dzialy: null };
     const dz = H().dzialyKierownika(role, (stale && stale.dzialy) || []);
     if (dz === null) return { tryb: 'zarzad', dzialy: null };
     return dz.length ? { tryb: 'zarzad', dzialy: dz } : { tryb: 'moje' };

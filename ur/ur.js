@@ -409,24 +409,23 @@
   function komunikatBledu(e) {
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
+    if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło ustawione / stara wersja — tekst huba
     if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo lidera Utrzymania Ruchu.';
-    // 400/401/429 hub opisuje po polsku i mówi, co zrobić (D24: „Złe imię i nazwisko albo PIN”, blokada na 5 min).
-    return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i PIN.';
+    // 400/401/429 hub opisuje po polsku i mówi, co zrobić („Złe imię i nazwisko albo hasło”, pauza po złych próbach).
+    return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i hasło.';
   }
   UR.komunikatBledu = komunikatBledu;
 
-  /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43): identyfikator to kod z karty (aparat albo czytnik
+  /* Logowanie identyfikatorem i hasłem (D24, D43; od 2026-11-26 bez PIN-u): identyfikator to kod z karty (aparat albo czytnik
      „piszący” jak klawiatura i kończący Enterem) albo login. Enter z czytnika przenosi do drugiego pola, zamiast
-     wysyłać pusty sekret. Drugie pole: hasło (raz na 16 godzin na tym urządzeniu) albo PIN (4 cyfry) — konto.js. */
-  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
-                                                przelacz: $('przelacz-sekret') });
+     wysyłać pusty sekret. Drugie pole: zawsze hasło — konto.js. */
+  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta') });
   async function zaloguj() {
     const ident = $('identyfikator').value.trim().replace(/^HALA:P:/i, '');
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
     if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
-      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz hasło.'; $('blad-logowania').hidden = false;
       $('identyfikator').focus(); return;
     }
     const blad = $('blad-logowania');
@@ -442,7 +441,7 @@
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
-      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 16 h minęło albo 5 złych PIN-ów
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // wpisany dawny PIN — „Logowanie PIN-em wyłączone”
       $('pin').focus();
     } finally {
       for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = false;
@@ -450,7 +449,7 @@
   }
 
   $('formularz-logowania').addEventListener('submit', ev => { ev.preventDefault(); zaloguj(); });
-  // Skan karty aparatem wpisuje identyfikator i przenosi do PIN-u — nie loguje od razu (D24).
+  // Skan karty aparatem wpisuje identyfikator i przenosi do pola hasła — nie loguje od razu (D24).
   $('skanuj-karte').addEventListener('click', async () => {
     const t = await UR.skanuj('Zeskanuj identyfikator', 'Albo wpisz numer karty');
     if (!t) return;
@@ -466,8 +465,8 @@
     pokazSesje();
   }
   $('menu-wyloguj').addEventListener('click', wyloguj);   // stopka menu na komputerze, jak w GK Trasy
-  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
-     dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
+  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień hasło,
+     dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw pod „Więcej”. */
   /* D64: powiadomienia i „Sprawdź dźwięk” w Moim koncie — to samo miejsce co w Panelu i Liderze (wcześniej „Więcej”). */
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
     aplikacja: 'ur', komunikat: (t, r) => UR.komunikat(t, r), wyloguj, odrzucone: () => UR.idz('odrzucone'), instrukcja: 'instrukcja.html',
@@ -550,6 +549,17 @@
   // D98: terminowość i liczba zleceń tej osoby (wspolne/wyniki.js — ten sam ekran w Liderze, KJ; w Panelu pełny raport).
   UR.ekran('wyniki', { zakladka: 'wiecej', rysuj: el => global.HalaWyniki.rysuj(el, hala, { tryb: 'moje', klucz: 'ur-wyniki', tytul: 'Moje wyniki' }) });
 
+  /* Urlopy zespołu (właściciel 2026-11-26): lider UR i Menedżer wpisują urlopy tutaj — ten sam ekran co Panel → Administracja → Urlopy
+     (wspolne/klient/urlopy.js). Komu wolno wpisać, pilnuje hub (R5); bez uprawnień ekran tylko to mówi. */
+  UR.ekran('urlopy', {
+    zakladka: 'wiecej',
+    rysuj(el) {
+      if (!global.Hala.mozeUrlopyZespolu(hala.pracownik)) { el.innerHTML = '<h1>Urlopy zespołu</h1><p class="pusto">Urlopy zespołu wpisuje Lider Utrzymania Ruchu, Kierownik albo Menedżer.</p>'; return; }
+      global.HalaUrlopy.rysuj(el, hala, { tytul: 'Urlopy zespołu', komunikat: (t, r) => UR.komunikat(t, r === 'ok' ? 'ok' : 'alarm'),
+                                         potwierdz: (t, tr, tak) => UR.potwierdz(t, tr, tak), komunikatBledu, odswiez: () => pokazEkran() });
+    },
+  });
+
   // STYL-GK §8: Plan (menu `.w-wiecej`) jest na telefonie tylko tutaj (dolny pasek: najwyżej 4 ekrany + Więcej); #plan działa jak dawniej.
   UR.ekran('wiecej', {
     rysuj(el) {
@@ -558,6 +568,7 @@
           <a class="przycisk" href="#liczniki">Liczniki maszyn (motogodziny, cykle)</a>
           ${UR.mozeKpi() ? '<a class="przycisk" href="#kpi">KPI: wskaźniki Utrzymania Ruchu</a>' : ''}
           ${UR.kierownikUR() ? '<a class="przycisk" href="#plan">Plan przeglądów: karty i harmonogram</a>' : ''}
+          ${global.Hala.mozeUrlopyZespolu(hala.pracownik) ? '<a class="przycisk" href="#urlopy">Urlopy zespołu</a>' : ''}
           ${global.Hala.skrotyDoPanelu(hala.pracownik).map(s => `<a class="przycisk" href="${s.adres}">${s.tekst}</a>`).join('')}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#wyniki">Moje wyniki</a>

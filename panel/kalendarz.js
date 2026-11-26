@@ -99,7 +99,7 @@
           <div class="slaby">${p.godziny.length ? esc(p.godziny.join(', ')) + ' · ' : ''}${esc(p.dla || '')}</div>
           ${szczegolyHtml(p)}
         </div>
-        ${pisze && p.kod && !c.przeszly ? `<div class="akcje">
+        ${pisze && p.kod && !c.przeszly && W.moznaZmieniacZapisane(((hala.slowniki || {}).zlecenia_stale || {})[p.kod], hala.pracownik) ? `<div class="akcje">
           ${p.pominiety === 'pominięty' ? '<button type="button" class="maly" data-akcja="przywroc">Przywróć</button>'
             : !p.pominiety ? '<button type="button" class="maly" data-akcja="pomin">Pomiń ten dzień</button>' : ''}
           ${!p.pominiety ? '<button type="button" class="maly" data-akcja="zakoncz">Zakończ po tym dniu</button>' : ''}

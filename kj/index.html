@@ -27,7 +27,7 @@
   <div class="hala-karta-logowania">
     <img src="../wspolne/logo-gkf.png" alt="GK Factory" class="hala-logo">
     <h1>GK Kontrola Jakości</h1>
-    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;<span class="bez-lamania">PIN-em</span></p>
+    <p class="pod">Zaloguj się imieniem i nazwiskiem i&nbsp;hasłem</p>
     <form id="formularz-logowania" autocomplete="off">
       <label>Imię i nazwisko (albo karta)
         <span class="rzad">
@@ -35,10 +35,9 @@
           <button id="skanuj-karte" type="button" aria-label="Skanuj identyfikator" title="Skanuj identyfikator"><span class="ik" data-ikona="aparat" data-rozmiar="22"></span></button>
         </span>
       </label>
-      <label><span id="pin-etykieta">Hasło (raz na 16 godzin na tym urządzeniu)</span>
+      <label><span id="pin-etykieta">Hasło</span>
         <input id="pin" name="pin" type="password" autocomplete="current-password">
       </label>
-      <button type="button" id="przelacz-sekret" class="hala-przelacz-sekret" hidden>Zaloguj hasłem</button>
       <button class="glowny" type="submit">Zaloguj</button>
     </form>
     <p id="blad-logowania" class="blad" role="alert" hidden></p>
@@ -96,6 +95,7 @@
 <script src="../wspolne/wyniki.js"></script>
 <script src="../wspolne/dzialania.js"></script>
 <script src="../wspolne/naglowek.js"></script>
+<script src="../wspolne/urlopy.js"></script>
 <script src="../wspolne/zlecenia.js"></script>
 <script src="../wspolne/skaner.js"></script>
 <script src="widok.js"></script>

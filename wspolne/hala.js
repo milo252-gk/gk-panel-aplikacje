@@ -34,6 +34,7 @@
      moznaAnulowacZlecenie <-> blad_anulowania_zlecenia (D45)
      dzialyKierownika    <-> dzialy_kierownika (D76: zakres kierownika działu)
      dzialyOsoby         <-> dzialy_osoby (D82: działy osoby); mozeOdebracZlecenie <-> blad_odbioru_zlecenia (R2); mozeUrlopOsoby <-> blad_urlopu_osoby (R5)
+     jestPrezesem, zlecilPrezes <-> tylko_prezes, Hub._blad_prezesa (1.44.0: Prezes — tylko własne zlecenia; jego zlecenia tylko on)
      postepRozdzialu     <-> postep_rozdzialu  (D76: postęp rozdzielonego zlecenia)
      odbiorPozycji       <-> odbior_pozycji    (D87: odbiór checklisty pozycja po pozycji)
      koniecZwrotu        <-> koniec_zwrotu_zmianowego (D88: zwrot tylko do końca zmiany, bez karencji)
@@ -95,13 +96,15 @@
     } catch (e) { return Promise.resolve(false); }
   }
 
-  /* ---------------------------------------------------------------- D78: logowanie PIN-em bez sieci
+  /* ---------------------------------------------------------------- D78: logowanie hasłem bez sieci
 
-     Hub (hala.py → weryfikator_offline) daje po logowaniu sól PIN-u i weryfikator = HMAC-SHA256(klucz = PBKDF2(PIN, sól,
-     200 000), „gk-offline-1|<id osoby>|<znacznik urządzenia>”). Telefon trzyma tylko to — nigdy PIN ani skrót z huba. Bez
-     sieci wpisany PIN liczymy tak samo i porównujemy. Ten sam wzór w GK Trasy i GK Flota (app.js → offlinePin). Potrzebne
-     crypto.subtle (https albo localhost) — bez niego logowania bez sieci po prostu nie ma. */
-  const WERSJA_OFFLINE = 'gk-offline-1';
+     Od 2026-11-26 (właściciel: „całkowicie usunąć PIN z logowania”, kontrakt 1.45.0) — hasłem, nie PIN-em.
+     Hub (hala.py → weryfikator_offline) daje po logowaniu sól hasła i weryfikator = HMAC-SHA256(klucz = PBKDF2(hasło, sól,
+     200 000), „gk-offline-2|<id osoby>|<znacznik urządzenia>”). Telefon trzyma tylko to — nigdy hasło ani skrót z huba. Bez
+     sieci wpisane hasło liczymy tak samo i porównujemy. Ten sam wzór w GK Trasy i GK Flota (web/gk-offline.js). Dawny
+     weryfikator PIN-u („gk-offline-1”) nie otwiera już niczego. Potrzebne crypto.subtle (https albo localhost) — bez niego
+     logowania bez sieci po prostu nie ma. */
+  const WERSJA_OFFLINE = 'gk-offline-2';
   const subtle = () => (global.crypto && global.crypto.subtle) || null;
   const hex = bufor => Array.from(new Uint8Array(bufor), b => b.toString(16).padStart(2, '0')).join('');
   async function liczWeryfikator(pin, sol, iteracje, pracownikId, znacznik) {
@@ -872,9 +875,25 @@
   const ROLE_ZAKLADU = ['kierownik', 'admin'];
   function moznaAnulowacZlecenie(zlecenie, pracownik, pracownicy) {
     const zlecil = ((zlecenie && zlecenie.dane) || {}).zlecil;
+    // 1.44.0: Prezes odwołuje tylko swoje zlecenia, a zlecenia Prezesa — on albo Menedżer (admin; hub: Hub._blad_prezesa).
+    if (jestPrezesem(pracownik && pracownik.role)) return !!pracownik.id && zlecil === pracownik.id;
+    if (zlecilPrezes(zlecenie, pracownicy) && !(pracownik && (pracownik.id === zlecil || (pracownik.role || []).includes('admin')))) return false;
     const osoba = (pracownicy || []).find(p => p && p.id === zlecil);
     const zZakladu = role => (role || []).some(r => ROLE_ZAKLADU.includes(r));
     return !zZakladu(osoba && osoba.role) || zZakladu(pracownik && pracownik.role);
+  }
+
+  /* 1.44.0 (właściciel 2026-11-26): rola „Prezes” — tylko Panel Zarządczy GK, wgląd jak Kierownik zakładu, zleca tylko Kierownikowi
+     zakładu i Menedżerowi. jestPrezesem — rola Prezesa bez roli zakładu (wtedy obowiązują zawężenia; bliźniak: tylko_prezes w hala.py).
+     zlecilPrezes — zlecenie wydał Prezes (role zlecającego z hala.pracownicy): odbiera, zwraca, zmienia i odwołuje je on albo Menedżer. */
+  function jestPrezesem(role) {
+    const r = [].concat(role || []);
+    return r.includes('prezes') && !r.some(x => ROLE_ZAKLADU.includes(x));
+  }
+  function zlecilPrezes(zlecenie, pracownicy) {
+    const zlecil = ((zlecenie && zlecenie.dane) || {}).zlecil;
+    const osoba = zlecil ? (pracownicy || []).find(p => p && p.id === zlecil) : null;
+    return !!osoba && (osoba.role || []).includes('prezes');
   }
 
   /* D76 (właściciel 2026-10-19): „Kierownik zakładu wyznacza zadania (…) kierownikom innych działów. Kierownicy innych
@@ -980,10 +999,13 @@
   /* D3 (2026-11-25): „Urlopy” (lider UR, kierownik KJ — urlopy swojego działu) i „Administracja” (Menedżer) w „Więcej” aplikacji UR i KJ.
      Ekrany już są w Panelu Zarządczym GK i dzielą z nim konto — UR i KJ dają tylko przejście (adres względny ../panel/, jak w STYL-GK §8),
      bez powielania ekranu i bez nowych endpointów. Czysta funkcja: [{ tekst, adres }] zależnie od roli (Menedżer ma Urlopy w Administracji). */
+  /* Właściciel 2026-11-26: Menedżer (admin) ma pełne uprawnienia w każdej aplikacji — w GK Produkcja, UR i KJ „Więcej” ma pozycję
+     „Administracja”, która otwiera Panel Zarządczy GK → Administracja. Adres względny `../panel/`: na Pages i na hubie aplikacje leżą obok siebie
+     (/<repo>/ur/ → /<repo>/panel/, /ur/ → /panel/). Urlopy zespołu (lider UR, kierownik KJ) są od 26.11 ekranem w samej aplikacji
+     (wspolne/klient/urlopy.js, Hala.mozeUrlopyZespolu), więc nie prowadzą już do Panelu. */
   function skrotyDoPanelu(pracownik) {
     const role = (pracownik && pracownik.role) || [];
-    if (role.includes('admin')) return [{ tekst: 'Administracja (w Panelu Zarządczym GK)', adres: '../panel/#administracja' }];
-    if (role.includes('kierownik_ur') || role.includes('kierownik_kj')) return [{ tekst: 'Urlopy zespołu (w Panelu Zarządczym GK)', adres: '../panel/#urlopy' }];
+    if (role.includes('admin')) return [{ tekst: 'Administracja (Panel Zarządczy GK)', adres: '../panel/#administracja' }];
     return [];
   }
 
@@ -1071,10 +1093,10 @@
      kontraktu (stale.role, bez nawiasu na końcu: „Ekran”, nie „Ekran (konto urządzenia…)”). Osoba z kilkoma rolami: najwyższa
      z kolejności NAJWYZSZA_ROLA, ale tylko spośród ról, które dana aplikacja przyjmuje (kontrakt.aplikacje.<kod>.role) — mechanik
      z dodatkową rolą lidera w GK Utrzymanie Ruchu pokazuje „Pracownik Utrzymania Ruchu”. Bez ról — pusty napis. Tylko napis, nic nie egzekwuje. */
-  const NAJWYZSZA_ROLA = ['admin', 'kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'mistrz', 'lider', 'brygadzista_sp', 'mechanik', 'kontroler', 'pracownik_mag', 'ekran'];
+  const NAJWYZSZA_ROLA = ['prezes', 'admin', 'kierownik', 'kierownik_ur', 'kierownik_kj', 'kierownik_mag', 'mistrz', 'lider', 'brygadzista_sp', 'mechanik', 'kontroler', 'pracownik_mag', 'ekran'];
   /* Gdy kontraktu jeszcze nie ma (pierwszy start bez sieci i bez kopii) — te same nazwy co stale.role w zdarzenia.json. */
-  const NAZWY_ROL_AWARYJNE = { admin: 'Menedżer', kierownik: 'Kierownik zakładu', kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu',
-    mistrz: 'Mistrz Produkcji GK', lider: 'Lider produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu', kontroler: 'Pracownik Kontroli Jakości', pracownik_mag: 'Pracownik Magazynu', ekran: 'Ekran' };
+  const NAZWY_ROL_AWARYJNE = { prezes: 'Prezes', admin: 'Menedżer', kierownik: 'Kierownik zakładu', kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu',
+    mistrz: 'Mistrz Produkcji GK', lider: 'Lider Produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu', kontroler: 'Pracownik Kontroli Jakości', pracownik_mag: 'Pracownik Magazynu', ekran: 'Ekran' };
   /* Od 2026-11-25 pełne nazwy ról są w kontrakcie (stale.role: „Lider Utrzymania Ruchu” itd.), więc menu nie potrzebuje osobnych;
      mapa zostaje pusta jako miejsce na ewentualny wyjątek tylko dla nagłówka menu. */
   const NAZWY_ROL_W_MENU = {};
@@ -1112,7 +1134,12 @@
 
   /* R2: lider UR i kierownik KJ zamykają i zwracają (Odbierz / Zamknij / Zwróć) tylko zlecenia swojego działu; kierownik zakładu i admin —
      wszystkie. Ekran pokazuje przyciski tylko wtedy; hub: blad_odbioru_zlecenia (najpierw „tylko loguj”, potem 403). */
-  function mozeOdebracZlecenie(zlecenie, pracownik, dzialyKontraktu) {
+  function mozeOdebracZlecenie(zlecenie, pracownik, dzialyKontraktu, pracownicy) {
+    // 1.44.0: Prezes odbiera i zwraca tylko swoje zlecenia; zlecenie Prezesa odbiera on albo Menedżer (`pracownicy` — role zlecającego;
+    // bez listy reguła „zlecenie Prezesa” nie jest liczona — tak liczy się sam wgląd w dowody).
+    const zlecil = ((zlecenie && zlecenie.dane) || {}).zlecil;
+    if (jestPrezesem(pracownik && pracownik.role)) return !!pracownik.id && zlecil === pracownik.id;
+    if (pracownicy && zlecilPrezes(zlecenie, pracownicy) && !(pracownik && (pracownik.id === zlecil || (pracownik.role || []).includes('admin')))) return false;
     const zakres = dzialyKierownika(pracownik && pracownik.role, dzialyKontraktu);
     return zakres === null || zakres.includes(((zlecenie && zlecenie.dane) || {}).dzial);
   }
@@ -1231,6 +1258,51 @@
     if (!osoba) return false;
     return Object.values((slowniki && slowniki.urlopy) || {}).some(u => u && u.osoba === osoba
       && String(u.od || '') <= data && data <= String(u.do || ''));
+  }
+
+  /* Urlopy zespołu — czyste funkcje wspólne dla Panelu (Administracja → Urlopy) i ekranu „Urlopy zespołu” w UR i KJ
+     (wspolne/klient/urlopy.js; właściciel 2026-11-26: ten sam ekran, nie kopia). Do 26.11 leżały w panel/web/widok.js —
+     PanelWidok.urlopyLista/urlopZFormularza/osobyDoUrlopow wołają te. Słownik `urlopy`: {osoba, od, do (włącznie), uwagi?}. */
+  function dzienZakladu(ms) {
+    const l = lokalny(ms), d = n => String(n).padStart(2, '0');
+    return `${l.rok}-${d(l.miesiac)}-${d(l.dzien)}`;
+  }
+  /* Kto widzi ekran „Urlopy zespołu” w UR/KJ: kierownicy działów ze słownikiem urlopów (kontrakt: slowniki.urlopy.zapis) i Menedżer.
+     Hub i tak pilnuje zapisu (R5: tylko osoby z własnego działu). */
+  function mozeUrlopyZespolu(pracownik) {
+    const role = (pracownik && pracownik.role) || [];
+    return ['admin', 'kierownik_ur', 'kierownik_kj'].some(r => role.includes(r));
+  }
+  /* Lista (trwające i zaplanowane na górze, minione na dole). */
+  function urlopyLista(slowniki, pracownicy, teraz) {
+    const dzis = dzienZakladu(teraz);
+    return Object.entries((slowniki && slowniki.urlopy) || {}).filter(([, u]) => u && u.osoba).map(([kod, u]) => {
+      const p = (pracownicy || []).find(x => x.id === u.osoba);
+      const stan = u.do < dzis ? 'minal' : u.od <= dzis ? 'trwa' : 'przyszly';
+      return { kod, osoba: u.osoba, nazwa: p ? p.nazwa : u.osoba, od: u.od, do: u.do, uwagi: u.uwagi || '', stan,
+               opis: stan === 'trwa' ? 'Trwa' : stan === 'minal' ? 'Minął' : 'Zaplanowany' };
+    }).sort((a, b) => ((a.stan === 'minal') - (b.stan === 'minal')) || a.od.localeCompare(b.od) || a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+  /* R5 (2026-11-09, D82): komu ta osoba może wpisać urlop — kierownik zakładu i admin: wszyscy z działami hali; lider UR i kierownik KJ:
+     tylko osoby z jego działu (hub: blad_urlopu_osoby). D97: Pracownik produkcji nie ma działu, ale urlop wpisuje mu kierownik zakładu. */
+  function osobyDoUrlopow(pracownicy, ja, dzialy) {
+    const wDzialach = (p) => (p.role || []).includes('pracownik_prod') || (p.role || []).some(r => (dzialy || []).some(d => (d.role || []).includes(r)));
+    return (pracownicy || []).filter(p => p && p.aktywny !== false && wDzialach(p) && mozeUrlopOsoby(p, ja, dzialy))
+      .sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
+  }
+  /* Formularz → {bledy, kod, wartosc}; kod wolny w słowniku (<osoba>-<od>[-n]). */
+  function urlopZFormularza(f, slowniki) {
+    const bledy = [];
+    const data = t => /^\d{4}-\d{2}-\d{2}$/.test(String(t || ''));
+    if (!f.osoba) bledy.push('Wybierz osobę.');
+    if (!data(f.od) || !data(f.do)) bledy.push('Podaj daty od i do.');
+    else if (f.do < f.od) bledy.push('Data „do” jest przed „od”.');
+    const wartosc = { osoba: f.osoba, od: f.od, do: f.do };
+    if (String(f.uwagi || '').trim()) wartosc.uwagi = String(f.uwagi).trim().slice(0, 500);
+    const zajete = new Set(Object.keys((slowniki && slowniki.urlopy) || {}));
+    let kod = `${f.osoba}-${f.od}`, n = 2;
+    while (zajete.has(kod)) kod = `${f.osoba}-${f.od}-${n++}`;
+    return { bledy, kod, wartosc };
   }
 
   /* Licznik, który tyka na ekranie (przestój, czekanie na lidera): do godziny z sekundami („4 min 07 s”, „40 s”),
@@ -1435,7 +1507,7 @@
     // Dociąganie (sieć buforuje strumień, np. szybki tunel) to NIE brak połączenia — zmiany przychodzą co kilka sekund.
     const dociaga = !p.strumien && p.dociaganie && !p.blad;
     if (p.trybOffline) {
-      // D78: zalogowano PIN-em bez sieci — wyraźna wstęga: nic nie idzie do serwera, zapisy czekają w urządzeniu.
+      // D78: zalogowano bez sieci (hasłem) — wyraźna wstęga: nic nie idzie do serwera, zapisy czekają w urządzeniu.
       klasa = 'offline';
       czesci.push(`Tryb bez połączenia — ${n ? czekaNaWyslanie(n) : `zapisy zostają na tym urządzeniu`}`
                   + ' · wyślą się po powrocie sieci');
@@ -1815,15 +1887,13 @@
         return Promise.reject(new Error('hala.admin: tylko trasy /api/v1/admin/…'));
       return api(metoda, sciezka, cialo);
     };
-    /* Zmiana własnego PIN-u (D32, D43 §4): obecne hasło ALBO obecny PIN + nowy PIN (4 cyfry). Hub kończy INNE sesje tej
-       osoby i zaufanie urządzeń (po PIN-ie — oprócz tego: wysyłamy jego znacznik; po haśle — to dostaje nowy). Tylko
-       z siecią. Zły obecny sekret to 403 (nie 401 — sesja trwa), błąd ma tekst po polsku do pokazania wprost. */
+    /* Dawna zmiana własnego PIN-u (D32, D43 §4). Od 2026-11-26 PIN-ów nie ma — hub odpowiada 410 „pin_wylaczony” z tekstem
+       (zostaje dla zgodności API; żaden ekran już tego nie woła). */
     h.zmienPin = async (stary, nowy) => {
       const z = h.pracownik ? znacznikDla(h.pracownik.nazwa) : null;
       const r = await api('POST', '/api/v1/zmien-pin', { stary: String(stary || ''), nowy: String(nowy || ''), znacznik: z ? z.znacznik : null,
                                                          offline: offlineMozliwy() });
       if (r && r.znacznik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
-      // D78: nowy PIN — nowy weryfikator (albo żaden): stary PIN bez sieci nie może dalej otwierać aplikacji.
       if (r && h.pracownik) await zapamietajOffline(Object.assign({ pracownik: h.pracownik }, r), [h.pracownik.nazwa, h.pracownik.id]);
       return r;
     };
@@ -1832,7 +1902,7 @@
     h.zmienHaslo = async (stare, nowe) => {
       const r = await api('POST', '/api/v1/zmien-haslo', { stare: String(stare || ''), nowe: String(nowe || ''), offline: offlineMozliwy() });
       if (r && r.znacznik && h.pracownik) przepiszZnacznik(r, [h.pracownik.nazwa, h.pracownik.id]);
-      // D78: nowy znacznik urządzenia — weryfikator PIN-u bez sieci liczony z nim (stary już nie pasuje).
+      // D78: nowy znacznik i nowe hasło — nowy weryfikator bez sieci (stare hasło bez sieci już nie wpuści).
       if (r && h.pracownik) await zapamietajOffline(Object.assign({ pracownik: h.pracownik }, r), [h.pracownik.nazwa, h.pracownik.id]);
       return r;
     };
@@ -2233,7 +2303,7 @@
     }
 
     h.synchronizuj = async zaswiezoMs => {      // zaswiezoMs (liczba, tylko z logowania): pomiń dociąganie tuż po dociągnięciu przez strumień
-      // D78: tryb bez sieci nie ma tokenu — tylko sprawdzamy, czy hub wrócił (i logujemy tę osobę jej PIN-em).
+      // D78: tryb bez sieci nie ma tokenu — tylko sprawdzamy, czy hub wrócił (i logujemy tę osobę jej hasłem z pamięci strony).
       if (trybOffline) { await sprobujWrocic(); return; }
       if (!token || !db) return;
       // Trwa wysyłka: ten zapis mógł przyjść już po wyliczeniu paczki (np. w czasie dociągania) — bez ponowienia czekałby
@@ -2480,11 +2550,12 @@
       strumienAktywny = false;
     }
 
-    // --- znaczniki urządzenia (D43 §2): hasło raz na 16 godzin na tym urządzeniu, na co dzień PIN 4 cyfry
+    // --- znaczniki urządzenia (D43 §2): hasło raz na 16 godzin na tym urządzeniu (od 2026-11-26 bez PIN-u na co dzień)
     /* Hub po dobrym haśle wydaje znacznik (losowy, 16 h). Trzymamy go per osoba — na wspólnym telefonie lidera loguje
        się kilka osób — w localStorage TEJ aplikacji (klucz hala.<app>.znaczniki; na Pages wszystkie aplikacje dzielą
        źródło, więc przedrostek aplikacji, D33). Mapa: login (imię i nazwisko, karta, id — po loginZNazwy) → {znacznik, do}.
-       Wylogowanie go nie kasuje — po to jest: następne logowanie tej osoby PIN-em. */
+       Wylogowanie go nie kasuje. Od 2026-11-26 znacznik nie otwiera już PIN-u — służy logowaniu bez sieci (D78, weryfikator
+       związany ze znacznikiem) i dziennikowi logowań huba. */
     // Klucz zawsze z przedrostkiem 'hala.' (t_dostep.py → WspolneZrodlo sprawdza wszystkie getItem/setItem).
     function czytajZnaczniki() {
       try { const m = JSON.parse((ls && ls.getItem('hala.' + nazwaPamieci + '.znaczniki')) || '{}'); return m && typeof m === 'object' ? m : {}; }
@@ -2522,39 +2593,39 @@
       for (const k of Object.keys(m)) if (m[k] && stare.has(m[k].znacznik)) kl.push(k);
       zapamietajZnacznik(r, kl);
     }
-    /* 'pin' — ta osoba ma na tym urządzeniu ważny znacznik (pole „PIN (4 cyfry)”), inaczej 'haslo'. */
-    h.trybLogowania = ident => (znacznikDla(ident) ? 'pin' : 'haslo');
+    /* Pole logowania: od 2026-11-26 zawsze 'haslo' (PIN-ów nie ma). Funkcja zostaje — woła ją konto.js i stare ekrany. */
+    h.trybLogowania = () => 'haslo';
     h.loginZNazwy = loginZNazwy;
 
-    // --- D78: praca bez połączenia — logowanie PIN-em bez sieci
+    // --- D78: praca bez połączenia — logowanie hasłem bez sieci
     /* Właściciel 2026-10-19: „Tracąc internet nic nie przerywasz, działasz dalej, a po jego odzyskaniu dane trafiają
        w docelowe miejsca.” Osoba, która na TYM urządzeniu ma ważny znacznik (hasło w ciągu 16 h, D43), loguje się bez
-       sieci swoim PIN-em. Bezpieczeństwo:
+       sieci swoim hasłem (do 2026-11-26 — PIN-em). Bezpieczeństwo:
          * w telefonie tylko weryfikator z huba (liczWeryfikator) — związany ze znacznikiem urządzenia i ważny najdłużej
-           do jego końca; nigdy PIN ani skrót PIN-u z huba;
-         * 5 złych PIN-ów bez sieci (jak w hubie, D43) — weryfikator i znacznik przepadają, dalej tylko hasło przy sieci;
+           do jego końca; nigdy hasło ani skrót hasła z huba; dawny rekord PIN-u (bez wersji „gk-offline-2”) jest pomijany;
+         * 5 złych haseł bez sieci — weryfikator i znacznik przepadają, dalej tylko hasło przy sieci;
          * tryb bez sieci NIE ma tokenu: nic nie idzie do huba. Zapisy czekają w kolejce z autorem = ta osoba i wyjdą
-           dopiero JEJ sesją (po powrocie sieci klient sam loguje ją PIN-em trzymanym tylko w pamięci strony, a gdy strona
+           dopiero JEJ sesją (po powrocie sieci klient sam loguje ją hasłem trzymanym tylko w pamięci strony, a gdy strona
            była przeładowana — prosi o zwykłe logowanie). Cudzym tokenem — nigdy (synchronizuj wysyła tylko zapisy osoby
            z tokenu);
          * zegar cofnięty przed chwilę zapisu weryfikatora — odmowa (ktoś przestawia czas, żeby przedłużyć 16 h).
-       Rekordy: pamiec 'offline-konta' = { <id osoby>: { pracownik, klucze, sol, iteracje, weryfikator, do, zle, zapisano } }. */
-    const ZLE_PINY_OFFLINE = 5;
-    let trybOffline = null, pinOffline = null, podpowiedz = '';
+       Rekordy: pamiec 'offline-konta' = { <id osoby>: { pracownik, klucze, sol, iteracje, weryfikator, do, zle, zapisano, wersja } }. */
+    const ZLE_PROBY_OFFLINE = 5;
+    let trybOffline = null, sekretOffline = null, podpowiedz = '';
     const offlineMozliwy = () => !!subtle() && typeof TextEncoder !== 'undefined';
     async function kontaOffline() { const m = await pamiec.czytaj('offline-konta'); return m && typeof m === 'object' ? m : {}; }
     async function zapamietajOffline(r, klucze) {
       const p = r && r.pracownik;
       if (!p || !p.id) return;
       const m = await kontaOffline();
-      for (const [k, w] of Object.entries(m)) if (!w || !(Date.parse(w.do) > h.teraz())) delete m[k];   // wygasłe
+      for (const [k, w] of Object.entries(m)) if (!w || !(Date.parse(w.do) > h.teraz()) || w.wersja !== WERSJA_OFFLINE) delete m[k];   // wygasłe i dawne PIN-owe
       const o = r.offline;
       if (o && o.wersja === WERSJA_OFFLINE && typeof o.weryfikator === 'string' && typeof o.sol === 'string') {
         const stare = m[p.id] || {};
         m[p.id] = { pracownik: p, klucze: [...new Set([...(stare.klucze || []), ...klucze.map(loginZNazwy).filter(Boolean)])],
                     sol: o.sol, iteracje: o.iteracje || 200000, weryfikator: o.weryfikator, do: o.do || r.znacznik_do,
-                    zle: 0, zapisano: Date.now() };
-      } else delete m[p.id];          // brak weryfikatora (np. PIN do zmiany) — stary PIN bez sieci już nie wpuści
+                    zle: 0, zapisano: Date.now(), wersja: WERSJA_OFFLINE };
+      } else delete m[p.id];          // brak weryfikatora (np. hasło do zmiany) — stare hasło bez sieci już nie wpuści
       await pamiec.zapisz('offline-konta', m);
     }
     async function zapomnijOffline(id) {
@@ -2565,34 +2636,35 @@
     const bladSieciLogowania = e => !!e && (!e.kod || !e.odHuba) && e.kod !== 'do_ustawienia';
     function bladLogowania(tekst, kod, powod) { const e = new Error(tekst); e.kod = kod; e.powod = powod; e.bezSieci = true; return e; }
 
-    async function zalogujBezSieci(ident, pin, z) {
-      if (!offlineMozliwy() || !/^\d{4}$/.test(pin) || !z) return null;
+    async function zalogujBezSieci(ident, haslo, z) {
+      if (!offlineMozliwy() || !haslo || !z) return null;
       const m = await kontaOffline();
       const klucz = loginZNazwy(ident);
       const id = Object.keys(m).find(k => m[k] && (k === ident || (m[k].klucze || []).includes(klucz)));
       const w = id ? m[id] : null;
       if (!w) return null;
+      if (w.wersja !== WERSJA_OFFLINE) { await zapomnijOffline(id); return null; }   // dawny weryfikator PIN-u (sprzed 2026-11-26)
       const teraz = h.teraz();
       if (!(Date.parse(w.do) > teraz) || !(Date.parse(z.do) > teraz) || Date.now() < (w.zapisano || 0) - 300000) {
         await zapomnijOffline(id);
-        throw bladLogowania('Bez sieci logowanie PIN-em działa do 16 godzin od hasła na tym urządzeniu — ten czas minął. Zaloguj się przy sieci.', 401, 'wymagane_haslo');
+        throw bladLogowania('Bez sieci logowanie działa do 16 godzin od logowania przy sieci na tym urządzeniu — ten czas minął. Zaloguj się przy sieci.', 401, 'wymagane_haslo');
       }
-      const ok = rowneTeksty(await liczWeryfikator(pin, w.sol, w.iteracje, id, z.znacznik), w.weryfikator);
+      const ok = rowneTeksty(await liczWeryfikator(haslo, w.sol, w.iteracje, id, z.znacznik), w.weryfikator);
       if (!ok) {
         w.zle = (w.zle || 0) + 1;
-        if (w.zle >= ZLE_PINY_OFFLINE) {
+        if (w.zle >= ZLE_PROBY_OFFLINE) {
           delete m[id]; await pamiec.zapisz('offline-konta', m);
-          zapomnijZnacznik(z.znacznik);         // jak w hubie (D43): po 5 złych PIN-ach — znowu hasło
-          throw bladLogowania('5 złych PIN-ów — wpisz hasło (potrzebna sieć).', 401, 'wymagane_haslo');
+          zapomnijZnacznik(z.znacznik);         // po 5 złych hasłach bez sieci — dalej tylko przy sieci
+          throw bladLogowania('5 złych haseł bez sieci — zaloguj się przy sieci.', 401, 'wymagane_haslo');
         }
         await pamiec.zapisz('offline-konta', m);
-        throw bladLogowania('Zły PIN', 401, 'zly_pin');
+        throw bladLogowania('Złe hasło', 401, 'zly_pin');
       }
       if (w.zle) { w.zle = 0; await pamiec.zapisz('offline-konta', m); }
       h.pracownik = w.pracownik;
       token = null;
       trybOffline = { id, ident, do: [w.do, z.do].sort()[0] };
-      pinOffline = pin;                         // tylko w pamięci strony — do cichego logowania po powrocie sieci
+      sekretOffline = haslo;                    // tylko w pamięci strony — do cichego logowania po powrocie sieci
       przerwijBiezacyStrumien();
       await pamiec.usun('token');               // żaden stary token nie może wysłać zapisów tej osoby (ani jej — cudzych)
       await pamiec.zapisz('pracownik', h.pracownik);
@@ -2603,12 +2675,12 @@
       emituj('polaczenie', Object.assign({}, h.polaczenie));
       return h.pracownik;
     }
-    /* Koniec trybu bez sieci: powrot = 'polaczenie_wrocilo' (hub odpowiada, a PIN-u w pamięci nie ma — trzeba się
+    /* Koniec trybu bez sieci: powrot = 'polaczenie_wrocilo' (hub odpowiada, a hasła w pamięci nie ma — trzeba się
        zalogować, żeby wysłać zapisy), 'koniec_zaufania' (minęło 16 h od hasła), 'wyloguj', 'zalogowany' (zwykła sesja). */
     async function zakonczOffline(powod) {
       if (!trybOffline) return;
       if (powod === 'polaczenie_wrocilo' || powod === 'koniec_zaufania') podpowiedz = trybOffline.ident || '';
-      trybOffline = null; pinOffline = null;
+      trybOffline = null; sekretOffline = null;
       h.polaczenie.trybOffline = false;
       await pamiec.usun('sesja-offline').catch(() => {});
       if (powod !== 'zalogowany') {
@@ -2616,19 +2688,19 @@
         emituj('polaczenie', Object.assign({}, h.polaczenie));
       }
     }
-    /* Co 20 s (synchronizuj) i po „online”: czy hub już odpowiada. PIN w pamięci — zwykłe logowanie tej osoby (D43:
-       PIN + znacznik), jej kolejka rusza jej tokenem. Bez PIN-u (strona przeładowana) — koniec trybu i ekran logowania. */
+    /* Co 20 s (synchronizuj) i po „online”: czy hub już odpowiada. Hasło w pamięci — zwykłe logowanie tej osoby, jej
+       kolejka rusza jej tokenem. Bez hasła (strona przeładowana) — koniec trybu i ekran logowania. */
     let wracam = false;
     async function sprobujWrocic() {
       if (!trybOffline || wracam) return;
       if (h.teraz() > Date.parse(trybOffline.do)) { await zakonczOffline('koniec_zaufania'); return; }
       wracam = true;
       try {
-        if (pinOffline) {
+        if (sekretOffline) {
           const z = znacznikDla(trybOffline.ident) || znacznikDla(trybOffline.id);
           let r;
           try {
-            r = await api('POST', '/api/v1/logowanie', { aplikacja: o.aplikacja, identyfikator: trybOffline.ident, pin: pinOffline,
+            r = await api('POST', '/api/v1/logowanie', { aplikacja: o.aplikacja, identyfikator: trybOffline.ident, pin: sekretOffline,
                                                          znacznik: z ? z.znacznik : null, offline: offlineMozliwy() }, { bezSesji: true });
           } catch (e) {
             if (e && e.odHuba) await zakonczOffline('polaczenie_wrocilo');   // hub odpowiedział „nie” — człowiek zaloguje się sam
@@ -2637,6 +2709,9 @@
           if (r.do_ustawienia && r.do_ustawienia.length) { await zakonczOffline('polaczenie_wrocilo'); return; }
           const ident = trybOffline.ident;
           await zakonczOffline('zalogowany');
+          // Od 2026-11-26 każde logowanie hasłem daje NOWY znacznik (dawniej PIN zostawiał stary) — zapisz go, inaczej nowy
+          // weryfikator bez sieci byłby związany ze znacznikiem, którego telefon nie zna, i następne wejście bez sieci by nie przeszło.
+          if (r.znacznik) przepiszZnacznik(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
           await zapamietajOffline(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
           await zakonczLogowanie(r);
           return;
@@ -2653,12 +2728,12 @@
 
     // --- sesja
     h.zalogowany = () => !!token || !!trybOffline;
-    let ustawienie = null;           // sesja „tylko do ustawienia hasła i PIN-u” (D43 §3a) — tylko w pamięci
-    /* dane: { identyfikator, pin } (D24; identyfikator = kod z karty albo login; „pin” to sekret — hasło albo PIN).
-       D43: dokładamy znacznik urządzenia tej osoby (null, gdy go nie ma — hub wie wtedy, że klient zna D43).
-       Błąd 401 „wymagane_haslo” — znacznik nieważny (16 h minęło, 5 złych PIN-ów): zapominamy go, aplikacja
-       przełącza pole na hasło (HalaKonto.poleLogowania). Hasło startowe / brak PIN-u: hub daje sesję tylko do okna
-       „Ustaw hasło i PIN” — rzucamy błąd z kod 'do_ustawienia' (HalaKonto.zaloguj otwiera okno i woła ustawKonto). */
+    let ustawienie = null;           // sesja „tylko do ustawienia hasła” (D43 §3a) — tylko w pamięci
+    /* dane: { identyfikator, pin } (D24; identyfikator = kod z karty albo login; „pin” to sekret — od 2026-11-26 zawsze
+       hasło, nazwa pola bez zmian). D43: dokładamy znacznik urządzenia tej osoby (null, gdy go nie ma — hub wie wtedy, że
+       klient zna D43). Błąd 401 „wymagane_haslo” (np. wpisany dawny PIN: „Logowanie PIN-em wyłączone”): zapominamy znacznik.
+       Hasło startowe: hub daje sesję tylko do okna „Ustaw hasło” — rzucamy błąd z kod 'do_ustawienia' (HalaKonto.zaloguj
+       otwiera okno i woła ustawKonto). */
     h.zaloguj = async dane => {
       const ident = String((dane && dane.identyfikator) || '');
       const z = znacznikDla(ident);
@@ -2668,12 +2743,10 @@
                                                                    offline: offlineMozliwy() }, dane),
                       { bezSesji: true });
       } catch (e) {
-        // Tak samo „zly_pin” przy wpisie z literą albo znakiem: pole „PIN” ma limit 4 znaków, więc to było ucięte hasło, a znacznik
-        // jest już nieważny po stronie huba (zmiana hasła gdzie indziej) — bez zapomnienia go pole wracałoby do „PIN” bez końca.
-        if (e && z && (e.powod === 'wymagane_haslo' || (e.powod === 'zly_pin' && /\D/.test(String((dane && dane.pin) || '').trim())))) {
+        if (e && z && e.powod === 'wymagane_haslo') {
           zapomnijZnacznik(z.znacznik);
         }
-        // D78: hub nieosiągalny (brak sieci, tunel padł) — PIN-em bez sieci, gdy ta osoba ma na urządzeniu ważny znacznik.
+        // D78: hub nieosiągalny (brak sieci, tunel padł) — hasłem bez sieci, gdy ta osoba ma na urządzeniu ważny znacznik.
         if (bladSieciLogowania(e)) {
           const p = await zalogujBezSieci(ident, String((dane && dane.pin) || '').trim(), z);
           if (p) return p;
@@ -2684,21 +2757,20 @@
       if (!(r.do_ustawienia && r.do_ustawienia.length)) await zapamietajOffline(r, [ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
       if (r.do_ustawienia && r.do_ustawienia.length) {
         ustawienie = { token: r.token, pracownik: r.pracownik, doUstawienia: r.do_ustawienia.slice(), ident };
-        const e = new Error('Ustaw nowe hasło i PIN.');
+        const e = new Error('Ustaw nowe hasło.');
         e.kod = 'do_ustawienia'; e.doUstawienia = ustawienie.doUstawienia; e.pracownik = r.pracownik;
         throw e;
       }
       return zakonczLogowanie(r);
     };
-    /* Okno „Ustaw hasło i PIN” po pierwszym logowaniu (D43 §3a): { haslo?, pin? } → POST /ustaw-konto tokenem sesji
+    /* Okno „Ustaw hasło” po pierwszym logowaniu (D43 §3a; od 2026-11-26 bez PIN-u): { haslo } → POST /ustaw-konto tokenem sesji
        ustawienia. Hub ustawia, kończy wszystkie sesje i znaczniki osoby, daje znacznik tego urządzenia i pełną sesję
        (albo brak_dostepu, gdy rola nie otwiera tej aplikacji — wtedy błąd 403 z tekstem huba). */
     h.ustawienieKonta = () => (ustawienie ? { pracownik: ustawienie.pracownik, doUstawienia: ustawienie.doUstawienia.slice() } : null);
     h.ustawKonto = async dane => {
       if (!ustawienie) { const e = new Error('Zaloguj się ponownie'); e.kod = 401; throw e; }
       const u = ustawienie;
-      const r = await api('POST', '/api/v1/ustaw-konto', { haslo: String((dane && dane.haslo) || ''), pin: String((dane && dane.pin) || ''),
-                                                          offline: offlineMozliwy() },
+      const r = await api('POST', '/api/v1/ustaw-konto', { haslo: String((dane && dane.haslo) || ''), offline: offlineMozliwy() },
                           { bezSesji: true, naglowki: { Authorization: 'Bearer ' + u.token } });
       ustawienie = null;
       if (r.znacznik) przepiszZnacznik(r, [u.ident, r.pracownik && r.pracownik.nazwa, r.pracownik && r.pracownik.id]);
@@ -2732,7 +2804,7 @@
     h.wyloguj = async () => {
       const stary = token;
       token = null;
-      if (trybOffline) { trybOffline = null; pinOffline = null; h.polaczenie.trybOffline = false; await pamiec.usun('sesja-offline'); }
+      if (trybOffline) { trybOffline = null; sekretOffline = null; h.polaczenie.trybOffline = false; await pamiec.usun('sesja-offline'); }
       przerwijBiezacyStrumien();
       await pamiec.usun('token');
       // Kolejka ZOSTAJE: zapisy tej osoby poczekają, aż zaloguje się ponownie.
@@ -3026,7 +3098,7 @@
     WERSJA: WERSJA_KLIENTA, utworz, uuid, zastosuj, brakWymagan, zmianaDla, zmianyDzialu, zmianaDzialu, dzialZmianOsoby, planBezGodzin, DZIALY_Z_WLASNYMI_ZMIANAMI, przesuniecieZakladu, lokalny, zLokalnego,
     szablonDla, pozycjeZSzablonu, kolorChecklisty, checklistaZmiany, pozycjeWystapienia, maszynyPozycji, skanyPozycji, postepPozycji, odbiorPozycji, mozeOdbieracPozycje, STATUSY_ODBIORU_POZYCJI, koniecOdbioru, koniecZwrotu, karencjaOdbioru, minutyPytaniaZamkniecia, pozycjeBezWykonania, oknoZamknieciaZmiany, przestojMs, czasNaprawyMs, czasReakcjiMs, formatCzasu, formatLicznika,
     odczytajKod, kodZeSkanu, zmniejszZdjecie, pasekPolaczenia, czekaNaWyslanie, nieWyslane, zdjeciaCzekaja, zdjeciaNieWyslane, wystapieniaStale, zmianyPlanowe, zmianyDnia, planDnia, dzienHarmonogramu, swietaPL, celeStalego, opisTerminu, jestKonflikt, UWAGA_CZASU, UWAGA_PO_PRZERWIE,
-    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, skrotyDoPanelu, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, nazwaRoliMenu, NAJWYZSZA_ROLA, mozeOdebracZlecenie, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu, terminowoscZlecenia, ktoPracowal,
+    kpiAwarii, OPIS_MTBF, przestojWOknieMs, alertAktywny, loginZNazwy, moznaAnulowacZlecenie, moznaAnulowacAwarie, skrotyDoPanelu, wierszeMoichZgloszen, mozeCofnac, skrotOsoby, otwartaAwariaMaszyny, podpowiedzODuplikacie, mozeDopisacDoAwarii, dzialyOsoby, nazwaRoliMenu, NAJWYZSZA_ROLA, mozeOdebracZlecenie, jestPrezesem, zlecilPrezes, mozeUrlopOsoby, naUrlopie, wskaznikiOkresu, terminowoscZlecenia, ktoPracowal, dzienZakladu, mozeUrlopyZespolu, urlopyLista, osobyDoUrlopow, urlopZFormularza,
     dzialyKierownika, czesciRozdzialu, postepRozdzialu, mozeRozdzielic, doKierownika, widziRozdzial, szczegolyRozdzialu,
     mozePrzekazac, liczWeryfikator, poprosOTrwalaPamiec, limitZapytania, pilnujBledow, opisBledu, NIE_ZAPISANO,
   };

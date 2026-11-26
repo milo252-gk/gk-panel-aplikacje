@@ -1,16 +1,17 @@
-/* Panel Zarządczy GK — wspólne okna konta: „Zmień hasło”, „Zmień PIN”, „Ustaw hasło i PIN” po pierwszym logowaniu
-   i pole sekretu na ekranie logowania (D32: jedno konto we wszystkich aplikacjach GK; D43: hasło raz na 16 godzin na
-   urządzeniu, na co dzień PIN 4 cyfry).
+/* Panel Zarządczy GK — wspólne okna konta: „Zmień hasło”, „Ustaw hasło” po pierwszym logowaniu i pole hasła na ekranie
+   logowania (D32: jedno konto we wszystkich aplikacjach GK; D43: hasło raz na 16 godzin na urządzeniu). Od 2026-11-26
+   (właściciel: „całkowicie usunąć PIN z logowania — nikt z PIN-ów nie korzysta, hasła są bezpieczniejsze”, kontrakt 1.45.0)
+   PIN-ów nie ma: bez okna „Zmień PIN”, bez pól PIN-u i bez przełącznika „Zaloguj PIN-em”.
 
    Jedno okno dla Panelu, Lidera, UR i KJ (wszędzie z „Moje konto” — ikona osoby w nagłówku, niżej mojeKonto) — ten sam wygląd i te same
    słowa, jak Wygląd (motyw.js). Aplikacja woła:
-       HalaKonto.zaloguj(hala, { identyfikator, pin }, { komunikat })   // jak hala.zaloguj; hasło startowe → okno „Ustaw hasło i PIN”
-       HalaKonto.poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane })   // „Hasło (raz na 16 godzin…)” / „PIN (4 cyfry)”
-       HalaKonto.zmienHaslo(hala, { komunikat }) / HalaKonto.zmienPin(hala, { komunikat })   // true = zmienione, false = anulowano
-   albo dorysowuje przyciski:  HalaKonto.przycisk(el, hala, { komunikat })   // „Zmień hasło” i „Zmień PIN”
+       HalaKonto.zaloguj(hala, { identyfikator, pin }, { komunikat })   // jak hala.zaloguj („pin” = hasło); hasło startowe → okno „Ustaw hasło”
+       HalaKonto.poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane })   // zawsze „Hasło”
+       HalaKonto.zmienHaslo(hala, { komunikat })   // true = zmienione, false = anulowano
+   albo dorysowuje przycisk:  HalaKonto.przycisk(el, hala, { komunikat })   // „Zmień hasło”
 
-   Reguły (te same co w hubie — hala.py → blad_hasla, blad_pinu): hasło min. 8 znaków (najwyżej 128), byle nie hasło startowe
-   haslo123 — oczywiste wolno (D46); PIN dokładnie 4 cyfry, dowolne (D46 — także 1234, 0000). Hub i tak sprawdza wszystko jeszcze raz; tu tylko podpowiadamy od razu.
+   Reguły (te same co w hubie — hala.py → blad_hasla): hasło min. 8 znaków (najwyżej 128), byle nie hasło startowe
+   haslo123 — oczywiste wolno (D46). Hub i tak sprawdza wszystko jeszcze raz; tu tylko podpowiadamy od razu.
    Okna to <dialog> w warstwie górnej — działają nad każdym ekranem aplikacji (także nad oknem menu Lidera).
    Wygląd: hala.css → .hala-okno. Bez sieci zmiany nie ma (hub musi sprawdzić obecny sekret) — mówimy to wprost. */
 
@@ -35,18 +36,6 @@
     else if (nowe.toLowerCase() === HASLO_STARTOWE) b.push(`„${HASLO_STARTOWE}” to hasło startowe — wpisz nowe.`);
     if (nowe && stare && nowe === stare) b.push('Nowe hasło musi być inne niż obecne.');
     if (nowe && powtorz !== nowe) b.push('Powtórzone hasło nie zgadza się z nowym.');
-    return b;
-  }
-
-  /* Błędy nowego PIN-u (D43: dokładnie 4 cyfry). { stary (obecne hasło albo PIN, gdy wymagany), nowy, powtorz,
-     wymagajStarego } — czysta funkcja, testy: reduktor-testy.js. */
-  function bledyPinu({ stary, nowy, powtorz, wymagajStarego }) {
-    const b = [];
-    stary = String(stary || '').trim(); nowy = String(nowy || '').trim(); powtorz = String(powtorz || '').trim();
-    if (wymagajStarego !== false && !stary) b.push('Wpisz obecne hasło albo obecny PIN.');
-    if (!/^\d{4}$/.test(nowy)) b.push('PIN to dokładnie 4 cyfry.');
-    if (nowy && stary && nowy === stary) b.push('Nowy PIN musi być inny niż obecny.');
-    if (nowy && powtorz !== nowy) b.push('Powtórzony PIN nie zgadza się z nowym.');
     return b;
   }
 
@@ -114,7 +103,7 @@
       <form method="dialog" autocomplete="off">
         <h2 id="hala-okno-hasla-tytul">Zmień hasło</h2>
         <p class="hala-okno-opis">${esc(p.nazwa || '')} · To hasło działa we wszystkich aplikacjach GK. Wpisujesz je raz na 16 godzin
-          na urządzeniu, na co dzień — PIN. Min. 8 znaków. Inne urządzenia poproszą o nowe hasło.</p>
+          na urządzeniu. Min. 8 znaków. Inne urządzenia poproszą o nowe hasło.</p>
         <label>Obecne hasło<input name="stare" type="password" autocomplete="current-password" maxlength="128"></label>
         <label>Nowe hasło (min. 8 znaków)<input name="nowe" type="password" autocomplete="new-password" maxlength="128"></label>
         <label>Powtórz nowe hasło<input name="powtorz" type="password" autocomplete="new-password" maxlength="128"></label>
@@ -130,49 +119,21 @@
     });
   }
 
-  /* Moje konto → „Zmień PIN” (D43 §4): obecne hasło albo PIN + nowy PIN ×2 (4 cyfry). */
-  function zmienPin(hala, opcje) {
-    const o = Object.assign({ komunikat: null }, opcje || {});
-    const p = hala.pracownik || {};
-    const d = okno('hala-okno-pinu');
-    d.innerHTML = `
-      <form method="dialog" autocomplete="off">
-        <h2 id="hala-okno-pinu-tytul">Zmień PIN</h2>
-        <p class="hala-okno-opis">${esc(p.nazwa || '')} · Ten PIN działa we wszystkich aplikacjach GK — na urządzeniu, na którym
-          w ciągu 16 godzin wpisano hasło. PIN to 4 cyfry. Inne zalogowane urządzenia trzeba będzie zalogować od nowa.</p>
-        <label>Obecne hasło albo PIN<input name="stary" type="password" autocomplete="current-password" maxlength="128"></label>
-        <label>Nowy PIN (4 cyfry)<input name="nowy" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
-        <label>Powtórz nowy PIN<input name="powtorz" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
-        <p class="hala-okno-blad" role="alert" hidden></p>
-        <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zmień PIN</button></div>
-      </form>`;
-    return prowadzOkno(d, {
-      bledy: f => bledyPinu({ stary: f.stary.value, nowy: f.nowy.value, powtorz: f.powtorz.value }),
-      wyslij: f => hala.zmienPin(f.stary.value.trim(), f.nowy.value.trim()),
-      poBledzie: (e, f) => { if (e && e.kod === 403) { f.stary.value = ''; f.stary.focus(); } },
-      komunikatOk: 'PIN zmieniony — działa we wszystkich aplikacjach GK.', komunikat: o.komunikat,
-      bezSieciTekst: 'Zmiana PIN-u wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.',
-    });
-  }
-
-  /* Treść okna „Ustaw hasło i PIN” (D43 §3a) — czysta funkcja, testy: reduktor-testy.js. doUstawienia: ['haslo','pin']. */
-  function trescUstawienia({ nazwa, doUstawienia }) {
-    const haslo = (doUstawienia || []).includes('haslo'), pin = (doUstawienia || []).includes('pin');
-    const tytul = haslo && pin ? 'Ustaw hasło i PIN' : haslo ? 'Ustaw nowe hasło' : 'Ustaw PIN';
+  /* Treść okna „Ustaw hasło” (D43 §3a) — czysta funkcja, testy: reduktor-testy.js. Od 2026-11-26 zawsze samo nowe hasło ×2
+     (dawne ['pin'] w doUstawienia nie zdarza się już — hub go nie wysyła; okno i tak pyta tylko o hasło). */
+  function trescUstawienia({ nazwa }) {
     return `<form method="dialog" autocomplete="off">
-        <h2 id="hala-okno-ustaw-tytul">${tytul}</h2>
-        <p class="hala-okno-opis">${esc(nazwa || '')} · ${haslo ? 'Hasło startowe działa tylko przy pierwszym logowaniu. ' : ''}Hasło
-          wpiszesz raz na 16 godzin na tym urządzeniu, na co dzień — PIN. Oba działają we wszystkich aplikacjach GK.</p>
-        ${haslo ? `<label>Nowe hasło (min. 8 znaków)<input name="haslo" type="password" autocomplete="new-password" maxlength="128"></label>
-        <label>Powtórz nowe hasło<input name="haslo2" type="password" autocomplete="new-password" maxlength="128"></label>` : ''}
-        ${pin ? `<label>PIN (4 cyfry)<input name="pin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>
-        <label>Powtórz PIN<input name="pin2" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4"></label>` : ''}
+        <h2 id="hala-okno-ustaw-tytul">Ustaw nowe hasło</h2>
+        <p class="hala-okno-opis">${esc(nazwa || '')} · Hasło startowe działa tylko przy pierwszym logowaniu. Nowe hasło
+          wpiszesz raz na 16 godzin na tym urządzeniu — działa we wszystkich aplikacjach GK.</p>
+        <label>Nowe hasło (min. 8 znaków)<input name="haslo" type="password" autocomplete="new-password" maxlength="128"></label>
+        <label>Powtórz nowe hasło<input name="haslo2" type="password" autocomplete="new-password" maxlength="128"></label>
         <p class="hala-okno-blad" role="alert" hidden></p>
         <div class="hala-okno-przyciski"><button type="button" data-anuluj>Anuluj</button><button class="glowny" type="submit">Zapisz i wejdź</button></div>
       </form>`;
   }
 
-  /* Okno „Ustaw hasło i PIN” po logowaniu hasłem startowym (albo bez PIN-u). Obietnica: pracownik (zalogowany),
+  /* Okno „Ustaw hasło” po logowaniu hasłem startowym. Obietnica: pracownik (zalogowany),
      false — anulowano. Błąd „brak dostępu” (konto bez roli tej aplikacji) — odrzucenie z tekstem huba. */
   function ustawKonto(hala, opcje) {
     const o = Object.assign({ komunikat: null }, opcje || {});
@@ -183,97 +144,76 @@
     let wynik = false, bladDostepu = null;
     const nazwa = u.pracownik && u.pracownik.nazwa;
     return prowadzOkno(d, {
-      bledy: f => [
-        ...(f.haslo ? bledyHasla({ nowe: f.haslo.value, powtorz: f.haslo2.value, nazwa }) : []),
-        ...(f.pin ? bledyPinu({ nowy: f.pin.value, powtorz: f.pin2.value, wymagajStarego: false }) : []),
-      ],
+      bledy: f => bledyHasla({ nowe: f.haslo.value, powtorz: f.haslo2.value, nazwa }),
       wyslij: async f => {
         try {
-          wynik = await hala.ustawKonto({ haslo: f.haslo ? f.haslo.value.trim() : '', pin: f.pin ? f.pin.value.trim() : '' });
+          wynik = await hala.ustawKonto({ haslo: f.haslo.value.trim() });
         } catch (e) {
-          if (e && e.ustawione) { bladDostepu = e; return; }     // hasło i PIN zapisane — tylko ta aplikacja nie dla tej osoby
+          if (e && e.ustawione) { bladDostepu = e; return; }     // hasło zapisane — tylko ta aplikacja nie dla tej osoby
           throw e;
         }
       },
       komunikatOk: null, komunikat: o.komunikat,
-      bezSieciTekst: 'Ustawienie hasła i PIN-u wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.',
+      bezSieciTekst: 'Ustawienie hasła wymaga połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.',
     }).then(zrobione => {
       if (!zrobione && hala.anulujUstawienie) hala.anulujUstawienie();
       if (bladDostepu) throw bladDostepu;
-      if (zrobione && o.komunikat) o.komunikat('Hasło i PIN ustawione — działają we wszystkich aplikacjach GK.', 'ok');
+      if (zrobione && o.komunikat) o.komunikat('Hasło ustawione — działa we wszystkich aplikacjach GK.', 'ok');
       return zrobione ? wynik : false;
     });
   }
 
-  /* Logowanie z oknem pierwszego logowania (D43): jak hala.zaloguj, ale hasło startowe (albo brak PIN-u) otwiera okno
-     „Ustaw hasło i PIN”; po zapisie osoba jest zalogowana. Anulowane okno → błąd „Ustaw hasło i PIN, żeby wejść.” */
+  /* Logowanie z oknem pierwszego logowania (D43): jak hala.zaloguj, ale hasło startowe otwiera okno „Ustaw hasło”;
+     po zapisie osoba jest zalogowana. Anulowane okno → błąd „Ustaw nowe hasło, żeby wejść.” */
   async function zaloguj(hala, dane, opcje) {
     try {
       return await hala.zaloguj(dane);
     } catch (e) {
       if (!e || e.kod !== 'do_ustawienia') throw e;
       const p = await ustawKonto(hala, opcje);
-      if (!p) { const b = new Error('Ustaw nowe hasło i PIN, żeby wejść.'); b.kod = 400; throw b; }
+      if (!p) { const b = new Error('Ustaw nowe hasło, żeby wejść.'); b.kod = 400; throw b; }
       return p;
     }
   }
 
-  /* Pole sekretu na ekranie logowania (D43, STYL-GK §2): osoba z ważnym znacznikiem na tym urządzeniu → „PIN (4 cyfry)”
-     z klawiaturą cyfr, inaczej „Hasło (raz na 16 godzin na tym urządzeniu)” z pełną klawiaturą. Tryb liczy się przy
-     każdej zmianie pola identyfikatora; przycisk przelacz (opcjonalny) zmienia go ręcznie („Zaloguj hasłem” — zapomniany
-     PIN; „Zaloguj PIN-em” tylko, gdy znacznik jest). naZmiane(tryb) — np. Lider chowa klawiaturę cyfr przy haśle.
-     Zwraca { tryb(), odswiez(), haslo() } — odswiez() po błędzie „wymagane_haslo” (znacznik już zapomniany). */
-  const ETYKIETY = { pin: 'PIN lub hasło', haslo: 'Hasło (raz na 16 godzin na tym urządzeniu)' };
-  function poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane, slowaPrzelacznika }) {
-    const slowa = Object.assign({ pin: 'Zaloguj hasłem', haslo: 'Zaloguj PIN-em' }, slowaPrzelacznika || {});
-    let reczny = null, ostatni = null;
-    const auto = () => (hala.trybLogowania ? hala.trybLogowania(ident.value) : 'haslo');
+  /* Pole sekretu na ekranie logowania (D43, STYL-GK §2). Od 2026-11-26 zawsze „Hasło” z pełną klawiaturą (do 128 znaków) —
+     PIN-ów nie ma, przełącznik „Zaloguj PIN-em/hasłem” (przelacz, opcjonalny) jest zawsze schowany. naZmiane(tryb) woła się
+     raz z 'haslo' (np. Lider chowa wtedy dawną klawiaturę cyfr). Zwraca { tryb(), odswiez(), haslo() } jak dotąd — ekrany
+     aplikacji wołają odswiez() po błędzie „wymagane_haslo”. */
+  const ETYKIETY = { haslo: 'Hasło' };
+  function poleLogowania({ hala, ident, sekret, etykieta, przelacz, naZmiane }) {
+    let ostatni = null;
     function rysuj() {
-      const a = auto();
-      if (reczny === 'pin' && a !== 'pin') reczny = null;        // PIN-em tylko z ważnym znacznikiem
-      const tryb = reczny || a;
-      if (etykieta) etykieta.textContent = ETYKIETY[tryb];
-      // 2026-11-20: po haśle (zaufane urządzenie) pole przyjmuje PIN ALBO hasło — serwer rozpoznaje po treści (4 cyfry = PIN).
+      const tryb = 'haslo';
+      if (etykieta) etykieta.textContent = ETYKIETY.haslo;
       sekret.inputMode = 'text';
       sekret.maxLength = 128;
-      sekret.autocomplete = tryb === 'pin' ? 'off' : 'current-password';
+      sekret.autocomplete = 'current-password';
       sekret.dataset.tryb = tryb;
-      if (przelacz) {
-        przelacz.hidden = true;                                   // jedno pole przyjmuje PIN i hasło — przełącznik zbędny
-        przelacz.textContent = tryb === 'pin' ? slowa.pin : slowa.haslo;
-      }
+      if (przelacz) przelacz.hidden = true;
       if (tryb !== ostatni) { ostatni = tryb; if (naZmiane) naZmiane(tryb); }
       return tryb;
     }
-    ident.addEventListener('input', () => { reczny = null; rysuj(); });
     /* D78: tryb bez sieci właśnie się skończył (sieć wróciła po przeładowaniu strony) — ekran logowania wpisuje tę samą
-       osobę, a pole od razu jest polem PIN-u: zostaje wpisać 4 cyfry, a jej zapisy z kolejki wyjdą JEJ sesją. */
+       osobę: zostaje wpisać hasło, a jej zapisy z kolejki wyjdą JEJ sesją. */
     const wpiszPodpowiedz = () => {
       const p = hala.podpowiedzLoginu ? hala.podpowiedzLoginu() : '';
-      if (p && !ident.value) { ident.value = p; reczny = null; rysuj(); }
+      if (p && !ident.value) { ident.value = p; rysuj(); }
     };
     if (hala.na) hala.na('sesja', s => { if (s && !s.zalogowany && s.powod) setTimeout(wpiszPodpowiedz, 0); });
-    if (przelacz) przelacz.addEventListener('click', () => {
-      reczny = (reczny || auto()) === 'pin' ? 'haslo' : 'pin';
-      sekret.value = '';
-      rysuj();
-      sekret.focus();
-    });
     rysuj();
-    return { tryb: () => sekret.dataset.tryb, odswiez: () => { reczny = null; return rysuj(); },
-             haslo: () => { reczny = 'haslo'; return rysuj(); } };
+    return { tryb: () => sekret.dataset.tryb, odswiez: rysuj, haslo: rysuj };
   }
 
-  /* Przyciski „Zmień hasło” i „Zmień PIN” (D43 §4) do wstawienia w „Moje konto”. Konto ekranu ich nie dostaje —
-     PIN monitora zmienia administrator. */
+  /* Przycisk „Zmień hasło” (D43 §4) do wstawienia w „Moje konto”. Konto ekranu go nie dostaje — hasło monitora zmienia
+     Menedżer. Od 2026-11-26 bez „Zmień PIN”. */
   function przycisk(el, hala, opcje) {
     if (!el) return null;
     const p = hala.pracownik;
     if (!p || ekran(p)) { el.innerHTML = ''; return null; }
-    el.innerHTML = '<button type="button" class="hala-zmien-haslo">Zmień hasło</button><button type="button" class="hala-zmien-pin">Zmień PIN</button>';
-    el.querySelector('.hala-zmien-haslo').addEventListener('click', () => zmienHaslo(hala, opcje));
-    const b = el.querySelector('.hala-zmien-pin');
-    b.addEventListener('click', () => zmienPin(hala, opcje));
+    el.innerHTML = '<button type="button" class="hala-zmien-haslo">Zmień hasło</button>';
+    const b = el.querySelector('.hala-zmien-haslo');
+    b.addEventListener('click', () => zmienHaslo(hala, opcje));
     return b;
   }
 
@@ -287,7 +227,7 @@
   /* ---------------------------------------------------------------- „Moje konto” (STYL-GK §3, 2026-10-06)
 
      Jedno okno konta dla Panelu, Lidera, UR i KJ: ikona osoby w nagłówku → imię i nazwisko
-     (i rola), Wygląd, Zmień hasło i Zmień PIN (D43), rzeczy tej aplikacji (dodatki), Dane w tym urządzeniu, wersja, Wyloguj. Jak „Moje konto”
+     (i rola), Wygląd, Zmień hasło (D43; od 2026-11-26 bez „Zmień PIN”), rzeczy tej aplikacji (dodatki), Dane w tym urządzeniu, wersja, Wyloguj. Jak „Moje konto”
      w GK Trasy i GK Flota — osoba z kilkoma programami szuka tego samego w tym samym miejscu.
        HalaKonto.mojeKonto(hala, { aplikacja: 'ur', komunikat, wyloguj: async () => …, odrzucone: () => …,
                                    dodatki: el => … })
@@ -521,7 +461,7 @@
     }
     d.innerHTML = `<form method="dialog"><h2 id="hala-okno-aplikacji-tytul">${ikonaKonta('telefon', 22)}Kody QR aplikacji</h2>
       <p class="hala-okno-opis">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu głównego. Aplikacje hali, GK Trasy
-        i GK Flota — konto GK (imię i nazwisko, hasło, potem PIN); inne logowanie jest opisane przy aplikacji.</p>
+        i GK Flota — konto GK (imię i nazwisko i hasło); inne logowanie jest opisane przy aplikacji.</p>
       <div class="hala-aplikacje-lista" data-lista><p class="hala-okno-opis">Wczytuję…</p></div>
       <div class="hala-okno-przyciski"><button type="button" data-drukuj-wszystkie hidden>${ikonaKonta('drukuj')}Drukuj wszystkie</button>
         <button type="button" data-zamknij>Zamknij</button></div></form>`;   /* Zamknij zawsze obrysowany (STYL-GK §3) */
@@ -619,7 +559,7 @@
     await rysuj();
   }
 
-  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, bezKodu, drukujKodyAplikacji, drukujKody, drukujArkusz, wczytajZXing, svgQR, zmienPin, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyPinu, bledyHasla, trescUstawienia,
+  global.HalaKonto = { aplikacjeNaTelefon, wierszeAplikacji, arkuszKodow, bezKodu, drukujKodyAplikacji, drukujKody, drukujArkusz, wczytajZXing, svgQR, zmienHaslo, ustawKonto, zaloguj, poleLogowania, przycisk, bledyHasla, trescUstawienia,
                        biuro, bezSieci, mojeKonto, trescKonta, trescCudzych, IKONA_KONTA, powiadomienia, trescPowiadomien, ETYKIETY };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.HalaKonto;
 })(typeof window !== 'undefined' ? window : globalThis);

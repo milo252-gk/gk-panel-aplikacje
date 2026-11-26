@@ -224,7 +224,7 @@
   function opisDzialuListy(pracownik) {
     if (W.profilMagazynu(pracownik)) return 'dział Magazyn';
     const kat = W.kategorieOsoby(pracownik);
-    return kat.length > 1 ? 'dział Lider produkcji GK albo Mistrz Produkcji GK' : kat[0] === 'mistrz' ? 'dział Mistrz Produkcji GK' : 'dział Lider produkcji GK';
+    return kat.length > 1 ? 'dział Lider Produkcji GK albo Mistrz Produkcji GK' : kat[0] === 'mistrz' ? 'dział Mistrz Produkcji GK' : 'dział Lider Produkcji GK';
   }
 
   const wierszHtml = w => `<li class="pozycja stan-${esc(w.stan)}" data-pozycja="${esc(w.id)}" role="button" tabindex="0">

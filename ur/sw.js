@@ -10,7 +10,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                    */
 
-const WERSJA = 'ur-5a79f60a8256';
+const WERSJA = 'ur-36e5c9ce3c02';
 
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.
 importScripts('../wspolne/hala-push-sw.js');
@@ -24,7 +24,7 @@ const ZASOBY = [
   './', './index.html', './ur.css', './ur.js', './widok.js',
   './awarie.js', './przeglady.js', './kpi.js', './plan.js', './instrukcja.html',
   './manifest.webmanifest', './ikona.svg', './ikona-192.png', './ikona-512.png', './ikona-maskable-512.png', './apple-touch-icon.png',
-  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/miary.js', '../wspolne/wyniki.js', '../wspolne/hala-push-sw.js', '../wspolne/hala-sync-sw.js', '../wspolne/hala-siec-sw.js', '../wspolne/kolejka-ui.js', '../wspolne/palec.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/gk-ikony.js', '../wspolne/reakcje.js', '../wspolne/okna-x.js', '../wspolne/dzialania.js', '../wspolne/naglowek.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png', '../wspolne/skaner.js',
+  '../wspolne/hala.js', '../wspolne/motyw.js', '../wspolne/aktualizacja.js', '../wspolne/konto.js', '../wspolne/eksport.js', '../wspolne/miary.js', '../wspolne/wyniki.js', '../wspolne/hala-push-sw.js', '../wspolne/hala-sync-sw.js', '../wspolne/hala-siec-sw.js', '../wspolne/kolejka-ui.js', '../wspolne/palec.js', '../wspolne/zlecenia.js', '../wspolne/gk-dzwieki.js', '../wspolne/gk-ikony.js', '../wspolne/reakcje.js', '../wspolne/okna-x.js', '../wspolne/dzialania.js', '../wspolne/naglowek.js', '../wspolne/urlopy.js', '../wspolne/hala.css', '../wspolne/logo-gkf.png', '../wspolne/skaner.js',
   '../wspolne/skaner-zxing.js',          // zapasowy dekoder (iPhone) — bez sieci też musi czytać kody
 ];
 

@@ -290,25 +290,24 @@
   function komunikatBledu(e) {
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło i PIN ustawione / stara wersja — tekst huba
+    if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło ustawione / stara wersja — tekst huba
     if (e.kod === 403) return 'To konto nie ma dostępu do Kontroli Jakości. Zaloguj się kontem kontrolera albo kierownika Kontroli Jakości.';
-    // 400/401/429: hub mówi po polsku i co zrobić („Złe imię i nazwisko albo PIN”, blokada na 5 minut) — wprost (D24).
+    // 400/401/429: hub mówi po polsku i co zrobić („Złe imię i nazwisko albo hasło”, pauza po złych próbach) — wprost (D24).
     return e.message || 'Nie udało się zalogować. Spróbuj jeszcze raz.';
   }
 
-  /* Logowanie identyfikatorem i hasłem albo PIN-em (D24, D43). Identyfikator = kod z karty (aparat, czytnik „piszący”
+  /* Logowanie identyfikatorem i hasłem (D24, D43; od 2026-11-26 bez PIN-u). Identyfikator = kod z karty (aparat, czytnik „piszący”
      jak klawiatura) albo login. Skan tylko WPISUJE kod w pole — sekret i tak trzeba podać. Enter z czytnika
      w polu identyfikatora przenosi do drugiego pola. Drugie pole: hasło (raz na 16 godzin na tym urządzeniu)
      albo PIN (4 cyfry) — konto.js → poleLogowania. */
-  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'),
-                                                przelacz: $('przelacz-sekret') });
+  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta') });
   $('formularz-logowania').addEventListener('submit', async ev => {
     ev.preventDefault();
     const ident = $('identyfikator').value.trim().replace(/^HALA:P:/i, '');
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
     if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
-      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz hasło.'; $('blad-logowania').hidden = false;
       $('identyfikator').focus(); return;
     }
     const blad = $('blad-logowania');
@@ -325,7 +324,7 @@
       blad.textContent = komunikatBledu(e);
       blad.hidden = false;
       $('pin').value = '';
-      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 16 h minęło albo 5 złych PIN-ów
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // wpisany dawny PIN — „Logowanie PIN-em wyłączone”
       $('pin').focus();
     } finally {
       for (const b of document.querySelectorAll('#formularz-logowania button')) b.disabled = false;
@@ -346,8 +345,8 @@
     pokazSesje();
   }
   $('menu-wyloguj').addEventListener('click', wyloguj);   // stopka menu na komputerze, jak w GK Trasy
-  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
-     dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw i PIN pod „Więcej”. */
+  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień hasło,
+     dane w tym urządzeniu, wersja, Wyloguj. Wcześniej goły „Wyloguj” w nagłówku, a Motyw pod „Więcej”. */
   /* D64: powiadomienia w Moim koncie — to samo miejsce co w Panelu, Liderze i UR (wcześniej „Więcej”). */
   $('konto').addEventListener('click', () => global.HalaKonto.mojeKonto(hala, {
     aplikacja: 'kj', komunikat: (t, r) => KJ.komunikat(t, r), wyloguj, odrzucone: () => KJ.idz('odrzucone'), instrukcja: 'instrukcja.html',
@@ -421,6 +420,17 @@
   // D98: terminowość i liczba zleceń tej osoby (wspolne/wyniki.js — ten sam ekran w Liderze i UR; w Panelu pełny raport).
   KJ.ekran('wyniki', { zakladka: 'wiecej', rysuj: el => global.HalaWyniki.rysuj(el, hala, { tryb: 'moje', klucz: 'kj-wyniki', tytul: 'Moje wyniki' }) });
 
+  /* Urlopy zespołu (właściciel 2026-11-26): kierownik KJ i Menedżer wpisują urlopy tutaj — ten sam ekran co Panel → Administracja → Urlopy
+     (wspolne/klient/urlopy.js). Komu wolno wpisać, pilnuje hub (R5); bez uprawnień ekran tylko to mówi. */
+  KJ.ekran('urlopy', {
+    zakladka: 'wiecej',
+    rysuj(el) {
+      if (!global.Hala.mozeUrlopyZespolu(hala.pracownik)) { el.innerHTML = '<h1>Urlopy zespołu</h1><p class="pusto">Urlopy zespołu wpisuje Kierownik Kontroli Jakości, Kierownik albo Menedżer.</p>'; return; }
+      global.HalaUrlopy.rysuj(el, hala, { tytul: 'Urlopy zespołu', komunikat: (t, r) => KJ.komunikat(t, r === 'ok' ? 'ok' : 'alarm'),
+                                         potwierdz: (t, tr, tak) => KJ.potwierdz(t, tr, tak), komunikatBledu, odswiez: () => pokazEkran() });
+    },
+  });
+
   // STYL-GK §8: dolny pasek telefonu ma najwyżej 4 ekrany + Więcej, więc Reklamacje (menu `.w-wiecej`) są na telefonie tutaj;
   // adres #reklamacje i powiadomienia nic nie zmieniają — ekran ten sam, tylko podświetla „Więcej” (hala.css → :has).
   KJ.ekran('wiecej', {
@@ -431,6 +441,7 @@
           <a class="przycisk" href="#pareto">Pareto wad</a>
           <a class="przycisk" href="#partie">Partie brakowe</a>
           <a class="przycisk" href="#katalog">${KJ.kierownikKJ() ? 'Katalog, wyroby, plan' : 'Katalog wad'}</a>
+          ${global.Hala.mozeUrlopyZespolu(hala.pracownik) ? '<a class="przycisk" href="#urlopy">Urlopy zespołu</a>' : ''}
           ${global.Hala.skrotyDoPanelu(hala.pracownik).map(s => `<a class="przycisk" href="${s.adres}">${s.tekst}</a>`).join('')}
           <a class="przycisk" href="#zgloszenia">Moje zgłoszenia</a>
           <a class="przycisk" href="#wyniki">Moje wyniki</a>

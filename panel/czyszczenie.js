@@ -1,4 +1,4 @@
-/* Panel Zarządczy GK — okno „🧹 Czyszczenie zleceń” (Zlecenia → 🧹 Czyszczenie, Administracja → Dane; tylko administrator).
+/* Panel Zarządczy GK — okno „🧹 Czyszczenie zleceń” (Zlecenia → 🧹 Czyszczenie; od 2026-11-26 bez wejścia z Administracji; tylko administrator).
 
    Właściciel 2026-10-27: „usuń historię zadań z wczoraj i dziś z 1 zmiany”; 2026-11-09: „brakuje usunięcia zamkniętych, a wybór
    zleceń jest niejasny”. Dlatego jedna lista w trzech krokach: (1) które pokazać — Zakończone (zamknięte, odwołane, przepadłe;

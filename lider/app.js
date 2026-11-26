@@ -85,8 +85,8 @@
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.kod === 403) return 'To konto nie ma dostępu do GK Produkcja. Poproś Kierownika zakładu o funkcję Lider produkcji GK, Mistrz Produkcji GK, Lider Produkcji SP albo Kierownik zakładu / Pracownik Magazynu.';
-    // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo PIN, blokada na 5 minut…).
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Produkcja. Poproś Kierownika zakładu o funkcję Lider Produkcji GK, Mistrz Produkcji GK, Lider Produkcji SP albo Kierownik zakładu / Pracownik Magazynu.';
+    // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo hasło, pauza po złych próbach…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
   };
 
@@ -420,44 +420,29 @@
       blad.textContent = e && (e.ustawione || (e.kod === 403 && e.powod)) ? e.message : Lider.poLudzku(e);
       blad.hidden = false;
       $('pin').value = '';
-      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // 16 h minęło albo 5 złych PIN-ów
+      if (e && e.powod === 'wymagane_haslo') poleSekretu.haslo();     // wpisany dawny PIN — „Logowanie PIN-em wyłączone”
       $('pin').focus();
     } finally {
       przyciski.forEach(b => { b.disabled = false; });
     }
   }
 
-  /* Identyfikator + hasło albo PIN (D24, D43). Enter z czytnika w polu identyfikatora przenosi do drugiego pola,
-     zamiast wysyłać pusty sekret. Osoba z ważnym znacznikiem na tym telefonie → „PIN (4 cyfry)” i klawiatura cyfr
-     (rękawice); inaczej „Hasło (raz na 16 godzin…)” — zwykłe pole z pełną klawiaturą, klawiatura cyfr schowana.
-     „abc” przełącza na hasło (zapomniany PIN), „123” — z powrotem na PIN (konto.js → poleLogowania). */
-  const poleSekretu = HalaKonto.poleLogowania({
-    hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta'), przelacz: $('przelacz-sekret'),
-    slowaPrzelacznika: { pin: 'abc', haslo: '123' },
-    naZmiane: tryb => {
-      $('formularz-logowania').querySelector('.pinpad').hidden = tryb !== 'pin';
-      $('zaloguj-haslem').hidden = tryb === 'pin';
-      $('przelacz-sekret').title = tryb === 'pin' ? 'Hasło z pełnej klawiatury' : 'PIN z klawiatury cyfr';
-    },
-  });
+  /* Identyfikator (albo karta) + hasło (D24, D43). Od 2026-11-26 (właściciel: „całkowicie usunąć PIN z logowania”) bez
+     PIN-u, bez klawiatury cyfr dla rękawic i bez przełącznika „abc/123” — zwykłe pole hasła z pełną klawiaturą telefonu.
+     Enter z czytnika w polu identyfikatora przenosi do pola hasła, zamiast wysyłać pusty sekret (konto.js → poleLogowania). */
+  const poleSekretu = HalaKonto.poleLogowania({ hala, ident: $('identyfikator'), sekret: $('pin'), etykieta: $('pin-etykieta') });
   $('formularz-logowania').addEventListener('submit', ev => {
     ev.preventDefault();
     const ident = $('identyfikator').value.trim();
     const pin = $('pin').value.trim();
     if (ident && !pin) { $('pin').focus(); return; }
     if (!ident) {          // STYL-GK §2: to samo zdanie co w hubie i w GK Trasy / GK Flota
-      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz PIN albo hasło.'; $('blad-logowania').hidden = false;
+      $('blad-logowania').textContent = 'Wpisz imię i nazwisko oraz hasło.'; $('blad-logowania').hidden = false;
       $('identyfikator').focus(); return;
     }
     zaloguj({ identyfikator: ident, pin });
   });
-  $('formularz-logowania').querySelector('.pinpad').addEventListener('click', ev => {
-    const c = ev.target.dataset && ev.target.dataset.cyfra;
-    if (!c) return;
-    const pole = $('pin');
-    pole.value = c === 'C' ? pole.value.slice(0, -1) : (pole.value + c).slice(0, 4);   // klawiatura cyfr = tryb PIN: najwyżej 4 cyfry (piąta nie ma być próbą „hasła”)
-  });
-  // Skan karty tylko wpisuje identyfikator — PIN i tak trzeba podać (D24).
+  // Skan karty tylko wpisuje identyfikator — hasło i tak trzeba podać (D24).
   $('skanuj-karte').addEventListener('click', async () => {
     const t = await HalaSkaner.skanuj({ tytul: 'Zeskanuj identyfikator', podpowiedz: 'Albo wpisz numer karty' });
     if (!t) return;
@@ -469,7 +454,7 @@
 
   // ------------------------------------------------------------ menu
 
-  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień PIN,
+  /* „Moje konto” (ikona osoby w nagłówku, STYL-GK §3): wspólne okno z ../wspolne/konto.js — imię i nazwisko, Wygląd, Zmień hasło,
      dane w tym urządzeniu, wersja, Wyloguj — jak w UR, KJ, Panelu i GK Trasy. Rzeczy Lidera (linia, powiadomienia,
      ostatnia synchronizacja) dorysowują się w środku (dodatki). Okno to <dialog> w warstwie górnej — przed oknem Lidera
      (Zmień linię, Odrzucone) zamykamy je, inaczej przykryłoby tamto. */
@@ -487,7 +472,7 @@
             <p class="hala-konto-drobne">${esc(W.nazwaLinii(hala.slowniki, Lider.stan.linia))}</p>
             <button type="button" data-a="linia">Zmień linię</button></fieldset>` : ''}
           ${zespol ? `<fieldset><legend>Mój zespół</legend>
-            <p class="hala-konto-drobne">${wiele ? 'Dodaj lidera, przypisz linie, ustaw hasło startowe albo zresetuj PIN.' : 'Dodaj lidera, ustaw hasło startowe albo zresetuj PIN.'}</p>
+            <p class="hala-konto-drobne">${wiele ? 'Dodaj lidera, przypisz linie albo zresetuj hasło.' : 'Dodaj lidera albo zresetuj hasło.'}</p>
             <button type="button" data-a="zespol">Mój zespół</button></fieldset>` : ''}
           <div data-powiadomienia></div>
           <p class="hala-konto-drobne">Ostatnia synchronizacja: ${esc(ost ? W.godzina(ost) : '—')}</p>`;
@@ -596,7 +581,7 @@
     const p = hala.pracownik;
     // Przycisk „Moje konto” to sama ikona osoby (index.html, STYL-GK §3 runda 2) — bez „Anna N.” obok, jak w UR, KJ i Panelu.
     $('menu-kto').textContent = p ? p.nazwa : '';   // nagłówek menu na komputerze, jak w GK Trasy
-    // 2026-11-23: pod imieniem NAZWA ROLI (Mistrz Produkcji GK, Lider produkcji GK, Lider Produkcji SP, Kierownik zakładu, Menedżer, Kierownik zakładu/Pracownik Magazynu…),
+    // 2026-11-23: pod imieniem NAZWA ROLI (Mistrz Produkcji GK, Lider Produkcji GK, Lider Produkcji SP, Kierownik zakładu, Menedżer, Kierownik zakładu/Pracownik Magazynu…),
     // pod nią stała nazwa programu „GK Produkcja” (index.html) — bez wariantów „GK Mistrz”, „GK Magazyn”, „GK Lider Produkcji SP”.
     $('menu-rola').textContent = p ? Hala.nazwaRoliMenu(p, hala.kontrakt, 'lider') : '';
   }
@@ -722,7 +707,7 @@
         <nav class="menu-wiecej">
           ${mag ? '' : '<button type="button" class="glowny" data-a="koniec">Raport zmiany</button>'}
           ${W.mozeRcp(hala.pracownik) ? '<button type="button" data-a="rcp">Ludzie ze zmiany (RCP)</button>' : ''}
-          
+          ${Hala.skrotyDoPanelu(hala.pracownik).map(x => `<a class="przycisk" href="${esc(x.adres)}">${esc(x.tekst)}</a>`).join('')}
           <button type="button" data-a="moje">Moje zgłoszenia</button>
           <button type="button" data-a="wyniki">Moje wyniki</button>
           <button type="button" data-a="niewyslane">Nie wysłane${k.odrzucone ? ` (${k.odrzucone})` : ''}</button>

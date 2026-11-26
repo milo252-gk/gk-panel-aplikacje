@@ -1,12 +1,13 @@
 /* Panel Zarządczy GK — ekran administracji (rola admin; D49: kierownik zakładu, lider UR i kierownik KJ — tylko Pracownicy
    ze swoim zespołem, zakres z huba, wspolne/klient/zespol.js). 2026-09-28: login to imię i nazwisko (D26),
-   więc pracowników, PIN-y i karty prowadzi się tutaj, a nie tylko plikiem wspolne/narzedzia/zaladuj.py.
+   więc pracowników, hasła startowe i karty prowadzi się tutaj, a nie tylko plikiem wspolne/narzedzia/zaladuj.py.
 
    Logowania (logowanie R1, 2026-11-10): tylko do odczytu — dziennik logowań (bez haseł), lista kont z hasłem startowym, niespójności.
 
   Cztery części (UI etap 2, właściciel 2026-10-12 — wcześniej sześć chipów):
-   - Pracownicy: dodaj, zmień dane, role, linie, nowy PIN, karta (zgubiona → usuń), wyłącz konto, odblokuj po złych PIN-ach.
-     Hub: GET/POST /api/v1/admin/… przez hala.admin (rolę sprawdza hub). PIN-ów i kart nie widać — w bazie są tylko skróty.
+   - Pracownicy: dodaj, zmień dane, role, linie, hasło ekranu, karta (zgubiona → usuń), wyłącz konto, odblokuj po złych hasłach.
+     Hub: GET/POST /api/v1/admin/… przez hala.admin (rolę sprawdza hub). Haseł i kart nie widać — w bazie są tylko skróty.
+     Od 2026-11-26 PIN-ów nie ma (logowanie tylko hasłem): bez „Resetuj tylko PIN” i bez pola PIN osoby.
      🖨 przy osobie i „🖨 Identyfikatory” — kody HALA:P do logowania skanem w Liderze, UR i KJ (właściciel 2026-10-20).
    - Maszyny (bez linii i stanowisk — 2026-10-12): słownik przez zdarzenia slownik.zapisany / slownik.usuniety.
      „🖨 Drukuj etykiety” drukuje naklejki QR (dawny chip „Etykiety QR” — te same opcje i ten sam druk).
@@ -111,7 +112,8 @@
     const admin = jestAdmin();
     const dostepne = W.czesciAdministracji(P.dostepAdministracji());
     czesc = W.czescAdministracji(czesc, dostepne);
-    $('admin-chipy').hidden = dostepne.length < 2;
+    // Same drzwi (Prezes) — chipy powtarzałyby przyciski w treści, więc ich nie ma.
+    $('admin-chipy').hidden = dostepne.length < 2 || dostepne.every(c => W.DRZWI_TELEFONU.includes(c));
     rysujZespol(admin || czesc !== 'pracownicy');
     for (const b of document.querySelectorAll('#administracja .chip')) {
       b.hidden = !dostepne.includes(b.dataset.czesc);
@@ -126,75 +128,27 @@
     if (czesc === 'pracownicy') rysujPracownikow(el);
     else if (czesc === 'urlopy') { if (P.widoki.urlopy) P.widoki.urlopy.rysuj(el); }
     else if (czesc === 'maszyny') rysujMaszyny(el);
-    else if (czesc === 'dane') rysujDane(el);
     else if (czesc === 'logowania') rysujLogowania(el);
     else if (czesc === 'kody') rysujKody(el);
     else if (czesc === 'serwis') rysujSerwis(el);
     else if (czesc === 'plan') rysujPlan(el);
+    else if (W.DRZWI_TELEFONU.includes(czesc)) rysujDrzwi(el, dostepne);
     else rysujUstawienia(el);
   }
 
-  // ------------------------------------------------------------ dane i kody QR (STYL-GK §8, 2026-11-04)
-
-  /* „Dane” i „Kody QR” to tylko drzwi do istniejących okien: czyszczenie zleceń (czyszczenie.js — wybór pozycji, pełna kopia
-     bazy przed usunięciem, serwer odmawia nie-administratorom) i druk kodów QR (kody.js). Nic nie jest tu kopiowane, więc
-     wejście w Zlecenia → 🧹 działa dokładnie tak samo. Szkielet budowany raz na wejście w część
-     (przejdz() czyści treść), żeby przerysowanie co 20 s nie zabierało fokusu z przycisku. */
-  function rysujDane(el) {
-    if (el.querySelector('[data-karta="dane"]')) return;
-    el.innerHTML = `<section class="admin-linia" data-karta="dane">
-        <h3>Czyszczenie zleceń</h3>
-        <p class="slaby">Usuwa wybrane zlecenia (albo całą historię sprzed wybranej chwili) z Panelu i telefonów. Zapisanych zleceń nie rusza.
-          Serwer najpierw robi pełną kopię bazy (folder Odlozone na serwerze: 5 ostatnich, najwyżej 90 dni; zawiera też klucze i skróty haseł) i po usunięciu pokazuje jej nazwę. Wejście jest też w Zlecenia → Czyszczenie.</p>
-        <div class="admin-pasek"><button type="button" class="glowny" data-akcja="otworz-czyszczenie">${P.ik('czyszczenie')}Czyszczenie zleceń</button></div>
-      </section>
-      <section class="admin-linia" data-karta="odrzucone">
-        <h3>Odrzucone zdarzenia <button type="button" class="maly" data-akcja="odswiez-odrzucone">Odśwież</button></h3>
-        <p class="slaby">Zapisy z hali, których serwer nie przyjął (telefon pokazał osobie powód i wyrzucił je z kolejki). Leżą tu 90 dni.
-          „Ponów” wysyła zapis jeszcze raz w imieniu autora — z jego dzisiejszymi uprawnieniami i pełnym sprawdzeniem.</p>
-        <div id="odrzucone-lista" class="lista"><p class="pusto">Wczytuję…</p></div>
-      </section>`;
-    wczytajOdrzucone();
+  /* 1.44.0: Prezes ma tu same drzwi (Wskaźniki, Wyniki, Raporty, RCP) — chipy u góry otwierają ekrany, a treść to te same przyciski
+     w kolumnie (większe pola dotyku na telefonie). Nic nie jest wczytywane z /api/v1/admin (Prezes tam nie ma dostępu). */
+  const NAZWY_DRZWI = { wskazniki: ['wskazniki', 'Wskaźniki'], wyniki: ['trend', 'Wyniki'], raporty: ['raporty', 'Raporty'], rcp: ['zegar', 'RCP — godziny pracy'] };
+  function rysujDrzwi(el, dostepne) {
+    const kody = dostepne.filter(c => NAZWY_DRZWI[c]);
+    const odcisk = kody.join();
+    if (el.dataset.odcisk === 'drzwi:' + odcisk) return;
+    el.dataset.odcisk = 'drzwi:' + odcisk;
+    el.innerHTML = `<div class="admin-drzwi">${kody.map(c => `<button type="button" class="admin-drzwi-przycisk" data-drzwi="${c}">${P.ik(NAZWY_DRZWI[c][0])}${esc(NAZWY_DRZWI[c][1])}</button>`).join('')}</div>`;
   }
 
-  /* Etap 1: odrzucone zdarzenia (GET /api/v1/admin/zdarzenia-odrzucone; tylko administrator). Lista rysowana osobno od szkieletu,
-     żeby odświeżenie nie zabierało fokusu; co pokazać — W.odrzuconeZdarzenia (testowane). */
-  let odrzucone = null, bladOdrzuconych = '', wczytujeOdrzucone = false;
-  async function wczytajOdrzucone() {
-    if (wczytujeOdrzucone) return;
-    wczytujeOdrzucone = true;
-    try { odrzucone = await hala.admin('GET', '/api/v1/admin/zdarzenia-odrzucone'); bladOdrzuconych = ''; }
-    catch (e) { bladOdrzuconych = P.komunikatBledu(e); }
-    finally { wczytujeOdrzucone = false; rysujOdrzucone(); }
-  }
-  function rysujOdrzucone() {
-    const el = $('odrzucone-lista');
-    if (!el) return;
-    if (bladOdrzuconych && !odrzucone) { el.innerHTML = `<p class="pusto">${esc(bladOdrzuconych)}</p>`; return; }
-    const w = W.odrzuconeZdarzenia(odrzucone, P.nazwaTypu);
-    if (w.niedostepne) { el.innerHTML = `<p class="pusto">${esc(w.podsumowanie)}</p>`; return; }
-    if (w.pusto) { el.innerHTML = '<p class="pusto">Nic nie zostało odrzucone.</p>'; return; }
-    el.innerHTML = `<p class="slaby">${esc(w.podsumowanie)}</p>` + w.wiersze.map(z => `
-      <article class="admin-osoba ${z.ponowione ? 'wylaczona' : ''}" data-wpis="${z.id}">
-        <div class="opis">
-          <div><b>${esc(z.typ)}</b> <span class="slaby">${esc(z.kiedy)} · ${esc(z.kto)}</span></div>
-          <div class="szczegoly"><span>${esc(z.powod)}</span>
-            ${z.ponowione ? `<span class="znacznik neutral">Ponowione</span>` : ''}${z.wynik ? `<span class="slaby">${esc(z.wynik)}</span>` : ''}</div>
-          <details class="odrzucone-surowe"><summary class="slaby">Zapis</summary><pre>${esc(z.surowe)}</pre></details>
-        </div>
-        <div class="akcje">${z.mozePonowic ? '<button type="button" class="maly" data-akcja="ponow-odrzucone">Ponów</button>' : ''}</div>
-      </article>`).join('');
-  }
-  async function ponowOdrzucone(id) {
-    const z = ((odrzucone || {}).zdarzenia || []).find(x => x.id === id);
-    if (!z) return;
-    const ma = W.odrzuconeZdarzenia({ zdarzenia: [z] }, P.nazwaTypu).wiersze[0];
-    if (!await P.potwierdz('Ponowić zapis?', `${ma.typ} — ${ma.kto}, ${ma.kiedy}. Serwer sprawdzi go jeszcze raz tak, jakby wysłała go ta osoba teraz.`, 'Ponów')) return;
-    const r = await hala.admin('POST', `/api/v1/admin/zdarzenia-odrzucone/${id}/ponow`, {});
-    if (r.status === 'odrzucone') P.komunikat(`Serwer dalej nie przyjmuje: ${r.powod}`, 'uwaga');
-    else P.komunikat('Ponowione — zapis przyjęty.', 'ok');
-    await wczytajOdrzucone();
-  }
+  // ------------------------------------------------------------ logowania i kody QR (STYL-GK §8)
+
   /* Logowanie R1 (2026-11-10): „Logowania” — tylko do odczytu, tylko administrator (GET /api/v1/admin/logowania). Dziennik: kto, kiedy,
      skąd — bez haseł i PIN-ów; lista kont z hasłem startowym (bez haseł); niespójności wykryte w dzienniku. Szkielet budowany raz na
      wejście w część; lista rysowana osobno, żeby odświeżenie nie zabierało fokusu. Co pokazać — W.logowania (testowane). */
@@ -279,7 +233,7 @@
 
   // ------------------------------------------------------------ pracownicy
 
-  /* D49: zdanie nad listą dla zarządzającego — kogo widzi i czego nie może (usunąć, wpisać hasła ani PIN-u). */
+  /* D49: zdanie nad listą dla zarządzającego — kogo widzi i czego nie może (usunąć, wpisać hasła). */
   function rysujZespol(admin) {
     const el = $('admin-zespol');
     const tekst = admin || !zakres ? '' : HalaZespol.opisZespolu(zakres, hala.kontrakt && hala.kontrakt.stale, hala.slowniki);
@@ -316,13 +270,13 @@
             ${p.telefon ? `<span class="slaby">${P.ik('telefon-sluchawka', 14)}${esc(p.telefon)}</span>` : ''}
             ${p.aktywny === false ? '<span class="znacznik neutral">Wyłączone</span>' : ''}
             ${p.zablokowany ? `<span class="znacznik alarm">${p.blokada_internet && p.blokada_internet.rodzaj === 'konto'
-              ? 'Zablokowane z internetu' : 'Zablokowane po złych PIN-ach'}</span>` : ''}
+              ? 'Zablokowane z internetu' : 'Zablokowane po złych hasłach'}</span>` : ''}
           </div>
         </div>
         <div class="akcje">
           ${p.zablokowany ? '<button type="button" class="maly glowny" data-akcja="odblokuj">Odblokuj</button>' : ''}
           ${zeSkanem.has(p.id) ? `<button type="button" class="maly" data-akcja="identyfikator" title="Drukuj identyfikator QR" aria-label="Drukuj identyfikator QR">${P.ik('drukuj')}</button>` : ''}
-          ${uprawnienia(lista.find(x => x.id === p.id)).resetKonta ? '<button type="button" class="maly" data-akcja="resetuj-konto" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>' : ''}
+          ${uprawnienia(lista.find(x => x.id === p.id)).resetKonta ? '<button type="button" class="maly" data-akcja="resetuj-konto" title="Hasło startowe haslo123 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>' : ''}
           <button type="button" class="maly" data-akcja="edytuj">Zmień</button>
         </div>
       </article>`).join('') || '<p class="pusto">Nikogo nie znalazłem.</p>';
@@ -369,77 +323,60 @@
     fp.nazwa.focus();
   }
 
-  /* D43: człowiek — hasło startowe (nowa osoba; pole zostaje do „Resetuj tylko hasło”) i PIN 4 cyfry (nieobowiązkowy);
-     konto samego ekranu — jeden PIN 4–8 cyfr, bez hasła. Pola i podpisy idą za zaznaczonymi rolami. */
+  /* D43: człowiek — hasło startowe (nowa osoba; pole zostaje do „Resetuj hasło”); konto samego ekranu — jedno hasło
+     (od 2026-11-26 hasło min. 8 znaków zamiast PIN-u 4–8 cyfr; pole ma dalej nazwę „pin”). Pola i podpisy idą za rolami. */
   function polePinu() {
     const role = [...fp.querySelectorAll('input[name="role"]:checked')].map(x => x.value);
     const ekran = role.length === 1 && role[0] === 'ekran';
     // D34 (2026-10-07): mistrz w GK Produkcja widzi tylko zaznaczone linie — podpowiedź przy liniach, gdy ma tę rolę.
     $('osoba-linie-mistrz').hidden = !role.includes('mistrz');
-    // D46 (właściciel 2026-10-08): administrator nie wpisuje nikomu PIN-u — tylko „Resetuj tylko PIN” (startowy 1234).
-    // Pole zostaje wyłącznie dla konta ekranu (monitor), które ma jeden sekret 4–8 cyfr.
+    // Pole „Hasło ekranu” tylko dla konta ekranu (monitor) — człowiekowi administrator hasła nie wpisuje (poza startowym).
     const u = uprawnienia(edytowany);
     $('osoba-pin-pole').hidden = !ekran || !u.pin;
     if (!ekran) fp.pin.value = '';
-    $('osoba-pin-etykieta').textContent = ekran ? 'PIN ekranu (4–8 cyfr)' : 'PIN (4 cyfry, nieobowiązkowy)';
-    fp.pin.maxLength = ekran ? 8 : 4;
-    fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : ekran ? '4–8 cyfr' : 'osoba ustawi sama';
+    $('osoba-pin-etykieta').textContent = 'Hasło ekranu (min. 8 znaków)';
+    fp.pin.maxLength = 128;
+    fp.pin.placeholder = edytowany ? 'zostaw puste — bez zmian' : 'min. 8 znaków';
     // D49: zarządzający zespołem nie wpisuje hasła startowego — nowa osoba dostaje zawsze haslo123.
     $('osoba-haslo').hidden = ekran || !u.haslo;
     $('osoba-sekrety').hidden = $('osoba-haslo').hidden && $('osoba-pin-pole').hidden;   // pusty rząd nie robi przerwy
     if (!u.haslo) fp.haslo.value = '';
     $('osoba-reset').hidden = ekran || !u.resetHasla;
-    // D46: konto ekranu nie ma PIN-u osoby; własny PIN administrator zmienia w Moim koncie (reset wylogowałby go od razu).
-    $('osoba-resetuj-pin').hidden = ekran || !u.resetPinu;
-    $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jeden PIN — bez hasła i bez PIN-u osoby.'
-      : edytowany ? 'Hasło zmienia sama osoba (Moje konto). Niżej zresetujesz tylko hasło albo tylko PIN; oba naraz — „Resetuj hasło” na liście.'
-        : u.haslo ? 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.'
-          : 'Hasło startowe: haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu) i PIN.';
+    $('osoba-o-hasle').textContent = ekran ? 'Konto ekranu (monitor w biurze) ma jedno hasło — wpisuje je Menedżer tutaj.'
+      : edytowany ? 'Hasło zmienia sama osoba (Moje konto). Zapomniane — „Resetuj hasło” niżej albo na liście.'
+        : u.haslo ? 'Puste hasło startowe = haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu).'
+          : 'Hasło startowe: haslo123. Przy pierwszym logowaniu osoba ustawi własne hasło (raz na 16 godzin na urządzeniu).';
   }
   $('osoba-role').addEventListener('change', polePinu);
 
-  /* „Resetuj tylko hasło” (D43 §3a, D96-reset): haslo123 albo wpisane w polu „Hasło startowe”, PIN osoby zostaje, sesje i zaufanie
-     urządzeń zakończone, blokada zdjęta. Osoba przy następnym logowaniu wpisze hasło i ustawi nowe, potem znów loguje się PIN-em. */
+  /* „Resetuj hasło” w oknie osoby (D43 §3a, D96-reset): haslo123 albo wpisane w polu „Hasło startowe”, sesje i zaufanie urządzeń
+     zakończone, blokada zdjęta. Osoba przy następnym logowaniu wpisze hasło startowe i ustawi nowe (od 2026-11-26 bez PIN-u). */
   $('osoba-reset').addEventListener('click', async () => {
     const o = edytowany;
     if (!o) return;
     const wlasne = uprawnienia(o).haslo ? fp.haslo.value.trim() : '';
     const w = W.pracownikZFormularza({ nazwa: o.nazwa, role: o.role, linie: o.linie, aktywny: o.aktywny !== false, telefon: o.telefon,
-                                       haslo: wlasne, haslo_startowe: true, zachowaj_pin: true }, o, lista);
+                                       haslo: wlasne, haslo_startowe: true }, o, lista);
     const blad = fp.querySelector('.blad');
     if (w.bledy.length) { blad.textContent = w.bledy.join(' '); blad.hidden = false; return; }
-    if (!(await P.potwierdz('Zresetować tylko hasło?', `${o.nazwa} dostanie hasło ${wlasne ? 'wpisane w polu „Hasło startowe”' : '„haslo123”'}, `
-          + 'PIN zostaje, ale na każdym urządzeniu najpierw zaloguje się hasłem (przy wycieku albo zgubionym telefonie użyj „Resetuj hasło” — zmienia też PIN). Urządzenia zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe hasło.', 'Resetuj tylko hasło'))) return;
+    if (!(await P.potwierdz('Zresetować hasło?', `${o.nazwa} dostanie hasło ${wlasne ? 'wpisane w polu „Hasło startowe”' : '„haslo123”'}. `
+          + 'Urządzenia zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe hasło.', 'Resetuj hasło'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/pracownik', w.dane);
       $('okno-osoby').close();
-      P.komunikat(`${o.nazwa}: hasło startowe ${wlasne ? 'ustawione' : '„haslo123”'}, PIN bez zmian — przy logowaniu ustawi nowe hasło.`, 'ok');
+      P.komunikat(`${o.nazwa}: hasło startowe ${wlasne ? 'ustawione' : '„haslo123”'} — przy logowaniu ustawi nowe hasło.`, 'ok');
       await wczytajPracownikow();
     } catch (e) { blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
   });
 
-  /* „Resetuj tylko PIN” (D46): PIN startowy 1234 — osoba ustawia nowy przy pierwszym logowaniu, hasło zostaje. Nikt nie zna
-     niczyjego PIN-u. */
-  $('osoba-resetuj-pin').addEventListener('click', async () => {
-    const o = edytowany;
-    if (!o || !(await P.potwierdz('Zresetować tylko PIN?', `${o.nazwa} dostanie PIN startowy 1234, hasło zostaje. Wszystkie sesje zostaną `
-          + 'zakończone, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowy PIN.', 'Resetuj PIN'))) return;
-    try {
-      await hala.admin('POST', '/api/v1/admin/resetuj-pin', { pracownik: o.id });
-      $('okno-osoby').close();
-      P.komunikat(`${o.nazwa}: PIN startowy 1234, hasło bez zmian — przy logowaniu ustawi nowy PIN.`, 'ok');
-      await wczytajPracownikow();         // znacznik „PIN startowy” na liście
-    } catch (e) { const blad = fp.querySelector('.blad'); blad.textContent = P.komunikatBledu(e); blad.hidden = false; }
-  });
-
-  /* „Resetuj hasło” w wierszu listy (właściciel 2026-11-23, D96-reset): hasło startowe i PIN startowy jednym zapisem w hubie
-     (resetuj-konto) — najprostsza droga dla kierownika, gdy ktoś zapomniał logowania. Tylko tam, gdzie wolno oba resety. */
+  /* „Resetuj hasło” w wierszu listy (właściciel 2026-11-23, D96-reset): hasło startowe jednym zapisem w hubie (resetuj-konto) —
+     najprostsza droga dla kierownika, gdy ktoś zapomniał hasła. Od 2026-11-26 bez PIN-u 1234 (PIN-ów nie ma). */
   async function resetujKonto(o) {
-    if (!o || !(await P.potwierdz('Zresetować hasło i PIN?', `${o.nazwa} dostanie hasło „haslo123” i PIN 1234, wszystkie urządzenia `
-          + 'zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło'))) return;
+    if (!o || !(await P.potwierdz('Zresetować hasło?', `${o.nazwa} dostanie hasło „haslo123”, wszystkie urządzenia `
+          + 'zostaną wylogowane, a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe hasło.', 'Resetuj hasło'))) return;
     try {
       await hala.admin('POST', '/api/v1/admin/resetuj-konto', { pracownik: o.id });
-      P.komunikat(`${o.nazwa}: hasło „haslo123” i PIN 1234 — przy logowaniu ustawi nowe.`, 'ok');
+      P.komunikat(`${o.nazwa}: hasło „haslo123” — przy logowaniu ustawi nowe.`, 'ok');
       await wczytajPracownikow();
     } catch (e) { P.komunikat(P.komunikatBledu(e), 'blad'); }
   }
@@ -497,7 +434,7 @@
     const wybrane = n => [...fp.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value);
     const u = uprawnienia(edytowany);
     // Hasło z pola idzie przy zapisie tylko dla nowej osoby — u istniejącej wysyła je „Resetuj tylko hasło”.
-    // D49: zarządzający zespołem nie wysyła hasła, PIN-u ani karty (pola są ukryte; hub odrzuciłby je 403).
+    // D49: zarządzający zespołem nie wysyła hasła ani karty (pola są ukryte; hub odrzuciłby je 403). Pole „pin” to hasło ekranu.
     const w = W.pracownikZFormularza({ nazwa: fp.nazwa.value, role: wybrane('role'), linie: wybrane('linie'),
                                        pin: u.pin ? fp.pin.value : '', haslo: edytowany || !u.haslo ? '' : fp.haslo.value,
                                        karta: u.karta ? fp.karta.value : '', usun_karte: u.karta && fp.usun_karte.checked,
@@ -512,7 +449,7 @@
     const ja = hala.pracownik && edytowany && edytowany.id === hala.pracownik.id;
     if (ja && edytowany.role.includes('admin') && (!w.dane.role.includes('admin') || w.dane.aktywny === false)
         && !(await P.potwierdz(w.dane.aktywny === false ? 'Wyłączyć własne konto?' : 'Odebrać sobie funkcję Menedżer?',
-          'Po zapisie stracisz dostęp do Administracji (konta, PIN-y, tunel). Wróci tylko, gdy nada go inny Menedżer.',
+          'Po zapisie stracisz dostęp do Administracji (konta, hasła, tunel). Wróci tylko, gdy nada go inny Menedżer.',
           w.dane.aktywny === false ? 'Wyłącz' : 'Odbierz'))) return;
     // Etap 3: osoba zleca zlecenia stałe — po wyłączeniu (albo bez roli kierownika) hub przestanie je zlecać.
     const ostrz = W.ostrzezenieAutora(hala.slowniki, edytowany, w.dane, ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || []);
@@ -637,7 +574,7 @@
         <label>Sieć zakładu (adresy internetu wifi zakładu, po przecinku)
           <input name="siec_zakladu" value="${esc(wart('siec_zakladu', ''))}" placeholder="np. 203.0.113.7">
           <span class="slaby">${twojAdres ? `Ten komputer łączy się z adresu <b>${esc(twojAdres)}</b> — jeśli jesteś w zakładzie, to jest adres zakładu.` : ''}
-            Złe PIN-y z tej sieci nie blokują kont z internetu; sieci lokalne (192.168…, 10…) liczą się zawsze.
+            Złe hasła z tej sieci nie blokują kont z internetu; sieci lokalne (192.168…, 10…) liczą się zawsze.
             Najprościej: Ustawienia → „Wpisz mój adres”.</span></label>
         <p class="blad" role="alert" hidden></p>
         <div class="przyciski"><button class="glowny" type="submit">Zapisz progi</button></div>
@@ -991,7 +928,7 @@
           <div class="serwis-czesc-tresc" id="serwis-polaczenia-tresc"></div>
         </details>
         <div id="serwis-formularze">${FORMULARZE_KOPII_I_TUNELU}</div>
-        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Administracja → Dane</b> i w <b>Zlecenia → Czyszczenie</b> — tylko dla Menedżera.</p>`;
+        <p class="slaby">Czyszczenie zleceń (usuwanie historii) jest w <b>Zlecenia → Czyszczenie</b> — tylko dla Menedżera.</p>`;
       podlaczKopieITunel();
     }
     rysujDostep($('serwis-dostep-tresc'));
@@ -1064,7 +1001,7 @@
         Pokaż kod QR albo wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
       <section class="admin-linia">
         <h3><span>Logowanie z internetu <span class="znacznik ${lz.licznik.kolor}">${esc(String((dostepStan.logowanie || {}).zle_proby_godzina || 0))}</span></span></h3>
-        <p class="slaby">${esc(lz.licznik.tekst)}. Konto po 10 złych PIN-ach z internetu czeka 15 minut, po trzech takich seriach
+        <p class="slaby">${esc(lz.licznik.tekst)}. Konto po 10 złych hasłach z internetu czeka 3 minuty, po trzech takich seriach
           w ciągu doby jest zablokowane z internetu — w firmowym wifi loguje się dalej.</p>
         ${lz.zablokowane.map(z => `<div class="admin-maszyna" data-id="${esc(z.id)}"><span><b>${esc(z.nazwa)}</b>
           <span class="${z.konto ? 'tekst-alarm' : 'slaby'}">${esc(z.opis)}</span></span>
@@ -1129,7 +1066,7 @@
     if (!wpis) return;
     const obecna = String((((hala.slowniki && hala.slowniki.ustawienia) || {}).siec_zakladu || {}).wartosc || '').trim();
     if (!(await P.potwierdz('Wpisać ten adres jako sieć zakładu?', `${wpis} — rób to tylko w firmowej sieci (komputer w biurze `
-      + 'albo telefon w firmowym wifi). Złe PIN-y z tego adresu nie będą blokować kont z internetu.', 'Wpisz'))) return;
+      + 'albo telefon w firmowym wifi). Złe hasła z tego adresu nie będą blokować kont z internetu.', 'Wpisz'))) return;
     const wartosc = obecna ? `${obecna}, ${wpis}` : wpis;
     await hala.zapisz('slownik.zapisany', 'ustawienia/siec_zakladu', { slownik: 'ustawienia', klucz: 'siec_zakladu', wartosc: { wartosc } });
     P.komunikat(`Sieć zakładu: ${wartosc}`, 'ok');
@@ -1301,10 +1238,11 @@
     wskazniki: () => { const z = document.querySelector('.zakladki [data-widok="wskazniki"]'); if (z) z.click(); },
     wyniki: () => { const z = document.querySelector('.zakladki [data-widok="wyniki"]'); if (z) z.click(); },
     raporty: () => { const z = document.querySelector('.zakladki [data-widok="raporty"]'); if (z) z.click(); },
+    rcp: () => { const z = document.querySelector('.zakladki [data-widok="rcp"]'); if (z) z.click(); },
     role: () => { if (P.widoki.role) P.widoki.role.otworz(); },
-    niewyslane: () => { if (P.pokazOdrzucone) P.pokazOdrzucone(); },
   };
   for (const b of document.querySelectorAll('#administracja .chip')) b.addEventListener('click', () => (DRZWI[b.dataset.czesc] || (() => przejdz(b.dataset.czesc)))());
+  $('admin-tresc').addEventListener('click', ev => { const d = ev.target.closest('[data-drzwi]'); if (d && DRZWI[d.dataset.drzwi]) DRZWI[d.dataset.drzwi](); });
   // Rozwinięcie części Serwisu (także przez „Pokaż” przy alarmie) — zapamiętane na kolejne wejścia i przerysowania.
   $('admin-tresc').addEventListener('toggle', ev => {
     if (ev.target.matches && ev.target.matches('details.serwis-czesc')) serwisOtwarte[ev.target.dataset.sekcja] = ev.target.open;
@@ -1329,11 +1267,8 @@
         await wczytajPracownikow();
         if (czesc === 'serwis') await wczytajDostep();
       }
-      if (akcja === 'otworz-czyszczenie' && P.widoki.czyszczenie) P.widoki.czyszczenie.otworz();
       if (akcja === 'otworz-kody' && P.widoki.kody) P.widoki.kody.otworz();
-      if (akcja === 'odswiez-odrzucone') await wczytajOdrzucone();
       if (akcja === 'odswiez-logowania') await wczytajLogowania();
-      if (akcja === 'ponow-odrzucone') await ponowOdrzucone(Number((b.closest('[data-wpis]') || {}).dataset?.wpis));
       if (akcja === 'wpisz-moj-adres') await wpiszMojAdres();
       if (akcja === 'kopia-teraz') await kopiaTeraz();
       if (akcja === 'nowa-maszyna') otworzMaszyne();
@@ -1381,7 +1316,6 @@
   // Po wylogowaniu lista pracowników nie może zostać w pamięci strony dla następnej osoby.
   hala.na('sesja', () => {
     lista = null; zakres = null; szukaj = ''; szukajMaszyn = ''; polaczenia = null; nowyKlucz = null; dostepStan = null; bladDostepu = ''; bladListy = ''; bladPolaczen = '';
-    odrzucone = null; bladOdrzuconych = '';
     kopieStan = null; alarmy = []; alarmyCzas = 0; serwisOtwarte = { dostep: null, polaczenia: false }; etykietyOtwarte = false;
     $('admin-tresc').innerHTML = ''; delete $('admin-tresc').dataset.odcisk;
     rysujAlarmy();
