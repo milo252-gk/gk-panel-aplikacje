@@ -315,17 +315,29 @@
     <!-- UI etap 2 (właściciel 2026-10-12): na wierzchu tylko to, co wpisuje się prawie zawsze — co, dział, kto, termin.
          Reszta w zwiniętym „Więcej opcji” (rozwija się sama, gdy coś w nim jest wypełnione — W.wiecejOpcjiZlecenia). -->
     <label>Co zrobić<input name="tytul" list="podpowiedzi-czynnosci" required maxlength="200" placeholder="np. Wymienić lampę nad WT-01"></label>
-    <div class="dwie">
+    <div class="dwie dwie-zawsze">
       <label>Dział<select name="dzial" required></select></label>
       <label id="zlecenie-kto">Kto (opcjonalnie)<select name="wykonawca"><option value="">— cały dział —</option></select></label>
       <label id="zlecenie-zmiana">Na zmianę<select name="na_zmiane"><option value="">teraz</option></select></label>
     </div>
     <!-- D55: zlecenie dla kilku osób — każda zaznaczona dostaje własne zlecenie (widzi je tylko ona i kierownicy). -->
-    <fieldset id="zlecenie-osoby"><legend>Dla kogo (nic = cały dział; każda osoba dostaje osobne zlecenie)</legend>
-      <div class="zaznaczenia" data-osoby></div></fieldset>
+    <!-- 2026-11-26 (właściciel: „ekran tworzenia zlecenia jest przekomplikowany, dużo scrollowania”): lista osób zwinięta do jednej linii
+         „Cały dział / Wybrano: N”, Dział i Na zmianę obok siebie także na telefonie, zdjęcia (aparat / galeria) na wierzchu. -->
+    <!-- Napis krótki („Dla kogo”), objaśnienie (kto rozdzieli, osobne zlecenia) dopiero po rozwinięciu listy — mniej tekstu na wierzchu. -->
+    <fieldset id="zlecenie-osoby" class="osoby-kompakt"><legend>Dla kogo</legend>
+      <details class="osoby-lista"><summary data-osoby-podsumowanie>Cały dział</summary>
+      <p class="slaby konto-drobne" data-osoby-opis></p>
+      <div class="zaznaczenia" data-osoby></div></details></fieldset>
     <p class="slaby konto-drobne" id="zlecenie-zmiana-opis" hidden></p>
     <div class="dwie" id="zlecenie-terminy">
       <label id="zlecenie-termin">Termin (opcjonalnie)<input name="termin" type="datetime-local"></label>
+    </div>
+    <!-- 2026-11-26 (właściciel: „zdjęcie przy zlecaniu — z aparatu jak lider albo z galerii”): pole zdjęć na wierzchu, nie w „Więcej opcji”. -->
+    <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
+         miniatura i nazwa pliku (panel.js → poleZdjecia). D91: bez capture — na telefonie wybór aparat ALBO galeria. -->
+    <div class="hala-zdjecie" id="zlecenie-zdjecie">
+      <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dodaj zdjęcie</span></label>
+      <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa"></span>
     </div>
     <details id="zlecenie-wiecej" class="wiecej-opcji">
       <summary>Więcej opcji</summary>
@@ -362,12 +374,6 @@
           <option value="proba">Próba jakościowa — zaliczy się po zapisaniu próby</option>
           <option value="przeglad">Przegląd Utrzymania Ruchu — zaliczy się po zakończeniu przeglądu</option>
         </select></label>
-        <!-- Zamiast surowego „Wybierz plik / Nie wybrano pliku” — przycisk ze wspólnego hala.css (.hala-zdjecie); po wyborze
-             miniatura i nazwa pliku (panel.js → poleZdjecia). D91: bez capture — na telefonie wybór aparat ALBO galeria. -->
-        <div class="hala-zdjecie" id="zlecenie-zdjecie">
-          <label class="hala-zdjecie-przycisk"><input name="zdjecie" type="file" accept="image/*" multiple aria-label="Zdjęcia (opcjonalnie)"><span data-zdjecie-napis><span class="ik" data-ikona="aparat" data-rozmiar="16"></span>Dodaj zdjęcie</span></label>
-          <img class="hala-zdjecie-miniatura" alt="" hidden><span class="hala-zdjecie-nazwa">(opcjonalnie)</span>
-        </div>
         <!-- D31: jak dowód dostawy w GK Trasy — dział nie zamknie zlecenia bez tego, co tu zaznaczone. -->
         <fieldset><legend>Do zakończenia potrzebne</legend>
           <div class="zaznaczenia">

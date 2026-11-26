@@ -38,7 +38,7 @@
             // zablokowanej pozycji (klucz zmiany → ile razy) — tylko w pamięci tej karty, bez klucza localStorage.
             przyjecie: { odrzucone: {}, bez: {}, dotkniecia: {} } },
   };
-  /* D92: zalogowana osoba z Magazynu (W.profilMagazynu) — aplikacja „GK Magazyn” bez Zmiany, Jakości, Awarii i Raportu zmiany.
+  /* D92: zalogowana osoba z Magazynu (W.profilMagazynu) — profil Magazynu: Zmiana, Zlecenia i Awarie (wózki) bez linii; bez Jakości i Raportu zmiany (RCP „Ludzie ze zmiany” w Więcej jak u Lidera).
      Ekrany, wezwania i powiadomienia produkcji pytają o to tutaj (awarie.js, jakosc.js). */
   Lider.magazyn = () => hala.zalogowany() && W.profilMagazynu(hala.pracownik);
   Lider.ekranDostepny = nazwa => !W.ukryteEkrany(hala.pracownik).includes(nazwa) && (nazwa !== 'rcp' || W.mozeRcp(hala.pracownik));
@@ -336,11 +336,14 @@
   Lider.kontekst = (zmianaInna, liniaInna) => {
     const zmiana = zmianaInna || hala.zmianaTeraz();
     const linia = liniaInna || Lider.stan.linia;
-    const klucz = zmiana && linia ? W.kluczZmiany(linia, zmiana) : null;
+    // Magazyn (2026-11-26): ma Zmianę bez linii i bez obiektu „zmiana na linii” (nie ma otwarcia ani raportu) — klucz tylko do pamięci
+    // przypomnień i przyjęcia, zl zawsze puste (inaczej raport lidera linii wyglądałby jak raport Magazynu).
+    const mag = Lider.magazyn();
+    const klucz = zmiana && (mag || linia) ? W.kluczZmiany(mag ? W.LINIA_AWARII_MAGAZYNU : linia, zmiana) : null;
     // Mistrz (rola mistrz, jak W.dzialZlecen) ma WŁASNĄ checklistę — zlecenia działu „mistrz”, całego zakładu albo jego
     // linii (bez zawężenia do wybranej linii, bo pracuje na całej hali). Lider i reszta — dział „produkcja” na swojej linii.
     const lista = W.listaChecklisty(hala.obiekty('zlecenie'), hala.pracownik, linia, hala.slowniki, zmiana);
-    return { linia, zmiana, klucz, zl: klucz ? hala.obiekt('zmiana_linii', klucz) : null, lista };
+    return { linia: mag ? null : linia, zmiana, klucz, zl: klucz && !mag ? hala.obiekt('zmiana_linii', klucz) : null, lista };
   };
 
   function wyborLinii() {
@@ -375,6 +378,7 @@
       zastosujProfil();
       Lider.narysuj();
       przywrocOkno();
+      wrocDoSzkicuZdjec();
     }
     rysujPasek();
   }
@@ -599,8 +603,8 @@
 
   function rysujWezwania() {
     const lista = [];
-    // D92: wezwania to potwierdzenia napraw maszyn na linii — Magazyn ich nie dostaje (nie potwierdza awarii).
-    if (!Lider.magazyn()) for (const fn of Lider.wezwania) { try { lista.push(...(fn() || [])); } catch (e) { console.error(e); } }
+    // Magazyn (2026-11-26) potwierdza naprawę swojego wózka jak lider maszynę (wezwania filtruje awarie.js do jego zgłoszeń).
+    for (const fn of Lider.wezwania) { try { lista.push(...(fn() || [])); } catch (e) { console.error(e); } }
     const el = $('wezwania');
     el.innerHTML = lista.map((w, i) => `<button type="button" class="wezwanie ${esc(w.klasa || '')}" data-i="${i}">${w.html}</button>`).join('');
     el.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => lista[+b.dataset.i].akcja()));
@@ -696,7 +700,14 @@
     const lista = Lider.kontekst().lista;
     return z && lista.zlecenia.some(x => x.id === z.id) ? Lider.blokadaPrzyjecia() : null;
   };
-  Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji, najpierwPrzyjmij: Lider.najpierwPrzyjmij }, Lider.dzialZlecen());
+  /* Magazyn: „Przyjmuję zlecenia” jest na ekranie Zmiana (jak u lidera) i dodatkowo na karcie checklisty w Zleceniach (jak „Biorę”; to samo
+     zdarzenie zlecenie.przyjete). Tylko dla nieprzyjętej checklisty działu magazyn bez cudzego wykonawcy; nie blokuje odhaczania (Magazyn pracuje jak dotąd). */
+  Lider.przyjmijChecklisteMagazynu = z => {
+    if (!Lider.magazyn()) return false;
+    const o = hala.obiekt('zlecenie', z.id), d = (o && o.dane) || {};
+    return !!o && d.dzial === 'magazyn' && !d.przyjal && !(d.wykonawca && d.wykonawca !== (hala.pracownik || {}).id);
+  };
+  Lider.opcjeZlecen = () => Object.assign({ komunikat: t => Lider.komunikat(t, 'ok'), czynnosc: Lider.czynnoscPozycji, najpierwPrzyjmij: Lider.najpierwPrzyjmij, przyjmijChecklisty: Lider.przyjmijChecklisteMagazynu }, Lider.dzialZlecen());
   Lider.ekrany.zlecenia = { rysuj: el => HalaZlecenia.rysuj(el, hala, Lider.opcjeZlecen()) };
   /* D74 „Więcej” — jak w UR i KJ: rzadziej używane rzeczy Lidera; ustawienia, linia i zespół są w Moim koncie. */
   Lider.ekrany.wiecej = {
@@ -710,7 +721,7 @@
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu-wiecej">
           ${mag ? '' : '<button type="button" class="glowny" data-a="koniec">Raport zmiany</button>'}
-          ${W.mozeRcp(hala.pracownik) && !mag ? '<button type="button" data-a="rcp">Ludzie ze zmiany (RCP)</button>' : ''}
+          ${W.mozeRcp(hala.pracownik) ? '<button type="button" data-a="rcp">Ludzie ze zmiany (RCP)</button>' : ''}
           
           <button type="button" data-a="moje">Moje zgłoszenia</button>
           <button type="button" data-a="wyniki">Moje wyniki</button>
@@ -764,6 +775,25 @@
   setInterval(() => Lider.narysuj(), 20000);
 
   // ------------------------------------------------------------ okno po zamknięciu karty
+
+  /* Zgłoszenie liderów 2026-11-26 (iPhone): aparat zdjęcia potrafi zabić kartę aplikacji — po powrocie lider lądował na ekranie Zmiana
+     „w menu głównym”, bez formularza ze zdjęciami. Skoro w telefonie czeka świeży szkic formularza zlecenia/pozycji (zlecenia.js:
+     hala.brudnopis, najwyżej 36 h), wracamy od razu do Zleceń — tam formularz wstaje ze zdjęciami i tekstem. Raz na start karty. */
+  let wrocono = false;
+  async function wrocDoSzkicuZdjec() {
+    if (wrocono) return;
+    wrocono = true;
+    try {
+      if (Lider.stan.ekran !== 'zmiana' || !Lider.ekranDostepny('zlecenia')) return;
+      for (const klucz of ['zlecenia.pozycja', 'zlecenia.formularz']) {
+        const d = await hala.brudnopis.odczytaj(klucz);
+        if (d && typeof d === 'object' && d.czas && Date.now() - d.czas < 36 * 3600000) {
+          if (Lider.stan.ekran === 'zmiana' && !Lider.oknoOtwarte()) Lider.pokazEkran('zlecenia', { bezHistorii: true });
+          return;
+        }
+      }
+    } catch (e) { /* bez szkicu zostajemy na ekranie startowym */ }
+  }
 
   async function przywrocOkno() {
     const o = await hala.brudnopis.odczytaj('okno');

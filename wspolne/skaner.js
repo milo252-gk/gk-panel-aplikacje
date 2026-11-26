@@ -212,6 +212,9 @@
         clearTimeout(zegar); stopCzytnik();
         global.removeEventListener('popstate', wstecz);
         if (strumien) strumien.getTracks().forEach(t => t.stop());   // bez tego aparat świeci dalej
+        // iPhone (zgłoszenie liderów 2026-11-26: po skanie maszyn aparat zdjęcia „wycofuje” aplikację do menu): samo stop() zostawia
+        // element <video> z martwym strumieniem; zwalniamy go jawnie, żeby pamięć i aparat wróciły przed <input capture>.
+        try { video.pause(); video.srcObject = null; } catch (e) { /* bez wideo */ }
         okno.remove();
         if (poprzedniFokus && poprzedniFokus.focus && d.contains(poprzedniFokus)) { try { poprzedniFokus.focus({ preventScroll: true }); } catch (e) { /* trudno */ } }
         if (zastapione) przejmijWpis = wpisHistorii;

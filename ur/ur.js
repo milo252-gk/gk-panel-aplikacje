@@ -296,7 +296,14 @@
 
   UR.ekran = (nazwa, def) => { UR.ekrany[nazwa] = def; };
   // Zlecenia od kierownika (Panel → dział „ur”): wspólny ekran z wspolne/zlecenia.js.
-  UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur', komunikat: t => UR.komunikat(t, 'ok') }) });
+  /* Przyjęcie checklisty działu „ur” (zgłoszenie właściciela 2026-11-26: jak w Magazynie, także jako kierownik) — przycisk „Przyjmuję zlecenia” na
+     karcie checklisty w Zleceniach (to samo zdarzenie zlecenie.przyjete co „Biorę”); tylko nieprzyjęta checklista tego działu bez cudzego wykonawcy. */
+  const przyjmijChecklisty = z => {
+    const o = hala.obiekt('zlecenie', z.id), d = (o && o.dane) || {}, role = (hala.pracownik && hala.pracownik.role) || [];
+    return !!o && d.dzial === 'ur' && !d.przyjal && role.some(r => ['mechanik', 'kierownik_ur'].includes(r))
+      && !(d.wykonawca && d.wykonawca !== (hala.pracownik || {}).id);
+  };
+  UR.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'ur', komunikat: t => UR.komunikat(t, 'ok'), przyjmijChecklisty }) });
   // D5 (właściciel 2026-11-17): Pulpit = ekran startowy (pusty adres) — kafelki liczb jak w Panelu, tylko niezerowe, klik → lista.
   // Dotychczasowe ekrany i adresy (#awarie, #przeglady, #awaria/<id> z powiadomień) działają bez zmian.
   UR.ekran('pulpit', {

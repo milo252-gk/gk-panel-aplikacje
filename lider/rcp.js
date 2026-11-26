@@ -61,7 +61,7 @@
       lista.innerHTML = st.osoby.map(wiersz).join('')
         || (st.poza_zakresem
           ? `<li class="pusto tekst-uwaga">Na tej zmianie jest ${st.poza_zakresem} os., ale żadna nie jest przypisana do Twoich linii. Zgłoś kierownikowi przypisanie linii — samą notatką nikogo nie sprawdzisz.</li>`
-          : '<li class="pusto">Nikogo na tej zmianie w Twoich liniach. Jeśli tak ma być, wystarczy notatka.</li>');
+          : `<li class="pusto">Nikogo na tej zmianie ${L.magazyn() ? 'w Magazynie' : 'w Twoich liniach'}. Jeśli tak ma być, wystarczy notatka.</li>`);
     }
     odswiezPrzycisk();
   }
@@ -86,7 +86,7 @@
 
   function zbuduj(el) {
     el.innerHTML = `<h1>Ludzie ze zmiany (RCP)</h1>
-      <p class="slaby">Sprawdź odbicia osób ze swojej zmiany i swoich linii, napisz jedną notatkę do zmiany i potwierdź. Dzień zatwierdza kierownik.</p>
+      <p class="slaby">Sprawdź odbicia osób ze swojej zmiany ${L.magazyn() ? 'w Magazynie' : 'i swoich linii'}, napisz jedną notatkę do zmiany i potwierdź. Dzień zatwierdza kierownik.</p>
       <p class="blad" role="alert" data-blad hidden></p>
       <p data-info>Wczytuję…</p>
       <ul class="rcp-lista" data-lista></ul>

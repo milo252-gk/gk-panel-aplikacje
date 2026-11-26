@@ -86,10 +86,20 @@
     const role = (pracownik && pracownik.role) || [];
     return role.some(r => ROLE_MAGAZYNU.includes(r)) && !role.some(r => ROLE_GK_LIDER.includes(r));
   }
-  /* Ekrany, których osoba nie widzi (menu, adres #…, powiadomienia): Magazyn — bez Zmiany, Jakości, Awarii i Raportu zmiany. */
-  const EKRANY_BEZ_MAGAZYNU = ['zmiana', 'jakosc', 'awarie', 'koniec', 'rcp'];
+  /* Ekrany, których osoba nie widzi (menu, adres #…, powiadomienia): Magazyn — bez Jakości i Raportu zmiany (RCP „Ludzie ze zmiany” ma, od 2026-11-26)
+     (właściciel 2026-11-26: Magazyn ma ekrany Zmiana, Zlecenia i Awarie jak inne konta Lidera; awarie dotyczą wózków widłowych). */
+  const EKRANY_BEZ_MAGAZYNU = ['jakosc', 'koniec'];
   const ukryteEkrany = pracownik => profilMagazynu(pracownik) ? EKRANY_BEZ_MAGAZYNU.slice() : [];
-  const ekranStartowy = pracownik => profilMagazynu(pracownik) ? 'zlecenia' : 'zmiana';
+  const ekranStartowy = () => 'zmiana';
+  /* Awaria Magazynu: linia „magazyn” (dział, nie linia produkcji) + pole dzial; maszyną jest wózek widłowy. Lista wózków to maszyny
+     słownika z typem „wozek” albo działem „magazyn” (właściciel dośle ją w Administracji); dopóki jej nie ma, wózek wpisuje się ręcznie. */
+  const LINIA_AWARII_MAGAZYNU = 'magazyn';
+  function wozkiMagazynu(slowniki) {
+    return Object.entries((slowniki && slowniki.maszyny) || {})
+      .filter(([, m]) => m && (m.typ === 'wozek' || m.dzial === DZIAL_MAGAZYNU))
+      .map(([kod, m]) => Object.assign({ kod }, m))
+      .sort((a, b) => ((a.kolejnosc || 999) - (b.kolejnosc || 999)) || String(a.nazwa || a.kod).localeCompare(String(b.nazwa || b.kod), 'pl'));
+  }
 
   function linieMistrza(pracownik, slowniki) {
     const role = (pracownik && pracownik.role) || [];
@@ -143,9 +153,9 @@
      dostaje OBIE listy złączone w jedną (pozycje po terminie; `sekcje` mówi, która pozycja z której — ekran Zmiana rysuje
      dwie sekcje „Mistrz” i „Lider”; przyjęcie, odhaczanie i raport działają na całości). */
   function listaChecklisty(zlecenia, pracownik, linia, slowniki, zmiana) {
-    // D92: Magazyn nie ma ekranu Zmiana ani „Przyjmuję zadania” — checklisty Magazynu są zwykłymi zleceniami na ekranie Zlecenia,
-    // więc lista zmiany jest pusta (bez blokady „najpierw przyjmij” i bez przypomnień checklisty lidera).
-    if (profilMagazynu(pracownik)) return H().checklistaZmiany([], null, zmiana, DZIAL_MAGAZYNU);
+    // Magazyn (2026-11-26): ekran Zmiana ma checklisty działu „magazyn” na bieżącą zmianę zakładu, bez linii; przydzielone komuś innemu
+    // nie wchodzą do „Mojej zmiany” (jak u lidera). „Przyjmuję zlecenia” jest, ale nie blokuje odhaczania (przyjecieChecklisty).
+    if (profilMagazynu(pracownik)) return H().checklistaZmiany(zlecenia, null, zmiana, DZIAL_MAGAZYNU, pracownik && pracownik.id ? pracownik.id : null);
     const kat = kategorieOsoby(pracownik);
     // Lider i mistrz pracują tylko na swoich zleceniach (przydzielone komuś innemu nie wchodzą do „Mojej zmiany”); kierownik i admin
     // tylko oglądają całość.
@@ -215,7 +225,8 @@
     const przyjete = zl.filter(z => (z.dane || {}).przyjal)
       .sort((a, b) => (ms((a.dane || {}).czas_przyjecia) || 0) - (ms((b.dane || {}).czas_przyjecia) || 0));
     const role = (pracownik && pracownik.role) || [];
-    const moze = role.includes('lider') || jestMistrzem(role);
+    const mag = profilMagazynu(pracownik);
+    const moze = role.includes('lider') || jestMistrzem(role) || mag;
     const stan = doPrzyjecia.length && !przyjete.length ? 'brak' : doPrzyjecia.length ? 'czesc' : przyjete.length ? 'przyjete' : null;
     const d = przyjete.length ? przyjete[0].dane : null;
     const kto = d ? nazwaPracownika(pracownicy, d.przyjal) : null, godz = d && d.czas_przyjecia ? godzina(d.czas_przyjecia) : null;
@@ -223,9 +234,10 @@
       : stan ? `Przyjął: ${kto}${godz ? ' · ' + godz : ''}${stan === 'czesc' ? ' (część zleceń czeka)' : ''}` : '';
     const odrz = o.odrzucone || {};
     const powod = zl.map(z => odrz[z.id]).find(Boolean) || null;
-    const zablokowane = moze && doPrzyjecia.length > 0 && !o.bezPrzyjecia;
+    // Magazyn przyjmuje, ale odhaczanie nie czeka na przyjęcie (decyzja D92 zostaje: Magazyn pracuje jak dotąd).
+    const zablokowane = moze && !mag && doPrzyjecia.length > 0 && !o.bezPrzyjecia;
     return { stan, doPrzyjecia, kto, godz, tekst, moze, zablokowane, odrzucone: powod,
-             awaryjne: zablokowane && (!!powod || (o.dotkniecia || 0) >= 2), bezPrzyjecia: !!o.bezPrzyjecia && moze && doPrzyjecia.length > 0,
+             awaryjne: zablokowane && (!!powod || (o.dotkniecia || 0) >= 2), bezPrzyjecia: !!o.bezPrzyjecia && moze && !mag && doPrzyjecia.length > 0,
              podpis: zablokowane ? PODPIS_BLOKADY : '' };
   }
   const PODPIS_BLOKADY = 'Najpierw przyjmij zlecenia, potem odhaczaj';
@@ -422,7 +434,7 @@
     }
     const liniaKodu = odczyt.rodzaj === 'linie' ? odczyt.kod : (odczyt.wpis && odczyt.wpis.linia) || null;
     if (!liniaKodu) return { ok: false, powod: 'Tego kodu nie ma w słowniku. Zeskanuj inną naklejkę albo zgłoś to Menedżerowi.' };
-    if (liniaKodu !== linia) return { ok: false, powod: `Ten kod jest z linii ${liniaKodu}. Zeskanuj kod na linii ${linia}.` };
+    if (linia && liniaKodu !== linia) return { ok: false, powod: `Ten kod jest z linii ${liniaKodu}. Zeskanuj kod na linii ${linia}.` };
     return { ok: true };
   }
 
@@ -452,13 +464,15 @@
         return {
           id: a.id, numer: a.numer || '—', status: a.status, etykieta: a.etykieta || a.status, aktywny: a.aktywny,
           maszyna: d.maszyna, maszynaNazwa: (m && m.nazwa) || d.maszyna || '—', linia: a.linia,
-          opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), priorytet: d.priorytet, priorytetNazwa: p.kod ? nazwaPriorytetu(p, o.slowniki) : (d.priorytet || '—'), zatrzymuje: !!p.zatrzymuje,
+          opis: d.opis || '', zdjecia: [].concat(d.zdjecia || []), priorytet: d.priorytet, priorytetNazwa: p.kod ? nazwaPriorytetu(p, o.slowniki, a.linia === LINIA_AWARII_MAGAZYNU) : (d.priorytet || '—'), zatrzymuje: !!p.zatrzymuje,
           mechanik: nazwaPracownika(o.pracownicy, d.mechanik),
           powodWstrzymania: d.powod_wstrzymania ? (powody[d.powod_wstrzymania] || d.powod_wstrzymania) : null,
           opisNaprawy: d.opis_naprawy || null,
           czasZgloszenia: d.czas_zgloszenia, godzZgloszenia: godzina(d.czas_zgloszenia),
           przestojMs: H().przestojMs(a, o.teraz),
           doPotwierdzenia: a.status === 'oczekuje_potwierdzenia',
+          // Magazyn: naprawę wózka potwierdza zgłaszający (albo Kierownik Magazynu — dział „magazyn”); produkcja bez zmian (hub: blad_potwierdzenia_awarii).
+          mozePotwierdzic: !o.magazyn || (!!o.ja && d.zglosil === o.ja) || (!!o.kierownikMag && d.dzial === DZIAL_MAGAZYNU),
           // D55: anuluje tylko zgłaszający (pomyłka) albo administrator — reszta przez UR (hub odrzuca innych).
           // R7 (2026-11-09): także kierownik zakładu (o.kierownik) — jak Hala.moznaAnulowacAwarie i blad_anulowania_awarii w hubie.
           mozeAnulowac: (a.status === 'zgloszona' || a.status === 'przyjeta') && ((!!o.ja && d.zglosil === o.ja) || !!o.admin || !!o.kierownik),
@@ -480,9 +494,9 @@
   function pytanieODuplikat(a, o) { return H().podpowiedzODuplikacie(a, o); }
 
   /* Błędy formularza awarii — pokazywane przed zapisem, żeby hub nie odrzucił zgłoszenia. */
-  function sprawdzAwarie(f, stale) {
+  function sprawdzAwarie(f, stale, magazyn) {
     const bledy = [];
-    if (!f.maszyna) bledy.push('Wybierz maszynę.');
+    if (!String(f.maszyna || '').trim()) bledy.push(magazyn ? 'Wybierz albo wpisz, który wózek.' : 'Wybierz maszynę.');
     if (!(stale && (stale.priorytety || []).some(p => p.kod === f.priorytet))) bledy.push('Wybierz priorytet.');
     // Notatka (opis) i zdjęcie są nieobowiązkowe (D47, kontrakt 1.12.0) — brak nie blokuje zgłoszenia.
     return bledy;
@@ -676,9 +690,10 @@
 
   // ------------------------------------------------------------ RCP: sprawdzanie ludzi zmiany (D96)
 
-  /* Ekran RCP mają Lider, Mistrz, kierownik i administrator (serwer: te same role, inne dostają 403); brygadzista SP i Magazyn — nie. */
-  const ROLE_RCP = ['lider', 'mistrz', 'kierownik', 'admin'];
-  const mozeRcp = pracownik => !profilMagazynu(pracownik) && ((pracownik && pracownik.role) || []).some(r => ROLE_RCP.includes(r));
+  /* Ekran „Ludzie ze zmiany” mają Lider, Mistrz, Lider Produkcji SP, Magazyn (zespół działu), kierownik i administrator (serwer: te same role,
+     inne dostają 403). To tylko potwierdzanie obecności — pełne RCP (godziny, zatwierdzanie, korekty) jest w Panelu: kierownik i administrator. */
+  const ROLE_RCP = ['lider', 'mistrz', 'brygadzista_sp', 'kierownik_mag', 'pracownik_mag', 'kierownik', 'admin'];
+  const mozeRcp = pracownik => ((pracownik && pracownik.role) || []).some(r => ROLE_RCP.includes(r));
 
   /* Osoba ze zmiany → wiersz ekranu: znaczniki odbić (wszedł, spóźnienie, wyszedł, w pracy, braki) i czy trzeba dopisać uwagę. */
   function rcpOsoba(o) {
@@ -716,8 +731,10 @@
   /* Nazwa priorytetu awarii na ekranie. Przy jednej linii (D51) stoi maszyna, nie „linia” — „Zatrzymanie linii”
      myliło (lider zgłasza jedną maszynę, reszta hali pracuje), więc priorytet zatrzymujący to „Maszyna stoi”.
      Kod w zdarzeniu bez zmian (zatrzymanie), Panel i UR mówią tak samo. */
-  function nazwaPriorytetu(p, slowniki) {
+  function nazwaPriorytetu(p, slowniki, magazyn) {
     if (!p) return '—';
+    // Magazyn (2026-11-26) zgłasza wózek widłowy, nie maszynę na linii — zatrzymujący priorytet to „Wózek stoi”.
+    if (p.zatrzymuje && magazyn) return 'Wózek stoi';
     return p.zatrzymuje && !wieleLinii(slowniki) ? 'Maszyna stoi' : (p.nazwa || p.kod || '—');
   }
   /* Co rusza po naprawie: „Czy maszyna ruszyła?” przy jednej linii, „Czy linia ruszyła?” przy wielu. */
@@ -827,7 +844,7 @@
     wieleLinii, nazwaPriorytetu, coStoi, rodzajeZdarzenObsady, skanProby, punktyAudytuBhp, kluczBrudnopisu, zmianaFormularza, czekaNaWyslanie,
     opisCzekajacych, zBrakow, zakonczonaNaZmianie, przyciskiZmiany, zgloszenieZaczete, przebudowacZgloszenie, liczbyProby,
     maksPola, licznikZnakow, sprawdzOdpowiedz, ekranZAdresu,
-    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, profilMagazynu, ukryteEkrany, ekranStartowy, mozeRcp, rcpOsoba, rcpPodsumowanie, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
+    godzina, dataKrotka, opisZmiany, liczebnik, nazwaPracownika, nazwaLinii, liniePosortowane, liniaStartowa, dzialZlecen, listaChecklisty, przyjecieChecklisty, stanKonca, profilMagazynu, ukryteEkrany, ekranStartowy, wozkiMagazynu, LINIA_AWARII_MAGAZYNU, mozeRcp, rcpOsoba, rcpPodsumowanie, NAJPIERW_PRZYJMIJ, PODPIS_BLOKADY, bezKopiiLinii, kategorieOsoby, mojRaportWyslany,
     linieMistrza, liniaWidoczna, linieDoWyboru, maszynyLinii, stanowiskaLinii, wyrobyLinii, katalogWad, wadyDoProby, WADA_INNA,
     kluczZmiany, poprzedniaZmiana, zmianaPoId, zalegleRaporty, RAPORT_ZALEGLY_MS, kontekstFormularza, pozycjaZmiany, kluczBrudnopisuProby,
     checklista, kodZeSkanu, kodDlaLinii, doPrzypomnienia,

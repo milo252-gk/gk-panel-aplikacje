@@ -1700,16 +1700,24 @@
     $('zlecenie-tez').querySelector('[data-tez]').innerHTML = inne.map(d => `<label class="zaznacz"><input type="checkbox" name="tez_dzialy" value="${esc(d.kod)}" ${(zaznaczone || []).includes(d.kod) ? 'checked' : ''}> ${esc(d.nazwa)}</label>`).join('');
   }
   function rysujOsobyZlecenia(zaznaczone) {
-    $('zlecenie-osoby').querySelector('legend').textContent = W.opisDlaKogo(fz.dzial.value, hala.kontrakt.stale || {}, roleJa());
+    // Napis „Dla kogo” krótki; objaśnienie (kto rozdzieli, osobne zlecenia) w rozwiniętej liście, podsumowanie w jednej linii.
+    const stale = hala.kontrakt.stale || {}, dzial = fz.dzial.value;
+    const opis = document.querySelector('#zlecenie-osoby [data-osoby-opis]');
+    if (opis) opis.textContent = W.objasnienieDlaKogo(dzial, stale, roleJa());
     const el = document.querySelector('#zlecenie-osoby [data-osoby]');
+    const odswiez = () => { const n = document.querySelectorAll('#zlecenie-osoby [name=osoby]:checked').length;
+      const sum = document.querySelector('#zlecenie-osoby [data-osoby-podsumowanie]');
+      if (sum) sum.textContent = W.podsumowanieDlaKogo(fz.dzial.value, hala.kontrakt.stale || {}, roleJa(), n); };
     const osoby = osobyDzialu(fz.dzial.value);
     el.innerHTML = osoby.map(([id, n]) => `<label class="zaznacz"><input type="checkbox" name="osoby" value="${esc(id)}" ${(zaznaczone || []).includes(id) ? 'checked' : ''}> ${esc(n)}${
       Hala.naUrlopie && Hala.naUrlopie(hala.slowniki, id, W.dzienZakladu(hala.teraz())) ? ' <span class="slaby">(urlop)</span>' : ''}</label>`).join('')
       || '<span class="slaby">Nikt w tym dziale nie ma konta.</span>';
+    if (!el.dataset.podsumowanie) { el.dataset.podsumowanie = '1'; el.addEventListener('change', odswiez); }
+    odswiez();
   }
   function rysujZmianyZlecenia(wybrana) {
     const zm = hala.slowniki.zmiany || {};
-    fz.na_zmiane.innerHTML = '<option value="">teraz (bez zmiany)</option>' + Object.keys(zm).map(nr => {
+    fz.na_zmiane.innerHTML = '<option value="">teraz</option>' + Object.keys(zm).map(nr => {
       const z = W.naZmiane(nr, hala.slowniki, hala.teraz(), fz.dzial.value);
       // Późniejszą zmianę planuje tylko kierownik zakładu (D47) — liderzy UR i kierownicy KJ widzą tylko trwającą.
       return z && (z.biezaca || mozeWyslac('zlecenie.zaplanowane')) ? `<option value="${esc(nr)}">${esc(z.opis)}</option>` : '';
@@ -1938,6 +1946,24 @@
     const pole = input.closest('.hala-zdjecie');
     const napis = pole.querySelector('[data-zdjecie-napis]'), img = pole.querySelector('.hala-zdjecie-miniatura');
     const nazwa = pole.querySelector('.hala-zdjecie-nazwa');
+    // Zgłoszenie właściciela 2026-11-26: przy zlecaniu zdjęcie „natychmiast z aparatu jak lider” ALBO z galerii. Na telefonie (dotyk) obok
+    // przycisku z galerii dochodzi drugi — z aparatem (capture); oba zasilają tę samą listę zdjęć. Na komputerze zostaje jeden przycisk.
+    const dotyk = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    let aparat = null;
+    if (dotyk) {
+      const etykieta = input.closest('label.hala-zdjecie-przycisk');
+      aparat = document.createElement('input');
+      aparat.type = 'file'; aparat.accept = 'image/*'; aparat.setAttribute('capture', 'environment'); aparat.setAttribute('aria-label', 'Zrób zdjęcie aparatem');
+      const przycisk = document.createElement('label');
+      przycisk.className = 'hala-zdjecie-przycisk';
+      const tekst = document.createElement('span'); tekst.innerHTML = ik('aparat') + 'Zrób zdjęcie';
+      przycisk.append(aparat, tekst);
+      etykieta.before(przycisk);
+      napis.innerHTML = ik('galeria') + 'Z galerii';
+    }
+    // Pusta ikona z index.html (<span class="ik" data-ikona>) bywa jeszcze niewypełniona, a pokaz() przywraca ten napis po każdej
+    // zmianie — wtedy „Dodaj zdjęcie” traciło ikonę (komputer). Wypełniamy ją tu, zanim zapamiętamy napis.
+    napis.querySelectorAll('.ik[data-ikona]:empty').forEach(s => { s.outerHTML = ik(s.dataset.ikona, +s.dataset.rozmiar || 16); });
     const pusto = { napis: napis.innerHTML, nazwa: nazwa.textContent };
     const pliki = [];
     plikiPola.set(input, pliki);
@@ -1959,15 +1985,19 @@
       });
       const maks = maksNowych();
       if (pliki.length > maks) pliki.length = maks;             // po dołożeniu w liście obok nie przekraczamy limitu
-      napis.innerHTML = !maks && !pliki.length ? ik('aparat') + 'Komplet' : !pliki.length ? pusto.napis : pliki.length < maks ? ik('aparat') + 'Dodaj kolejne' : ik('aparat') + 'Komplet';
+      const ikonaGlowna = aparat ? 'galeria' : 'aparat';
+      napis.innerHTML = !maks && !pliki.length ? ik(ikonaGlowna) + 'Komplet' : !pliki.length ? pusto.napis : pliki.length < maks ? ik(ikonaGlowna) + (aparat ? 'Z galerii' : 'Dodaj kolejne') : ik(ikonaGlowna) + 'Komplet';
       nazwa.textContent = pliki.length ? `${pliki.length} z ${maks}` : pusto.nazwa;
       input.disabled = pliki.length >= maks;
+      if (aparat) aparat.disabled = pliki.length >= maks;
     };
-    input.addEventListener('change', () => {
-      for (const plik of Array.from(input.files || [])) if (pliki.length < maksNowych()) pliki.push(plik);
-      input.value = '';                                       // kolejne zdjęcie z tego samego pola nie zastąpi poprzednich
+    const dolacz = pole => () => {
+      for (const plik of Array.from(pole.files || [])) if (pliki.length < maksNowych()) pliki.push(plik);
+      pole.value = '';                                        // kolejne zdjęcie z tego samego pola nie zastąpi poprzednich
       pokaz();
-    });
+    };
+    input.addEventListener('change', dolacz(input));
+    if (aparat) aparat.addEventListener('change', dolacz(aparat));
     // „reset” przychodzi PRZED wyczyszczeniem pól — stan czytamy chwilę później.
     input.form.addEventListener('reset', () => setTimeout(() => { pliki.length = 0; pokaz(); }, 0));
     return pokaz;

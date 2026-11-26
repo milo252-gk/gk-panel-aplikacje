@@ -451,7 +451,11 @@
     for (const rodzaj of ['formularz', 'poz']) {
       let d = null;
       try { d = await hala.brudnopis.odczytaj(KLUCZ_SZKICU[rodzaj]); } catch (e) { d = null; }
-      if (!d || typeof d !== 'object' || s[rodzaj]) continue;
+      // Pozycja otwarta z ekranu Zmiana (lider: Zmiana → pozycja → karta w Zleceniach) powstaje PUSTA, zanim szkic zdąży się wczytać —
+      // zdjęcia z zabitej karty przepadały (iPhone, aparat). Pusta ta sama pozycja przyjmuje szkic; cokolwiek już wpisane zostaje.
+      const pustaTa = () => rodzaj === 'poz' && !!s.poz && !!d && s.poz.id === d.id && s.poz.pozycja === d.pozycja
+        && !s.poz.pliki.length && !s.poz.tekst && !s.poz.skan && !s.poz.wysyla;
+      if (!d || typeof d !== 'object' || (s[rodzaj] && !pustaTa())) continue;
       const ids = Array.isArray(d.zdjecia) ? d.zdjecia.filter(x => typeof x === 'string') : [];
       const sprzatnij = () => { for (const id of ids) if (hala.usunPlik) hala.usunPlik(id).catch(() => {}); try { hala.brudnopis.usun(KLUCZ_SZKICU[rodzaj]); } catch (e) { /* bez szkicu */ } };
       const opcje = s.opcje || {};
@@ -463,7 +467,7 @@
       for (const id of ids.slice(0, MAKS_ZDJEC)) {
         try { const url = await hala.adresPliku(id); if (url && !/\/api\/v1\/pliki\//.test(url)) pliki.push({ id, url }); } catch (e) { /* zdjęcia już nie ma na telefonie */ }
       }
-      if (s[rodzaj]) continue;
+      if (s[rodzaj] && !pustaTa()) continue;
       s[rodzaj] = rodzaj === 'formularz'
         ? { id: d.id, rodzaj: d.rodzaj === 'odrzucone' ? 'odrzucone' : 'wykonane', tekst: String(d.tekst || ''), pliki, blad: null, skan: d.skan || null,
             pilne: !!d.pilne, skany: Array.isArray(d.skany) ? d.skany : [], wymagania: wymaganiaZ(w, hala) }
@@ -641,6 +645,7 @@
         ${z.doZrobienia && z.przed ? `<div class="hala-zlecenie-termin" role="status">${ikona('klepsydra', 16)}Zrobisz od ${esc(z.odGodz)}${z.termin ? ` do ${esc(z.termin)}` : ''}</div>`
         : z.doZrobienia && z.pozycje.length ? (s.formularz && s.formularz.id === z.id ? formularz(s.formularz) : `<div class="hala-zlecenie-akcje">
           ${z.doKierownika && z.dzialania.przekaz && z.status === 'nowe' && !z.poCzasie ? '<button type="button" class="glowny" data-akcja="przyjmij">Biorę</button>' : ''}
+          ${z.status === 'nowe' && !z.poCzasie && !(z.doKierownika && z.dzialania.przekaz) && opcje && opcje.przyjmijChecklisty && opcje.przyjmijChecklisty(z) ? '<button type="button" class="glowny" data-akcja="przyjmij">Przyjmuję zlecenia</button>' : ''}
           ${z.dzialania.przekaz ? '<button type="button" data-akcja="przekaz">Przekaż</button>' : ''}
           ${z.postepPozycji && z.postepPozycji.pelne ? '<button type="button" class="zielony" data-akcja="wykonane">Zrobione</button>' : ''}
           ${z.zamkniecieZmiany ? '<button type="button" class="glowny" data-akcja="zamknij-zmiane">Zamknij z tym, co jest</button>' : ''}

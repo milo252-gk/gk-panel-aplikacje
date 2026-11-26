@@ -18,9 +18,12 @@
   // Jedna linia (D51): po naprawie rusza maszyna, nie „linia” (W.coStoi).
   const rusza = () => W.coStoi(hala.slowniki);
 
+  // Magazyn (2026-11-26) zgłasza awarie wózków widłowych: „linia” to dział (W.LINIA_AWARII_MAGAZYNU), nie linia produkcji.
+  const linia = () => L.magazyn() ? W.LINIA_AWARII_MAGAZYNU : L.linia();
+
   function wiersze(filtr) {
     return W.awarie(hala.obiekty('awaria', filtr), {
-      linia: L.linia(), ja: hala.pracownik && hala.pracownik.id, admin: ((hala.pracownik || {}).role || []).includes('admin'),
+      linia: linia(), magazyn: L.magazyn(), kierownikMag: ((hala.pracownik || {}).role || []).includes('kierownik_mag'), ja: hala.pracownik && hala.pracownik.id, admin: ((hala.pracownik || {}).role || []).includes('admin'),
       kierownik: ((hala.pracownik || {}).role || []).includes('kierownik'),
       teraz: hala.teraz(),
       slowniki: hala.slowniki, pracownicy: hala.pracownicy, stale: stale() });
@@ -37,22 +40,26 @@
      (ktoś inny zgłosił tę maszynę, kiedy lider wypełniał formularz). */
   function zbudujFormularz({ kontener, f, linia, wOknie, poWyslaniu }) {
     const d = f.dane;
-    const maszyny = W.maszynyLinii(hala.slowniki, linia);
+    const mag = L.magazyn();
+    const maszyny = mag ? W.wozkiMagazynu(hala.slowniki) : W.maszynyLinii(hala.slowniki, linia);
+    // Magazyn bez listy wózków w słowniku (dopisze ją właściciel w Administracji): pole „Który wózek?” zamiast kafelków.
+    const wozekTekstem = mag && !maszyny.length;
     const prio = (stale().priorytety || []).slice().sort((a, b) => (a.kolejnosc || 9) - (b.kolejnosc || 9));
     kontener.innerHTML = `<form class="formularz awaria-form" novalidate>
-        <h3>1. Maszyna</h3>
-        <div class="siatka-wyboru" data-grupa="maszyna">
+        <h3>1. ${mag ? 'Wózek' : 'Maszyna'}</h3>
+        ${wozekTekstem ? `<input type="text" name="maszyna" class="pole-wozka" maxlength="60" autocomplete="off" placeholder="Który wózek? (numer albo nazwa)" aria-label="Który wózek?">`
+        : `<div class="siatka-wyboru" data-grupa="maszyna">
           ${maszyny.map(m => { const k = W.kafelekMaszyny(m);   // nazwa duża, kod mały (UI etap 3)
             return `<button type="button" data-wartosc="${esc(m.kod)}"><b>${esc(k.duzy)}</b>${k.maly ? `<span>${esc(k.maly)}</span>` : ''}</button>`; }).join('')}
-          <button type="button" class="skan wlasny-skan" data-skanuj>${window.Lider.ik('skan', 18)}Skanuj QR maszyny</button>
-        </div>
+          ${mag ? '' : `<button type="button" class="skan wlasny-skan" data-skanuj>${window.Lider.ik('skan', 18)}Skanuj QR maszyny</button>`}
+        </div>`}
         <div class="wybrana-inna slaby" hidden></div>
         <div class="ostrzezenie duplikat" hidden><p></p>
           <div class="przyciski-rzad"><button type="button" class="glowny" data-dopisz>Dodaj do tej awarii</button>
             <button type="button" data-nowa>Zgłoś osobną</button></div></div>
         <h3>2. Priorytet</h3>
         <div class="siatka-wyboru priorytety" data-grupa="priorytet">
-          ${prio.map(p => `<button type="button" class="prio-${esc(KLASA_PRIORYTETU[p.kod] || 'neutral')}" data-wartosc="${esc(p.kod)}">${esc(W.nazwaPriorytetu(p, hala.slowniki))}</button>`).join('')}
+          ${prio.map(p => `<button type="button" class="prio-${esc(KLASA_PRIORYTETU[p.kod] || 'neutral')}" data-wartosc="${esc(p.kod)}">${esc(W.nazwaPriorytetu(p, hala.slowniki, mag))}</button>`).join('')}
         </div>
         <h3>3. Notatka i zdjęcie <span class="slaby">(nieobowiązkowe)</span></h3>
         <textarea name="opis" rows="3" maxlength="2000" placeholder="Co się dzieje? (np. dźwięk, błąd na panelu)" aria-label="Notatka — co się dzieje"></textarea>
@@ -94,7 +101,7 @@
       for (const g of form.querySelectorAll('[data-grupa]')) {
         for (const b of g.querySelectorAll('[data-wartosc]')) b.classList.toggle('wybrany', d[g.dataset.grupa] === b.dataset.wartosc);
       }
-      const inna = d.maszyna && !maszyny.some(m => m.kod === d.maszyna);
+      const inna = !mag && d.maszyna && !maszyny.some(m => m.kod === d.maszyna);
       const w = form.querySelector('.wybrana-inna');
       w.hidden = !inna;
       if (inna) {
@@ -115,7 +122,9 @@
         if (g.dataset.grupa === 'priorytet' && wOknie) form.opis.focus();
       });
     }
-    form.querySelector('[data-skanuj]').addEventListener('click', async () => {
+    const przyciskSkanu = form.querySelector('[data-skanuj]');
+    if (wozekTekstem) form.querySelector('[name=maszyna]').addEventListener('input', () => { pokazDuplikat(); pokazWyczysc(); });
+    if (przyciskSkanu) przyciskSkanu.addEventListener('click', async () => {
       // Wpisany „WT-01” = skan HALA:M:WT-01; zły kod — skaner zostaje otwarty z błędem (L.skanujKod).
       const skan = await L.skanujKod({ tytul: 'Zeskanuj maszynę' }, t => {
         const kod = Hala.odczytajKod(t, hala.slowniki);
@@ -131,7 +140,8 @@
     zaznacz();
     form.addEventListener('submit', W.przyWysylce(async ev => {
       ev.preventDefault();
-      const bledy = W.sprawdzAwarie(d, stale());
+      if (wozekTekstem) d.maszyna = String(d.maszyna || '').trim();
+      const bledy = W.sprawdzAwarie(d, stale(), mag);
       const ul = form.querySelector('.bledy');
       ul.hidden = !bledy.length;
       ul.innerHTML = bledy.map(b => `<li>${esc(b)}</li>`).join('');
@@ -145,7 +155,7 @@
       const m = (hala.slowniki.maszyny || {})[d.maszyna] || {};
       const id = hala.nowyId();
       const zd = await L.zapisz('awaria.zgloszona', id, L.bezPustych({
-        linia: m.linia || linia, maszyna: d.maszyna, stanowisko: m.stanowisko || '',
+        linia: mag ? W.LINIA_AWARII_MAGAZYNU : m.linia || linia, dzial: mag ? W.LINIA_AWARII_MAGAZYNU : '', maszyna: d.maszyna, stanowisko: mag ? '' : m.stanowisko || '',
         opis: d.opis.trim(), priorytet: d.priorytet, zdjecia: d.zdjecia }));
       if (!zd) return;
       await f.usun();
@@ -156,7 +166,7 @@
 
   /* Okno zgłoszenia — z zasłony alertu jakości (jakosc.js) i po przeładowaniu karty z otwartym oknem (L.oknaPoStarcie). */
   async function zglos(parametry) {
-    const linia = L.linia();
+    const linia = L.magazyn() ? W.LINIA_AWARII_MAGAZYNU : L.linia();
     // Brudnopis na tę zmianę (audyt 2026-10-12): okno zamknięte przyciskiem zamknij zostawia brudnopis, a z kluczem samej linii AWARIA
     // otwierała się po dniach z dawną maszyną, priorytetem i notatką. Zmiana zapamiętana w parametrach okna — po
     // przeładowaniu karty tuż po 14:00 brudnopis zmiany I dalej się znajdzie.
@@ -183,7 +193,7 @@
      inaczej tylko odświeżamy pytanie o duplikat. naEkranie = { linia, zmianaId, dane, odswiez, miejsce }. */
   let naEkranie = null, budowa = 0;
   function rysujZgloszenie(miejsce) {
-    const linia = L.linia(), zmianaId = (hala.zmianaTeraz() || {}).id || '';
+    const linia = L.magazyn() ? W.LINIA_AWARII_MAGAZYNU : L.linia(), zmianaId = (hala.zmianaTeraz() || {}).id || '';
     if (naEkranie && naEkranie.miejsce === miejsce && !W.przebudowacZgloszenie(naEkranie, linia, zmianaId)) {
       if (naEkranie.odswiez) naEkranie.odswiez();
       return;
@@ -264,7 +274,7 @@
   function karta(w) {
     return `<article class="karta awaria ${w.zatrzymuje && w.aktywny ? 'zatrzymanie' : ''} ${w.doPotwierdzenia ? 'do-potwierdzenia' : ''}" data-id="${esc(w.id)}">
       <header>
-        <div><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)}${w.linia !== L.linia() ? ' · ' + esc(w.linia) : ''}</span></div>
+        <div><b>${esc(w.maszynaNazwa)}</b> <span class="slaby">${esc(w.maszyna)}${w.linia !== linia() ? ' · ' + esc(w.linia) : ''}</span></div>
         <span class="numer slaby">${esc(w.numer)}</span>
       </header>
       <div class="szczegoly">
@@ -280,7 +290,7 @@
       <div class="przestoj">Przestój <b ${w.aktywny ? `data-od="${esc(Date.parse(w.czasZgloszenia) || '')}"` : ''}>${esc(Hala.formatLicznika(w.przestojMs))}</b>
         <span class="slaby">od ${esc(w.godzZgloszenia)}</span></div>
       ${w.aktywny ? `<div class="akcje">
-        ${w.doPotwierdzenia ? `<button type="button" class="zielony" data-a="potwierdz">${rusza() === 'linia' ? 'Linia' : 'Maszyna'} ruszyła</button>
+        ${w.doPotwierdzenia && w.mozePotwierdzic ? `<button type="button" class="zielony" data-a="potwierdz">${rusza() === 'linia' ? 'Linia' : 'Maszyna'} ruszyła</button>
                                <button type="button" data-a="odrzuc">Nadal nie działa</button>` : ''}
         <button type="button" class="maly" data-a="komentarz">Notatka</button>
         ${w.mozeAnulowac ? '<button type="button" class="maly" data-a="anuluj">Odwołaj</button>' : ''}
@@ -332,7 +342,7 @@
   /* Dla „Szukaj” w nagłówku: awarie widoczne dla tej osoby (jej linia i jej zgłoszenia), także zamknięte z ostatnich dni. */
   L.awarieDoSzukania = () => wiersze();
 
-  L.wezwania.push(() => wiersze(a => a.aktywny && a.status === 'oczekuje_potwierdzenia').map(w => ({
+  L.wezwania.push(() => wiersze(a => a.aktywny && a.status === 'oczekuje_potwierdzenia').filter(w => w.mozePotwierdzic).map(w => ({
     klasa: 'ok', akcja: () => potwierdz(w.id),
     html: `<b>${esc(w.maszyna)} naprawiona</b> — potwierdź, że ${rusza()} ruszyła ›` })));
 
@@ -345,8 +355,9 @@
     if (typ !== 'awaria' || !obiekt) return;
     const byl = statusy.get(id);
     statusy.set(id, obiekt.status);
-    if (!byl || byl === obiekt.status || obiekt._oczekuje || L.magazyn()) return;     // D92: Magazyn bez awarii maszyn
-    if (obiekt.linia !== L.linia()) return;
+    if (!byl || byl === obiekt.status || obiekt._oczekuje) return;
+    // Magazyn dostaje komunikaty tylko o własnych zgłoszeniach (wózki), reszta — o awariach swojej linii.
+    if (L.magazyn() ? (obiekt.dane || {}).zglosil !== (hala.pracownik || {}).id : obiekt.linia !== L.linia()) return;
     const m = (obiekt.dane || {}).maszyna || '';
     if (obiekt.status === 'oczekuje_potwierdzenia') {
       L.powiadom(`${m}: naprawa zakończona`, `Potwierdź, że ${rusza()} ruszyła`, { tag: 'awaria-' + id, adres: '#awarie' });

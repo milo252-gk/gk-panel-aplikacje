@@ -108,14 +108,12 @@
     if (!stan) return { stan: null, tekst: '' };
     /* „Nikt jeszcze nie przyjął” kłamie, gdy lista ma już zrobione albo pominięte pozycje (2026-11-25, zrzut z produkcji: magazynier
        odhaczył 2/7, a karta mówiła, że nikt nie przyjął) — przyjęcie jest tylko krokiem w aplikacji (hub go nie egzekwuje), a Magazyn
-       (GK Magazyn) w ogóle nie ma przycisku „Przyjmuję zlecenia”, więc jego checklista zostaje „nowa” do końca. Dlatego: dział
-       Magazyn — bez napisu o przyjęciu; praca bez przyjęcia — „Praca w toku (bez przyjęcia)”. Stan ‘brak’ zostaje tylko dla listy
+       do 2026-11-26 nie miał przycisku przyjęcia (teraz ma go na karcie checklisty w Zleceniach). Dlatego: praca bez przyjęcia — „Praca w toku (bez przyjęcia)”. Stan ‘brak’ zostaje tylko dla listy
        bez żadnej odhaczonej pozycji (Lider ma tę samą regułę bez zmian: tam przyjęcie jest warunkiem odhaczania). */
     if (stan === 'brak') {
       const maPostep = zl.some(z => { const d = z.dane || {};
         return Object.values(d.wykonane || {}).some(Boolean) || Object.values(d.pominiete || {}).some(Boolean); });
       if (maPostep) return { stan: 'bez', tekst: 'Praca w toku (bez przyjęcia)' };
-      if (zl.length && zl.every(z => (z.dane || {}).dzial === 'magazyn')) return { stan: null, tekst: '' };
       return { stan, tekst: 'Nikt jeszcze nie przyjął zleceń' };
     }
     const d = przyjete[0].dane;
@@ -2830,6 +2828,16 @@
     return kierownik ? `Dla kogo (nic = ${kierownik} rozdzieli; każda osoba dostaje osobne zlecenie)`
       : 'Dla kogo (nic = cały dział; każda osoba dostaje osobne zlecenie)';
   }
+  /* 2026-11-26 (właściciel: „uprość ekran Nowe zlecenie”): „Dla kogo” jest jedną linią. Gdy nikt nie zaznaczony, linia mówi wprost,
+     co się stanie (cały dział albo kierownik działu rozdzieli — ta sama reguła co opisDlaKogo); po zaznaczeniu — ile osób. */
+  function podsumowanieDlaKogo(dzial, stale, role, wybrano) {
+    if (wybrano) return `Wybrano: ${wybrano}`;
+    const m = /^Dla kogo \(nic = (.+?) rozdzieli;/.exec(opisDlaKogo(dzial, stale, role));
+    return m ? `${m[1].charAt(0).toUpperCase()}${m[1].slice(1)} rozdzieli` : 'Cały dział';
+  }
+  function objasnienieDlaKogo(dzial, stale, role) {
+    return opisDlaKogo(dzial, stale, role).replace(/^Dla kogo \((.*)\)$/, '$1').replace(/^nic = /, 'Nikt nie zaznaczony = ');
+  }
 
   /* D60 (właściciel 2026-10-14: „oznaczaj rodzaje zleceń, a nie dziel je na kategorie — wszystko z tego jest zadaniem”):
      jedna lista Zleceń. Rodzaje (kod, napis na znaczniku) — także filtr „Rodzaj”. */
@@ -3576,7 +3584,7 @@
                        stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        planDoFormularza, planZeStanu, planZmianZapisy, skutkiPlanu, zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
-                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, szukaj, NAZWY_WYNIKOW, maszynyAdmin, dzialyDoZlecania, opisDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };
+                       bezCzesci, rozdzialZlecenia, MOJE_DZIALY, szukaj, NAZWY_WYNIKOW, maszynyAdmin, dzialyDoZlecania, opisDlaKogo, podsumowanieDlaKogo, objasnienieDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };
   global.PanelWidok = PanelWidok;
   if (typeof module !== 'undefined' && module.exports) module.exports = PanelWidok;
 })(typeof window !== 'undefined' ? window : globalThis);

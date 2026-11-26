@@ -186,7 +186,14 @@
   KJ.ekran = (nazwa, def) => { KJ.ekrany[nazwa] = def; };
   // Zlecenia od kierownika (Panel → dział „kj”): stała zakładka Zlecenia (D64, jak Lider i UR); do zrobienia stoją też
   // na górze Planu (UI etap 2, proba.js). Adres „#zlecenia” (push z huba) otwiera zakładkę.
-  KJ.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'kj', komunikat: t => KJ.komunikat(t, 'ok') }) });
+  /* Przyjęcie checklisty działu „kj” (zgłoszenie właściciela 2026-11-26: jak w Magazynie, także jako kierownik) — przycisk „Przyjmuję zlecenia” na
+     karcie checklisty w Zleceniach (to samo zdarzenie zlecenie.przyjete co „Biorę”); tylko nieprzyjęta checklista tego działu bez cudzego wykonawcy. */
+  const przyjmijChecklisty = z => {
+    const o = hala.obiekt('zlecenie', z.id), d = (o && o.dane) || {}, role = (hala.pracownik && hala.pracownik.role) || [];
+    return !!o && d.dzial === 'kj' && !d.przyjal && role.some(r => ['kontroler', 'kierownik_kj'].includes(r))
+      && !(d.wykonawca && d.wykonawca !== (hala.pracownik || {}).id);
+  };
+  KJ.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'kj', komunikat: t => KJ.komunikat(t, 'ok'), przyjmijChecklisty }) });
   global.HalaZlecenia.sledz(hala, () => ({ dzial: 'kj' }), (z, o) => KJ.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
   // D56: „Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
   if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'kj' }), otworzZlecenia: () => KJ.idz('zlecenia'),

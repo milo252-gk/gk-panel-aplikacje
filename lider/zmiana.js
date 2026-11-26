@@ -41,7 +41,7 @@
       dane.uwagi = `Próba ${(p && p.numer) || String(e.proba).slice(0, 8)}`;
     }
     if (e.uwagi) dane.uwagi = e.uwagi;
-    if (!k.zl) await L.zapisz('zmiana.rozpoczeta', k.klucz, { linia: k.linia, zmiana: k.zmiana.id, pozycje: [] });
+    if (!k.zl && !L.magazyn()) await L.zapisz('zmiana.rozpoczeta', k.klucz, { linia: k.linia, zmiana: k.zmiana.id, pozycje: [] });
     const zd = await L.zapisz('zlecenie.pozycja_wykonana', m.zlecenie, dane);
     if (zd) await HalaZlecenia.zakonczJesliGotowe(hala, m.zlecenie);
     return zd;
@@ -65,7 +65,7 @@
     const k = kk || L.kontekst();
     // Wpisany „WT-01” = skan HALA:M:WT-01; zły kod — skaner zostaje otwarty z błędem (L.skanujKod).
     const s = await L.skanujKod({ tytul: p.nazwa, podpowiedz: 'Albo wpisz kod z naklejki' },
-      t => W.kodDlaLinii(Hala.odczytajKod(t, hala.slowniki), k.linia, p.cel));
+      t => W.kodDlaLinii(Hala.odczytajKod(t, hala.slowniki), L.magazyn() ? null : k.linia, p.cel));
     return s ? s.tekst : null;
   }
 
@@ -161,6 +161,7 @@
   // ------------------------------------------------------------ przekazanie od poprzedniej zmiany
 
   function kartaPrzekazania(k) {
+    if (L.magazyn()) return '';          // przekazanie zmiany jest obiektem linii — Magazyn go nie ma
     const prev = W.poprzedniaZmiana(k.zmiana, hala.slowniki.zmiany, hala.slowniki.plan_zmian);
     if (!prev) return '';
     const zlp = hala.obiekt('zmiana_linii', W.kluczZmiany(k.linia, prev));
@@ -196,7 +197,7 @@
      tylko, gdy checklista (otwarta albo szablon do otwarcia) nie ma pozycji tego typu — W.przyciskiZmiany. Prawdziwy hub
      startuje bez szablonu „standard” i bez tego wejścia nie dałoby się ich wysłać (audyt 2026-10-12). Próba i zgłoszenie
      BHP są na ekranie Jakość. Wysłany formularz odhacza pierwszą wolną pozycję swojego typu, gdy szablon ją ma (L.odhaczTyp). */
-  const przyciskiZmiany = pozycje => `<div class="przyciski-rzad">
+  const przyciskiZmiany = pozycje => L.magazyn() ? '' : `<div class="przyciski-rzad">
         ${W.przyciskiZmiany(pozycje).map(p => `<button type="button" data-a="${esc(p.a)}">${esc(p.nazwa)}</button>`).join('')}
       </div>`;
 
@@ -205,7 +206,7 @@
        wykonania wszystkich zadań?” — oknoRaportu); po wysłaniu „haczyk i godzina”;
      — lista kompletna, raport niewysłany: jeden główny przycisk pod listą (zamiast wiersza).
      To nie pozycja zlecenia (raport to osobne zdarzenie zmiana.raport, KONTRAKT §6.4). */
-  const koniecZmiany = glowny => `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Raport zmiany</button></div>`;
+  const koniecZmiany = glowny => L.magazyn() ? '' : `<div class="przyciski-rzad"><button type="button" class="${glowny ? 'glowny ' : ''}szeroki" data-a="koniec">Raport zmiany</button></div>`;
 
   function ostatniKrok(k, wyslany) {
     const d = (k.zl && k.zl.dane) || {};
@@ -221,6 +222,7 @@
 
   /* Dział do wpisania w Panelu → Zlecenia → Zapisane → „+ Nowe” → „Checklista” zależnie od roli (pusty ekran). */
   function opisDzialuListy(pracownik) {
+    if (W.profilMagazynu(pracownik)) return 'dział Magazyn';
     const kat = W.kategorieOsoby(pracownik);
     return kat.length > 1 ? 'dział Lider produkcji GK albo Mistrz Produkcji GK' : kat[0] === 'mistrz' ? 'dział Mistrz Produkcji GK' : 'dział Lider produkcji GK';
   }
@@ -236,6 +238,8 @@
   function rysujZmiane(el) {
     const k = L.kontekst();
     if (!k.zmiana) { el.innerHTML = '<p class="pusto">Poza godzinami zmian. Sprawdź słownik zmian.</p>'; return; }
+    const mag = L.magazyn();       // Magazyn: bez linii, raportu zmiany, Obsady i Audytu BHP
+    const nazwaMiejsca = mag ? 'Magazyn' : W.nazwaLinii(hala.slowniki, k.linia);
     const przekazanie = kartaPrzekazania(k);
     const pozycje = (k.lista && k.lista.dane.pozycje) || [];
     const wyslany = W.mojRaportWyslany(k.zl, hala.pracownik, hala.pracownicy);      // mój raport (lider/mistrz osobno), nie „ktokolwiek”
@@ -253,7 +257,7 @@
     if (!pozycje.length) {
       el.innerHTML = `${przekazanie}
         <article class="karta otwarcie">
-          <h2>${esc(W.nazwaLinii(hala.slowniki, k.linia))}</h2>
+          <h2>${esc(nazwaMiejsca)}</h2>
           <p>${esc(k.zmiana.nazwa)} ${esc(W.godzina(k.zmiana.od))}–${esc(W.godzina(k.zmiana.do))}</p>
           <p class="slaby">Na tę zmianę nie ma checklisty. Kierownik zakładu układa ją w Panelu → Zlecenia → ${window.GKIkony ? window.GKIkony.html('zapisane', 16) + ' ' : ''}Zapisane → „+ Nowe” → „Checklista”
             (${esc(opisDzialuListy(hala.pracownik))}) — pojawi się tu sama na początku zmiany.</p>
@@ -263,7 +267,7 @@
       return;
     }
     const c = W.checklista(k.lista, hala.teraz(), prog());
-    const zamknieta = wyslany;
+    const zamknieta = wyslany;          // Magazyn: k.zl zawsze puste, więc nigdy „raport wysłany”
     const pr = W.przyjecieChecklisty(k.lista, hala.pracownik, hala.pracownicy, L.opcjePrzyjecia(k.klucz));
     // Jedna czynność przejęcia całej checklisty działu na tę zmianę; potem — kto i o której (kierownik i admin widzą to samo).
     const przyjecie = !pr.stan ? '' : pr.moze && pr.doPrzyjecia.length
@@ -272,7 +276,7 @@
           <button type="button" class="glowny duzy szeroki" data-a="przyjmuje">Przyjmuję zlecenia</button>
           ${pr.awaryjne ? '<button type="button" class="maly szeroki" data-a="bez-przyjecia">Pracuję bez przyjęcia</button>' : ''}</article>`
       : `<p class="slaby przyjecie" role="status">${esc(pr.tekst)}${pr.bezPrzyjecia ? ' · pracujesz bez przyjęcia' : ''}</p>`;
-    const komplet = W.stanKonca(k.lista).komplet;
+    const komplet = W.stanKonca(k.lista).komplet || mag;      // Magazyn nie ma „Raportu zmiany” — ostatniego kroku listy nie rysujemy
     const zWierszy = ids => c.wiersze.filter(x => ids.has(x.id));
     // Osoba z rolami lider+mistrz: dwie sekcje („Mistrz”, „Lider”) na jednej zmianie; przyjęcie i raport obejmują obie.
     const lista = k.lista.sekcje && k.lista.sekcje.length
@@ -353,7 +357,7 @@
     if (!nowe.length) return;
     for (const p of nowe) {
       juz.add(p.id);
-      L.powiadom(`${p.godz} · ${p.nazwa}`, `Za ${Math.max(0, p.zaMin)} min${W.wieleLinii(hala.slowniki) ? ' — linia ' + k.linia : ''}`, { tag: 'poz-' + p.id, adres: '#zmiana' });
+      L.powiadom(`${p.godz} · ${p.nazwa}`, `Za ${Math.max(0, p.zaMin)} min${W.wieleLinii(hala.slowniki) && k.linia ? ' — linia ' + k.linia : ''}`, { tag: 'poz-' + p.id, adres: '#zmiana' });
       L.komunikat(`Za ${Math.max(0, p.zaMin)} min: ${p.nazwa}`, 'info');
     }
     L.pamiec.zapisz('przypomniane', JSON.stringify({ klucz: k.klucz, ids: Array.from(juz) }));
