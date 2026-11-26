@@ -283,7 +283,7 @@ EKRANY.zaladunek = {
           </button>`;
         }).join('')}
         ${trasa.status === 'planowana' && !ileDoZaladunku(trasa) ? `
-          <button class="glowny duzy" id="z-start">${ikonka('odtworz')}Rozpocznij trasę</button>` : ''}`;
+          <button class="glowny duzy" id="z-start">${ikonka('odtworz')}Rozpocznij pracę</button>` : ''}`;
       pole.querySelectorAll('[data-poz]').forEach(b => b.onclick = () => {
         oknoZaladunku(pozycje.find(p => p.id === Number(b.dataset.poz)), trasa, rysuj);
       });

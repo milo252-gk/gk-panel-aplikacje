@@ -83,7 +83,7 @@ EKRANY.pulpit = {
         ${chipyAutHtml(p.auta_ikol)}
       </div>
       ${p.ostatnie_pozycje.length ? '' : `<div class="male slaby mapa-podpowiedz">${p.ikol
-        ? 'Auta pojawią się na mapie, gdy lokalizator w aucie przekaże pozycję (Ustawienia → Zaawansowane → Lokalizatory w autach: przypisz lokalizator do kierowcy). Do tego czasu mapa jest zmniejszona.'
+        ? 'Auta pojawią się na mapie, gdy lokalizator w aucie przekaże pozycję (Ustawienia → Lokalizatory w autach: przypisz lokalizator do kierowcy). Do tego czasu mapa jest zmniejszona.'
         : 'Auta pojawią się na mapie, gdy kierowca włączy udostępnianie położenia w „Mojej trasie”. Do tego czasu mapa jest zmniejszona.'}
         <button type="button" class="maly" id="p-mapa-rozmiar" aria-expanded="false">Powiększ mapę</button></div>`}
       <div class="mapa${p.ostatnie_pozycje.length ? '' : ' zwinieta'}" id="p-mapa"></div>`;
@@ -1267,8 +1267,7 @@ async function wzbogacNieudane(el, lista) {
   el.querySelectorAll('[data-powieksz]').forEach(bt => bt.onclick = () => oknoPowiekszenia(bt.dataset.powieksz, bt.dataset.podpis));
 }
 
-/* „Ostatnio zatwierdzone (24 h)”: zwijana sekcja tylko do odczytu. Bez nowego endpointu: trasy z dzisiaj i wczoraj i ich
-   punkty z `przyjeto_o` w ostatniej dobie (ręcznie albo automatycznie), z dowodami po rozwinięciu. */
+/* „Ostatnio zatwierdzone (24 h)”: zwijana sekcja tylko do odczytu. Punkty z `przyjeto_o` w ostatniej dobie (`/api/zatwierdzone`; starszy serwer: trasy z dzisiaj i wczoraj) (ręcznie albo automatycznie), z dowodami po rozwinięciu. */
 function sekcjaZatwierdzonychHtml(punkty, token) {
   if (!punkty.length) return '<div class="male slaby">Przez ostatnią dobę nic nie zostało zatwierdzone.</div>';
   return `<div class="karta">${punkty.map(x => `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
@@ -1285,6 +1284,11 @@ function sekcjaZatwierdzonychHtml(punkty, token) {
 }
 
 async function punktyZatwierdzone() {
+      // Nowy serwer: jedno lekkie zapytanie (punkty + nazwy plików dowodów). Starszy serwer (404) — stara droga przez trasy.
+      try {
+        const lekkie = await API.get('/api/zatwierdzone?godzin=24');
+        if (Array.isArray(lekkie)) return lekkie;
+      } catch (e) { /* stary serwer albo chwilowy błąd — próbujemy starą drogą poniżej */ }
       const teraz = new Date();
       const dwa = n => String(n).padStart(2, '0');
       const f = d => `${d.getFullYear()}-${dwa(d.getMonth() + 1)}-${dwa(d.getDate())} ${dwa(d.getHours())}:${dwa(d.getMinutes())}:${dwa(d.getSeconds())}`;
@@ -1324,6 +1328,7 @@ function podepnijZatwierdzone(blok) {
       const wszystkie = punkty;
       punkty = filtrujPulpit(wszystkie, czytajFiltryPulpitu(), AKCESORIA_PULPITU.zatwierdzone);
       for (const x of punkty) {
+        if (Array.isArray(x.zalaczniki)) continue;      // nowy serwer podaje je od razu
         try { x.zalaczniki = await API.get(`/api/przystanki/${x.id}/zalaczniki`); } catch (e) { x.zalaczniki = []; }
       }
       cel.innerHTML = (punkty.length < wszystkie.length
@@ -3866,7 +3871,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     </div>
 
     <details class="zaawansowane" id="u-zaawansowane">
-      <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Zaawansowane
+      <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Ustawienia
         <span class="slaby">— połączenia, kopie, tunel, poczta, przechowywanie danych</span></summary>
       <p class="male slaby">Rzadko zmieniane ustawienia techniczne. Na co dzień nie trzeba
         tu zaglądać — program sam pokaże wstęgę, gdy coś stąd wymaga uwagi.</p>
@@ -4110,7 +4115,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     // dopiero potem pytanie, inaczej sprawdzalibysmy stary klucz z bazy.
     pole.querySelector('#u-flotex-sprawdz').onclick = async () => {
       if (!val('u-flotex-klucz') && !ustawienia.flotex_klucz_ustawiony) {
-        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z GK Trasy)', 'blad');
+        komunikat('Wklej klucz z GK Flota (Ustawienia → Połączenie z GK Trasy)', 'blad');
         return;
       }
       const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
@@ -4382,7 +4387,7 @@ function oknoKonta_admin(k) {
         </select></label>
       <p class="male slaby" style="margin:-4px 0 10px">Stąd program liczy kilometry i czas
         tras tego kierowcy, jeśli na samej trasie nie wskazano innego miejsca.</p>
-      ${zPanelu ? '' : `<label>${nowe ? 'PIN kierowcy (min. 4 znaki) albo hasło biura (min. 8 znaków)'
+      ${zPanelu ? '' : `<label>${nowe ? 'PIN kierowcy (4 cyfry) albo hasło biura i Podglądu (min. 8 znaków)'
           : 'Nowy PIN / hasło — zostaw puste, żeby nie zmieniać'}
         <input id="ko-pin" type="text" autocomplete="off"></label>`}
       ${nowe ? '' : `<label class="plaska"><input type="checkbox" id="ko-aktywny" ${k.aktywny ? 'checked' : ''} ${blok}>
@@ -5089,7 +5094,7 @@ function kartaFlotexu(u) {
         <input id="u-flotex-klucz" type="password" autocomplete="new-password"
                placeholder="${u.flotex_klucz_ustawiony
                  ? 'klucz jest zapisany — wklej nowy, żeby zmienić'
-                 : 'z GK Flota: Ustawienia → Zaawansowane → Połączenie z GK Trasy'}"></label>
+                 : 'z GK Flota: Ustawienia → Połączenie z GK Trasy'}"></label>
     </div>
     <div class="male ${u.flotex_klucz_ustawiony ? '' : 'slaby'}">
       ${u.flotex_klucz_ustawiony ? (ikonka('haczyk') + 'Klucz ustawiony') : 'Klucz nie jest ustawiony'}</div>

@@ -20,7 +20,8 @@ async function wczytajMojaTrase(data, zPamieci) {
     // trasa byla dla kierowcy niewidoczna. Bierzemy pierwsza niezakonczona.
     const czynna = moje.find(x => x.status !== 'zakonczona') || moje[0];
     const pelna = await API.get('/api/trasy/' + czynna.id);
-    pelna.inne_trasy_dnia = moje.filter(x => x.id !== czynna.id)
+    // Pusta trasa (0 punktów) nie jest „kolejną trasą do zrobienia” — nie pokazujemy jej (recenzja 2026-11-25, D4).
+    pelna.inne_trasy_dnia = moje.filter(x => x.id !== czynna.id && (x.ile || 0) > 0)
       .map(x => ({ id: x.id, nazwa: x.nazwa, status: x.status, ile: x.ile }));
     // Serwer nie wie jeszcze o zapisach, które czekają w kolejce. Bez tego
     // wejście na ekran w trakcie wysyłki cofałoby ptaszki na "do zrobienia",
@@ -63,7 +64,7 @@ async function pobierzTraseNaJutro(wymus) {
     if (!trasy.length) { await Kolejka.zapamietaj(klucz, null); return null; }
     const czynna = trasy.find(x => x.status !== 'zakonczona') || trasy[0];
     const pelna = await API.get('/api/trasy/' + czynna.id);
-    pelna.inne_trasy_dnia = trasy.filter(x => x.id !== czynna.id).map(x => ({ id: x.id, nazwa: x.nazwa, status: x.status, ile: x.ile }));
+    pelna.inne_trasy_dnia = trasy.filter(x => x.id !== czynna.id && (x.ile || 0) > 0).map(x => ({ id: x.id, nazwa: x.nazwa, status: x.status, ile: x.ile }));
     await Kolejka.zapamietaj(klucz, pelna);
     return pelna;
   } catch (e) {
@@ -291,8 +292,8 @@ EKRANY.moja = {
               `<b>${escHtml(x.nazwa || 'bez nazwy')}</b> (${x.ile || 0} pkt)`).join(', ')}
             — pokaże się po zamknięciu tej.</div>` : ''}
         <div class="przyciski" style="margin-top:12px">
-          ${mojaTrasa.status === 'planowana' ? ('<button class="glowny" id="btn-start">' + ikonka('odtworz') + 'Rozpocznij trasę</button>') : ''}
-          ${zrobione === l.wszystkie && l.wszystkie && !mojaTrasa.koniec_klik && mojaTrasa.status !== 'odwolana'
+          ${mojaTrasa.status === 'planowana' ? ('<button class="glowny" id="btn-start">' + ikonka('odtworz') + 'Rozpocznij pracę</button>') : ''}
+          ${zrobione === l.wszystkie && (l.wszystkie || (mojaTrasa.przystanki || []).length) && !mojaTrasa.koniec_klik && mojaTrasa.status !== 'odwolana'
         ? ('<button class="zielony" id="btn-koniec">' + ikonka('haczyk') + 'Zakończ pracę</button>') : ''}
           ${mojaTrasa.status !== 'odwolana' && mojaTrasa.data <= dzisiaj()
         ? ('<button id="btn-uwaga">' + ikonka('ostrzezenie') + 'Uwaga w trasie</button>') : ''}
@@ -383,7 +384,7 @@ EKRANY.moja = {
   },
 };
 
-/* „▶ Rozpocznij trasę” — jedna akcja dla dwóch miejsc: przycisku na Mojej
+/* „▶ Rozpocznij pracę” — jedna akcja dla dwóch miejsc: przycisku na Mojej
    trasie i dużego przycisku pod listą Załadunku, który pojawia się, gdy
    wszystko jest potwierdzone (kierowca kończy załadunek właśnie tam).
 
@@ -630,6 +631,26 @@ function oknoUwagiTrasy(trasa, nastepny) {
   });
 }
 
+/* Czego brakuje do dowodu dostawy — lista do miękkiego ostrzeżenia „Brakuje: …” (nie blokuje zapisu). Czysta funkcja:
+   wymogi punktu, dane z okna ({odebral, podpis, zdjecia, notatka, dokument}), czy to nasze miejsce.
+   D8 (właściciel 2026-11-25): po zmianie, która dała punktom klienta wymogi domyślne (zdjęcie, notatka), kierowca
+   z samym zdjęciem i notatką nie dostawał żadnego ostrzeżenia, choć nie ma ani podpisu, ani nazwiska odbierającego —
+   u klienta brak obu to dalej „Brakuje: kto odebrał albo podpis”. Gdy biuro wymaga któregoś z nich jawnie,
+   zostaje osobna pozycja jak dotąd. Punkt bez żadnych wymogów (dawny) ma tylko ostrzeżenie „Brak dowodu dostawy”. */
+function brakiDowoduDostawy(wymogi, dane, nasze) {
+  const brakuje = [];
+  if (!wymogi.length) return brakuje;
+  if (wymogi.includes('odebral') && !dane.odebral) brakuje.push('kto odebrał');
+  if (wymogi.includes('podpis') && !dane.podpis) brakuje.push('podpis');
+  if (!nasze && !wymogi.includes('odebral') && !wymogi.includes('podpis') && !dane.odebral && !dane.podpis) {
+    brakuje.push('kto odebrał albo podpis');
+  }
+  if (wymogi.includes('zdjecie') && !dane.zdjecia.length) brakuje.push('zdjęcie');
+  if (wymogi.includes('notatka') && !dane.notatka) brakuje.push('notatka');
+  if (wymogi.includes('dokument') && !dane.dokument) brakuje.push('numer dokumentu');
+  return brakuje;
+}
+
 function oknoDostarczone(p) {
   let podpisPole = null;
   const zdjecia = [];
@@ -682,17 +703,11 @@ function oknoDostarczone(p) {
           if (!await potwierdz('Brak dowodu dostawy',
             'Nie ma podpisu, zdjęcia ani nazwiska odbierającego. Zapisać mimo to?')) return;
         }
-        // Własny punkt z wymogami biura: miękkie ostrzeżenie o tym, czego brakuje (nie blokuje — kierowca bywa w terenie).
-        if (wymogi.length) {
-          const brakuje = [];
-          if (wymogi.includes('odebral') && !dane.odebral) brakuje.push('kto odebrał');
-          if (wymogi.includes('podpis') && !dane.podpis) brakuje.push('podpis');
-          if (wymogi.includes('zdjecie') && !dane.zdjecia.length) brakuje.push('zdjęcie');
-          if (wymogi.includes('notatka') && !dane.notatka) brakuje.push('notatka');
-          if (wymogi.includes('dokument') && !dane.dokument) brakuje.push('numer dokumentu');
-          if (brakuje.length && !await potwierdz('Brakuje: ' + brakuje.join(', '),
-            'Biuro prosi o to przy tym punkcie. Zapisać mimo to?')) return;
-        }
+        // Punkt z wymogami biura (u klienta od 25.11 domyślnie zdjęcie i notatka): miękkie ostrzeżenie o tym, czego brakuje
+        // (nie blokuje — kierowca bywa w terenie).
+        const brakuje = brakiDowoduDostawy(wymogi, dane, nasze);
+        if (brakuje.length && !await potwierdz('Brakuje: ' + brakuje.join(', '),
+          'Biuro prosi o to przy tym punkcie. Zapisać mimo to?')) return;
         z();
         if (oknoDostarczone.odepnij) oknoDostarczone.odepnij();
         await zapiszDostawe(p, dane);
@@ -817,7 +832,13 @@ function przyciskAparatu(id) {
 }
 
 async function dodajZdjecia(pliki, zbior, pojemnik, wejscie) {
-  for (const plik of Array.from(pliki).slice(0, 8 - zbior.length)) {
+  // Limit 8 zdjęć na punkt: nadmiar odpadał po cichu — teraz kierowca wie, że część nie weszła (recenzja 2026-11-25, D1).
+  const miejsce = Math.max(0, 8 - zbior.length);
+  if (Array.from(pliki).length > miejsce) {
+    komunikat(miejsce ? `Dodano ${miejsce} z ${Array.from(pliki).length} zdjęć — na jednym punkcie jest limit 8.`
+      : 'Na jednym punkcie jest limit 8 zdjęć.', 'blad');
+  }
+  for (const plik of Array.from(pliki).slice(0, miejsce)) {
     try {
       const maly = await zmniejszZdjecie(plik);
       zbior.push(maly);

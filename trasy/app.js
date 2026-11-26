@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-f3a620fc014c';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-579256edafc6';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -1497,10 +1497,12 @@ async function synchronizuj(cicho = true) {
       const n = wynik.przyjete.length;
       komunikat(`Wysłano ${n} ${odmiana(n, 'zapis', 'zapisy', 'zapisów')}`, 'ok');
     }
-    if (wynik.przyjete.length) {
+    // Zapis odrzucony TRWALE zszedł już z kolejki — reszta idzie od razu, nie dopiero za 25 s (recenzja 2026-11-25, D6).
+    const trwaleOdrzucone = wynik.odrzucone.filter(o => o.trwaly && wgUuid[o.uuid]).length;
+    if (wynik.przyjete.length || trwaleOdrzucone) {
       const zostalo = await Kolejka.ile();
       if (zostalo) { stan.synchronizuje = false; return synchronizuj(cicho); }
-      if (EKRANY[stan.ekran] && EKRANY[stan.ekran].poSynchronizacji) EKRANY[stan.ekran].poSynchronizacji();
+      if (wynik.przyjete.length && EKRANY[stan.ekran] && EKRANY[stan.ekran].poSynchronizacji) EKRANY[stan.ekran].poSynchronizacji();
     }
   } catch (e) {
     if (!cicho) komunikat('Nie udało się wysłać. ' + poLudzku(e), 'blad');
@@ -2085,6 +2087,10 @@ function jestAdministratorem() { return stan.uz && stan.uz.rola === 'admin'; }
    konta to zwykły PIN 4 cyfry (jak kierowca), nie hasło biura — stąd osobne kontoBiura(). */
 function jestPodgladem() { return !!stan.uz && stan.uz.rola === 'podglad'; }
 function kontoBiura() { return jestBiuro() && !jestPodgladem(); }
+/* Konto z jednym sekretem „hasło min. 8 znaków”: biuro i admin, a od 2026-11-25 (D9) także nowy sekret Podglądu
+   na koncie tutejszym. Konto z Panelu (D43) ma osobne hasło i PIN, więc go to nie dotyczy. Dotychczasowy 4-cyfrowy
+   PIN Podglądu dalej loguje; reguła działa dopiero przy ustawianiu nowego sekretu. */
+function kontoZHaslem() { return kontoBiura() || (jestPodgladem() && !(stan.uz && stan.uz.d43)); }
 const EKRANY_PODGLADU = ['pulpit', 'trasy', 'trasa'];
 
 function menuDlaRoli() {
@@ -2339,7 +2345,7 @@ function stempelWersji() {
       </div>
       ${pagesStarsze ? `<div class="male" style="margin-top:6px">Na GitHub Pages jest inna wersja
         aplikacji niż program w biurze. Nową wersję wysyła sam Panel Zarządczy GK — stan:
-        Ustawienia → Zaawansowane → Adres dla telefonów (GitHub Pages).</div>` : ''}
+        Ustawienia → Adres dla telefonów (GitHub Pages).</div>` : ''}
       ${zgodne ? '' : `<button class="maly" id="btn-odswiez-program" style="margin-top:8px">
         Odśwież program</button>`}
     </div>`;
@@ -2372,7 +2378,7 @@ async function sprawdzSpojnoscWersji() {
     // nie ma dostępu do Ustawień i dostałby ostrzeżenie bez wyjścia.
     if (osobneAdresy && dysk !== skrypt && jestAdministratorem()) {
       komunikat('Na GitHub Pages jest inna wersja aplikacji niż program w biurze. '
-        + 'Nową wersję wysyła sam Panel Zarządczy GK — stan: Ustawienia → Zaawansowane → Adres dla telefonów '
+        + 'Nową wersję wysyła sam Panel Zarządczy GK — stan: Ustawienia → Adres dla telefonów '
         + '(GitHub Pages).', 'blad');
     }
     return;
@@ -2621,7 +2627,7 @@ function otworzInstrukcje() {
    osoba i rola → Wygląd → Zmień hasło/PIN (formularz rozwija się w oknie) →
    Powiadomienia → Dane w tym urządzeniu → wersja → Zamknij + Wyloguj na dole. */
 function oknoKonta() {
-  const zmien = kontoBiura() ? 'Zmień hasło' : 'Zmień PIN';
+  const zmien = kontoZHaslem() ? 'Zmień hasło' : 'Zmień PIN';
   okno({
     tytul: 'Moje konto',
     konto: true,
@@ -2839,8 +2845,8 @@ function trescZmianySekretu(zmien) {
   return `<div><button type="button" id="btn-pokaz-zmiane">${zmien}</button></div>
       <fieldset id="zmiana-pinu" class="ukryty"><legend>${zmien}</legend>
         ${pinZPanelu() ? `<p class="konto-drobne">Konto z Panelu Zarządczego GK —
-          ${kontoBiura() ? 'nowe hasło działa' : 'nowy PIN działa'} we wszystkich aplikacjach GK.</p>` : ''}
-        <label>${kontoBiura() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
+          ${kontoZHaslem() ? 'nowe hasło działa' : 'nowy PIN działa'} we wszystkich aplikacjach GK.</p>` : ''}
+        <label>${kontoZHaslem() ? 'Obecne hasło' : 'Obecny PIN'}<input id="pin-stary" type="password"
                inputmode="${trybKlawiaturyPinu()}" autocomplete="current-password" maxlength="128"></label>
         <label>${opisNowegoPinu()}<input id="pin-nowy" type="password"
                inputmode="${trybKlawiaturyPinu()}" autocomplete="new-password" maxlength="128"></label>
@@ -2925,7 +2931,7 @@ function podepnijZmianeSekretu(pole) {
     const stary = pole.querySelector('#pin-stary').value;
     const nowy = pole.querySelector('#pin-nowy').value;
     const w = await sprobuj(() => API.post('/api/zmien-pin', { stary, nowy }),
-      `${kontoBiura() ? 'Hasło zmienione' : 'PIN zmieniony'} — pozostałe urządzenia zostały wylogowane`);
+      `${kontoZHaslem() ? 'Hasło zmienione' : 'PIN zmieniony'} — pozostałe urządzenia zostały wylogowane`);
     if (!w) return;
     // Zmiana hasła unieważnia stare sesje, więc trzeba przejąć nowy token,
     // inaczej wyrzuciłoby z aplikacji osobę, która właśnie ją zmieniła.
@@ -3253,7 +3259,7 @@ async function wejdzDoAplikacji() {
    odrzucał wszystko krótsze niż 8. Pola PIN-u są bez inputmode="numeric":
    na telefonie z klawiaturą cyfrową hasła biura nie dałoby się wpisać. */
 function opisNowegoPinu() {
-  if (kontoBiura()) return 'Nowe hasło (min. 8 znaków)';
+  if (kontoZHaslem()) return 'Nowe hasło (min. 8 znaków)';
   return 'Nowy PIN (4 cyfry)';
 }
 
@@ -3262,7 +3268,7 @@ function pinZPanelu() { return stan.uz.zrodlo === 'gk' && !!stan.uz.konta_z_pane
 /* Klawiatura jak w aplikacjach hali (konto.js): biuro — zwykła (hasło z liter),
    kierowca — cyfrowa: nowy PIN to dokładnie 4 cyfry (D46, 2026-10-16 także na
    kontach tutejszych, jak serwer → sprawdz_dlugosc_pinu i GK Flota). */
-function trybKlawiaturyPinu() { return !kontoBiura() ? 'numeric' : 'text'; }
+function trybKlawiaturyPinu() { return !kontoZHaslem() ? 'numeric' : 'text'; }
 
 /* Konto biura albo administratora z hasłem krótszym niż 8 znaków (w praktyce
    fabryczne „1234” konta admin) — serwer melduje to polem haslo_startowe.
