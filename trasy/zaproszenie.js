@@ -27,7 +27,7 @@ EKRANY.zaproszenie = {
       ${z.skad === 'siec' ? `<div class="wstega uwaga">
         <b>Ten adres działa tylko w firmowym wifi.</b> Kierowca spod domu ani z trasy
         się nie połączy. Żeby aplikacja otwierała się z dowolnej sieci, administrator
-        włącza tunel w <b>Ustawieniach → Dostęp z internetu</b> — aplikację na GitHub Pages
+        włącza tunel w <b>Ustawieniach → Zaawansowane → Dostęp z internetu</b> — aplikację na GitHub Pages
         wyśle wtedy sam Panel Zarządczy GK na tym komputerze.</div>` : ''}
 
       ${naGithubie && daneWSwiat ? `<div class="wstega ok">
@@ -38,22 +38,22 @@ EKRANY.zaproszenie = {
       ${naGithubie && !daneWSwiat ? `<div class="wstega uwaga">
         <b>Aplikacja otworzy się wszędzie, ale program w biurze nie ma teraz adresu
         w internecie.</b> Kierowca zobaczy ekran logowania i nic więcej, dopóki tunel
-        nie ruszy (Ustawienia → Dostęp z internetu; zwykle wystarczy uruchomić
+        nie ruszy (Ustawienia → Zaawansowane → Dostęp z internetu; zwykle wystarczy uruchomić
         GK Trasy jeszcze raz).</div>` : ''}
 
       ${naGithubie && daneWSwiat && z.pages && !z.pages.adres_aktualny ? `<div class="wstega uwaga">
         Panel Zarządczy GK jeszcze nie wpisał nowego adresu tunelu na GitHub Pages — zwykle
         trwa to chwilę po starcie. Jeśli to nie minie, Szef Sprzedaży sprawdza
-        <b>Ustawienia → Adres dla telefonów</b> i Panel → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
+        <b>Ustawienia → Zaawansowane → Adres dla telefonów</b> i Panel → Administracja → Ustawienia → Dostęp z telefonów.</div>` : ''}
 
       ${naGithubie && z.pages && z.pages.starsza && admin ? `<div class="wstega uwaga">
         Na GitHub Pages jest jeszcze starsza wersja aplikacji niż program w biurze — Panel
-        Kierownika wysyła nową sam. Jeśli to nie minie, sprawdź <b>Ustawienia → Adres dla telefonów</b>.</div>` : ''}
+        Kierownika wysyła nową sam. Jeśli to nie minie, sprawdź <b>Ustawienia → Zaawansowane → Adres dla telefonów</b>.</div>` : ''}
 
       ${tunelowy && !z.adres_trwaly ? `<div class="wstega uwaga">
         <b>Ten adres zmieni się po ponownym uruchomieniu programu.</b> Nie drukuj tego
         kodu ani nie rozsyłaj go na stałe. Stały adres daje aplikacja na GitHub Pages — wysyła ją
-        Panel Zarządczy GK na tym komputerze sam${admin ? '; stan widać w <b>Ustawieniach → Adres dla telefonów</b>.'
+        Panel Zarządczy GK na tym komputerze sam${admin ? '; stan widać w <b>Ustawieniach → Zaawansowane → Adres dla telefonów</b>.'
                 : '; jeśli to nie minie, powiedz Szefowi Sprzedaży.'}</div>` : ''}
 
       ${tunelowy && z.adres_trwaly ? `<div class="wstega ok">
@@ -98,7 +98,7 @@ EKRANY.zaproszenie = {
           </div>
         </div>
         <div class="wstega info" style="margin-top:12px">Kierowca loguje się imieniem
-          i nazwiskiem (albo loginem) i swoim PIN-em — tym samym, co w innych
+          i nazwiskiem (albo loginem) i swoim hasłem — tym samym, co w innych
           aplikacjach GK.</div>
         ${naGithubie ? `<div class="wstega info"><b>Ten krok robi się raz na zawsze.</b>
           Ikona na telefonie prowadzi pod stały adres, więc kierowca nie skanuje kodu

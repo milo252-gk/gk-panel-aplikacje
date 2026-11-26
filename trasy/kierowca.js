@@ -34,7 +34,7 @@ async function wczytajMojaTrase(data, zPamieci) {
   } catch (e) {
     const kopia = await Kolejka.przypomnij(klucz);
     if (kopia === null || kopia === undefined) throw e;
-    // D78: telefon bywa wspólny (logowanie PIN-em bez sieci) — trasa z pamięci innego kierowcy to nie „moja trasa”.
+    // D78: telefon bywa wspólny (logowanie hasłem bez sieci) — trasa z pamięci innego kierowcy to nie „moja trasa”.
     if (!jestBiuro() && kopia.kierowca !== undefined && kopia.kierowca !== null && stan.uz && String(kopia.kierowca) !== String(stan.uz.id)) throw e;
     komunikat(stan.sesjaWygasla ? 'Sesja wygasła — pokazuję trasę z pamięci telefonu'
       : 'Brak sieci — pokazuję trasę z pamięci telefonu');

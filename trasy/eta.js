@@ -214,7 +214,7 @@ const ETA = (() => {
     const u = ustawienia(trasa);
     const punkty = trasa.przystanki.filter(p => p.status !== 'odwolany');
     punkty.forEach(p => {
-      p.eta = null; p.spoznienie = null; p.za_wczesnie = null; p.przerwa_przed = 0;
+      p.eta = null; p.eta_dni = 0; p.spoznienie = null; p.za_wczesnie = null; p.przerwa_przed = 0;
     });
 
     // punkt startowy: ostatnia zamknięta dostawa (jeśli dziś już jeżdżą),
@@ -262,6 +262,9 @@ const ETA = (() => {
       if (p.mapa_lat == null) return;
       const chwila = minuty + krok.dojazd_min;
       p.eta = naGodzine(chwila);
+      // Ile dni po dniu trasy wypada ta godzina (0 = ten sam dzień). Bez tego długa trasa „zawijała się” przez północ
+      // i „ok. 07:13” po „ok. 23:40” wyglądało jak pomyłka (recenzja 2026-11-25, D5). p.eta zostaje samym HH:MM.
+      p.eta_dni = Math.max(0, Math.floor(chwila / 1440));
       policzonych += 1;
 
       const od = naMinuty(p.okno_od), doGodz = naMinuty(p.okno_do);
@@ -272,23 +275,31 @@ const ETA = (() => {
   }
 
   /* Krótki opis pod punktem — to, co człowiek ma przeczytać. */
+  /* Dopisek dnia do godziny: „następnego dnia”, „za 2 dni” — tylko gdy godzina wypada po dniu trasy. */
+  function dzienEta(p) {
+    const n = Number(p && p.eta_dni) || 0;
+    if (n <= 0) return '';
+    return n === 1 ? ' (następnego dnia)' : ` (za ${n} dni)`;
+  }
+
   function opis(p) {
     if (!p.eta) return '';
+    const godzina = p.eta + dzienEta(p);
     /* Przerwa jest częścią tej godziny — bez dopisku wygląda jak strata czasu
        albo pomyłka w rachunku. */
     const przerwa = p.przerwa_przed
       ? `<span class="slaby"> · ${ikonka('przerwa')}w drodze przerwa ${p.przerwa_przed} min</span>` : '';
     if (p.spoznienie) {
-      return `<span style="color:var(--czerwony);font-weight:700">${ikonka('ostrzezenie')}${p.eta} — nie zdążysz,`
+      return `<span style="color:var(--czerwony);font-weight:700">${ikonka('ostrzezenie')}${godzina} — nie zdążysz,`
         + ` zamykają ${escHtml(p.okno_do)}</span>` + przerwa;
     }
     if (p.za_wczesnie && p.za_wczesnie > 15) {
-      return `<span style="color:var(--zolty)">${ikonka('zegar')}${p.eta} — otwierają dopiero`
+      return `<span style="color:var(--zolty)">${ikonka('zegar')}${godzina} — otwierają dopiero`
         + ` ${escHtml(p.okno_od)}</span>` + przerwa;
     }
-    return `<span class="slaby">${ikonka('zegar')}ok. ${p.eta}</span>` + przerwa;
+    return `<span class="slaby">${ikonka('zegar')}ok. ${godzina}</span>` + przerwa;
   }
 
   return { policz, opis, odlegloscKm, naGodzine, naMinuty, minutyOdPoczatkuDnia, modelCzasu,
-    liczba };
+    liczba, dzienEta };
 })();

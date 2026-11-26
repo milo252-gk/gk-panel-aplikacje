@@ -83,7 +83,7 @@ EKRANY.pulpit = {
         ${chipyAutHtml(p.auta_ikol)}
       </div>
       ${p.ostatnie_pozycje.length ? '' : `<div class="male slaby mapa-podpowiedz">${p.ikol
-        ? 'Auta pojawią się na mapie, gdy lokalizator w aucie przekaże pozycję (Ustawienia → Lokalizatory w autach: przypisz lokalizator do kierowcy). Do tego czasu mapa jest zmniejszona.'
+        ? 'Auta pojawią się na mapie, gdy lokalizator w aucie przekaże pozycję (Ustawienia → Zaawansowane → Lokalizatory w autach: przypisz lokalizator do kierowcy). Do tego czasu mapa jest zmniejszona.'
         : 'Auta pojawią się na mapie, gdy kierowca włączy udostępnianie położenia w „Mojej trasie”. Do tego czasu mapa jest zmniejszona.'}
         <button type="button" class="maly" id="p-mapa-rozmiar" aria-expanded="false">Powiększ mapę</button></div>`}
       <div class="mapa${p.ostatnie_pozycje.length ? '' : ' zwinieta'}" id="p-mapa"></div>`;
@@ -1381,7 +1381,10 @@ async function rysujDoPrzyjecia(el, poZmianie) {
       — do tego czasu możesz zwrócić kierowcy to, co trzeba poprawić.</p>
     <div class="karta">${grupyDoPrzyjecia(lista).map(g => `${g.pozycje.length > 1 ? `
       <div class="przyciski" style="justify-content:space-between;align-items:center;padding:8px 0 2px;border-bottom:2px solid var(--ramka)">
-        <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa czeka', 'dostawy czekają', 'dostaw czeka')}</span></b>
+        <b>${escHtml(g.nazwa)} <span class="slaby male">· ${g.pozycje.length} ${odmiana(g.pozycje.length, 'dostawa czeka', 'dostawy czekają', 'dostaw czeka')}${
+          /* Przycisk zbiorczy zatwierdza tylko dostarczone — nieudane zostają do decyzji przy każdej z osobna. */
+          g.dostarczone.length > 1 && g.pozycje.length > g.dostarczone.length
+            ? ` (${g.pozycje.length - g.dostarczone.length} ${odmiana(g.pozycje.length - g.dostarczone.length, 'nieudana', 'nieudane', 'nieudanych')} — zatwierdź osobno)` : ''}</span></b>
         ${g.dostarczone.length > 1 ? `<button class="maly glowny" data-przyjmij-trase="${g.trasa}">${ikonka('haczyk')}Zatwierdź dostarczone (${g.dostarczone.length})</button>` : ''}
       </div>` : ''}${g.pozycje.map(x => {
       return `<div style="padding:9px 0;border-bottom:1px solid var(--ramka)">
@@ -1487,7 +1490,7 @@ async function zmienPrzydzial(wybor) {
       : `Na tej trasie ${zamkniete} ${odmiana(zamkniete, 'punkt jest już zamknięty', 'punkty są już zamknięte', 'punktów jest już zamkniętych')} — zmiana kierowcy zeruje załadunek.`,
     { tak: 'Zmień mimo to', nie: 'Wróć', groznie: true })) { odswiezEkran(); return; }
   if (pole === 'pojazd' && wartosc && !await zgodaNaBus(wartosc)) { odswiezEkran(); return; }
-  const w = await sprobuj(() => zapisBiura('POST', '/api/trasy', { id, [pole]: wartosc }, {
+  await sprobuj(() => zapisBiura('POST', '/api/trasy', { id, [pole]: wartosc }, {
     opis: (pole === 'kierowca' ? 'zmiana kierowcy' : 'zmiana auta') + ' na trasie nr ' + id,
     zrodla: ['/api/trasy/' + id],
     popraw: (sciezka, d) => {
@@ -2408,7 +2411,6 @@ function naglowekPunktu(t, p) {
    lista pustych myślników niczego nie mówi, a zajmuje pół ekranu. */
 function osCzasuPunktu(t, p, d) {
   const kiedy = x => czasNaEkran(x);
-  const godz = x => String(x || '').slice(11, 16);
   const zdarzenia = [];
   const zrodlo = d || {};
 
@@ -3712,9 +3714,8 @@ function kartaKontKierowcow(ustawienia, konta) {
       <thead><tr><th>Imię</th><th>Login</th><th>Telefon</th><th></th></tr></thead>
       <tbody>${(konta || []).map(x => `<tr style="${x.aktywny ? '' : 'opacity:.5'}">
         <td><b>${escHtml(x.imie)}</b>${x.aktywny ? '' : ' <span class="male">(wyłączone)</span>'}
-          ${x.aktywny && (x.haslo_do_zmiany || x.pin_do_zmiany)
-            ? `<br><span class="male slaby">${x.haslo_do_zmiany ? 'hasło startowe — ustawi przy pierwszym logowaniu'
-              : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}</td>
+          ${x.aktywny && x.haslo_do_zmiany
+            ? '<br><span class="male slaby">hasło startowe — ustawi przy pierwszym logowaniu</span>' : ''}</td>
         <td>${escHtml(x.login)}</td><td>${escHtml(x.telefon || '')}</td>
         <td>${x.mozna_zmienic && mozna ? `<button class="maly" data-kierowca-konto="${x.id}">${ikonka('edytuj')}Zmień</button>` : ''}</td>
       </tr>`).join('') || '<tr><td colspan="4" class="slaby">Nie ma jeszcze kierowców.</td></tr>'}</tbody>
@@ -3755,15 +3756,30 @@ async function rysujUstawieniaBiura(pole) {
     podepnijChipy();
     return;
   }
+  // Decyzja właściciela 2026-11-26: „Ustawienia firmy” zmienia tylko Szef Sprzedaży i Menedżer — biuro je widzi.
+  // Serwer odmawia zapisu (403) i mówi, czy to konto może zmieniać (`moze_zmieniac_ustawienia`); bez pola (starszy
+  // serwer) — jak dotąd. Konta kierowców biuro prowadzi dalej.
+  const zmienia = ustawienia.moze_zmieniac_ustawienia !== false;
   pole.innerHTML = `
     ${chipy}
-    <p class="male slaby" style="margin:0 0 10px">Tu ustawiasz, jak program liczy trasy
+    <p class="male slaby" style="margin:0 0 10px">${zmienia
+      ? `Tu ustawiasz, jak program liczy trasy
       i pilnuje kierowców oraz zakładasz konta kierowców. Klucze, pocztę, kopie zapasowe
-      i konta biura zmienia Szef Sprzedaży.</p>
+      i konta biura zmienia Szef Sprzedaży.`
+      : 'Tu widzisz, jak program liczy trasy i pilnuje kierowców, i zakładasz konta kierowców.'}</p>
+    ${zmienia ? '' : `<div class="wstega info" id="u-tylko-odczyt">${ikonka('info')}Ustawienia firmy zmienia
+      Szef Sprzedaży albo Menedżer — tutaj są tylko do odczytu.</div>`}
+    <div id="u-ustawienia-firmy">
     ${kartaFirmyUst(ustawienia)}
     ${kartaGodzinUst(ustawienia)}
     ${kartaPrzerwUst(ustawienia)}
+    </div>
     ${kartaKontKierowcow(ustawienia, konta)}`;
+  if (!zmienia) {
+    const firmy = pole.querySelector('#u-ustawienia-firmy');
+    firmy.querySelectorAll('input, textarea, select').forEach(x => { x.disabled = true; });
+    firmy.querySelectorAll('.zapisz-ustawienia').forEach(x => x.remove());
+  }
   const nowyKierowca = pole.querySelector('#u-nowy-kierowca');
   if (nowyKierowca) nowyKierowca.onclick = () => oknoKontaZespolu(null);
   podepnijChipy();
@@ -3891,7 +3907,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     </div>
 
     <details class="zaawansowane" id="u-zaawansowane">
-      <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Ustawienia
+      <summary><span class="znak-zwiniecia">${ikonka('szewron-prawo')}</span> Zaawansowane
         <span class="slaby">— połączenia, kopie, tunel, poczta, przechowywanie danych</span></summary>
       <p class="male slaby">Rzadko zmieniane ustawienia techniczne. Na co dzień nie trzeba
         tu zaglądać — program sam pokaże wstęgę, gdy coś stąd wymaga uwagi.</p>
@@ -3993,7 +4009,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
         aparatem telefonu. Adres to stały adres aplikacji na GitHub Pages
         (<code>${escHtml(((ustawienia.pages || {}).adres) || 'https://milo252-gk.github.io/gk-panel-aplikacje/trasy/')}</code>),
         a gdy Panel Zarządczy GK jeszcze jej tam nie wysłał — adres tunelu albo firmowego wifi.</p>
-      <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i PIN-em,
+      <p class="male">Kierowca loguje się imieniem i nazwiskiem (albo loginem) i hasłem,
         a potem w przeglądarce wybiera <b>„Dodaj do ekranu głównego”</b>. Od tej pory
         aplikacja otwiera się z ikony jak zwykły program i działa również bez zasięgu.</p>`)}
     </details>`;
@@ -4135,7 +4151,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     // dopiero potem pytanie, inaczej sprawdzalibysmy stary klucz z bazy.
     pole.querySelector('#u-flotex-sprawdz').onclick = async () => {
       if (!val('u-flotex-klucz') && !ustawienia.flotex_klucz_ustawiony) {
-        komunikat('Wklej klucz z GK Flota (Ustawienia → Połączenie z GK Trasy)', 'blad');
+        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z GK Trasy)', 'blad');
         return;
       }
       const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
@@ -4245,10 +4261,9 @@ function kartaKontAdmina(ustawienia, u) {
             <td><b>${escHtml(x.imie)}</b>${x.aktywny ? '' : ' <span class="male">(wyłączone)</span>'}
               ${x.zrodlo === 'gk' ? ' <span class="plakietka p-planowana">z Panelu</span>' : ''}
               ${x.zrodlo === 'gk' && x.pin_w_panelu && x.aktywny
-                ? '<br><span class="male slaby">PIN do ustawienia w Panelu</span>' : ''}
-              ${x.zrodlo === 'gk' && x.aktywny && (x.haslo_do_zmiany || x.pin_do_zmiany)
-                ? `<br><span class="male slaby">${x.haslo_do_zmiany ? 'hasło startowe — ustawi przy pierwszym logowaniu'
-                  : 'PIN startowy 1234 — ustawi nowy przy logowaniu'}</span>` : ''}
+                ? '<br><span class="male slaby">bez hasła — „Resetuj hasło” albo Panel</span>' : ''}
+              ${x.zrodlo === 'gk' && x.aktywny && x.haslo_do_zmiany
+                ? '<br><span class="male slaby">hasło startowe — ustawi przy pierwszym logowaniu</span>' : ''}
               ${opisBlokadyZInternetu(x.z_internetu)}</td>
             <td>${escHtml(x.login)}</td>
             <td>${escHtml(nazwaRoliKonta(x))}${x.baza_nazwa
@@ -4329,7 +4344,7 @@ EKRANY.administracja = {
 };
 
 
-/* Logowanie z internetu (tunel): po 10 złych PIN-ach w 15 min konto czeka minutę
+/* Logowanie z internetu (tunel): po 10 złych hasłach w 15 min konto czeka minutę
    (od 2026-11-03 nie ma już blokady do „Odblokuj”; dawne wpisy blokad dobowych
    serwer ignoruje, a poniższe opisy stanu zostają dla zgodności). Z firmowego
    wifi ta osoba wchodzi cały czas. */
@@ -4344,7 +4359,7 @@ function opisBlokadyZInternetu(s) {
     wynik = `<br><span class="plakietka p-oczekuje">z internetu czeka do ${escHtml(godzina)}</span>`;
   }
   if (s.zle_godzina) {
-    wynik += `<br><span class="male slaby">złe PIN-y z internetu w ostatniej godzinie: ${Number(s.zle_godzina)}</span>`;
+    wynik += `<br><span class="male slaby">złe hasła z internetu w ostatniej godzinie: ${Number(s.zle_godzina)}</span>`;
   }
   return wynik;
 }
@@ -4355,7 +4370,7 @@ function wstegaLogowaniaZInternetu(s) {
   const zle = Number(s.zle_godzina || 0);
   if (!zablokowane.length && !zle) return '';
   return `<div class="wstega ${zablokowane.length ? 'blad' : 'uwaga'}">
-    Złe PIN-y z internetu w ostatniej godzinie: <b>${zle}</b>.
+    Złe hasła z internetu w ostatniej godzinie: <b>${zle}</b>.
     ${zablokowane.length ? `Zablokowane z internetu: <b>${zablokowane.map(x => escHtml(x.imie)).join(', ')}</b>
       — z firmowego wifi wchodzą normalnie; „Odblokuj” przy koncie zdejmuje blokadę.` : ''}</div>`;
 }
@@ -4373,7 +4388,7 @@ function oknoKonta_admin(k) {
   // w programie (same role GK Trasy) — formularz konta GK, zapis przez hub.
   if (zespol && (nowe || (k.zrodlo === 'gk' && k.edycja_w_programie))) return oknoKontaZespolu(k);
   k = k || { imie: '', login: '', rola: 'kierowca', telefon: '', aktywny: 1 };
-  // Konto z Panelu: imię, rolę, telefon, PIN i aktywność prowadzi Panel →
+  // Konto z Panelu: imię, rolę, telefon, hasło i aktywność prowadzi Panel →
   // Administracja. Pola są widoczne, ale zablokowane — tutaj tylko baza wyjazdowa.
   const zPanelu = !nowe && k.zrodlo === 'gk' && !!(stan.ustawienia || {}).konta_z_panelu;
   const blok = zPanelu ? 'disabled' : '';
@@ -4381,7 +4396,7 @@ function oknoKonta_admin(k) {
     tytul: nowe ? 'Dodaj osobę' : 'Konto: ' + k.imie,
     tresc: `
       ${zPanelu ? `<div class="wstega info">Konto z Panelu Zarządczego GK. Imię, rolę,
-        telefon, PIN i wyłączenie konta zmienia się w <b>Panelu → Administracja</b>.${zespol
+        telefon, hasło i wyłączenie konta zmienia się w <b>Panelu → Administracja</b>.${zespol
           ? ' Ta osoba ma też role spoza Panelu Zarządczego SP (np. kierownik albo Menedżer) — dlatego nie tutaj.' : ''}</div>` : ''}
       <label>Imię i nazwisko<input id="ko-imie" value="${escHtml(k.imie)}" autocapitalize="words" ${blok}></label>
       <label>Login ${nowe ? '' : '<span class="slaby">(nie da się zmienić)</span>'}
@@ -4407,12 +4422,12 @@ function oknoKonta_admin(k) {
         </select></label>
       <p class="male slaby" style="margin:-4px 0 10px">Stąd program liczy kilometry i czas
         tras tego kierowcy, jeśli na samej trasie nie wskazano innego miejsca.</p>
-      ${zPanelu ? '' : `<label>${nowe ? 'PIN kierowcy (4 cyfry) albo hasło biura i Podglądu (min. 8 znaków)'
-          : 'Nowy PIN / hasło — zostaw puste, żeby nie zmieniać'}
-        <input id="ko-pin" type="text" autocomplete="off"></label>`}
+      ${zPanelu ? '' : `<label>${escHtml(nowe ? 'Hasło (min. 8 znaków: litery, cyfry, znaki)'
+          : 'Nowe hasło — zostaw puste, żeby nie zmieniać (min. 8 znaków)')}
+        <input id="ko-pin" type="text" autocomplete="off" maxlength="128"></label>`}
       ${nowe ? '' : `<label class="plaska"><input type="checkbox" id="ko-aktywny" ${k.aktywny ? 'checked' : ''} ${blok}>
         Konto aktywne</label>
-        <p class="male slaby">Zmiana PIN-u wylogowuje tę osobę ze wszystkich urządzeń.</p>`}`,
+        <p class="male slaby">Zmiana hasła wylogowuje tę osobę ze wszystkich urządzeń.</p>`}`,
     przyciski: [
       { napis: 'Anuluj', klik: z => z() },
       { napis: 'Zapisz', klasa: 'glowny', klik: async z => {
@@ -4431,9 +4446,9 @@ function oknoKonta_admin(k) {
 }
 
 /* Konto kierowcy albo biura zakładane i zmieniane przez Panel (D49, GK-KONTA.md §3.5).
-   Tylko imię i nazwisko, role, telefon i aktywność — żadnego pola hasła ani PIN-u:
-   nowa osoba dostaje w Panelu hasło startowe haslo123, a „Ustaw hasło startowe”
-   i „Resetuj PIN” to te same przyciski co w Panelu. Usunięcia nie ma (tylko
+   Tylko imię i nazwisko, role, telefon i aktywność — żadnego pola hasła:
+   nowa osoba dostaje w Panelu hasło startowe haslo123, a „Resetuj hasło” i „Ustaw hasło startowe”
+   to te same przyciski co w Panelu. „Resetuj PIN” zniknął 2026-11-26 (logowanie bez PIN-ów). Usunięcia nie ma (tylko
    administrator Panelu) — tutaj konto się wyłącza. Baza wyjazdowa jest tylko nasza. */
 function oknoKontaZespolu(k) {
   const nowe = !k;
@@ -4472,18 +4487,17 @@ function oknoKontaZespolu(k) {
             `<option value="${l.id}" ${k.baza === l.id ? 'selected' : ''}>${escHtml(l.nazwa)}</option>`).join('')}
         </select></label>
       ${nowe ? `<p class="male slaby">Hasło startowe: <b>haslo123</b> — przy pierwszym logowaniu osoba
-          ustawi własne hasło i PIN.</p>`
+          ustawi własne hasło.</p>`
         : `<label class="plaska"><input type="checkbox" id="kz-aktywny" ${k.aktywny ? 'checked' : ''}>
           Konto aktywne</label>
         <p class="male slaby" style="margin:-4px 0 12px">Usuwa Menedżer w Panelu → Administracja —
           tu możesz wyłączyć konto.</p>
-        <fieldset><legend>Hasło i PIN</legend>
-          <p class="male slaby" style="margin:0 0 10px">Nikt nie zna niczyjego hasła ani PIN-u — możesz tylko
-            przywrócić startowe. Osoba ustawi własne przy następnym logowaniu.</p>
+        <fieldset><legend>Hasło</legend>
+          <p class="male slaby" style="margin:0 0 10px">Nikt nie zna niczyjego hasła — możesz tylko
+            przywrócić startowe (np. gdy ktoś zapomniał hasła). Osoba ustawi własne przy następnym logowaniu.</p>
           <div class="przyciski-konta">
-            <button type="button" data-akcja-konta="resetuj_konto" title="Hasło haslo123 i PIN 1234 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>
+            <button type="button" data-akcja-konta="resetuj_konto" title="Hasło haslo123 — osoba ustawi nowe przy logowaniu">Resetuj hasło</button>
             <button type="button" data-akcja-konta="haslo_startowe">Ustaw hasło startowe</button>
-            <button type="button" data-akcja-konta="resetuj_pin">Resetuj PIN</button>
             <button type="button" data-akcja-konta="wyloguj_wszedzie">Wyloguj wszędzie</button>
           </div>
         </fieldset>`}`,
@@ -4498,14 +4512,11 @@ function oknoKontaZespolu(k) {
       // Pytania jak w Panelu → Administracja: kto co dostanie i co przepada.
       const PYTANIA = {
         haslo_startowe: [`Ustawić hasło startowe?`,
-          `${k.imie} dostanie hasło „haslo123”, PIN zostanie skasowany, a wszystkie urządzenia wylogowane. `
-          + 'Przy pierwszym logowaniu ustawi nowe hasło i PIN.', 'Ustaw hasło startowe'],
-        resetuj_konto: [`Zresetować hasło i PIN?`,
-          `${k.imie} dostanie hasło „haslo123” i PIN 1234, wszystkie urządzenia zostaną wylogowane, `
+          `${k.imie} dostanie hasło „haslo123”, a wszystkie urządzenia zostaną wylogowane. `
+          + 'Przy pierwszym logowaniu ustawi nowe hasło.', 'Ustaw hasło startowe'],
+        resetuj_konto: [`Zresetować hasło?`,
+          `${k.imie} dostanie hasło „haslo123”, wszystkie urządzenia zostaną wylogowane, `
           + 'a blokada logowania w systemie zdjęta. Przy logowaniu ustawi nowe.', 'Resetuj hasło'],
-        resetuj_pin: [`Zresetować PIN?`,
-          `${k.imie} dostanie PIN startowy 1234 — przy pierwszym logowaniu ustawi nowy. Hasło się nie zmienia.`,
-          'Resetuj PIN'],
         wyloguj_wszedzie: [`Wylogować wszędzie?`,
           `Wszystkie urządzenia osoby ${k.imie} (Panel Zarządczy SP i inne aplikacje GK) zostaną wylogowane — `
           + 'następne logowanie hasłem.',
@@ -4519,8 +4530,7 @@ function oknoKontaZespolu(k) {
         try {
           zajety(true);
           const w = await API.post('/api/konta-gk/osoba', { akcja, id: k.id });
-          komunikat(akcja === 'resetuj_konto' ? `${k.imie}: hasło „haslo123” i PIN 1234 — przy logowaniu ustawi nowe.`
-            : akcja === 'resetuj_pin' ? `PIN startowy ${w.pin || '1234'} — ${k.imie} ustawi nowy przy logowaniu`
+          komunikat(akcja === 'resetuj_konto' ? `${k.imie}: hasło „haslo123” — przy logowaniu ustawi nowe.`
             : akcja === 'haslo_startowe' ? `Hasło startowe haslo123 — ${k.imie} ustawi nowe przy logowaniu`
               : `Wylogowano ${k.imie} ze wszystkich urządzeń`, 'ok');
           if (w.uwaga) komunikat(w.uwaga, 'blad');
@@ -5102,10 +5112,10 @@ function kartaFlotexu(u) {
       planista widzi przy autach, czy są sprawne, kierowca ma w menu „Moje auto”
       (GK Flota bez drugiego logowania), a przebieg, tankowania i usterki z raportu
       pracy same trafiają do GK Flota. Konta kierowców zakłada się tylko tutaj —
-      GK Flota dostaje je sama, z tym samym loginem i PIN-em.</p>
+      GK Flota dostaje je sama, z tym samym loginem i hasłem.</p>
     <p class="male slaby">Adres: <b>http://127.0.0.1:8780</b>, gdy GK Flota działa na tym
       komputerze, albo <b>https://…</b> (tunel). Zwykłe <b>http://</b> do innego komputera
-      jest zablokowane — klucz i PIN-y kierowców szłyby otwartym tekstem.</p>
+      jest zablokowane — klucz i skróty haseł kierowców szłyby otwartym tekstem.</p>
     <div class="dwie">
       <label>Adres GK Flota
         <input id="u-flotex-adres" value="${escHtml(u.flotex_adres || '')}"
@@ -5114,7 +5124,7 @@ function kartaFlotexu(u) {
         <input id="u-flotex-klucz" type="password" autocomplete="new-password"
                placeholder="${u.flotex_klucz_ustawiony
                  ? 'klucz jest zapisany — wklej nowy, żeby zmienić'
-                 : 'z GK Flota: Ustawienia → Połączenie z GK Trasy'}"></label>
+                 : 'z GK Flota: Ustawienia → Zaawansowane → Połączenie z GK Trasy'}"></label>
     </div>
     <div class="male ${u.flotex_klucz_ustawiony ? '' : 'slaby'}">
       ${u.flotex_klucz_ustawiony ? (ikonka('haczyk') + 'Klucz ustawiony') : 'Klucz nie jest ustawiony'}</div>
@@ -5173,7 +5183,7 @@ function kartaFlotexu(u) {
    Administracja (decyzja właściciela 2026-10-02). Tutaj admin wkleja adres
    i klucz Panelu; program sam pobiera konta co 5 minut. „Przenieś konta do
    Panelu” to jednorazowe przeniesienie kont założonych dotąd tutaj — z ich
-   PIN-ami (jadą tylko skróty, PIN się nie zmienia).                         */
+   hasłami (jadą tylko skróty, hasło się nie zmienia).                       */
 function kartaKontGK(u) {
   const s = u.hub_stan || {};
   const w = s.wynik || {};
@@ -5189,12 +5199,12 @@ function kartaKontGK(u) {
   return zwin('Konta GK (Panel Zarządczy GK)', plakietka, `
     <p class="male slaby">Konta wszystkich aplikacji GK zakłada się w jednym miejscu:
       <b>Panel → Administracja</b>. Osoba loguje się wszędzie imieniem i nazwiskiem i tym
-      samym PIN-em. Program pobiera konta z Panelu co 5 minut i trzyma ich kopię — logowanie
+      samym hasłem. Program pobiera konta z Panelu co 5 minut i trzyma ich kopię — logowanie
       działa dalej, gdy Panel chwilowo nie odpowiada.</p>
     <p class="male slaby"><b>Panel na tym komputerze łączy się sam</b> — Panel robi klucz i podaje go
       programowi przez plik w profilu Windows, nic nie trzeba wklejać. Ręcznie (Panel na innym
       komputerze): adres <b>https://…</b> i klucz z Panelu → Administracja → Ustawienia → Połączenia GK.</p>
-    <p class="male slaby"><b>Login „admin”</b> to konto Menedżera z Panelu — to samo hasło i PIN
+    <p class="male slaby"><b>Login „admin”</b> to konto Menedżera z Panelu — to samo hasło
       co w Panelu (ustawia się je w aplikacji hali). Tutejszy awaryjny „admin” z tutejszym hasłem
       wpuszcza tylko bez Panelu: gdy połączenie nie jest ustawione albo konta nie pobrały się od
       ponad ${Number(adm.po_godz) || 24} godzin. Inni Menedżerowie logują się imieniem i nazwiskiem.</p>
@@ -5239,14 +5249,14 @@ function kartaKontGK(u) {
         : `Login <b>admin</b> = tutejsze konto awaryjne${adm.w_panelu && !adm.swiezy
           ? ` — konta z Panelu nie pobrały się od ponad ${Number(adm.po_godz) || 24} h` : ''}.`}</div>
       ${(s.bez_pinu || []).length ? `<div class="wstega uwaga" style="margin-top:8px">
-        Bez PIN-u (ustaw go w Panelu albo niech ta osoba zaloguje się raz w aplikacji GK na hali):
+        Bez hasła („Resetuj hasło” przy koncie albo w Panelu → Administracja):
         <b>${s.bez_pinu.map(escHtml).join(', ')}</b></div>` : ''}
       ${(w.ostrzezenia || []).length ? `<div class="wstega uwaga" style="margin-top:8px">
         ${w.ostrzezenia.map(x => `<div>${escHtml(x)}</div>`).join('')}</div>` : ''}
 
       <h3 style="margin-top:18px">Przenieś konta do Panelu</h3>
       <p class="male slaby">Jednorazowo: konta założone dotąd tutaj trafiają do Panelu razem
-        z PIN-ami (jadą tylko skróty — nikt nie musi zmieniać PIN-u). Osoba, która już jest
+        z hasłami (jadą tylko skróty — nikt nie musi zmieniać hasła). Osoba, która już jest
         w Panelu pod tym samym imieniem i nazwiskiem, dostaje tylko rolę Panelu Zarządczego SP. Najpierw
         popraw w kontach <b>pełne imię i nazwisko</b> — to w Panelu jest login. Konto awaryjne
         „admin” zostaje tutaj. Powtórne przeniesienie niczego nie dubluje.</p>
@@ -5301,7 +5311,7 @@ function podepnijKontaGK(pole, ustawienia) {
   if (przenies) przenies.onclick = async () => {
     if (!await potwierdz('Przenieść konta do Panelu?',
       'Konta założone tutaj (oprócz awaryjnego „admin”) trafią do Panelu → Administracja '
-      + 'z obecnymi PIN-ami. Od tej chwili zmienia się je w Panelu.')) return;
+      + 'z obecnymi hasłami. Od tej chwili zmienia się je w Panelu.')) return;
     const w = await sprobuj(() => API.post('/api/konta-gk/przenies'));
     if (w) {
       komunikat(`Przeniesiono: nowe ${w.dodane}, połączone ${w.polaczone}, konflikty `
