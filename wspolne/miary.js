@@ -26,7 +26,7 @@
     przestoj: { nazwa: 'Przestój łącznie',
       tekst: 'Czas, przez który linie stały w okresie: od zgłoszenia awarii do potwierdzenia przez lidera, że linia ruszyła (trwająca — do teraz). Liczony 24/7, także gdy naprawa jest wstrzymana. Przycięty do okresu, więc liczy się też awaria zgłoszona wcześniej. Nakładające się awarie jednej linii liczą się raz; suma po liniach. Bez odwołanych.' },
     reakcja: { nazwa: 'Reakcja Utrzymania Ruchu (średnio)',
-      tekst: 'Średni czas od zgłoszenia awarii do chwili, gdy mechanik ją przyjął („Mechanik w drodze”) albo od razu zaczął naprawę. Z awarii zgłoszonych w okresie, które Utrzymanie Ruchu już przyjęło.' },
+      tekst: 'Średni czas od zgłoszenia awarii do chwili, gdy Pracownik UR ją przyjął („Pracownik UR w drodze”) albo od razu zaczął naprawę. Z awarii zgłoszonych w okresie, które Utrzymanie Ruchu już przyjęło.' },
     mttr: { nazwa: 'MTTR (średnio)',
       tekst: 'Średni czas naprawy: od zgłoszenia awarii do „Zakończona przez Utrzymanie Ruchu”. Bez czekania na potwierdzenie lidera. Z awarii zgłoszonych w okresie i już zakończonych przez UR.' },
     mtbf: { nazwa: 'MTBF',

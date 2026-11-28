@@ -78,7 +78,7 @@
   <header class="naglowek">
     <div class="zmiana" id="zmiana"></div>
     <div class="zegar" id="zegar">--:--</div>
-    <div class="kto"><button id="szukaj" class="maly" type="button" aria-label="Szukaj" title="Szukaj: zlecenie (ZL-…), osoba, maszyna, linia, dział (klawisz /)"><span class="ik" data-ikona="jakosc" data-rozmiar="18"></span><span class="szukaj-napis">Szukaj</span></button><button id="dzwiek" class="maly" aria-pressed="false"><span class="ik" data-ikona="dzwonek-wyl" data-rozmiar="18"></span></button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
+    <div class="kto"><button id="szukaj" class="maly" type="button" aria-label="Szukaj" title="Szukaj: zlecenie (ZL-…), osoba, maszyna, linia, dział (klawisz /)"><span class="ik" data-ikona="szukaj" data-rozmiar="18"></span><span class="szukaj-napis">Szukaj</span></button><button id="dzwiek" class="maly" aria-pressed="false"><span class="ik" data-ikona="dzwonek-wyl" data-rozmiar="18"></span></button><button id="konto" class="maly hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
   <div id="na-zywo" class="na-zywo">
@@ -271,17 +271,18 @@
            zmian to „Progi i godziny” (kod: ustawienia). Etykiety QR drukuje przycisk w Maszynach. STYL-GK §8: „Kody QR” to wejście do okna kodów QR (kody.js).
            Właściciel 2026-11-26: bez chipów „Dane” (czyszczenie tylko w Zlecenia → Czyszczenie) i „Nie wysłane” (pasek połączenia, Moje konto). -->
       <div class="chipy" id="admin-chipy" role="group" aria-label="Część administracji">
-        <!-- Unifikacja E7 (2026-11-23): stały rdzeń Administracji (STYL §7): Pracownicy · Kody QR · Role i uprawnienia · Ustawienia (Panel od 2026-11-26 bez „Dane i czyszczenie” i „Nie wysłane”);
-             potem dodatki Panelu (Urlopy, Maszyny, Plan zmian, Progi i godziny, Logowania); Wskaźniki, Wyniki, Raporty i RCP — chipy tylko na telefonie (na komputerze są w menu po lewej). -->
-        <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true">Pracownicy</button>
-        <button type="button" class="chip" data-czesc="kody" aria-pressed="false"><span class="ik" data-ikona="kody" data-rozmiar="16"></span>Kody QR</button>
-        <button type="button" class="chip" data-czesc="role" aria-pressed="false"><span class="ik" data-ikona="konta" data-rozmiar="16"></span>Role i uprawnienia</button>
-        <button type="button" class="chip" data-czesc="serwis" aria-pressed="false">Ustawienia</button>
+        <!-- Właściciel 2026-11-27 (P3): kolejność wg STYL-GK §8 — Pracownicy · Urlopy · Maszyny · Kody QR · Progi i godziny, potem części, których
+             wzór wcześniej nie znał (Plan zmian obok Progi i godziny, Role i uprawnienia, Logowania), Ustawienia (techniczne) na końcu; każdy chip
+             z ikoną liniową. Wskaźniki, Wyniki, Raporty i RCP — chipy tylko na telefonie (na komputerze są w menu po lewej). Kody części bez zmian. -->
+        <button type="button" class="chip" data-czesc="pracownicy" aria-pressed="true"><span class="ik" data-ikona="konta" data-rozmiar="16"></span>Pracownicy</button>
         <button type="button" class="chip" data-czesc="urlopy" aria-pressed="false"><span class="ik" data-ikona="urlop" data-rozmiar="16"></span>Urlopy</button>
-        <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false">Maszyny</button>
-        <button type="button" class="chip" data-czesc="plan" aria-pressed="false">Plan zmian</button>
-        <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false">Progi i godziny</button>
-        <button type="button" class="chip" data-czesc="logowania" aria-pressed="false">Logowania</button>
+        <button type="button" class="chip" data-czesc="maszyny" aria-pressed="false"><span class="ik" data-ikona="fabryka" data-rozmiar="16"></span>Maszyny</button>
+        <button type="button" class="chip" data-czesc="kody" aria-pressed="false"><span class="ik" data-ikona="kody" data-rozmiar="16"></span>Kody QR</button>
+        <button type="button" class="chip" data-czesc="ustawienia" aria-pressed="false"><span class="ik" data-ikona="licznik" data-rozmiar="16"></span>Progi i godziny</button>
+        <button type="button" class="chip" data-czesc="plan" aria-pressed="false"><span class="ik" data-ikona="kalendarz" data-rozmiar="16"></span>Plan zmian</button>
+        <button type="button" class="chip" data-czesc="role" aria-pressed="false"><span class="ik" data-ikona="zamek" data-rozmiar="16"></span>Role i uprawnienia</button>
+        <button type="button" class="chip" data-czesc="logowania" aria-pressed="false"><span class="ik" data-ikona="lista" data-rozmiar="16"></span>Logowania</button>
+        <button type="button" class="chip" data-czesc="serwis" aria-pressed="false"><span class="ik" data-ikona="ustawienia" data-rozmiar="16"></span>Ustawienia</button>
         <button type="button" class="chip chip-telefon" data-czesc="wskazniki" aria-pressed="false"><span class="ik" data-ikona="wskazniki" data-rozmiar="16"></span>Wskaźniki</button>
         <button type="button" class="chip chip-telefon" data-czesc="wyniki" aria-pressed="false"><span class="ik" data-ikona="trend" data-rozmiar="16"></span>Wyniki</button>
         <button type="button" class="chip chip-telefon" data-czesc="raporty" aria-pressed="false"><span class="ik" data-ikona="raporty" data-rozmiar="16"></span>Raporty</button>
@@ -482,7 +483,7 @@
       <div class="wklej-liste" id="stale-wklej" hidden>
         <label>Jedna pozycja w wierszu, opcjonalnie „g:mm nazwa” (np. „2:00 Obchód BHP”)
           <textarea id="stale-wklej-tekst" rows="5" placeholder="0:30 Sprawdź czystość stanowiska&#10;2:00 Obchód BHP&#10;Sprzątanie po zmianie"></textarea></label>
-        <div class="stale-skroty"><button type="button" class="glowny maly" data-wklej-dodaj>Dodaj do listy</button><button type="button" class="maly" data-wklej-anuluj>Anuluj</button></div>
+        <div class="stale-skroty"><button type="button" class="maly" data-wklej-anuluj>Anuluj</button><button type="button" class="glowny maly" data-wklej-dodaj>Dodaj do listy</button></div>
       </div>
       <p class="slaby konto-drobne">Enter w nazwie dodaje nową pozycję. Opis jest pod nazwą, a maszyny, zdjęcie, notatka i skan — pod „⋯”.</p>
     </fieldset>
@@ -669,7 +670,7 @@
       <label>Karta (zeskanuj czytnikiem)<input name="karta" autocapitalize="off" spellcheck="false" placeholder="zostaw puste — bez zmian"></label>
     </div>
     <div class="dwie">
-      <label>Telefon (GK Trasy, GK Flota)<input name="telefon" type="tel" maxlength="30" placeholder="np. 600 100 200"></label>
+      <label>Telefon (Panel Zarządczy SP, GK Flota)<input name="telefon" type="tel" maxlength="30" placeholder="np. 600 100 200"></label>
       <p class="slaby konto-drobne" id="osoba-loginy"></p>
     </div>
     <label class="zaznacz" id="osoba-usun-karte" hidden><input type="checkbox" name="usun_karte"> Karta zgubiona — usuń (stary kod przestanie działać)</label>

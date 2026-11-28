@@ -761,7 +761,9 @@
   /* D56 (właściciel 2026-10-13: „niech skanowanie QR będzie bardziej na wierzchu — teraz trzeba go szukać”): pływający
      przycisk „Skanuj QR” na każdym ekranie aplikacji działu (nad dolnym paskiem). Skan maszyny → menu: Wykonaj zadanie
      (skan od razu zapisany w zleceniu jako krok, potem ekran Zleceń), Zgłoś awarię, Zgłoś nieprawidłowość.
-     opcje: { zlecenia: () => {dzial, linia?}, otworzZlecenia: () => …, komunikat: t => …, awaria?: maszyna => … }. */
+     opcje: { zlecenia: () => {dzial, linia?}, otworzZlecenia: () => …, komunikat: t => …, awaria?: maszyna => …, akcja?: () => bool }.
+     akcja: aplikacja może przejąć dotknięcie na swoim ekranie (KJ: skan stanowiska na Pulpicie i w Próbkowaniu, 2026-11-27) —
+     zwraca true, gdy obsłużyła; inaczej zwykłe menu maszyny. */
   function przyciskSkanu(hala, opcje) {
     const o = opcje || {};
     const doc = global.document;
@@ -780,6 +782,7 @@
     pokaz();
     b.onclick = () => {
       if (!hala.zalogowany()) { pokaz(); return; }
+      if (typeof o.akcja === 'function' && o.akcja()) return;
       skanujMaszyne(hala, { zlecenia: o.zlecenia, komunikat: o.komunikat, gotowe: o.komunikat, awaria: o.awaria,
         wykonaj: async (zid, maszyna) => {
           const t = global.HalaZlecenia ? await global.HalaZlecenia.zaliczSkan(hala, zid, maszyna) : '';

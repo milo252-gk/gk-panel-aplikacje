@@ -410,7 +410,7 @@
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło ustawione / stara wersja — tekst huba
-    if (e.kod === 403) return 'To konto nie ma dostępu do Utrzymania Ruchu. Zaloguj się kontem mechanika albo lidera Utrzymania Ruchu.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Utrzymanie Ruchu. Zaloguj się kontem Pracownika albo Lidera Utrzymania Ruchu.';
     // 400/401/429 hub opisuje po polsku i mówi, co zrobić („Złe imię i nazwisko albo hasło”, pauza po złych próbach).
     return e.message || 'Nie udało się zalogować. Sprawdź identyfikator i hasło.';
   }
@@ -554,7 +554,9 @@
   UR.ekran('urlopy', {
     zakladka: 'wiecej',
     rysuj(el) {
-      if (!global.Hala.mozeUrlopyZespolu(hala.pracownik)) { el.innerHTML = '<h1>Urlopy zespołu</h1><p class="pusto">Urlopy zespołu wpisuje Lider Utrzymania Ruchu, Kierownik albo Menedżer.</p>'; return; }
+      if (!global.Hala.mozeUrlopyZespolu(hala.pracownik)) { el.innerHTML = '<h1>Urlopy zespołu</h1><p class="pusto">Urlopy zespołu wpisuje Lider Utrzymania Ruchu, Kierownik zakładu albo Menedżer.</p>'; return; }
+      // wspolne/urlopy.js (26.11) może nie dojść przy pierwszym starcie po wydaniu (stara kopia strony).
+      if (!global.HalaUrlopy) { el.innerHTML = '<p class="slaby">Odśwież aplikację, żeby zobaczyć urlopy zespołu.</p>'; return; }
       global.HalaUrlopy.rysuj(el, hala, { tytul: 'Urlopy zespołu', komunikat: (t, r) => UR.komunikat(t, r === 'ok' ? 'ok' : 'alarm'),
                                          potwierdz: (t, tr, tak) => UR.potwierdz(t, tr, tak), komunikatBledu, odswiez: () => pokazEkran() });
     },

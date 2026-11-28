@@ -164,7 +164,7 @@
       <section class="admin-linia" data-karta="logowania-niespojnosci" id="logowania-niespojnosci" hidden></section>
       <section class="admin-linia" data-karta="logowania">
         <h3>Dziennik logowań <button type="button" class="maly" data-akcja="odswiez-logowania">Odśwież</button></h3>
-        <p class="slaby">Kto, kiedy i skąd się logował — bez haseł i PIN-ów. Wpisy leżą 90 dni, adres widzi tylko Menedżer. Ekran tylko do odczytu.</p>
+        <p class="slaby">Kto, kiedy i skąd się logował — bez haseł. Wpisy leżą 90 dni, adres widzi tylko Menedżer. Ekran tylko do odczytu.</p>
         <div class="admin-pasek">
           <label>Wynik <select id="logowania-wynik">${opcje([['', 'wszystkie'], ['ok', 'udane'], ['zle_haslo', 'złe hasło'], ['zly_pin', 'zły PIN'],
             ['wymagane_haslo', 'wymagane hasło'], ['pauza', 'pauza'], ['seria', 'serie złych prób'], ['nieznany', 'nieznany identyfikator']])}</select></label>
@@ -264,7 +264,7 @@
         <div class="opis">
           <div><b>${esc(p.nazwa)}</b> <span class="slaby">${esc(p.id)}</span></div>
           <div class="szczegoly">
-            ${p.roleNazwy.map(r => `<span class="znacznik neutral">${esc(r)}</span>`).join('')}
+            ${p.roleNazwy.map((r, i) => `<span class="znacznik neutral"${p.rolePelne[i] !== r ? ` title="${esc(p.rolePelne[i])}"` : ''}>${esc(r)}</span>`).join('')}
             ${p.linieNazwy.map(l => `<span>${esc(l)}</span>`).join('')}
             ${p.ma_karte ? `<span class="slaby">karta ${P.ik('haczyk', 14)}</span>` : ''}${W.stanHasla(p).znacznik ? `<span class="${W.stanHasla(p).klasa}">${esc(W.stanHasla(p).znacznik)}</span>` : ''}
             ${p.telefon ? `<span class="slaby">${P.ik('telefon-sluchawka', 14)}${esc(p.telefon)}</span>` : ''}
@@ -296,7 +296,7 @@
     $('osoba-role').innerHTML = W.grupyRol(hala.kontrakt && hala.kontrakt.stale, u.role, osoba ? osoba.role : []).map(g => `
       <fieldset><legend>${esc(g.nazwa)}</legend>${g.opis ? `<p class="slaby konto-drobne">${esc(g.opis)}</p>` : ''}
         <div class="zaznaczenia">${g.role.map(r =>
-          `<label class="zaznacz"><input type="checkbox" name="role" value="${esc(r.kod)}" ${(osoba ? osoba.role.includes(r.kod) : (u.role || []).length === 1) ? 'checked' : ''}> ${esc(r.nazwa)}</label>`).join('')}</div>
+          `<label class="zaznacz"${r.pelna && r.pelna !== r.nazwa ? ` title="${esc(r.pelna)}"` : ''}><input type="checkbox" name="role" value="${esc(r.kod)}" ${(osoba ? osoba.role.includes(r.kod) : (u.role || []).length === 1) ? 'checked' : ''}> ${esc(r.nazwa)}</label>`).join('')}</div>
       </fieldset>`).join('');
     P.pokazPolaLinii(fp);
     // D49: mistrz z liniami przypisuje tylko swoje (hub sprawdza to samo).
@@ -402,7 +402,7 @@
     // Etap 3: osoba zleca zlecenia stałe — po usunięciu hub przestanie je zlecać (jak po wyłączeniu).
     const ostrz = W.ostrzezenieAutora(hala.slowniki, o, Object.assign({}, o, { aktywny: false }),
                                       ((hala.kontrakt.zdarzenia['zlecenie.utworzone'] || {}).role) || []);
-    $('usun-osobe-tresc').textContent = `${o.nazwa} zniknie z list, logowania i programów GK Trasy i GK Flota. Historia `
+    $('usun-osobe-tresc').textContent = `${o.nazwa} zniknie z list, logowania i programów Panel Zarządczy SP i GK Flota. Historia `
       + `(awarie, zlecenia, raporty) zostaje z dopiskiem „(usunięty)”. Tego nie da się cofnąć — tę samą osobę można później `
       + `założyć od nowa.${ostrz ? ' ' + ostrz : ''}`;
     fu.reset();
@@ -997,7 +997,7 @@
     const link = a => (a ? `<a href="${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>` : '');
     el.innerHTML = `
       <p class="slaby opis-widoku">Telefony otwierają aplikacje ze stałych adresów na jednej stronie GitHub Pages (sam wygląd, bez danych):
-        cztery aplikacje hali, GK Trasy, GK Flota, GK Szkolenia i GK Wycena. Dane idą tunelem do serwera i do programów w biurze.
+        cztery aplikacje hali, Panel Zarządczy SP, GK Flota, GK Szkolenia i GK Wycena. Dane idą tunelem do serwera i do programów w biurze.
         Pokaż kod QR albo wydrukuj — telefon zeskanuje go aparatem i doda aplikację do ekranu.</p>
       <section class="admin-linia">
         <h3><span>Logowanie z internetu <span class="znacznik ${lz.licznik.kolor}">${esc(String((dostepStan.logowanie || {}).zle_proby_godzina || 0))}</span></span></h3>
@@ -1037,7 +1037,7 @@
         <div class="admin-pasek"><button type="button" data-akcja="drukuj-qr-aplikacji">${P.ik('drukuj')}Drukuj wszystkie</button></div>
       </section>
       <section class="admin-linia">
-        <h3><span>GK Trasy i GK Flota</span></h3>
+        <h3><span>Panel Zarządczy SP i GK Flota</span></h3>
         <p class="slaby">Programy na tym komputerze same mówią serwerowi swój adres tunelu, a serwer wysyła ich aplikacje na tę samą
           stronę tym samym tokenem. W programach nic nie trzeba ustawiać.</p>
         ${programy.map(p => `<div class="admin-maszyna"><span><b>${esc(p.nazwa)}</b> <span class="znacznik ${p.kolor}">${esc(p.stan)}</span>
@@ -1075,7 +1075,7 @@
 
   async function aktualizujSerwer() {
     if (!(await P.potwierdz('Zaktualizować serwer teraz?', 'Serwer pobierze najnowsze wydanie z GitHuba i zainstaluje je w ciągu kilku minut. '
-      + 'Programy w biurze (hala, GK Trasy, GK Flota, Szkolenia, Wycena) wyłączą się na chwilę — najlepiej poza godzinami pracy.', 'Zaktualizuj'))) return;
+      + 'Programy w biurze (hala, Panel Zarządczy SP, GK Flota, Szkolenia, Wycena) wyłączą się na chwilę — najlepiej poza godzinami pracy.', 'Zaktualizuj'))) return;
     aktualizuje = true; rysuj();
     try {
       dostepStan = await hala.admin('POST', '/api/v1/admin/serwer/aktualizuj', {}); dostepCzas = Date.now();
@@ -1088,7 +1088,7 @@
 
   async function wyslijNaPages() {
     if (!(await P.potwierdz('Wysłać aplikacje na GitHub?', 'Na publiczną stronę GitHub Pages trafia sam wygląd czterech aplikacji hali i adres '
-      + 'tunelu — bez danych firmy. Telefony wezmą nową wersję same. GK Trasy i GK Flota serwer wysyła sam, bez tego przycisku.', 'Wyślij'))) return;
+      + 'tunelu — bez danych firmy. Telefony wezmą nową wersję same. Panel Zarządczy SP i GK Flota serwer wysyła sam, bez tego przycisku.', 'Wyślij'))) return;
     wysyla = true; rysuj();
     try {
       const r = await hala.admin('POST', '/api/v1/admin/dostep/publikuj', {});

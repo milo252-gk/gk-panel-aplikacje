@@ -10,7 +10,7 @@
    TA LISTA MUSI WYMIENIAĆ KAŻDY PLIK Z web/ (pilnuje tego test). Pominięty plik
    działa przy sieci, a bez niej aplikacja nie wstaje wcale.                    */
 
-const WERSJA = 'ur-36e5c9ce3c02';
+const WERSJA = 'ur-ae2043835947';
 
 // Powiadomienia przy zamkniętej aplikacji (D28) — wspólne dla Lidera, UR i KJ.
 importScripts('../wspolne/hala-push-sw.js');

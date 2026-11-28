@@ -101,7 +101,7 @@
       ['Zgłosił', `${w.zglosil || '—'} · ${W.kiedy(w.czasZgloszenia, k.teraz)}`],
       ['Priorytet', w.priorytetNazwa + (w.priorytetZgloszony ? ` (zgłoszony: ${w.priorytetZgloszony})` : '')],
       ['Typ usterki', w.typUsterki || '—'],
-      ['Mechanik', w.mechanikNazwa ? (w.moja ? 'Ty' : w.mechanikNazwa) : '—'],
+      ['Pracownik UR', w.mechanikNazwa ? (w.moja ? 'Ty' : w.mechanikNazwa) : '—'],
       ['Reakcja', w.reakcjaMs !== null ? Hala.formatCzasu(w.reakcjaMs) : '—'],
       ['Naprawa', w.naprawaMs !== null ? Hala.formatCzasu(w.naprawaMs) : '—'],
     ];
@@ -286,7 +286,7 @@
 
       case 'awaria.przypisana': {
         const lista = W.mechanicy(hala.pracownicy, UR.ja());
-        if (!lista.length) { UR.komunikat('Nie ma komu przekazać — brak innych mechaników.', 'uwaga'); break; }
+        if (!lista.length) { UR.komunikat('Nie ma komu przekazać — brak innych Pracowników UR.', 'uwaga'); break; }
         const w = await UR.okno({
           tytul: 'Przekaż koledze',
           tresc: UR.chipy('mechanik', lista.map(p => ({ kod: p.id, nazwa: p.nazwa })), []),

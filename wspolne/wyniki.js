@@ -238,7 +238,7 @@
     const o = Object.assign({ tryb: 'moje', klucz: 'wyniki', komunikat: null }, opcje || {});
     const stale = (hala.kontrakt && hala.kontrakt.stale) || {};
     const dost = o.tryb === 'zarzad' ? dostep(hala.pracownik.role, stale) : { tryb: 'moje' };
-    if (o.tryb === 'zarzad' && dost.tryb !== 'zarzad') { el.innerHTML = '<p class="pusto">Ten ekran widzą kierownik zakładu, Menedżer i kierownicy działów. Twoje wyniki są w „Moje wyniki”.</p>'; return; }
+    if (o.tryb === 'zarzad' && dost.tryb !== 'zarzad') { el.innerHTML = '<p class="pusto">Ten ekran widzą Kierownik zakładu, Menedżer i kierownicy działów. Twoje wyniki są w „Moje wyniki”.</p>'; return; }
     const st = stan.get(o.klucz) || stan.set(o.klucz, { okres: 'miesiac', zakres: null, dzial: '', osoba: '', blad: '' }).get(o.klucz);
     const teraz = hala.teraz();
     const pamiec = M().pamiecZakresu(o.klucz, () => hala.teraz());

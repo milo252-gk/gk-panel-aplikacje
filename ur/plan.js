@@ -26,7 +26,7 @@
       const czesci = [];
       if (r.zaplanowane) czesci.push(`zaplanowane: ${r.zaplanowane}`);
       if (r.usuniete) czesci.push(`usunięte stare terminy: ${r.usuniete}`);
-      if (r.przypisane) czesci.push(`nowy mechanik: ${r.przypisane}`);
+      if (r.przypisane) czesci.push(`nowy Pracownik UR: ${r.przypisane}`);
       UR.komunikat(czesci.length ? `Przeglądy — ${czesci.join(', ')}` : 'Plan aktualny — nic do zmiany.');
     } catch (e) {
       if (!cicho) UR.komunikat(`Serwer nie zaplanował: ${W.bladZapytania(e)}`, 'alarm');
@@ -37,7 +37,7 @@
 
   UR.ekran('plan', {
     rysuj(el) {
-      if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Plan przeglądów prowadzi lider Utrzymania Ruchu.</p>'; return; }
+      if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Plan przeglądów prowadzi Lider Utrzymania Ruchu.</p>'; return; }
       const sl = hala.slowniki;
       const karty = Object.entries(sl.karty_przegladow || {}).map(([kod, k]) => Object.assign({ kod }, k))
         .sort((a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl'));
@@ -119,7 +119,7 @@
         <div class="dwa"><label>Co<input name="co" inputmode="decimal" value="${esc(w0.co)}" data-bez-fokusu></label>
           <label>Pierwszy przegląd<input type="date" name="od" value="${esc(w0.od)}"></label></div>
         <label id="h-start" ${licznikowy(w0.interwal) ? '' : 'hidden'}>Odczyt licznika w dniu startu (z maszyny)<input name="start" inputmode="decimal" value="${esc(w0.start ?? '')}" data-bez-fokusu></label>
-        <label>Mechanik (opcjonalnie)<select name="mechanik"><option value="">— każdy —</option>${mech.map(p => `<option value="${esc(p.id)}" ${p.id === w0.mechanik ? 'selected' : ''}>${esc(p.nazwa)}</option>`).join('')}</select></label>
+        <label>Pracownik UR (opcjonalnie)<select name="mechanik"><option value="">— każdy —</option>${mech.map(p => `<option value="${esc(p.id)}" ${p.id === w0.mechanik ? 'selected' : ''}>${esc(p.nazwa)}</option>`).join('')}</select></label>
         ${klucz ? '<p class="slaby">Maszyny i karty nie da się zmienić — usuń pozycję i dodaj nową.</p>' : ''}`,
       przyciski,
       przy: form => {
@@ -177,7 +177,7 @@
   }
 
   async function rysujEdytor(el, kod) {
-    if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Karty przeglądów prowadzi lider Utrzymania Ruchu.</p>'; return; }
+    if (!UR.kierownikUR()) { el.innerHTML = '<p class="pusto">Karty przeglądów prowadzi Lider Utrzymania Ruchu.</p>'; return; }
     const sl = hala.slowniki;
     const nowa = !kod || kod === 'nowa';
     const istn = nowa ? null : (sl.karty_przegladow || {})[kod];

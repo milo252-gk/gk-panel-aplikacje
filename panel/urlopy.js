@@ -10,6 +10,7 @@
   const P = window.Panel;
 
   function rysuj(el) {
+    if (!window.HalaUrlopy) { el.innerHTML = '<p class="slaby">Odśwież stronę, żeby zobaczyć urlopy.</p>'; return; }
     window.HalaUrlopy.rysuj(el, P.hala, { klasaWiersza: 'zlecenie', komunikat: (t, r) => P.komunikat(t, r), potwierdz: (...a) => P.potwierdz(...a),
                                          komunikatBledu: e => P.komunikatBledu(e), odswiez: () => P.narysuj() });
   }

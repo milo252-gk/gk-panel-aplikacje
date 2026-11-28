@@ -80,7 +80,7 @@
     zakladka: 'reklamacje',
     formularz: true,
     async rysuj(el) {
-      if (!KJ.mozna('reklamacja.zarejestrowana')) { el.innerHTML = '<p class="pusto">Reklamacje rejestruje kontroler albo kierownik Kontroli Jakości.</p>'; return; }
+      if (!KJ.mozna('reklamacja.zarejestrowana')) { el.innerHTML = '<p class="pusto">Reklamacje rejestruje Pracownik albo Kierownik Kontroli Jakości.</p>'; return; }
       f = Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS)) || {});
       if (!f.linia && W.jedynaLinia(hala.slowniki)) f.linia = W.jedynaLinia(hala.slowniki);   // D51: jedna linia — bez wybierania
       el.innerHTML = `<a class="wstecz" href="#reklamacje">‹ Reklamacje</a>

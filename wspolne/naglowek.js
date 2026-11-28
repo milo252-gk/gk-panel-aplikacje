@@ -84,14 +84,16 @@
 
   const ik = (nazwa, rozmiar) => (global.GKIkony ? `<span class="ik" aria-hidden="true">${global.GKIkony.html(nazwa, rozmiar)}</span>` : '');
 
-  /* Dzwonek: ikona `alerty`, gdy dźwięk działa, `dzwonek-wyl`, gdy przeglądarka go trzyma (stan AudioContext ≠ running). */
+  /* Dzwonek: ikona `alerty`; gdy przeglądarka trzyma dźwięk (stan AudioContext ≠ running) — ten sam dzwonek w pomarańczowej
+     ramce (klasa `czeka`, hala.css), dokładnie jak w Panelu (właściciel 2026-11-27, P6: ten sam stan — ten sam wygląd). */
   function dzwonek(hala, przycisk) {
     const GD = () => global.GKDzwieki;
     const rysuj = () => {
       const a = GD() && GD().kontekst ? GD().kontekst() : null;
       const wyl = !!a && a.state !== 'running';
-      przycisk.innerHTML = ik(wyl ? 'dzwonek-wyl' : 'alerty', 18);
-      przycisk.title = wyl ? 'Dźwięk wyłączony — dotknij, żeby włączyć' : 'Dźwięk włączony — dotknij, żeby sprawdzić';
+      przycisk.innerHTML = ik('alerty', 18);
+      przycisk.classList.toggle('czeka', wyl);
+      przycisk.title = wyl ? 'Włącz dźwięk — dotknij, żeby przeglądarka wpuściła dźwięk' : 'Dźwięk włączony — dotknij, żeby sprawdzić';
       przycisk.setAttribute('aria-label', przycisk.title);
       if (a && !a.naglowekSledzi) { a.naglowekSledzi = true; a.addEventListener('statechange', rysuj); }
     };
@@ -115,7 +117,7 @@
     if (!kto || doc.getElementById('szukaj-nag')) return null;
     const w = doc.createElement('div');
     w.className = 'szukaj-stale';
-    w.innerHTML = `${ik('jakosc', 18)}<input id="szukaj-nag" type="search" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="szukaj-panel" aria-label="${esc(opcje.aria)}" placeholder="${esc(opcje.znak)}" title="Klawisz /"><kbd class="szukaj-klawisz" aria-hidden="true">/</kbd><div id="szukaj-panel" class="szukaj-wyniki szukaj-panel" hidden aria-live="polite"></div>`;
+    w.innerHTML = `${ik('szukaj', 18)}<input id="szukaj-nag" type="search" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="szukaj-panel" aria-label="${esc(opcje.aria)}" placeholder="${esc(opcje.znak)}" title="Klawisz /"><kbd class="szukaj-klawisz" aria-hidden="true">/</kbd><div id="szukaj-panel" class="szukaj-wyniki szukaj-panel" hidden aria-live="polite"></div>`;
     kto.prepend(w);
     const pole = w.querySelector('#szukaj-nag'), panel = w.querySelector('#szukaj-panel');
     const pokaz = () => { opcje.rysuj(pole.value, panel); panel.hidden = false; pole.setAttribute('aria-expanded', 'true'); };
@@ -159,7 +161,7 @@
     const s = global.document.createElement('button');
     s.id = 'szukaj'; s.type = 'button'; s.className = 'maly';
     s.setAttribute('aria-label', 'Szukaj'); s.title = 'Szukaj (klawisz /)';
-    s.innerHTML = `${ik('jakosc', 18)}<span class="szukaj-napis">Szukaj</span>`;
+    s.innerHTML = `${ik('szukaj', 18)}<span class="szukaj-napis">Szukaj</span>`;
     const d = global.document.createElement('button');
     d.id = 'dzwiek'; d.type = 'button'; d.className = 'maly';
     kto.prepend(s, d);

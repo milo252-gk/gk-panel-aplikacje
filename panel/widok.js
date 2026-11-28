@@ -1668,12 +1668,19 @@
       .replace(/[._-]+/g, ' ').split(/\s+/).filter(Boolean).join(' ');
   }
 
-  /* linieNazwy: linie osoby nazwami — przy jednej linii pusto (D51: „Hala” przy każdym liderze to szum). */
+  /* H29 (właściciel 2026-11-27): w Administracji krótka nazwa roli — bez nawiasu z kontraktu („Ekran”, nie „Ekran (konto urządzenia,
+     tylko odczyt)”; „Podgląd”, „Kierowca GK Flota”), pełna nazwa w podpowiedzi (`title`). Ta sama reguła co nagłówek menu
+     (Hala.nazwaRoliMenu) i tabela Ról — kody ról i kontrakt bez zmian. */
+  const nazwaRoliKrotka = nazwa => String(nazwa === null || nazwa === undefined ? '' : nazwa).split(' (')[0];
+
+  /* linieNazwy: linie osoby nazwami — przy jednej linii pusto (D51: „Hala” przy każdym liderze to szum). roleNazwy — krótkie (H29),
+     rolePelne — pełne nazwy z kontraktu (podpowiedź chipa). */
   function pracownicyAdmin({ lista, szukaj, nieaktywni, stale, slowniki }) {
     const role = (stale && stale.role) || {};
     const s = loginZNazwy(szukaj);
     return (lista || []).filter(p => (nieaktywni || p.aktywny !== false) && (!s || loginZNazwy(p.nazwa).includes(s) || loginZNazwy(p.id).includes(s)))
-      .map(p => Object.assign({}, p, { roleNazwy: (p.role || []).map(r => role[r] || r),
+      .map(p => Object.assign({}, p, { roleNazwy: (p.role || []).map(r => nazwaRoliKrotka(role[r] || r)),
+                                       rolePelne: (p.role || []).map(r => role[r] || r),
                                        linieNazwy: (p.linie || []).map(l => liniaWidoczna(slowniki, l)).filter(Boolean) }))
       .sort((a, b) => (b.zablokowany - a.zablokowany) || (b.aktywny !== false) - (a.aktywny !== false) || a.nazwa.localeCompare(b.nazwa, 'pl'));
   }
@@ -1702,9 +1709,10 @@
     const role = (stale && stale.role) || {};
     const wycofane = ((stale && stale.role_wycofane && stale.role_wycofane.role) || []).filter(r => !(maOsoba || []).includes(r));
     const grupy = ((stale && stale.grupy_rol) || [{ nazwa: 'Role', role: Object.keys(role) }])
-      .map(g => ({ nazwa: g.nazwa, opis: g.opis || '', role: (g.role || []).filter(r => role[r] && !wycofane.includes(r)).map(r => ({ kod: r, nazwa: role[r] })) }));
+      .map(g => ({ nazwa: g.nazwa, opis: g.opis || '', role: (g.role || []).filter(r => role[r] && !wycofane.includes(r))
+        .map(r => ({ kod: r, nazwa: nazwaRoliKrotka(role[r]), pelna: role[r] })) }));   // H29: krótka nazwa przy polu, pełna w podpowiedzi
     const w = new Set(grupy.flatMap(g => g.role.map(r => r.kod)).concat(wycofane));
-    for (const [kod, nazwa] of Object.entries(role)) if (!w.has(kod) && grupy.length) grupy[0].role.push({ kod, nazwa });
+    for (const [kod, nazwa] of Object.entries(role)) if (!w.has(kod) && grupy.length) grupy[0].role.push({ kod, nazwa: nazwaRoliKrotka(nazwa), pelna: nazwa });
     if (Array.isArray(dozwolone))
       for (const g of grupy) { g.role = g.role.filter(r => dozwolone.includes(r.kod)); g.opis = ''; }
     return grupy.filter(g => g.role.length);
@@ -1743,7 +1751,7 @@
     }
     // Hub nie zna długości hasła sprzed D43 (import z programu) — rola biura dochodzi tylko z hasłem startowym.
     if (biuroTransportu(role) && istniejacy && !startowe && !istniejacy.dlugie_haslo)
-      bledy.push('Rola biura GK Trasy / GK Flota wymaga hasła min. 8 znaków — kliknij „Resetuj hasło”.');
+      bledy.push('Rola Biura (Panel Zarządczy SP, GK Flota) wymaga hasła min. 8 znaków — kliknij „Resetuj hasło”.');
     const telefon = String(f.telefon || '').trim();
     if (!/^[0-9+()\- ]{0,30}$/.test(telefon)) bledy.push('Telefon: cyfry, spacje, + i myślnik, np. 600 100 200.');
     const dane = { id, nazwa, role, linie: [].concat(f.linie || []).filter(Boolean), aktywny: f.aktywny !== false, telefon };
@@ -1987,13 +1995,14 @@
     ustawienie: ['Ustawiono hasło', 'ok'], wylogowanie: ['Wylogowano', 'ok'], inny: ['Inna odmowa', 'uwaga'],
   };
   const ZRODLA_LOGOWAN = { zaklad: 'sieć zakładu', internet: 'internet', lokalny: 'ten komputer' };
-  const PROGRAMY_LOGOWAN = { panel: 'Panel', lider: 'Lider', ur: 'Utrzymanie Ruchu', kj: 'Kontrola Jakości', trasy: 'Trasy', flota: 'Flota',
-                             szkolenia: 'Szkolenia', wycena: 'Wycena', foto: 'Foto', czytnik: 'Czytnik' };
+  // Przegląd UI 2026-11-27: pełne, stałe nazwy programów (STYL-GK §5), nie „Lider”/„Trasy”.
+  const PROGRAMY_LOGOWAN = { panel: 'Panel Zarządczy GK', lider: 'GK Produkcja', ur: 'GK Utrzymanie Ruchu', kj: 'GK Kontrola Jakości', trasy: 'Panel Zarządczy SP', flota: 'GK Flota',
+                             szkolenia: 'GK Szkolenia', wycena: 'GK Wycena', foto: 'GK Foto', czytnik: 'GK Czytnik' };
   // Nazwy funkcji (D92, 2026-11-19 — tylko napisy; kody ról bez zmian). Kody bez słownika kontraktu (biuro, kierowca, kierownik-ur…)
   // przychodzą z dziennika logowań programów.
   const NAZWY_ROL_LOGOWAN = { admin: 'Menedżer', kierownik: 'Kierownik zakładu', biuro: 'Biuro', lider: 'Lider Produkcji GK', mistrz: 'Mistrz Produkcji GK', brygadzista_sp: 'Lider Produkcji SP', mechanik: 'Pracownik Utrzymania Ruchu',
-                              kontroler: 'Pracownik Kontroli Jakości', kierowca: 'Kierowca GK Trasy', 'kierownik-ur': 'Lider Utrzymania Ruchu', 'kierownik-kj': 'Kierownik Kontroli Jakości',
-                              kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu', pracownik_mag: 'Pracownik Magazynu', prezes: 'Prezes' };
+                              kontroler: 'Pracownik Kontroli Jakości', kierowca: 'Kierowca', 'kierownik-ur': 'Lider Utrzymania Ruchu', 'kierownik-kj': 'Kierownik Kontroli Jakości',
+                              kierownik_ur: 'Lider Utrzymania Ruchu', kierownik_kj: 'Kierownik Kontroli Jakości', kierownik_mag: 'Kierownik Magazynu', pracownik_mag: 'Pracownik Magazynu', prezes: 'Prezes', ekran: 'Ekran' };   // H29: „Ekran”, nie kod roli
   function logowania(odp) {
     const o = odp || {};
     if (o.niedostepne) return { niedostepne: true, wiersze: [], pusto: false, podsumowanie: 'Ten ekran jest chwilowo wyłączony — zobacz czerwony alarm u góry Administracji.', startowe: [], startowePodsumowanie: '', niespojnosci: [] };
@@ -2526,7 +2535,9 @@
      wprowadzał w błąd, a „Dodaj je w administracji” od D51 nie ma gdzie zrobić (linii w Panelu się nie zakłada). */
   function pustyObchod(slowniki, zmiana) {
     if (!zmiana) return 'Teraz nie trwa żadna zmiana.';
-    return brakMaszyn(slowniki) || 'Brak linii w słowniku.';
+    // Przegląd UI 2026-11-27: linie są, ale kart nie ma (np. lider UR z filtrem „mój dział i moje”, dział bez checklisty) — „Brak linii
+    // w słowniku” było nieprawdą i żargonem.
+    return brakMaszyn(slowniki) || (Object.keys((slowniki && slowniki.linie) || {}).length ? 'Brak checklist na tej zmianie.' : 'Brak linii — Menedżer zakłada je w Panelu (Administracja → Maszyny).');
   }
 
   /* Błąd → zdanie dla kierownika. fetch bez sieci rzuca TypeError (angielski tekst przeglądarki), przerwane zapytanie
@@ -2633,6 +2644,13 @@
       && (!zakres || wDniach(z, zakres)));
   }
   const MOJE_DZIALY = 'moje';
+
+  /* P4 (właściciel 2026-11-27): kafelki Pulpitu liczą według tych samych filtrów co lista pod nimi. Z wierszy W.zlecenia (filtr „w-toku”)
+     zostają te, które przepuszcza filtrujZlecenia(…, filtr), a W.kafelki dostaje odpowiadające im obiekty zleceń (te same pola co dotąd). */
+  function zleceniaWedlugFiltrow(zlecenia, wiersze, filtr) {
+    const id = new Set(filtrujZlecenia(wiersze, filtr).map(w => w.id));
+    return (zlecenia || []).filter(z => z && id.has(z.id));
+  }
 
   // ================================================================ D4 (właściciel 2026-11-17): jedno globalne „Szukaj”
 
@@ -3571,13 +3589,13 @@
     return { od: dzienZakladu(ms - 6 * 86400000), do: dzienZakladu(ms) };
   }
 
-  const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, zleceniaNaZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
+  const PanelWidok = { ktoPracowal, rcpCzas, rcpUwaga, RCP_FILTRY, rcpWiersze, rcpLiczby, rcpOkres, rcpPrzedzialy, CZYNNOSCI_POZYCJI, GOTOWE_CZYNNOSCI, podpowiedziCzynnosci, gotowaCzynnosc, checklistaDoFormularza, pozycjaZZapisanego, zmianyPowiazane, zastosujPowiazane, nazwaPorownawcza, checklistaTeraz, wieluAdresatow, zleceniaTeraz, RODZAJE_ZADAN, nazwaRodzaju, rodzajZlecenia, polaczZadania, listaProb, postepZlecenia, maszynyPostepZlecenia, maszynyPostepPozycji, szczegolyPozycji, zadaniaDoChecklisty, nazwaPracownika, filtrujZlecenia, zleceniaWedlugFiltrow, zakresDat, sortujWgDaty, kluczFiltrow, filtryZPamieci, filtryDoPamieci, opisFiltrow, filtryAktywne, SORTOWANIA, OKRESY_DNI, naZmiane, zleceniaNaZmiane, statystykiOsob, urlopyLista, urlopZFormularza, osobyDoUrlopow, zgloszeniaLista, zlecenieZeZgloszenia, bhpLista, zlecenieZBhp,
                        pilneBezUkrytych, checklistaZFormularza, dzienZakladu, napisJeszcze, procent, czesciAdministracji, czescAdministracji, DRZWI_TELEFONU, osobyDoZlecenia, zapisaneDlaOsoby, moznaZmieniacZapisane, obchody, obchodyMistrza, obchodyDzialow, obchodyKarty, DZIALY_OBCHODOW, bezKopiiLiniiMistrza, przyjecieListy, pilneOdZespolu, stanKafelkaCzerwony, DZIALY_NOWEJ_CHECKLISTY, awarie, incydenty, raporty, zmianyBezRaportu, pasekPolaczenia, opisUrzadzen, autorNieZleca, staleAutora, ostrzezenieAutora,
                        pokrycieDoby, uzyciaZmian, ZAKRESY_USTAWIEN, ustawieniaZFormularza, wynikZapisu, dlugosciZmian, opisBiezacejZmiany, godzina, dataKrotka, opisZmiany, licznik, noweAlarmy,
                        dlaKogoPoLudzku, adresaciPoLudzku, kierownicyStalego, czasZPola, uprawnienia, agendaZlecen, automatDlaStalego, juzZleconeNaZmianie, zlecenieEdytowane, zdjeciaEdycji, pozycjeDlaInstancji, wzorzecZInstancji, instancjeWzorca, pozycjeZFormularza, siatkaMiesiaca, podgladKalendarza, przelaczDzien, najblizszeWystapienia,
                        zmianyDniZMacierzy, obslugujeZmianyWgDni, obslugujeWymogRcp, pozycjeZTekstu, pominDzisiajAkcja, doDodaniaSoboty, duplikatStalego, kalendarzZlecen, powodPominiecia, ktoryDzienPoLudzku, MIESIACE, komunikatUciecia, logowania,
                        zlecenia, odbiorObchodu, pozycjeObchodu, pozycjaPasujeDoFiltru, FILTRY_POZYCJI, zmianaWKarencji, zmianaKarty, czyZamknacPoOdbiorze, kafelki, DNI_NAZWY, dniPoLudzku, harmonogramPoLudzku, nastepneWystapienie, zleceniaStale, stalyZFormularza, ZESTAW_STARTOWY, brakujaceZestawu, LINIA_KAZDA,
-                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
+                       stalyDoFormularza, stalyZZlecenia, terminTeraz, wczytacPonownie, raz, przyWysylce, PONOW_PO_BLEDZIE_MS, zlecenieZeStalego, poleCzasu, loginZNazwy, pracownicyAdmin, nazwaRoliKrotka, pracownikZFormularza, stanHasla, bladHasla, pozycjaZFormularza, LINIA_HALI, wieleLinii, liniaDomyslna, grupyRol, biuroTransportu, polaczenieGK, programyNaPages, dostepZTelefonow, aktualizacjaSerwera, logowanieZInternetu, dostepZFormularza, kopieZFormularza, stanKopii, alarmyAdmina, chipyZlecen, wiecejOpcjiZlecenia,
                        planDoFormularza, planZeStanu, planZmianZapisy, skutkiPlanu, zmianyZFormularza, oknoWskaznikow, wskazniki, zakresZPamieci, planZFormularza, terminPoZFormularza, terminAktywacji, opisTerminuPlanu, dataDluga, startPierwszejZmiany, minutyZTekstu, godzinaPozycji,
                        brakMaszyn, pustyObchod, tekstBledu, kafelkiDoPokazania, czekaNaCiebie, nazwaPriorytetu, priorytetyDoWyboru, MASZYNA_STOI,
                        bezCzesci, rozdzialZlecenia, MOJE_DZIALY, szukaj, NAZWY_WYNIKOW, maszynyAdmin, dzialyDoZlecania, opisDlaKogo, podsumowanieDlaKogo, objasnienieDlaKogo, zleceniaDzialow, pustaListaZlecen, nazwaAdministracji };

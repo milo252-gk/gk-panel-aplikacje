@@ -99,7 +99,7 @@
     const nazwy = (stale && stale.role) || {};
     const linie = (slowniki && slowniki.linie) || {}, wiele = wieleLinii(slowniki);
     return (lista || []).map(p => Object.assign({}, p, {
-      roleNazwy: (p.role || []).map(r => nazwy[r] || r),
+      roleNazwy: (p.role || []).map(r => String(nazwy[r] || r).split(' (')[0]),   // H29 (27.11): krótka nazwa roli, jak Panel → Administracja
       linieNazwy: wiele ? (p.linie || []).map(l => (linie[l] || {}).nazwa || l) : [],
       stan: stanHasla(p),
     })).sort((a, b) => (!!b.zablokowany - !!a.zablokowany) || ((b.aktywny !== false) - (a.aktywny !== false))
@@ -244,6 +244,7 @@
       const f2 = okno('hala-okno-osoby-zespolu', 'hala-zespol-osoba-okno');
       const role = u.role || [];
       const nazwyRol = stale.role || {};
+      const krotka = r => String(nazwyRol[r] || r).split(' (')[0];   // H29: pełna nazwa w podpowiedzi pola
       const linie = Object.entries((hala.slowniki && hala.slowniki.linie) || {})
         .filter(([kod]) => !u.linie || u.linie.includes(kod))
         .sort(([, a], [, b]) => ((a || {}).kolejnosc || 999) - ((b || {}).kolejnosc || 999));
@@ -253,9 +254,9 @@
       f2.innerHTML = `<form method="dialog" autocomplete="off">
           <h2 id="hala-okno-osoby-zespolu-tytul">${esc(osoba ? osoba.nazwa : 'Nowa osoba')}</h2>
           <label>Imię i nazwisko (to jest login)<input name="nazwa" maxlength="120" placeholder="np. Jan Kowalski" value="${esc(osoba ? osoba.nazwa : '')}"></label>
-          ${jednaRola ? `<input type="hidden" name="role" value="${esc(role[0])}"><p class="hala-konto-drobne">Rola: ${esc(nazwyRol[role[0]] || role[0])}</p>`
+          ${jednaRola ? `<input type="hidden" name="role" value="${esc(role[0])}"><p class="hala-konto-drobne">Rola: ${esc(krotka(role[0]))}</p>`
             : `<fieldset><legend>Rola</legend><div class="hala-zespol-wybor">${role.map(r =>
-              `<label class="hala-zespol-zaznacz"><input type="checkbox" name="role" value="${esc(r)}" ${ma('role', r) ? 'checked' : ''}> ${esc(nazwyRol[r] || r)}</label>`).join('')}</div></fieldset>`}
+              `<label class="hala-zespol-zaznacz" title="${esc(nazwyRol[r] || r)}"><input type="checkbox" name="role" value="${esc(r)}" ${ma('role', r) ? 'checked' : ''}> ${esc(krotka(r))}</label>`).join('')}</div></fieldset>`}
           ${linie.length ? `<fieldset${wieleLinii(hala.slowniki) ? '' : ' hidden'}><legend>Linie</legend><div class="hala-zespol-wybor">${linie.map(([kod, l]) =>
             `<label class="hala-zespol-zaznacz"><input type="checkbox" name="linie" value="${esc(kod)}" ${ma('linie', kod) ? 'checked' : ''}> ${esc((l && l.nazwa) || kod)}</label>`).join('')}</div></fieldset>` : ''}
           <label>Telefon (nieobowiązkowy)<input name="telefon" type="tel" maxlength="30" placeholder="np. 600 100 200" value="${esc((osoba && osoba.telefon) || '')}"></label>

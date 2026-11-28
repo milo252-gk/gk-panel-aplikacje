@@ -20,8 +20,7 @@
 /* Pasek górny (.naglowek), menu po lewej i dolny pasek: wygląd w hala.css (jak GK Trasy). Tu tylko treść paska Panelu. */
 .naglowek .zmiana .slaby { color: var(--na-marce); opacity: .75; }
 .naglowek .zegar { margin-left: auto; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-/* Dźwięk włączony, ale przeglądarka czeka na kliknięcie — przycisk ma się rzucać w oczy. */
-.naglowek button.maly.czeka { box-shadow: inset 0 0 0 2px var(--pomarancz); }
+/* Dźwięk włączony, ale przeglądarka czeka na kliknięcie — reguła `.naglowek button.maly.czeka` jest w hala.css (od 2026-11-27 wspólna z GK Produkcja, UR i KJ). */
 @media (max-width: 820px) {
   .aplikacja { padding-bottom: calc(var(--dol-wys) + env(safe-area-inset-bottom, 0px)); }
   .zakladki > button.menu-akcja { color: var(--czerwony); }
@@ -162,11 +161,13 @@ section h2 .licznik { margin-left: auto; display: flex; gap: 6px; text-transform
 /* Telefon: w pasku zostaje zmiana, zegar, dźwięk i Wyjdź — imię jest w menu i przy logowaniu. */
 @media (max-width: 600px) {
   .naglowek .kto > span { display: none; }
-  .naglowek .zegar { font-size: 18px; }
-  /* Ocena UX 2026-11-17, poz. 11: „Zmiana II 14:00–22:00…” był ucięty — tytuł w dwóch wierszach (nazwa nad godzinami). */
-  .hala-uklad > .naglowek .zmiana { white-space: normal; overflow: visible; line-height: 1.2; font-size: 16px; }
-  .hala-uklad > .naglowek .zmiana > b { display: block; }
-  .hala-uklad > .naglowek .zmiana :is(span, .slaby) { font-size: 12px; }
+  /* H26 (2026-11-27): zegar na telefonie schowany — godzinę pokazuje pasek telefonu, a „Zmiana II 14:00–22:00” obok zegara, Szukaj,
+     dzwonka i konta nie mieściła się na 360–375 px bez ucięcia; tak samo jak GK Produkcja, UR i KJ (bez zegara). Monitor i komputer — bez zmian. */
+  .naglowek .zegar { display: none; }
+  /* H26 (właściciel 2026-11-27): jeden układ nagłówka w czterech aplikacjach hali — nazwa zmiany i godziny w JEDNYM wierszu po lewej
+     („Zmiana II 14:00–22:00”, jak UR i KJ; do 27.11 dwa wiersze), tym samym pismem co UR i KJ (hala.css: 17/15 px). Mieści się na
+     360 px obok Szukaj, dzwonka i konta, bo „zostało …” i zegar na telefonie są schowane (niżej). */
+  .hala-uklad > .naglowek .zmiana { white-space: nowrap; flex: 0 1 auto; }
   .naglowek .dz-napis { font-size: 12px; }
   .hala-uklad > .naglowek .zmiana .slaby { display: none; }   /* „zostało …” zostaje na komputerze; na telefonie tytuł ma się zmieścić w dwóch wierszach */
   .na-zywo { padding: 8px; gap: 8px; }
@@ -647,8 +648,10 @@ button.tytul-historii:focus-visible { outline: 2px solid var(--akcent); outline-
 /* Komputer: pola węższe, żeby najczęstsze (dział, osoba, rodzaj, status, kolejność) + „tylko spóźnione” + „Więcej” mieściły się w JEDNYM rzędzie. */
 @media (min-width: 821px) {
   #filtry-pola { gap: 6px 10px; }
-  #filtry-pola select { min-width: 0; width: 122px; }
-  #filtry-pola label:has(select[name="sort"]) select { width: 160px; }
+  /* H28 (właściciel 2026-11-27): pełne napisy w zamkniętych polach zamiast „mój dział i m…”, „Domyślnie (spóźni…” — pole ma szerokość
+     WYBRANEJ opcji (field-sizing, Chrome/Edge), co najmniej 100 px (wtedy na 1366 px rząd mieści się cały); przeglądarka bez field-sizing — szerokość najdłuższej opcji. Rząd
+     może się zawinąć na węższym ekranie (poniżej ~1366 px); filtry zostają na wierzchu. */
+  #filtry-pola select { min-width: 100px; width: auto; max-width: 100%; field-sizing: content; }
   #filtry-pola > label.zaznacz { font-size: 14px; white-space: nowrap; }
 }
 .filtry-rzadkie { display: none; flex-wrap: wrap; gap: 8px 14px; align-items: end; flex-basis: 100%; }
@@ -900,7 +903,7 @@ dialog .czysc-lista label.czysc-wiersz { display: flex; flex-direction: row; ali
 
 /* Ikony liniowe zamiast emoji (poprawki po audycie 10.11): ikona sama w przycisku/wierszu nie potrzebuje odstępu od napisu. */
 #dzwiek .ik, .pozycja-glowna .ikony .ik { margin-right: 2px; }
-#dzwiek { display: inline-flex; align-items: center; gap: 4px; }
+#dzwiek { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 44px; }   /* przegląd 2026-11-27: było 38 px szerokości */
 
 /* D4: okno „Szukaj” i grupa przycisków w nagłówku — wspólne z Liderem, UR i KJ (hala.css). */
 .naglowek #szukaj .szukaj-napis { font-size: 14px; }

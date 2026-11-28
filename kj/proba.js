@@ -48,7 +48,6 @@
       el.innerHTML = `
         <div class="tytul-ekranu"><h1>Plan próbkowania</h1><span class="licznik-planu ${plan.zrobione >= plan.plan && plan.plan ? 'tekst-ok' : ''}">${plan.zrobione}/${plan.plan}</span></div>
         <div class="postep ${W.stanPaskaPlanu(plan, zmiana, hala.teraz())}"><span style="width:${proc}%"></span></div>
-        ${KJ.mozna('proba.zarejestrowana') ? `<button type="button" class="glowny szeroki duzy wlasny-skan" id="skanuj-stanowisko">${KJ.ik('skan', 22)}${esc(W.napisSkanu(hala.slowniki))}</button>` : ''}
         ${plan.linie.map(g => `
           <section class="grupa">
             <h2>${esc(g.nazwa)} <span class="slaby">${g.zrobione}/${g.plan}</span></h2>
@@ -70,8 +69,6 @@
         <section class="grupa"><h2>Próby Kontroli Jakości na tej zmianie <span class="slaby">${moje.length}</span></h2>
           ${widoczne.widoczne.map(kartaProby).join('') || '<p class="pusto">Brak prób na tej zmianie. Zeskanuj maszynę, żeby zacząć pierwszą.</p>'}
           ${widoczne.ukryte ? `<button type="button" class="szeroki" id="wszystkie-proby">Pokaż wszystkie (${moje.length})</button>` : ''}</section>`;
-      const b = el.querySelector('#skanuj-stanowisko');
-      if (b) b.addEventListener('click', () => KJ.idz('proba/skanuj'));
       const w = el.querySelector('#wszystkie-proby');
       if (w) w.addEventListener('click', () => { wszystkieProby = zmiana && zmiana.id; KJ.odswiez('wymus'); });
       // „Partia brakowa” przy próbie lidera — ta sama ścieżka co z wyniku próby (zaproponujPartie + podpowiedź progiem).
@@ -140,7 +137,7 @@
   KJ.ekran('proba', {
     formularz: true,
     async rysuj(el, parametr) {
-      if (!KJ.mozna('proba.zarejestrowana')) { el.innerHTML = '<p class="pusto">Próby rejestruje kontroler albo kierownik Kontroli Jakości.</p>'; return; }
+      if (!KJ.mozna('proba.zarejestrowana')) { el.innerHTML = '<p class="pusto">Próby rejestruje Pracownik albo Kierownik Kontroli Jakości.</p>'; return; }
       // Braki zawsze z wad (UI etap 2) — także w brudnopisie sprzed zmiany, gdzie wpisywało się je ręcznie.
       // D56: miejsce ze skanu (linia, stanowisko, maszyna) tylko z tej samej sesji — po ponownym logowaniu skanuje się od nowa.
       f = W.brakiZWad(Object.assign(pusty(), (await hala.brudnopis.odczytaj(BRUDNOPIS,

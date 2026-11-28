@@ -16,7 +16,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Lider">
+<meta name="apple-mobile-web-app-title" content="Produkcja">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="../wspolne/hala.css">
 <link rel="stylesheet" href="lider.css">
@@ -53,8 +53,11 @@
 <!-- ====================================================== APLIKACJA -->
 <div id="aplikacja" class="aplikacja hala-uklad" hidden>
   <header class="naglowek">
-    <button id="wybor-linii" class="linia" type="button" aria-label="Zmień linię"></button>
-    <div id="opis-zmiany" class="opis-zmiany"></div>
+    <!-- H26/H27 (właściciel 2026-11-27): kontekst po lewej — linia (wybór), pod nią zmiana i godziny w JEDNYM wierszu; Magazyn bez linii: sama zmiana, jak w UR i KJ. -->
+    <div class="naglowek-kontekst">
+      <button id="wybor-linii" class="linia" type="button" aria-label="Zmień linię"></button>
+      <div id="opis-zmiany" class="opis-zmiany"></div>
+    </div>
     <div class="kto"><button id="menu" class="hala-konto-przycisk" type="button" aria-label="Moje konto" title="Moje konto"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" fill="currentColor"/></svg></button></div>
   </header>
 
@@ -81,7 +84,7 @@
       <div class="hala-menu-kto">GK Produkcja</div>
     </div>
     <button type="button" data-ekran="zmiana" aria-current="page"><span class="ikona" data-ikona="zmiana" aria-hidden="true"></span>Moja zmiana</button>
-    <button type="button" data-ekran="jakosc"><span class="ikona" data-ikona="jakosc" aria-hidden="true"></span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>
+    <button type="button" data-ekran="jakosc"><span class="ikona" data-ikona="proba" aria-hidden="true"></span>Jakość<span class="plakietka" data-plakietka="jakosc" hidden></span></button>
     <!-- Ikona awaria = awarie (zgłoszenie i lista) w GK Produkcja i GK Utrzymanie Ruchu; ikona przeglady to w UR przeglądy — jedna ikona, jedna rzecz.
          UI etap 2: jedna czerwona zakładka zamiast przycisku AWARIA i zakładki „Awarie” — zgłoszenie na górze, pod nim lista. -->
     <button type="button" data-ekran="awarie" class="awaria"><span class="ikona" data-ikona="awaria" aria-hidden="true"></span>Awarie<span class="plakietka" data-plakietka="awarie" hidden></span></button>

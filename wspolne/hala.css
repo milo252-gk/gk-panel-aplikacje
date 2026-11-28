@@ -607,9 +607,13 @@ dialog.hala-okno legend { padding: 0 4px; font-size: 13px; font-weight: 700; col
 .hala-wybor { display: flex; flex-wrap: wrap; gap: 8px; }
 .hala-wybor button { min-height: var(--dotyk); padding: 0 14px; font-weight: 600; font-size: 14px; border-radius: 999px; }
 .hala-wybor button[aria-pressed="true"] { background: var(--granat); border-color: var(--granat); color: var(--na-marce); }
+/* Przegląd 2026-11-27: na telefonie (okno Moje konto ~300 px) trzy pigułki Wyglądu łamały się na dwa rzędy — węższy odstęp
+   i dopełnienie, pigułki dzielą rząd; przy bardzo wąskim ekranie dalej mogą się złamać (flex-wrap zostaje). */
+@media (max-width: 480px) { .hala-wybor { gap: 6px; } .hala-wybor button { flex: 1 1 auto; padding: 0 8px; } }
 /* Powiadomienia (konto.js → powiadomienia): jeden przycisk albo stan; „Zablokowane…” zwykłym tekstem w kolorze ostrzeżenia. */
 .hala-konto-push [data-push-stan] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .hala-konto-push [data-push-stan] > p { flex: 1 1 100%; margin: 0; }
+.hala-konto-push [data-push-stan] > button { flex: 1 1 100%; }   /* przegląd 2026-11-27: pełna szerokość jak „Sprawdź dźwięki” pod nim */
 .hala-push-ok { font-size: 14px; color: var(--zielony); font-weight: 600; }
 .hala-push-uwaga { font-size: 14px; color: var(--uwaga); font-weight: 400; }
 /* Stopka „wersja X” — pełna wersja techniczna w podpowiedzi (title) dla serwisu. */
@@ -760,9 +764,15 @@ a.hala-konto-aplikacje { display: flex; align-items: center; justify-content: ce
 .hala-skan-fab .ik { margin: 0; }
 .hala-skan-fab .ik svg { width: 24px; height: 24px; }
 /* Ikona liniowa (gk-ikony.js) przed napisem na przycisku, chipie albo w nagłówku: <span class="ik" data-ikona="drukuj" data-rozmiar="16">. */
+/* Dzwonek w nagłówku, gdy przeglądarka czeka na dotknięcie (dźwięk zablokowany) — pomarańczowa ramka, jeden wygląd w Panelu,
+   GK Produkcja, UR i KJ (właściciel 2026-11-27, P6; wcześniej tylko panel.css, a reszta pokazywała przekreślony dzwonek). */
+.naglowek button.maly.czeka { box-shadow: inset 0 0 0 2px var(--pomarancz); }
 .ik { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
 .ik.po { margin: 0 0 0 4px; }                       /* ikona za napisem (szewron „Więcej”) */
-.ik.bez-odstepu, button > .ik:only-child { margin: 0; }   /* sama ikona w przycisku — wyśrodkowana */
+.ik.bez-odstepu, button[aria-label] > .ik:only-child { margin: 0; }   /* sama ikona w przycisku — wyśrodkowana */
+/* Przegląd UI 2026-11-27: dawne „button > .ik:only-child” zjadało odstęp także w przyciskach ikona + napis („Kody QR aplikacji”,
+   „Sprawdź dźwięki”, chipy Administracji) — CSS nie widzi węzłów tekstowych, więc :only-child pasował do każdej ikony z napisem.
+   Przycisk z samą ikoną ma zawsze aria-label (czytnik ekranu), więc to on wyznacza „samą ikonę”. */
 /* Szewron rozwijania (summary::before) jako ta sama ikona liniowa co szewron-prawo w gk-ikony.js — bez znaku tekstowego. */
 :root { --szewron-prawo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E"); }
 .szewron-summary::before { content: ''; display: inline-block; flex: none; width: 16px; height: 16px; background: currentColor;

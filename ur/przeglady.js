@@ -59,7 +59,7 @@
           ${UR.mozna('przeglad.zaplanowany') && kart ? '<button type="button" id="zaplanuj">+ Zaplanuj</button>' : ''}</div>
         <div class="wybor filtr" id="filtr-przegladow">${[['wszystkie', 'Wszystkie'], ['moje', 'Moje']].map(([kod, n]) =>
           `<button type="button" data-filtr="${kod}" aria-pressed="${f === kod}">${n}</button>`).join('')}</div>
-        ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">planie przeglądów</a>.' : ' Poproś lidera Utrzymania Ruchu o plan przeglądów.'}</p>` : ''}
+        ${!kart ? `<p class="pusto">Nie ma jeszcze kart przeglądów.${UR.kierownikUR() ? ' Dodaj je w <a href="#plan">planie przeglądów</a>.' : ' Poproś Lidera Utrzymania Ruchu o plan przeglądów.'}</p>` : ''}
         ${sekcja('Po terminie', g.opoznione, 'tekst-alarm')}
         ${sekcja('W trakcie', g.wTrakcie)}
         ${sekcja('Dziś', g.dzis, '', 'Na dziś nic nie zaplanowano')}
@@ -92,7 +92,7 @@
       tresc: `<label>Maszyna<select name="maszyna" id="pl-maszyna">${maszyny.map(m => `<option value="${esc(m.kod)}">${esc(m.nazwa)} (${esc(m.kod)})</option>`).join('')}</select></label>
         <label>Karta przeglądu<select name="karta" id="pl-karta">${opcjeKart(pierwsza)}</select></label>
         <label>Dzień<input type="date" name="dzien" value="${esc(dzis)}" min="${esc(dzis)}"></label>
-        <label>Mechanik (opcjonalnie)<select name="mechanik"><option value="">— każdy —</option>${mech.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('')}</select></label>`,
+        <label>Pracownik UR (opcjonalnie)<select name="mechanik"><option value="">— każdy —</option>${mech.map(p => `<option value="${esc(p.id)}">${esc(p.nazwa)}</option>`).join('')}</select></label>`,
       przyciski: [{ tekst: 'Anuluj', wartosc: false }, { tekst: 'Zaplanuj', wartosc: true, glowny: true,
         sprawdz: f => W.bledyPlanowania(Object.fromEntries(f), sl, dzis)[0] || null }],
       przy: form => form.querySelector('#pl-maszyna').addEventListener('change', ev => {
@@ -184,7 +184,7 @@
           <div class="slaby">Punkty: ${w.postep.zrobione}/${w.postep.wszystkie}${w.postep.niezgodne.length ? ` · <span class="tekst-alarm">niezgodne: ${w.postep.niezgodne.length}</span>` : ''}</div>` : ''}
       </section>
       ${akcje ? `<div style="margin:12px 0">${akcje}</div>` : ''}
-      ${!karta ? '<p class="pusto blad">Karty tego przeglądu nie ma w słowniku (usunięta?). Poproś lidera Utrzymania Ruchu o poprawkę planu.</p>' : ''}
+      ${!karta ? '<p class="pusto blad">Karty tego przeglądu nie ma w słowniku (usunięta?). Poproś Lidera Utrzymania Ruchu o poprawkę planu.</p>' : ''}
       ${karta && p.status !== 'zaplanowany' ? `<h2>Punkty kontrolne</h2><div class="lista" id="punkty">${(karta.punkty || []).map(pk => rysujPunkt(pk, wyniki[pk.id], edycja)).join('')}</div>` : ''}
       ${karta && p.status === 'zaplanowany' ? `<h2>Punkty kontrolne (${(karta.punkty || []).length})</h2><ol>${(karta.punkty || []).map(pk => `<li>${esc(pk.nazwa)}${W.zakres(pk) ? ` <span class="slaby">(${esc(W.zakres(pk))})</span>` : ''}</li>`).join('')}</ol>` : ''}
       ${edycja ? '<button type="button" class="glowny szeroki duzy" id="zakoncz" style="margin-top:14px">Zakończ przegląd</button>' : ''}

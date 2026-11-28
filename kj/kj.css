@@ -78,7 +78,7 @@ details.grupa { padding: 0 12px; }
 button[aria-label] > .ik, .usun-zdjecie .ik, .miniatura .usun .ik { margin-right: 0; }
 button.glowny.wlasny-skan { background: var(--pomarancz); border-color: var(--pomarancz); color: var(--na-pomarancz); font-weight: 800; }   /* jedyna akcja główna ekranu — ten sam pomarańcz co pływający „Skanuj” (hala.css), który tu się chowa */   /* przycisk tylko z ikoną: bez odstępu na napis */
 .tylko-czytnik { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+details.grupa > summary { min-height: var(--dotyk); display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; overflow-wrap: normal; }   /* .ekran ma overflow-wrap:anywhere — bez tego „Więcej” łamało się na „Więc / ej” (nocna kontrola 28.11) */
 /* Strzałka zwiniętej grupy (jak „Więcej” w Panelu i Liderze) — display:flex chowa znacznik przeglądarki. */
 details.grupa > summary::-webkit-details-marker { display: none; }
 details.grupa > summary::before { content: ''; width: 16px; height: 16px; flex: none; background: currentColor;
@@ -243,3 +243,9 @@ pre { white-space: pre-wrap; font-size: .85em; background: var(--tlo); padding: 
 .okno-przyciski button { flex: 1; }
 
 /* Komunikat (toast): wygląd i miejsce wspólne w hala.css (#komunikaty .komunikat), jak w GK Trasy. */
+
+/* Pulpit (P2, 2026-11-27) — te same kafelki co Pulpit GK Utrzymanie Ruchu (ur.css). */
+.ekran-pulpit .pulpit-kafelki { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.ekran-pulpit .pulpit-kafelki > a { display: block; min-height: 88px; box-sizing: border-box; text-decoration: none; color: inherit; cursor: pointer; }
+.ekran-pulpit .pulpit-kafelki > a:focus-visible { outline: 3px solid var(--tekst); outline-offset: 2px; }
+.ekran-pulpit .spokoj { margin: 16px 0; font-weight: 700; }

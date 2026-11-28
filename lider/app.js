@@ -85,7 +85,7 @@
   /* Błędy przeglądarki są po angielsku, a czyta je lider na hali — tłumaczymy w jednym miejscu. */
   Lider.poLudzku = e => {
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
-    if (e.kod === 403) return 'To konto nie ma dostępu do GK Produkcja. Poproś Kierownika zakładu o funkcję Lider Produkcji GK, Mistrz Produkcji GK, Lider Produkcji SP albo Kierownik zakładu / Pracownik Magazynu.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Produkcja. Poproś Kierownika zakładu o funkcję Lider Produkcji GK, Mistrz Produkcji GK, Lider Produkcji SP, Kierownik Magazynu albo Pracownik Magazynu.';
     // 400/401/429: hub mówi po polsku i wprost, co zrobić (złe imię i nazwisko albo hasło, pauza po złych próbach…).
     return e.message || 'Coś poszło nie tak. Spróbuj jeszcze raz.';
   };

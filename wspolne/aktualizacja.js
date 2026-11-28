@@ -38,6 +38,32 @@
     return a.tagName === 'SELECT' || !!a.value;
   }
 
+  /* Start po wydaniu (27.11.2026, Panel u właściciela): stary worker oddał część plików z kopii, część z sieci
+     (sieć najpierw, ale z limitem 4 s) — mieszanka wersji wywróciła skrypt aplikacji i ekran został PUSTY, a po
+     ręcznym odświeżeniu wszystko działało. Błąd skryptu w pierwszych 15 s od wejścia = raz prosimy workera
+     o nową wersję i przeładowujemy stronę. Strażnik w sessionStorage: najwyżej jedno takie przeładowanie
+     na kartę (zdejmowany po 30 s spokojnej pracy), więc stały błąd w kodzie nie zrobi pętli. */
+  const KLUCZ_NAPRAWY = 'hala.aktualizacja.naprawaStartu';
+  if (global.addEventListener && nav) {
+    global.addEventListener('error', function naprawStart(e) {
+      if (!e || !/\.js(\?|$)/.test(String(e.filename || ''))) return;
+      if (!global.performance || global.performance.now() > 15000) return;
+      try {
+        if (global.sessionStorage.getItem(KLUCZ_NAPRAWY)) return;
+        global.sessionStorage.setItem(KLUCZ_NAPRAWY, String(Date.now()));
+      } catch (_) { return; }
+      global.removeEventListener('error', naprawStart);
+      const dalej = () => global.location.reload();
+      const sw = nav.serviceWorker;
+      if (sw && sw.getRegistration) {
+        sw.getRegistration().then(r => r && r.update()).catch(() => {}).then(() => setTimeout(dalej, 1500));
+      } else setTimeout(dalej, 500);
+    });
+    global.addEventListener('load', () => setTimeout(() => {
+      try { global.sessionStorage.removeItem(KLUCZ_NAPRAWY); } catch (_) { /* brak pamięci karty — nic */ }
+    }, 30000));
+  }
+
   function pilnuj(opcje) {
     const o = opcje || {};
     if (!nav || !('serviceWorker' in nav)) return;

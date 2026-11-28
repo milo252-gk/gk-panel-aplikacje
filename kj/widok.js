@@ -711,8 +711,24 @@
      powtarzanie jej przy każdej próbie nic nie mówi; przy próbie na całej linii miejsce już JEST linią. */
   const liniaPrzyProbie = (p, slowniki) => (!p || jedynaLinia(slowniki) || p.stanowisko === p.liniaNazwa ? '' : p.liniaNazwa || '');
 
+  /* Pulpit KJ (właściciel 2026-11-27, P2 przeglądu UI): kafelki liczb jak w GK Utrzymanie Ruchu (UR W.pulpit — te same klasy i adresy),
+     z danych, które KJ już ma: plan próbkowania tej zmiany, aktywne alerty, partie brakowe, otwarte reklamacje, zlecenia działu.
+     Tylko kafelki > 0; same zera → „Wszystko w porządku”. Wejście: wynik planZmiany i list (listaAlertow, listaPartii, listaReklamacji). */
+  function pulpit({ plan, alerty, partie, reklamacje, zlecenia } = {}) {
+    const p = plan || {};
+    const doZrobienia = Math.max(0, (Number(p.plan) || 0) - (Number(p.zrobione) || 0));
+    const kafelki = [
+      { kod: 'alerty', etykieta: 'Aktywne alerty jakości', liczba: (alerty || []).filter(a => a && a.aktywny).length, klasa: 'pilne', adres: '#alerty' },
+      { kod: 'partie', etykieta: 'Partie brakowe', liczba: (partie || []).filter(x => x && x.aktywna).length, klasa: 'pilne', adres: '#partie' },
+      { kod: 'proby', etykieta: 'Próby do zrobienia', liczba: doZrobienia, klasa: 'uwaga', adres: '#plan' },
+      { kod: 'reklamacje', etykieta: 'Reklamacje otwarte', liczba: (reklamacje || []).filter(r => r && r.otwarta).length, klasa: 'uwaga', adres: '#reklamacje' },
+      { kod: 'zlecenia', etykieta: 'Zlecenia do wykonania', liczba: Number(zlecenia) || 0, klasa: 'uwaga', adres: '#zlecenia' },
+    ].filter(k => k.liczba > 0);
+    return { kafelki, spokoj: !kafelki.length };
+  }
+
   global.KJWidok = {
-    raz, odmiana, liczba, linie, nazwaLinii, nazwaStanowiska, nazwaWyrobu, nazwaWady, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
+    pulpit, raz, odmiana, liczba, linie, nazwaLinii, nazwaStanowiska, nazwaWyrobu, nazwaWady, nazwaPracownika, godzina, data, dataPelna, kiedy, numer,
     koniecDnia, mozna, sumaWad, MAKS_ZDJEC, skanZInnejZmiany, bledyProby, daneProby, podpowiedzPartii, powodPartii, korektaProby,
     liczbaZPola, korektaZFormularza, dzisZakladu, probyLiderowPonadProgiem, komunikatReklamacji,
     planZmiany, stanPaskaPlanu, probyZmiany, pareto, okres, stopkaPareto, linieAlertu, postepAlertu, bledyAlertu, daneAlertu, listaAlertow,

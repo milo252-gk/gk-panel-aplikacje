@@ -109,14 +109,17 @@
     const sameDrzwi = !!czesciAdm.length && czesciAdm.every(c => W.DRZWI_TELEFONU.includes(c));
     $('menu-administracja').classList.toggle('tylko-telefon', sameDrzwi);
     // Ikona jak „Więcej” w innych aplikacjach GK (STYL-GK §8) — wstawiana tylko przy zmianie, bez przerysowania co 20 s.
-    const ikonaAdm = $('menu-administracja').querySelector('.ikona');
-    const ikonaChciana = sameDrzwi ? 'wiecej' : 'administracja';
-    if (ikonaAdm && ikonaAdm.getAttribute('data-ikona') !== ikonaChciana && window.GKIkony) {
-      ikonaAdm.setAttribute('data-ikona', ikonaChciana);
-      window.GKIkony.wypelnij(ikonaAdm.parentNode);
-    }
     // Lider Utrzymania Ruchu i Kierownik Kontroli Jakości mają tu tylko urlopy swoich ludzi — pozycja nazywa się wtedy „Urlopy” (W.nazwaAdministracji).
     const nazwaAdm = W.nazwaAdministracji(czesciAdm);
+    const ikonaAdm = $('menu-administracja').querySelector('.ikona');
+    // Przegląd UI 2026-11-27: „Urlopy” z ikoną urlopu (jedna ikona, jedna rzecz), nie suwakami Administracji.
+    const ikonaChciana = sameDrzwi ? 'wiecej' : nazwaAdm === 'Urlopy' ? 'urlop' : 'administracja';
+    if (ikonaAdm && ikonaAdm.getAttribute('data-ikona') !== ikonaChciana && window.GKIkony) {
+      ikonaAdm.setAttribute('data-ikona', ikonaChciana);
+      // GKIkony.wypelnij pomija element, który ma już <svg> — bez wyczyszczenia Prezes widział „Więcej” z ikoną Administracji.
+      ikonaAdm.innerHTML = '';
+      window.GKIkony.wypelnij(ikonaAdm.parentNode);
+    }
     const wstawNazwe = (el, nazwa) => { if (el && el.textContent !== nazwa) el.textContent = nazwa; };
     wstawNazwe(document.querySelector('#menu-administracja span:not(.ikona)'), nazwaAdm);
     wstawNazwe($('t-administracja'), nazwaAdm);
@@ -446,7 +449,8 @@
           <div class="lista">${k.wiersze.map(wierszZlecenia).join('')}</div></details>
       </article>`;
     // Filtry sekcji (dział, linia, „tylko spóźnione”; osoba i rodzaj „Zlecenie” ukrywają karty checklist) dotyczą kart checklist
-    // tak samo jak kart zleceń. Zwracana lista `karty` zostaje pełna — liczy z niej kafelek „Opóźnione checklisty”.
+    // tak samo jak kart zleceń. Właściciel 2026-11-27 (P4): kafelek „Opóźnione checklisty” liczy TE SAME karty, które widać pod nim
+    // (wcześniej cały zakład — lider UR widział „3”, a pod spodem pustą listę). Monitor nie ma filtrów — liczy wszystkie.
     const kartaPasuje = k => {
       if (document.body.classList.contains('tryb-ekran')) return true;      // monitor nie ma filtrów — pokazuje wszystkie karty
       const dz = biezaceDzial(), moje = mojeDzialy() || [];
@@ -480,7 +484,7 @@
     $('kafelki').dataset.pustyTekst = W.pustyObchod(d.slowniki, d.zmiana);
     ladujZdjeciaLeniwie($('kafelki'));
     // Kafelek mistrza liczy się do „Opóźnione checklisty” na Pulpicie tak samo jak kafelek linii (czerwony = po terminie).
-    return karty;
+    return karty.filter(kartaPasuje);
   }
 
   /* Lista wszystkich pozycji jednej checklisty w karcie obchodu: zrobione (z dowodami), po terminie i do zrobienia. */
@@ -544,13 +548,15 @@
 
   /* „Pilne od zespołu” (2026-11-25): trwałe wpisy z „Pilne — powiadom kierownika”, ostatnie 48 godzin (W.pilneOdZespolu). Konto „ekran”
      (monitor) ich nie widzi — to wiadomość do kierownika i Menedżera. */
+  // pilne.js (26.11) może nie dojść przy pierwszym starcie po wydaniu (stara kopia strony) — wtedy bez „Widziałem”, ale Panel działa.
+  const pilneWpisy = () => window.PanelPilne || { bezWidzianych: l => l, widziane: () => [], przycisk: () => '', oznacz() {} };
   function rysujPilne(d, zlecenia) {
     const sekcja = $('pulpit-pilne');
     const ja = hala.pracownik && hala.pracownik.id;
     // Klucz jako literał „hala.panel.pilneUkryte.” + id osoby (test t_dostep pilnuje przedrostka „hala.” w kodzie). Pamiętamy czas najnowszego ukrytego wpisu.
     const ukryteDo = ja ? Number(pamiec.czytaj('hala.panel.pilneUkryte.' + ja)) || 0 : 0;
     const wszystkie = ((hala.pracownik && (hala.pracownik.role || []).includes('ekran')) ? [] : W.pilneOdZespolu({ zlecenia, pracownicy: d.pracownicy, teraz: d.teraz, dzialy: mojeDzialy() }));
-    const wiersze = PanelPilne.bezWidzianych(W.pilneBezUkrytych(wszystkie, ukryteDo), PanelPilne.widziane(ja));   // 26.11: „Widziałem” przy wpisie (pilne.js)
+    const wiersze = pilneWpisy().bezWidzianych(W.pilneBezUkrytych(wszystkie, ukryteDo), pilneWpisy().widziane(ja));   // 26.11: „Widziałem” przy wpisie (pilne.js)
     sekcja.hidden = !wiersze.length;
     $('licznik-pilnych').innerHTML = wiersze.length ? `<span class="znacznik alarm">${wiersze.length}</span>` : '';
     $('lista-pilnych').innerHTML = wiersze.map(w => {
@@ -558,7 +564,7 @@
       return `<article class="pilne-wpis" data-id="${esc(w.id)}">
         <div class="opis"><div><b>${esc(w.nazwaPozycji || w.tytul || 'Zlecenie')}</b>${w.nazwaPozycji && w.tytul ? ` <span class="slaby">${esc(w.tytul)}</span>` : ''}</div>
           <div class="slaby">${esc(w.kto)} · ${esc(W.godzina(w.czas))}</div>
-          ${w.uwagi ? `<div class="tekst-opisu">${esc(w.uwagi)}</div>` : ''}</div>${PanelPilne.przycisk(w)}
+          ${w.uwagi ? `<div class="tekst-opisu">${esc(w.uwagi)}</div>` : ''}</div>${pilneWpisy().przycisk(w)}
         ${w.zdjecia.length ? `<div class="zdjecia">${w.zdjecia.map(id => `<button type="button" class="miniatura" data-zdjecie="${esc(id)}" data-podpis="${esc(podpis)}" aria-label="Powiększ zdjęcie"><img data-plik="${esc(id)}" alt=""></button>`).join('')}</div>` : ''}
       </article>`;
     }).join('');
@@ -573,7 +579,7 @@
   });
   $('lista-pilnych').addEventListener('click', ev => {
     const widzialem = ev.target.closest('[data-widzialem]');
-    if (widzialem) { PanelPilne.oznacz(hala.pracownik && hala.pracownik.id, widzialem.dataset.widzialem); rysujPilne(dane(), hala.obiekty('zlecenie')); return; }
+    if (widzialem) { pilneWpisy().oznacz(hala.pracownik && hala.pracownik.id, widzialem.dataset.widzialem); rysujPilne(dane(), hala.obiekty('zlecenie')); return; }
     const foto = ev.target.closest('[data-zdjecie]');
     if (foto) pokazZdjecie(foto.dataset.zdjecie, foto.dataset.podpis);
   });
@@ -683,7 +689,12 @@
         rysujPilne(d, zlecenia);
         rysujCzeka(czeka);
         rysujBiezace(d, zlecenia);
-        rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia, teraz: d.teraz, bezRaportu: bezRaportu(d),
+        // P4 (właściciel 2026-11-27): „Zlecenia” i „Zlecenia po terminie” liczą według filtrów Pulpitu (dział, „mój dział i moje”, osoba,
+        // „tylko spóźnione”) — jak lista pod kafelkami. Awarie, „Do decyzji” i reszta jak dotąd (lista Awarii nie ma filtrów).
+        const zleceniaKafelkow = document.body.classList.contains('tryb-ekran') ? zlecenia : W.zleceniaWedlugFiltrow(zlecenia,
+          W.zlecenia({ zlecenia, slowniki: d.slowniki, pracownicy: d.pracownicy, stale: d.stale, teraz: d.teraz, filtr: 'w-toku', ja: hala.pracownik }),
+          Object.assign({}, biezace, { dzial: biezaceDzial(), mojeDzialy: mojeDzialy() || [], ja: hala.pracownik && hala.pracownik.id }));
+        rysujLiczby(W.kafelki({ kafelkiLinii: linie, wierszeAwarii: wiersze, incydenty: jakosc, zlecenia: zleceniaKafelkow, teraz: d.teraz, bezRaportu: bezRaportu(d),
                                 slowniki: d.slowniki, urzadzenia, czeka }));
         pokazJeszcze();
       } else if (widokAktywny === 'zlecenia') {

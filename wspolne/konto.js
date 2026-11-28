@@ -303,7 +303,7 @@
     try { odrzucone = (await hala.odrzucone()).length; } catch (e) { /* bez IndexedDB — nic nie pokazujemy */ }
     const ekran = (p.role || []).length === 1 && p.role[0] === 'ekran';
     const motyw = global.HalaMotyw;
-    d.innerHTML = trescKonta({ nazwa: p.nazwa, program: NAZWY_PROGRAMOW[o.aplikacja] || '', role: (p.role || []).map(r => nazwyRol[r] || r), wyglad: motyw ? motyw.odczytaj() : 'auto',
+    d.innerHTML = trescKonta({ nazwa: p.nazwa, program: NAZWY_PROGRAMOW[o.aplikacja] || '', role: (p.role || []).map(r => String(nazwyRol[r] || r).split(' (')[0]),   /* H29 (27.11): bez nawiasu z kontraktu, jak menu */ wyglad: motyw ? motyw.odczytaj() : 'auto',
                                komputer: naKomputerze(), czeka: k.moje || 0, cudze: Math.max(0, (k.oczekuje || 0) - (k.moje || 0)), odrzucone,
                                zOdrzuconymi: typeof o.odrzucone === 'function', pin: !ekran, instrukcja: o.instrukcja,
                                cudzeLista: hala.cudzeZapisy ? hala.cudzeZapisy() : [] });

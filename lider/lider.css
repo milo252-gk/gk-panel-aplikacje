@@ -49,16 +49,24 @@ body:has(.hala-logowanie:not([hidden])) { padding-bottom: 0; }
 /* Jedna linia w zakładzie (D51): sama nazwa, nic do kliknięcia (app.js → rysujNaglowek). */
 .naglowek .linia.jedna { pointer-events: none; }
 .naglowek .linia.jedna span { font-weight: 600; opacity: 1; }
-.naglowek .opis-zmiany { flex: 1; text-align: center; font-size: .9em; line-height: 1.2; }
-.naglowek .opis-zmiany span { opacity: .8; display: block; }
-/* Tytuł zmiany na wąskim telefonie: „Zmiana II” i „14:00–22:00” w jednym wierszu każde, bez łamania „14:00–” / „22:00” na cztery linie. */
-.naglowek .opis-zmiany { min-width: 0; }
+/* Tytuł zmiany na wąskim telefonie: „Zmiana II” i „14:00–22:00” bez łamania „14:00–” / „22:00” na cztery linie. */
 .naglowek .opis-zmiany b, .naglowek .opis-zmiany span { white-space: nowrap; }
-/* Recenzja 25.11 (pkt 3), 360 px: przy długiej nazwie linii („L3 Pakowanie”) godziny zmiany wychodziły poza swoje pole i wjeżdżały pod lupę.
-   Godziny nie ustępują (flex-shrink 0), a ustępuje nazwa linii — wielokropek na samej nazwie; kod linii i strzałka zostają, przycisk ≥ 52 px. */
+/* Recenzja 25.11 (pkt 3), 360 px: przy długiej nazwie linii („L3 Pakowanie”) ustępuje nazwa linii — wielokropek na samej nazwie;
+   kod linii i strzałka zostają. */
 .naglowek .linia { flex-shrink: 1; }
 .naglowek .linia span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.naglowek .opis-zmiany { flex: 1 0 auto; }
+/* H26/H27 (właściciel 2026-11-27): jeden układ nagłówka w czterech aplikacjach hali — kontekst PO LEWEJ, nazwa zmiany i godziny
+   w JEDNYM wierszu („Zmiana II 14:00–22:00”), nic na środku. Tu: linia (wybór) w pierwszym wierszu bloku, zmiana pod nią; dotknięcie
+   całego bloku otwiera wybór linii (::after przycisku kryje blok — cel dotyku ≥ 52 px wysokości przy pasku 56 px). Magazyn (D92,
+   bez linii) i „Poza zmianą”: sama zmiana w jednym wierszu po lewej, tym samym pismem co UR i KJ (hala.css → .zmiana). */
+.naglowek .naglowek-kontekst { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  flex: 1 1 auto; min-width: 0; min-height: var(--dotyk, 52px); line-height: 1.2; }
+.hala-uklad > .naglowek .naglowek-kontekst > .linia { min-height: 0; padding: 0; max-width: 100%; border-radius: 0; background: none; }
+.naglowek .naglowek-kontekst > .linia:not(.jedna)::after { content: ''; position: absolute; inset: 0; }
+.naglowek .opis-zmiany { max-width: 100%; text-align: left; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.naglowek .opis-zmiany span { opacity: .8; font-weight: 400; }
+.naglowek .naglowek-kontekst > .linia[hidden] + .opis-zmiany { font-size: 17px; }
+.naglowek .naglowek-kontekst > .linia[hidden] + .opis-zmiany span { font-size: 15px; opacity: .75; }
 
 /* ---------------------------------------------------------------- wezwania (na każdym ekranie) */
 
@@ -287,6 +295,10 @@ details.wiecej[open] { display: grid; gap: 12px; }
 .menu-wiecej button, .menu-wiecej .przycisk { min-height: var(--dotyk); justify-content: flex-start; }
 /* Menedżer: „Administracja (Panel Zarządczy GK)” to link do Panelu (2026-11-26) — wygląda jak pozostałe przyciski Więcej. */
 .menu-wiecej a.przycisk { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+/* Przegląd UI 2026-11-27: „Więcej” wygląda jak w GK Utrzymanie Ruchu i GK Kontrola Jakości (ur.css/kj.css → .menu .przycisk) —
+   pozycje 60 px, napis od lewej; wcześniej tu były wyśrodkowane przyciski 52 px. „Raport zmiany” zostaje główny (grafit). */
+.menu-wiecej button, .menu-wiecej .przycisk, .menu-wiecej a.przycisk { display: flex; align-items: center; justify-content: flex-start; text-align: left;
+  min-height: 60px; padding: 0 16px; font-size: 1.05em; }
 .opis-pozycji { margin: 8px 0; white-space: pre-line; }
 
 /* RCP: ludzie ze zmiany (D96) */

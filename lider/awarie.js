@@ -248,7 +248,7 @@
   L.potwierdzAwarie = potwierdz;
 
   async function odrzuc(id) {
-    const powod = await L.zapytaj({ tytul: 'Nadal nie działa', pytanie: 'Co jest nie tak? Awaria wróci do mechanika.',
+    const powod = await L.zapytaj({ tytul: 'Nadal nie działa', pytanie: 'Co jest nie tak? Awaria wróci do Utrzymania Ruchu.',
                                     podpowiedz: 'Np. dalej cieknie olej', przycisk: 'Odeślij do UR', wymagane: true, klasa: 'alarm',
                                     pole: ['awaria.potwierdzenie_odrzucone', 'powod'] });
     if (!powod) return;
@@ -284,7 +284,7 @@
       </div>
       ${w.opis ? `<div class="opis-awarii">${esc(w.opis)}</div>` : ''}
       ${w.zdjecia.length ? `<div class="galeria-awarii" data-zdjecia="${esc(w.zdjecia.join(','))}" data-podpis="${esc(w.maszynaNazwa)}"></div>` : ''}
-      ${w.mechanik ? `<div class="slaby">Mechanik: ${esc(w.mechanik)}</div>` : ''}
+      ${w.mechanik ? `<div class="slaby">Pracownik UR: ${esc(w.mechanik)}</div>` : ''}
       ${w.powodWstrzymania ? `<div class="tekst-uwaga">Wstrzymana: ${esc(w.powodWstrzymania)}</div>` : ''}
       ${w.opisNaprawy && w.doPotwierdzenia ? `<div>Utrzymanie Ruchu: ${esc(w.opisNaprawy)}</div>` : ''}
       <div class="przestoj">Przestój <b ${w.aktywny ? `data-od="${esc(Date.parse(w.czasZgloszenia) || '')}"` : ''}>${esc(Hala.formatLicznika(w.przestojMs))}</b>
@@ -364,7 +364,7 @@
       L.komunikat(`${m}: naprawa zakończona — potwierdź`, 'ok', 'awaria-' + id);
     } else {
       L.komunikat(`${m}: ${obiekt.etykieta || obiekt.status}`, 'info', 'awaria-' + id);
-      if (obiekt.status === 'przyjeta') L.powiadom(`${m}: mechanik w drodze`, '', { tag: 'awaria-' + id, wibracja: 100, adres: '#awarie' });
+      if (obiekt.status === 'przyjeta') L.powiadom(`${m}: Pracownik UR w drodze`, '', { tag: 'awaria-' + id, wibracja: 100, adres: '#awarie' });
     }
   });
   hala.na('sesja', () => { statusy.clear(); for (const a of hala.obiekty('awaria')) statusy.set(a.id, a.status); });

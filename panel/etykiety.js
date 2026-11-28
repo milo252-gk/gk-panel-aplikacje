@@ -146,7 +146,7 @@
         && (p.role || []).some(r => (role.size ? role.has(r) : r !== 'ekran')))
       .slice().sort((a, b) => String(a.nazwa || a.id).localeCompare(String(b.nazwa || b.id), 'pl'))
       .map(p => ({ rodzaj: 'pracownicy', rodzajNazwa: 'Identyfikator', kod: p.id, nazwa: p.nazwa || p.id, liniaNazwa: '',
-                   podpis: 'Identyfikator — zeskanuj przy logowaniu, potem PIN', qr: `HALA:P:${p.id}` }));
+                   podpis: 'Identyfikator — zeskanuj przy logowaniu, potem hasło', qr: `HALA:P:${p.id}` }));
   }
 
   /* Wszystkie kategorie kodów do okna „🖨 Kody QR” (Administracja → Kody QR). Każda: {kod, nazwa, gdzie, elementy: [{klucz, nazwa, podpis,

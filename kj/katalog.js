@@ -70,7 +70,7 @@
   function rysujWady(box) {
     const lista = W.katalogWad(hala.slowniki);
     const edycja = moznaPisac('katalog_wad');
-    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowa-wada">+ Dodaj wadę</button>' : '<p class="slaby">Katalog zmienia kierownik Kontroli Jakości.</p>'}
+    box.innerHTML = `${edycja ? '<button type="button" class="glowny szeroki" id="nowa-wada">+ Dodaj wadę</button>' : '<p class="slaby">Katalog zmienia Kierownik Kontroli Jakości.</p>'}
       <div class="lista">${lista.map(w => `
         <div class="karta wiersz-katalogu">
           <div><b>${esc(w.nazwa)}</b>${w.kategoria ? ` <span class="slaby">${esc(w.kategoria)}</span>` : ''}</div>

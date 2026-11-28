@@ -193,19 +193,42 @@
     return !!o && d.dzial === 'kj' && !d.przyjal && role.some(r => ['kontroler', 'kierownik_kj'].includes(r))
       && !(d.wykonawca && d.wykonawca !== (hala.pracownik || {}).id);
   };
+  /* Pulpit (właściciel 2026-11-27, P2): kafelki liczb jak w GK Utrzymanie Ruchu — co czeka na Kontrolę Jakości teraz. */
+  KJ.ekran('pulpit', {
+    rysuj(el) {
+      const zmiana = hala.zmianaTeraz();
+      const p = W.pulpit({
+        plan: W.planZmiany({ slowniki: hala.slowniki, proby: hala.obiekty('proba'), zmiana }),
+        alerty: W.listaAlertow({ alerty: hala.obiekty('alert'), slowniki: hala.slowniki, pracownicy: hala.pracownicy, teraz: hala.teraz() }),
+        partie: W.listaPartii({ partie: hala.obiekty('partia'), slowniki: hala.slowniki }),
+        reklamacje: W.listaReklamacji({ reklamacje: hala.obiekty('reklamacja'), slowniki: hala.slowniki, pracownicy: hala.pracownicy }),
+        zlecenia: global.HalaZlecenia.doZrobienia(hala, { dzial: 'kj' }),
+      });
+      el.innerHTML = `<h1>Pulpit</h1>` + (p.spokoj ? `<p class="spokoj pusto ok">${KJ.ik('haczyk', 18)}Wszystko w porządku — nic nie czeka</p>`
+        : `<div class="hala-kafelki pulpit-kafelki">${p.kafelki.map(x => `<a class="${esc(x.klasa)}" href="${esc(x.adres)}" data-kafel="${esc(x.kod)}"><span class="etykieta">${esc(x.etykieta)}</span><b>${x.liczba}</b></a>`).join('')}</div>`);
+    },
+  });
   KJ.ekran('zlecenia', { rysuj: el => global.HalaZlecenia.rysuj(el, hala, { dzial: 'kj', komunikat: t => KJ.komunikat(t, 'ok'), przyjmijChecklisty }) });
   global.HalaZlecenia.sledz(hala, () => ({ dzial: 'kj' }), (z, o) => KJ.komunikat(global.HalaZlecenia.opisPowiadomienia(z, o)));
   // D56: „Skanuj” na wierzchu każdego ekranu — skan maszyny → zadanie, awaria albo nieprawidłowość.
+  // P2 (właściciel 2026-11-27): na Pulpicie i w Próbkowaniu ten sam pasek „Skanuj QR” zaczyna próbę (skan stanowiska — dawny pomarańczowy
+  // przycisk „Skanuj stanowisko” w treści); na pozostałych ekranach jak w UR i GK Produkcja: menu maszyny (zadanie, awaria, nieprawidłowość).
   if (global.HalaDzialania) global.HalaDzialania.przyciskSkanu(hala, { zlecenia: () => ({ dzial: 'kj' }), otworzZlecenia: () => KJ.idz('zlecenia'),
-                                                                        komunikat: t => KJ.komunikat(t, 'ok') });
+    komunikat: t => KJ.komunikat(t, 'ok'),
+    akcja: () => {
+      if (!KJ.biezacy || !['pulpit', 'plan'].includes(KJ.biezacy.nazwa) || !KJ.mozna('proba.zarejestrowana')) return false;
+      KJ.idz('proba/skanuj');
+      return true;
+    } });
   KJ.idz = adres => { if (location.hash !== '#' + adres) location.hash = adres; else pokazEkran(); };
 
   function adres() {
-    const [nazwa, ...reszta] = (location.hash.replace(/^#/, '') || 'plan').split('/');
+    // P2 (2026-11-27): start na Pulpicie (jak UR); nieznany adres też tam.
+    const [nazwa, ...reszta] = (location.hash.replace(/^#/, '') || 'pulpit').split('/');
     // Zepsute „%” w adresie (np. ręcznie wpisane) nie może wywrócić nawigacji — wtedy bez parametru.
     let parametr = null;
     try { parametr = reszta.map(decodeURIComponent).join('/') || null; } catch (e) { parametr = null; }
-    return { nazwa: KJ.ekrany[nazwa] ? nazwa : 'plan', parametr };
+    return { nazwa: KJ.ekrany[nazwa] ? nazwa : 'pulpit', parametr };
   }
 
   function pokazEkran() {
@@ -291,7 +314,7 @@
     // fetch bez sieci rzuca TypeError z angielskim tekstem przeglądarki — zamieniamy na instrukcję.
     if (!e || e instanceof TypeError || !e.kod) return 'Brak połączenia z serwerem. Sprawdź sieć i spróbuj jeszcze raz.';
     if (e.ustawione || (e.kod === 403 && e.powod)) return e.message;   // D43: hasło ustawione / stara wersja — tekst huba
-    if (e.kod === 403) return 'To konto nie ma dostępu do Kontroli Jakości. Zaloguj się kontem kontrolera albo kierownika Kontroli Jakości.';
+    if (e.kod === 403) return 'To konto nie ma dostępu do GK Kontrola Jakości. Zaloguj się kontem Pracownika albo Kierownika Kontroli Jakości.';
     // 400/401/429: hub mówi po polsku i co zrobić („Złe imię i nazwisko albo hasło”, pauza po złych próbach) — wprost (D24).
     return e.message || 'Nie udało się zalogować. Spróbuj jeszcze raz.';
   }
@@ -425,7 +448,9 @@
   KJ.ekran('urlopy', {
     zakladka: 'wiecej',
     rysuj(el) {
-      if (!global.Hala.mozeUrlopyZespolu(hala.pracownik)) { el.innerHTML = '<h1>Urlopy zespołu</h1><p class="pusto">Urlopy zespołu wpisuje Kierownik Kontroli Jakości, Kierownik albo Menedżer.</p>'; return; }
+      if (!global.Hala.mozeUrlopyZespolu(hala.pracownik)) { el.innerHTML = '<h1>Urlopy zespołu</h1><p class="pusto">Urlopy zespołu wpisuje Kierownik Kontroli Jakości, Kierownik zakładu albo Menedżer.</p>'; return; }
+      // wspolne/urlopy.js (26.11) może nie dojść przy pierwszym starcie po wydaniu (stara kopia strony).
+      if (!global.HalaUrlopy) { el.innerHTML = '<p class="slaby">Odśwież aplikację, żeby zobaczyć urlopy zespołu.</p>'; return; }
       global.HalaUrlopy.rysuj(el, hala, { tytul: 'Urlopy zespołu', komunikat: (t, r) => KJ.komunikat(t, r === 'ok' ? 'ok' : 'alarm'),
                                          potwierdz: (t, tr, tak) => KJ.potwierdz(t, tr, tak), komunikatBledu, odswiez: () => pokazEkran() });
     },
@@ -437,6 +462,7 @@
     rysuj(el) {
       el.innerHTML = `<h1>Więcej</h1>
         <nav class="menu">
+          <a class="przycisk" href="#proba">Próba</a>
           <a class="przycisk" href="#reklamacje">Reklamacje</a>
           <a class="przycisk" href="#pareto">Pareto wad</a>
           <a class="przycisk" href="#partie">Partie brakowe</a>
@@ -447,7 +473,7 @@
           <a class="przycisk" href="#wyniki">Moje wyniki</a>
           <a class="przycisk" href="#odrzucone">Nie wysłane${kolejka.odrzucone ? ` (${kolejka.odrzucone})` : ''}</a>
         </nav>
-        <p class="slaby">Powiadomienia, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
+        <p class="slaby">Powiadomienia, dźwięki, wersja i wylogowanie — w Moim koncie (ikona osoby u góry).</p>`;
     },
   });
 
