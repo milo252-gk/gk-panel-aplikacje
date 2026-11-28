@@ -53,7 +53,7 @@ function oknoKontaZTrasexu(u) {
   okno({
     tytul: 'Konto ' + u.imie,
     tresc: `
-      <div class="wstega info">Konto prowadzi <b>GK Trasy</b> — imię, login, hasło
+      <div class="wstega info">Konto prowadzi <b>Panel Zarządczy SP</b> — imię, login, hasło
         i wyłączenie konta zmieniasz tam. Auto przypisujesz tutaj:
         Flota → karta auta → <b>Kierowca</b>.</div>
       <div class="dwie-kolumny">
@@ -103,7 +103,7 @@ EKRANY.konta = {
 
     pole.innerHTML = `
       ${stan.kontaZPanelu ? `<div class="wstega info">Konta zakłada się w <b>Panelu
-        Kierownika → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
+        Zarządczym GK → Administracja</b> — jedna osoba, jedno konto we wszystkich aplikacjach
         GK. GK Flota pobiera je sama co kilka minut (Administracja → Ustawienia → Zaawansowane → Konta GK). ${stan.zespolGk
           ? `Konta <b>biura i kierowców</b> zakładasz też tutaj — „+ Dodaj konto” zapisuje
             je w Panelu.` : `Tutaj zostaje tylko awaryjny administrator.${zespol.powod
@@ -130,7 +130,7 @@ EKRANY.konta = {
           <tr${u.aktywny ? '' : ' class="slaby"'}>
             <td><b>${escHtml(u.imie)}</b>${u.aktywny ? ''
               : ' <span class="plakietka">wyłączone</span>'}${u.zrodlo === 'trasex'
-              ? ' <span class="plakietka p-wykonany">z GK Trasy</span>' : ''}${u.zrodlo === 'gk'
+              ? ' <span class="plakietka p-wykonany">z Panelu Zarządczego SP</span>' : ''}${u.zrodlo === 'gk'
               ? ' <span class="plakietka p-zatwierdzony">z Panelu</span>' : ''}
               ${u.telefon ? `<br><span class="slaby male">${escHtml(u.telefon)}</span>` : ''}</td>
             <td>${escHtml(u.login)}</td>
@@ -188,7 +188,7 @@ EKRANY.kierowcy = {
         <tbody>${konta.length ? konta.map(u => `
           <tr${u.aktywny ? '' : ' class="slaby"'}>
             <td><b>${escHtml(u.imie)}</b>${u.aktywny ? '' : ' <span class="plakietka">wyłączone</span>'}${u.zrodlo
-              === 'trasex' ? ' <span class="plakietka p-wykonany">z GK Trasy</span>' : ''}${u.zrodlo === 'gk'
+              === 'trasex' ? ' <span class="plakietka p-wykonany">z Panelu Zarządczego SP</span>' : ''}${u.zrodlo === 'gk'
               ? ' <span class="plakietka p-zatwierdzony">z Panelu</span>' : ''}
               ${u.telefon ? `<br><span class="slaby male">${escHtml(u.telefon)}</span>` : ''}</td>
             <td>${escHtml(u.login)}</td>
@@ -354,7 +354,7 @@ function oknoKontaLokalnegoKierowcy(u) {
     tytul: 'Konto ' + u.imie,
     tresc: `
       <div class="wstega info">To konto prowadzi sam <b>GK Flota</b> (nie pochodzi z Panelu Zarządczego GK) — zmienia je
-        administrator: Administracja → Konta. Auto przypisujesz tutaj: Flota → karta auta → <b>Kierowca</b>.</div>
+        administrator: Administracja → Pracownicy. Auto przypisujesz tutaj: Flota → karta auta → <b>Kierowca</b>.</div>
       <p class="slaby male">${escHtml(u.login)} · konto ${u.aktywny ? 'czynne' : 'wyłączone'}${u.pojazdy
         ? ` · auta: <b>${escHtml(u.pojazdy)}</b>` : ' · bez przypisanego auta'}.</p>`,
     przyciski: [{ napis: 'Zamknij', klik: z => z() }],
@@ -382,7 +382,7 @@ function oknoKontaZespolu(u) {
     tytul: nowy ? 'Nowe konto' : 'Konto ' + u.imie,
     tresc: `
       <div class="wstega info">${nowy ? 'Konto powstaje' : 'Konto jest'} w <b>Panelu
-        Kierownika</b> — jedno konto we wszystkich aplikacjach GK.</div>
+        Zarządczym GK</b> — jedno konto we wszystkich aplikacjach GK.</div>
       <div class="dwie-kolumny">
         <label>Imię i nazwisko *
           <input id="kz-imie" maxlength="120" autocomplete="off" placeholder="np. Jan Kowalski"
@@ -392,13 +392,13 @@ function oknoKontaZespolu(u) {
                  value="${escHtml(u ? u.telefon || '' : '')}"></label>
       </div>
       ${tylkoKierowcy ? `<p class="kz-rola-stala"><b>Rola:</b> Kierowca <span class="slaby">— swoje auto,
-          przeglądy i usterki; jest też kierowcą w GK Trasy. Konta biura i administratorów prowadzi
+          przeglądy i usterki; jest też kierowcą w Panelu Zarządczym SP. Konta biura i administratorów prowadzi
           administrator.</span></p>` : `<fieldset class="kz-role"><legend>Rola *</legend>
         ${ROLE_ZESPOLU.map(([kod, nazwa, opis]) => `
           <label class="plaska"><input type="checkbox" data-rola="${kod}"${role.has(kod)
             ? ' checked' : ''}> <span><b>${nazwa}</b> <span class="slaby">— ${opis}</span></span></label>
           ${kod === 'trasy_kierowca' ? '<p class="slaby male kz-podpowiedz">Kierowca jest też '
-            + 'kierowcą w GK Trasy.</p>' : ''}`).join('')}
+            + 'kierowcą w Panelu Zarządczym SP.</p>' : ''}`).join('')}
       </fieldset>`}
       ${nowy ? `<p class="wstega ok">Hasło startowe: <b>haslo123</b> — przy pierwszym logowaniu
           osoba ustawi własne hasło.</p>` : `

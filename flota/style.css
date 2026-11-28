@@ -17,7 +17,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'flotex-9be33c62ae97';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'flotex-8bec7130c36a';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -341,11 +341,16 @@ button.ikona-btn{border:0; background:none; font-size:19px; padding:0 10px; line
                min-height:var(--dotyk, 44px)}
 .szukaj-wiecej:hover,.szukaj-wiecej:focus-visible{background:var(--tlo-neutralne)}
 .szukaj-pusto{padding:12px 8px; color:var(--tekst-slaby)}
+@media (min-width:821px) { #btn-szukaj{display:none !important} }   /* spacja przed { celowo: testy szukają pierwszego bloku komputera */
 @media (max-width:820px){
-  /* Pole ma stałe minimum szerokości (dawniej 92–185 px zależnie od długości tytułu ekranu);
-     to tytuł się skraca wielokropkiem, a nie pole. */
-  .tytul{flex:0 1 auto; min-width:0}
-  .gora-szukaj{flex:1 1 120px; min-width:120px; margin-left:auto; max-width:240px}
+  /* P10 (właściciel 2026-11-27): na telefonie lupa jak w Panelu Zarządczym SP — pole rozwija się na cały nagłówek
+     (klasa .szuka na .gora), tytuł ekranu ma całą szerokość i nie jest ucinany. */
+  .gora-szukaj{display:none}
+  .gora{position:relative}
+  .gora.szuka .gora-szukaj{display:block; position:absolute; left:0; right:0; top:env(safe-area-inset-top); bottom:0;
+    flex:none; max-width:none; min-width:0; margin:0; padding:6px 56px 6px 12px; background:var(--marka-tlo); z-index:2}
+  .gora.szuka .gora-szukaj input{width:100%; min-height:44px; font-size:16px}
+  .gora.szuka #btn-szukaj{position:absolute; right:6px; top:env(safe-area-inset-top); z-index:3; height:var(--gora-wys)}
   .szukaj-wyniki{left:12px; right:12px; width:auto}
 }
 .stan-sieci-btn{padding:0 6px}
@@ -893,10 +898,17 @@ button.glowny.niszczacy,
 .konto-uwaga{font-size:14px; color:var(--zolty)}
 .konto-ok{font-size:14px; font-weight:600; color:var(--zielony)}
 .konto-push > * + *{margin-top:8px}
+/* Przegląd UI 2026-11-27 (jak hala.css): „Włącz powiadomienia” na pełną szerokość, jak „Sprawdź dźwięki” pod nim;
+   na telefonie trzy pigułki Wyglądu w jednym rzędzie (węższe dopełnienie; przy bardzo wąskim ekranie dalej się łamią);
+   trzecia linia nad oknem Moje konto — stała nazwa programu, jak w menu. */
+.konto-push > button{width:100%}
+.konto-kto .konto-program{font-size:12px; text-transform:uppercase; letter-spacing:.6px; opacity:.8}
 .wybor-wygladu{display:flex; flex-wrap:wrap; gap:8px}
 .wybor-wygladu button{min-height:44px; padding:0 14px; font-size:14px; border-radius:999px}
 .wybor-wygladu button[aria-pressed="true"]{background:var(--granat); border-color:var(--granat);
                                            color:var(--na-marce)}
+/* Przegląd UI 2026-11-27: na telefonie trzy pigułki Wyglądu w jednym rzędzie (375 px: 267 z 271 px; węższy ekran — łamie się). */
+@media (max-width:480px){.wybor-wygladu{gap:6px} .wybor-wygladu button{padding:0 6px}}
 
 /* ----------------------------------------------------------- komunikaty */
 /* Jak hala.css → .komunikaty (2026-10-16): nad dolnym paskiem i nad paskiem gestów
@@ -1081,6 +1093,10 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   .pasek-narzedzi select,.pasek-narzedzi input:not([type=checkbox]){min-width:132px; width:auto}
   .pasek-narzedzi label{flex:none}
   .pasek-narzedzi .chipy{flex-wrap:nowrap; margin:0}
+  /* Chipy Administracji na telefonie: jeden poziomo przewijany rząd jak w Panelu (STYL-GK §8; nocna kontrola 28.11 — były dwa wiersze). */
+  .chipy-admin{flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding-bottom:2px}
+  .chipy-admin::-webkit-scrollbar{display:none}
+  .chipy-admin .chip{flex:none; white-space:nowrap}
   .pasek-narzedzi .chip{white-space:nowrap}
   .flota-karty{display:block}
   .flota-tabela{display:none}
@@ -1193,3 +1209,46 @@ a.chip{display:inline-flex; align-items:center; text-decoration:none}
   *:not(.hala-reakcja-figura),*::before,*::after{animation-duration:.01ms !important; animation-iteration-count:1 !important;
     transition-duration:.01ms !important; scroll-behavior:auto !important}
 }
+
+/* ---------------------------------------------- „i” przy kafelkach Pulpitu (P13) i okno „Role i uprawnienia” (P14), 2026-11-27
+   Ten sam wygląd co w Panelu Zarządczym SP (wskazniki.css): kółko 20 px, na telefonie cel dotyku 44 px (kółko 28 px). */
+.miara-i{display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; position:relative;
+  box-sizing:border-box; width:20px; height:20px; min-height:0; min-width:0; margin:0 0 0 6px; padding:0;
+  border-radius:50%; border:1px solid var(--ramka-mocna); background:var(--pole-tlo); color:var(--tekst-slaby);
+  font:700 12px/1 system-ui,sans-serif; text-transform:none; letter-spacing:0; cursor:pointer; box-shadow:none}
+.miara-i::after{content:''; position:absolute; inset:-10px}
+.miara-i[aria-expanded="true"]{background:var(--granat); border-color:var(--granat); color:var(--na-marce)}
+.miara-i:focus-visible{outline:2px solid var(--akcent); outline-offset:2px}
+@media (max-width:820px){
+  .miara-i{width:44px; height:44px; margin:-8px -8px -8px -2px; border:0; font-size:15px;
+    background:radial-gradient(circle, var(--pole-tlo) 0 12.5px, var(--ramka-mocna) 13px 14px, transparent 14.5px)}
+  .miara-i::after{inset:0}
+  .miara-i[aria-expanded="true"]{background:radial-gradient(circle, var(--granat) 0 14px, transparent 14.5px)}
+}
+.miara-dymek{position:fixed; inset:auto; margin:0; box-sizing:border-box; gap:4px; padding:10px 12px; max-width:calc(100vw - 32px);
+  border:1px solid var(--ramka-mocna); border-radius:10px; background:var(--karta); color:var(--tekst); box-shadow:var(--cien-mocny);
+  font-size:14px; line-height:1.4; text-transform:none; letter-spacing:0; text-align:left}
+.miara-dymek:popover-open,.miara-dymek:not([popover]):not([hidden]){display:grid}
+.miara-dymek[hidden]{display:none}
+.miara-dymek b{font-size:14px}
+.miara-dymek span{color:var(--tekst-slaby)}
+.role-zasady h3,.role-opisy h3{margin:0 0 6px; font-size:15px}
+.role-zasady ol{margin:0 0 12px; padding-left:20px}
+.role-zasady li{margin:3px 0}
+.role-opisy dl{margin:0 0 10px}
+.role-opisy dt{font-weight:700; margin-top:6px}
+.role-opisy dd{margin:0; color:var(--tekst-slaby)}
+.role-legenda{margin:6px 0 8px}
+.role-tabela{border-collapse:collapse; width:100%; min-width:480px}
+.role-tabela thead th{position:sticky; top:0; background:var(--karta); text-align:center}
+.role-tabela thead th:first-child{text-align:left}
+.role-tabela tbody th[scope="row"]{font-size:14px; font-weight:500; text-transform:none; letter-spacing:0; color:var(--tekst); text-align:left}
+.role-tabela td{text-align:center; font-weight:700; vertical-align:middle}
+.role-tabela td .ik{margin:0}
+.role-tabela td.rola-tak{color:var(--zielony)}
+.role-tabela td.rola-czesc{color:var(--zolty)}
+.role-tabela td.rola-nie{color:var(--tekst-slaby); font-weight:400}
+.role-tabela .moja-rola{background:var(--nasze-tlo)}
+.role-tabela .role-grupa th{background:var(--tlo); text-align:left; font-size:12px}
+.role-tabela .rola-uwaga{display:block; font-size:12px; font-weight:400; color:var(--tekst-slaby); line-height:1.2}
+.role-opisy dt.moja-rola{color:var(--granat-tekst)}

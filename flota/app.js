@@ -6,7 +6,7 @@
    API, sprobuj). Pliki ekranow nic wlasnego w tych sprawach nie robia.
    Instrukcja "jak dodac ekran" stoi na samym koncu pliku.                   */
 
-const WERSJA_SKRYPTU = 'flotex-9be33c62ae97';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'flotex-8bec7130c36a';   // stempluje zbuduj.py
 
 /* localStorage tylko przez te trzy funkcje.
 
@@ -337,7 +337,7 @@ function miesiacSlownie(okres) {
    idą słowa. Kod spoza listy pokazujemy jak jest, z „_” zamienionym na spację. */
 const OPIS_USTERKI = { zgloszona: 'zgłoszona', w_naprawie: 'w naprawie', zamknieta: 'zamknięta' };
 const OPIS_WAGI = { drobna: 'drobna', powazna: 'poważna', unieruchamiajaca: 'unieruchamiająca' };
-const OPIS_ZRODLA = { telefon: 'telefon', biuro: 'biuro', przeglad: 'przegląd', trasex: 'GK Trasy' };
+const OPIS_ZRODLA = { telefon: 'telefon', biuro: 'biuro', przeglad: 'przegląd', trasex: 'Panel Zarządczy SP' };
 function opisKodu(mapa, kod) {
   return mapa[kod] || String(kod == null ? '' : kod).replace(/_/g, ' ');
 }
@@ -1865,7 +1865,7 @@ async function wejdzKodem(kod) {
     throw new Error('Serwer odpowiedział czymś, czego program nie rozumie. '
       + 'Sprawdź adres albo spróbuj za chwilę.');
   }
-  if (!odp.ok) throw new Error(wynik.blad || 'Nie udało się wejść z GK Trasy');
+  if (!odp.ok) throw new Error(wynik.blad || 'Nie udało się wejść z Panelu Zarządczego SP');
   zapomnijStanOsoby();
   stan.token = wynik.token;
   pamietaj('token', wynik.token);
@@ -1879,7 +1879,7 @@ async function wejdzKodem(kod) {
    i ekran „Moje auto". Adres sprawdzamy także tutaj, choć sprawdził go
    serwer: w pamięci przeglądarki może leżeć cokolwiek, a „javascript:"
    pod przyciskiem wykonałby cudzy kod w aplikacji floty. */
-const NAPIS_POWROTU = 'GK Trasy';          // przed napisem stoi ikona strzalka-lewo (htmlPowrotu)
+const NAPIS_POWROTU = 'Panel Zarządczy SP';          // przed napisem stoi ikona strzalka-lewo (htmlPowrotu)
 const htmlPowrotu = () => ikonka('strzalka-lewo') + escHtml(NAPIS_POWROTU);
 
 function adresPowrotu() {
@@ -2198,6 +2198,8 @@ function menuDlaRoli() {
    domyślny roli, i to jest celowe: kierowca po restarcie telefonu ma
    zobaczyć swoje auto, a nie ostatnie okno sprzed tygodnia.                 */
 async function pokazEkran(nazwa, parametry) {
+  // Dymek „i” (jak liczymy) nie zostaje nad innym ekranem po przejściu z Pulpitu (przegląd UI 2026-11-27).
+  if (typeof MiaryFloty !== 'undefined') MiaryFloty.zamknij();
   // Administrator ma „Konta” i „Ustawienia” jako zakładki jednej pozycji „Administracja” (STYL-GK §8). Stare
   // wejścia — hasz #ekran=…, wstęgi alarmów („Pokaż w Ustawieniach”), powiadomienia — trafiają tam same;
   // ekrany `konta` i `ustawienia` zostają w rejestrze, bo to one rysują zawartość zakładek.
@@ -2272,7 +2274,8 @@ async function wczytajSlowniki() {
        otwarciu, byłaby pusta dokładnie wtedy, kiedy jest potrzebna.         */
     const [pojazdy, kierowcy, ustawienia, instrukcje] = await Promise.all([
       API.get('/api/pojazdy'),
-      API.get('/api/kierowcy').catch(() => []),
+      // Przegląd UI 2026-11-27: kierowca nie pyta (403 = czerwony wpis w konsoli przy każdym wczytaniu).
+      jestBiuro() ? API.get('/api/kierowcy').catch(() => []) : Promise.resolve([]),
       API.get('/api/ustawienia'),
       API.get('/api/instrukcje').catch(() => []),
     ]);
@@ -2536,7 +2539,7 @@ function naKomputerze() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(min-width:821px)').matches;
 }
 function napisKodowQR() {
-  return naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon — kody QR';
+  return 'Kody QR aplikacji';     // jedna nazwa na telefonie i komputerze, jak w hali (przegląd 2026-11-27)
 }
 function maKodyQR() { return !!stan.uz && stan.uz.zrodlo === 'gk'; }
 
@@ -2585,10 +2588,10 @@ function drukujArkuszQR(html) {
 function oknoKodowAplikacji() {
   let lista = [];
   okno({
-    tytul: naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon',
+    tytul: 'Kody QR aplikacji',
     konto: true,
     tresc: `<p class="konto-drobne">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu
-        głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko i hasło);
+        głównego. Aplikacje hali, Panel Zarządczy SP i GK Flota — konto GK (imię i nazwisko i hasło);
         inne logowanie jest opisane przy aplikacji.</p>
       <div class="kody-aplikacji" id="kody-aplikacji"><p class="konto-drobne">Wczytuję…</p></div>`,
     // Jak w każdym oknie GK (2026-10-16): drugorzędny „Zamknij” obrysowany po lewej,
@@ -2714,7 +2717,7 @@ function oknoKonta() {
     tytul: 'Moje konto',
     konto: true,
     tresc: `
-      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(etykietaRoli(stan.uz))}</span></p>
+      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(etykietaRoli(stan.uz))}</span><span class="konto-program">GK Flota</span></p>
       <fieldset><legend>Wygląd</legend>
         <div class="wybor-wygladu" role="group" aria-label="Wygląd">${wyborWygladu()}</div>
         <p class="konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
@@ -2722,16 +2725,18 @@ function oknoKonta() {
       ${!jestBiuro() && telefonBiura() ? `<fieldset><legend>Biuro</legend>
         <p class="konto-drobne">${kontaktBiura()}</p></fieldset>` : ''}
       ${stan.uz.zrodlo === 'trasex'
-        ? `<p class="konto-drobne">Twoje konto prowadzi GK Trasy — tam zmieniasz hasło.
+        ? `<p class="konto-drobne">Twoje konto prowadzi Panel Zarządczy SP — tam zmieniasz hasło.
              Nowe zadziała tutaj samo po kilku minutach.</p>`
         : trescZmianyHasla()}
       ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${ikonka('telefon')}${napisKodowQR()}</button>` : ''}
-      <div class="przyciski-konta konto-pomoc"><button type="button" id="btn-instrukcja">Instrukcja</button></div>
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${escHtml(opisPowiadomien())}</p>
         <div id="push-konto" class="konto-push"><p class="konto-drobne">Sprawdzam…</p></div>
         ${poleDzwieku()}
       </fieldset>
+      <!-- Przegląd UI 2026-11-27: Instrukcja pod Powiadomieniami — ta sama kolejność co w Panelu Zarządczym GK. -->
+      <div class="przyciski-konta konto-pomoc"><button type="button" id="btn-instrukcja">${ikonka('dokument')}Instrukcja</button>
+        ${jestBiuro() ? `<button type="button" id="btn-role">${ikonka('zamek')}Role i uprawnienia</button>` : ''}</div>
       <fieldset><legend>Dane w tym urządzeniu</legend>
         ${jestBiuro() ? `<p class="konto-drobne">Gdy program w biurze nie odpowiada (np. trwa aktualizacja serwera), zatwierdzenie
             i zwrot przeglądu, zmiany usterek, auta, kierowcy i terminu czekają w tym komputerze, a po powrocie połączenia wysyłają
@@ -2785,6 +2790,12 @@ function oknoKonta() {
       }
       if (stan.uz.zrodlo !== 'trasex') podepnijZmianeHasla(pole);
       // Instrukcja jest zwykłą stroną z web/ (instrukcja.html) — jak w GK Trasy: działa też z GitHub Pages i bez zasięgu (sw.js).
+      // P14 (2026-11-27): „Role i uprawnienia” jak w Panelu Zarządczym SP — okno, „Wróć” wraca do Moje konto.
+      const przyciskRol = pole.querySelector('#btn-role');
+      if (przyciskRol) przyciskRol.onclick = () => {
+        zamknijOkno();
+        otworzRole(oknoKonta).catch(e => { komunikat(poLudzku(e), 'blad'); oknoKonta(); });
+      };
       pole.querySelector('#btn-instrukcja').onclick = () => window.open(`instrukcja.html?v=${typeof WERSJA_SKRYPTU === 'string' ? WERSJA_SKRYPTU : ''}`, '_blank', 'noopener');
       const kodyQR = pole.querySelector('#btn-kody-qr');
       if (kodyQR) kodyQR.onclick = oknoKodowAplikacji;

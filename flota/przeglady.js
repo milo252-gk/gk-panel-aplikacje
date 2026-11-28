@@ -561,6 +561,7 @@ EKRANY.usterki = {
             data-status="${s}">${s ? escHtml(opisKodu(OPIS_USTERKI, s)) : 'wszystkie'}</button>`).join('')}
         </div>
         ${polaSortowania(f.sortuj)}
+        ${przyciskCzyszczenia()}
       </div>
       ${lista.length ? lista.map(u => `
         <div class="pozycja s-${escHtml(u.status)}">
@@ -593,6 +594,7 @@ EKRANY.usterki = {
       b.onclick = () => { f.status = b.dataset.status; odswiezEkran(); };
     });
     pole.querySelector('#sortowanie').onchange = e => { f.sortuj = e.target.value; odswiezEkran(); };
+    podepnijCzyszczenie(pole);       // P12: przycisk „Czyszczenie” (tylko administrator) — administracja.js
     pole.querySelectorAll('[data-zamknij]').forEach(b => {
       b.onclick = () => oknoUsterki(lista.find(u => u.id === Number(b.dataset.zamknij)), token);
     });

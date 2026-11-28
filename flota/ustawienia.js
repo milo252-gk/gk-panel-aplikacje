@@ -91,7 +91,7 @@ EKRANY.ustawienia = {
         <summary>Zaawansowane</summary>
         <div class="zwijana-tresc">
       <p class="slaby male" style="margin-top:0">Poczta, tunel i adres dla telefonów, kopie
-        zapasowe, połączenia z Panelem Zarządczym GK i GK Trasy, trzymanie danych — ustawia się
+        zapasowe, połączenia z Panelem Zarządczym GK i Panelem Zarządczym SP, trzymanie danych — ustawia się
         je raz. Zmiany w polach zapisuje ten sam przycisk „Zapisz ustawienia” na dole.</p>
 
       <div class="karta" id="u-poczta">
@@ -461,8 +461,8 @@ function sekcjaKontGk(u) {
         <button class="niszczacy${polaczone ? '' : ' ukryty'}" id="u-hub-odlacz">Odłącz</button>
       </div>
       <p class="slaby male">„Przenieś konta do Panelu” robi się raz: konta biura i kierowcy
-        założeni tutaj trafiają do Panelu z obecnymi hasłami (kierowców z GK Trasy przenosi
-        GK Trasy). Awaryjny „admin” zostaje tylko tutaj.${
+        założeni tutaj trafiają do Panelu z obecnymi hasłami (kierowców z Panelu Zarządczego SP przenosi
+        Panel Zarządczy SP). Awaryjny „admin” zostaje tylko tutaj.${
         (s.do_przeniesienia || 0) ? ` Do przeniesienia: <b>${Number(s.do_przeniesienia)}</b>.` : ''}</p>
     </div>`;
 }
@@ -542,21 +542,21 @@ function sekcjaTrasexu(u) {
   const wlaczone = !!u.gk_klucz_ustawiony;
   return `
     <div class="karta">
-      <div class="karta-gora" id="u-polaczenie-gk"><h3>Połączenie z GK Trasy</h3>
+      <div class="karta-gora" id="u-polaczenie-gk"><h3>Połączenie z Panelem Zarządczym SP</h3>
         <span class="plakietka p-${wlaczone ? 'zatwierdzony' : 'oczekuje'}">${
           wlaczone ? 'klucz ustawiony' : 'wyłączone'}</span></div>
 
-      <p class="slaby male">GK Trasy pokazuje planiście, które auta są sprawne,
+      <p class="slaby male">Panel Zarządczy SP pokazuje planiście, które auta są sprawne,
       zakłada tu konta kierowców, przysyła przebieg, tankowania i usterki
-      z raportów dziennych, a kierowca wchodzi z GK Trasy do „Moje auto”
+      z raportów dziennych, a kierowca wchodzi z Panelu Zarządczego SP do „Moje auto”
       bez drugiego logowania.</p>
       ${wlaczone && u.gk_instancja_przypieta ? `<p class="slaby male">Klucza używa już
-        jedna instalacja GK Trasy. Inna (np. testowa kopia) dostanie odmowę — żeby
+        jedna instalacja Panelu Zarządczego SP. Inna (np. testowa kopia) dostanie odmowę — żeby
         przenieść połączenie na inny komputer, utwórz nowy klucz.</p>` : ''}
 
       <div id="u-gk-nowy" class="ukryty">
         <div class="wstega ok">Nowy klucz — widać go <b>tylko teraz</b>.
-          Wklej go w programie GK Trasy: <b>Ustawienia → GK Flota</b>.</div>
+          Wklej go w programie Panel Zarządczy SP: <b>Ustawienia → GK Flota</b>.</div>
         <div class="przyciski">
           <input id="u-gk-klucz" readonly autocomplete="off" spellcheck="false"
                  style="flex:1; min-width:0; font-family:monospace">
@@ -583,7 +583,7 @@ function podepnijTrasex(pole) {
   pole.querySelector('#u-gk-generuj').onclick = async () => {
     const byl = !wylacz.classList.contains('ukryty');
     if (byl && !await potwierdz('Utworzyć nowy klucz?',
-      'Stary klucz przestanie działać od razu — GK Trasy straci połączenie z GK Flota, '
+      'Stary klucz przestanie działać od razu — Panel Zarządczy SP straci połączenie z GK Flota, '
       + 'dopóki nie wkleisz mu nowego.', { tak: 'Nowy klucz', groznie: true })) return;
     const w = await sprobuj(() => API.post('/api/gk/nowy-klucz', {}));
     if (!w || !w.klucz) return;
@@ -614,12 +614,12 @@ function podepnijTrasex(pole) {
     }
   };
   wylacz.onclick = async () => {
-    if (!await potwierdz('Wyłączyć połączenie z GK Trasy?',
-      'GK Trasy przestanie widzieć stan aut i wysyłać raporty. Konta kierowców '
-      + 'z GK Trasy zostają. Żeby włączyć z powrotem, utworzysz nowy klucz.',
+    if (!await potwierdz('Wyłączyć połączenie z Panelem Zarządczym SP?',
+      'Panel Zarządczy SP przestanie widzieć stan aut i wysyłać raporty. Konta kierowców '
+      + 'z Panelu Zarządczego SP zostają. Żeby włączyć z powrotem, utworzysz nowy klucz.',
       { tak: 'Wyłącz', groznie: true })) return;
     if (!await sprobuj(() => API.post('/api/gk/nowy-klucz', { wylacz: true }),
-                       'Połączenie z GK Trasy wyłączone')) return;
+                       'Połączenie z Panelem Zarządczym SP wyłączone')) return;
     await wczytajSlowniki().catch(() => {});
     odswiezEkran();
   };

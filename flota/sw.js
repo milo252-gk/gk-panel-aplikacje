@@ -7,7 +7,7 @@
    nie siega, a zasieg komorkowy bywa jednokreskowy. Program ma sie tam otworzyc
    i przyjac komplet zdjec.                                                   */
 
-const WERSJA = 'flotex-9be33c62ae97';
+const WERSJA = 'flotex-8bec7130c36a';
 
 /* Zasoby wołamy ZE STEMPLEM wersji w adresie (?v=...). To jedyne, czego żadna
    pamięć podręczna nie obejdzie: po zmianie pliku zmienia się adres, więc stara

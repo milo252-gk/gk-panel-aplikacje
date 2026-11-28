@@ -7,6 +7,105 @@
    własna kopia tej reguły w przeglądarce rozjeżdżałaby się z tą, po której
    idą alarmy mailowe — i biuro widziałoby na ekranie inny kolor niż w skrzynce. */
 
+/* ------------------------------------------------------------ „i” przy kafelkach Pulpitu (P13, 2026-11-27)
+
+   Decyzja właściciela: kafelki Pulpitu mają „i” (jak liczymy) jak w Panelu Zarządczym GK i Panelu Zarządczym SP (STYL-GK §6);
+   zera zostają (0 po terminie to dobra wiadomość). Wzór: web/miary.js w Panelu Zarządczym SP (MiaryTras) — tu mniejsza kopia.
+   Teksty zgodne z flotex.py → a_pulpit i _alarmy_floty; zmieniasz regułę liczenia — zmień tekst tutaj. Kafelek to przycisk,
+   więc „i” jest spanem role="button", a dotknięcie „i” nie otwiera listy pod kafelkiem (faza przechwytywania). */
+const MiaryFloty = (() => {
+  const DEFINICJE = {
+    'po-terminie': { nazwa: 'Po terminie',
+      tekst: 'Terminy czynnych aut (badanie techniczne, OC, AC, serwis i inne), których data już minęła, a nikt ich nie odnowił.' },
+    'w-oknie': { nazwa: 'Terminy w najbliższych dniach',
+      tekst: 'Terminy czynnych aut, które mijają w najbliższych dniach — tyle dni, ile wpisano w Ustawieniach („Ostrzegaj na ile dni przed terminem”). Terminy po terminie liczą się osobno.' },
+    'zalegle': { nazwa: 'Zaległe przeglądy',
+      tekst: 'Czynne auta bez oddanego ani zatwierdzonego przeglądu w tym miesiącu (także przegląd odrzucony). Auto z przeglądem co kilka miesięcy liczy się tylko w miesiącu, w którym przegląd mu się należy.' },
+    'usterki': { nazwa: 'Otwarte usterki',
+      tekst: 'Usterki czynnych aut, które nie są zamknięte: zgłoszone i w naprawie.' },
+    'do-zatwierdzenia': { nazwa: 'Do zatwierdzenia',
+      tekst: 'Przeglądy oddane przez kierowców, które czekają na zatwierdzenie biura — ze wszystkich miesięcy. Bez przeglądów oddanych przez Ciebie: zatwierdza je ktoś inny.' },
+  };
+  const tytul = k => (DEFINICJE[k] ? `${DEFINICJE[k].nazwa} — ${DEFINICJE[k].tekst}` : '');
+  let dymek = null, otwarty = null, globalne = false;
+  function zamknij() {
+    if (!dymek) return;
+    if (dymek.hidePopover) { try { dymek.hidePopover(); } catch (e) { /* już zamknięty */ } } else dymek.hidden = true;
+    if (otwarty) otwarty.setAttribute('aria-expanded', 'false');
+    otwarty = null;
+  }
+  function pokaz(b) {
+    const d = DEFINICJE[b.dataset.info];
+    if (!d) return;
+    if (!dymek) {
+      dymek = document.createElement('div');
+      dymek.className = 'miara-dymek';
+      dymek.id = 'miara-dymek';
+      dymek.setAttribute('role', 'tooltip');
+      if ('popover' in dymek) {
+        dymek.setAttribute('popover', 'auto');
+        dymek.addEventListener('toggle', ev => {
+          if (ev.newState === 'closed' && otwarty) { otwarty.setAttribute('aria-expanded', 'false'); otwarty = null; }
+        });
+      } else {
+        dymek.hidden = true;
+      }
+      document.body.appendChild(dymek);
+    }
+    const ten = otwarty === b;
+    zamknij();
+    if (ten) return;
+    dymek.innerHTML = `<b>${escHtml(d.nazwa)}</b><span>${escHtml(d.tekst)}</span>`;
+    b.setAttribute('aria-expanded', 'true');
+    b.setAttribute('aria-controls', dymek.id);
+    otwarty = b;
+    if (dymek.showPopover) dymek.showPopover(); else dymek.hidden = false;
+    const r = b.getBoundingClientRect(), szer = Math.min(340, window.innerWidth - 32);
+    dymek.style.width = `${szer}px`;
+    const lewo = Math.max(16, Math.min(r.left + r.width / 2 - szer / 2, window.innerWidth - szer - 16));
+    const wys = dymek.offsetHeight;
+    const gora = r.bottom + 8 + wys > window.innerHeight - 8 ? Math.max(8, r.top - 8 - wys) : r.bottom + 8;
+    dymek.style.left = `${Math.round(lewo)}px`;
+    dymek.style.top = `${Math.round(gora)}px`;
+  }
+  function dolaczDoKafli(el) {
+    if (!el) return;
+    el.querySelectorAll('[data-miara]').forEach(kafel => {
+      const klucz = kafel.dataset.miara, d = DEFINICJE[klucz], etykieta = kafel.querySelector('.etykieta');
+      if (!d || !etykieta || etykieta.querySelector('.miara-i')) return;
+      const znak = document.createElement('span');
+      znak.className = 'miara-i';
+      znak.setAttribute('role', 'button');
+      znak.tabIndex = 0;
+      znak.dataset.info = klucz;
+      znak.setAttribute('aria-label', `Jak liczymy: ${d.nazwa}`);
+      znak.setAttribute('aria-expanded', 'false');
+      znak.title = tytul(klucz);
+      znak.textContent = 'i';
+      etykieta.appendChild(znak);
+    });
+    if (el.dataset.miaryFloty) return;
+    el.dataset.miaryFloty = '1';
+    el.addEventListener('click', ev => {
+      const b = ev.target.closest && ev.target.closest('.miara-i');
+      if (!b || !el.contains(b)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      pokaz(b);
+    }, true);
+    el.addEventListener('keydown', ev => {
+      const b = ev.target.closest && ev.target.closest('.miara-i');
+      if (b && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); ev.stopPropagation(); pokaz(b); }
+    }, true);
+    if (!globalne) {
+      globalne = true;
+      document.addEventListener('keydown', ev => { if (ev.key === 'Escape') zamknij(); });
+      document.addEventListener('click', ev => { if (dymek && !dymek.showPopover && !dymek.contains(ev.target)) zamknij(); });
+    }
+  }
+  return { DEFINICJE, dolaczDoKafli, zamknij };
+})();
+
 /* ------------------------------------------------------------ narzędzia */
 
 const RODZAJE_POJAZDU = ['osobowy', 'dostawczy', 'ciezarowy', 'przyczepa', 'maszyna'];
@@ -70,17 +169,17 @@ EKRANY.pulpit = {
           <span class="slaby male">${escHtml(miesiacSlownie(d.okres))}</span>
         </div>
         <div class="kafelki">
-          <button type="button" data-kafel="terminy" class="${klasa(kaf.po_terminie, 'pilne')}">
+          <button type="button" data-kafel="terminy" data-miara="po-terminie" class="${klasa(kaf.po_terminie, 'pilne')}">
             <span class="etykieta">Po terminie</span><b>${kaf.po_terminie || 0}</b></button>
-          <button type="button" data-kafel="terminy" class="${klasa(kaf.terminy_w_oknie, 'uwaga')}">
+          <button type="button" data-kafel="terminy" data-miara="w-oknie" class="${klasa(kaf.terminy_w_oknie, 'uwaga')}">
             <span class="etykieta">Terminy w ciągu ${Number(kaf.okno_dni) || 30} ${
               odmiana(Number(kaf.okno_dni) || 30, 'dnia', 'dni', 'dni')}</span><b>${
               kaf.terminy_w_oknie || 0}</b></button>
-          <button type="button" data-kafel="zalegle" class="${klasa(kaf.zalegle, 'uwaga')}">
+          <button type="button" data-kafel="zalegle" data-miara="zalegle" class="${klasa(kaf.zalegle, 'uwaga')}">
             <span class="etykieta">Zaległe przeglądy</span><b>${kaf.zalegle || 0}</b></button>
-          <button type="button" data-kafel="usterki" class="${klasa(kaf.usterki, 'uwaga')}">
+          <button type="button" data-kafel="usterki" data-miara="usterki" class="${klasa(kaf.usterki, 'uwaga')}">
             <span class="etykieta">Otwarte usterki</span><b>${kaf.usterki || 0}</b></button>
-          <button type="button" data-kafel="do-zatwierdzenia"
+          <button type="button" data-kafel="do-zatwierdzenia" data-miara="do-zatwierdzenia"
                   class="${klasa(kaf.do_zatwierdzenia, 'uwaga')}">
             <span class="etykieta">Do zatwierdzenia</span><b>${kaf.do_zatwierdzenia || 0}</b></button>
         </div>
@@ -123,6 +222,7 @@ EKRANY.pulpit = {
     pole.querySelectorAll('[data-kafel]').forEach(b => {
       b.onclick = () => otworzKafelPulpitu(b.dataset.kafel, pole);
     });
+    MiaryFloty.dolaczDoKafli(pole.querySelector('.kafelki'));     // P13: „i” (jak liczymy) przy każdym kafelku
     podepnijWstegiAlarmow(pole);
     const doInstrukcji = pole.querySelector('#p-do-instrukcji');
     if (doInstrukcji) doInstrukcji.onclick = () => pokazEkran('awaria');
@@ -473,7 +573,16 @@ function podepnijSzukajGora() {
   const komunikatPanelu = tekst => { panel.innerHTML = `<div class="szukaj-pusto">${escHtml(tekst)}</div>`; panel.hidden = false; };
   // Zmiana osoby: wynik wpisany przez poprzednią osobę nie może zostać w polu ani w panelu,
   // a odpowiedź, która jeszcze nie doszła, ma być odrzucona (licznik rośnie).
-  szukajWyczysc = () => { licznik++; clearTimeout(zegar); rozwiniete.clear(); pole.value = ''; zamknij(); };
+  // P10 (2026-11-27): na telefonie lupa rozwija pole na cały nagłówek (jak w Panelu Zarządczym SP); zamknięcie chowa je z powrotem.
+  const gora = document.querySelector('.gora');
+  const lupa = document.getElementById('btn-szukaj');
+  const zwin = () => { if (gora) gora.classList.remove('szuka'); if (lupa) lupa.setAttribute('aria-expanded', 'false'); };
+  if (lupa) lupa.onclick = () => {
+    const otwarte = !!gora && gora.classList.toggle('szuka');
+    lupa.setAttribute('aria-expanded', otwarte ? 'true' : 'false');
+    if (otwarte) pole.focus(); else { zamknij(); pole.value = ''; }
+  };
+  szukajWyczysc = () => { licznik++; clearTimeout(zegar); rozwiniete.clear(); pole.value = ''; zamknij(); zwin(); };
 
   async function szukaj() {
     const tekst = pole.value.trim();
@@ -503,7 +612,7 @@ function podepnijSzukajGora() {
     }).join('');
     panel.hidden = false;
     panel.querySelectorAll('.szukaj-wynik').forEach(b => {
-      b.onclick = () => { const x = wyniki[Number(b.dataset.nr)]; zamknij(); pole.value = ''; szukajOtworz(x, biuro); };
+      b.onclick = () => { const x = wyniki[Number(b.dataset.nr)]; zamknij(); pole.value = ''; zwin(); szukajOtworz(x, biuro); };
     });
     panel.querySelectorAll('.szukaj-wiecej').forEach(b => {
       b.onclick = () => { rozwiniete.add(b.dataset.grupa); szukaj(); };
@@ -513,7 +622,7 @@ function podepnijSzukajGora() {
   pole.addEventListener('input', () => { clearTimeout(zegar); rozwiniete.clear(); zegar = setTimeout(szukaj, 250); });
   pole.addEventListener('focus', () => { if (pole.value.trim().length >= SZUKAJ_MIN) szukaj(); });
   pole.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { zamknij(); pole.blur(); }
+    if (e.key === 'Escape') { zamknij(); pole.blur(); zwin(); }
     if (e.key === 'Enter') { clearTimeout(zegar); szukaj(); }
     if (e.key === 'ArrowDown') { const p = panel.querySelector('.szukaj-wynik'); if (p) { e.preventDefault(); p.focus(); } }
   });
@@ -524,7 +633,10 @@ function podepnijSzukajGora() {
     if (e.key === 'Escape') { zamknij(); pole.focus(); }
   });
   document.addEventListener('click', e => {
-    if (!e.target.closest('.gora-szukaj') && !e.target.closest('#szukaj-wyniki')) zamknij();
+    if (!e.target.closest('.gora-szukaj') && !e.target.closest('#szukaj-wyniki') && !e.target.closest('#btn-szukaj')) {
+      zamknij();
+      if (!pole.value.trim()) zwin();          // pusta lupa zwija się po dotknięciu obok; z wpisanym tekstem zostaje
+    }
   });
 }
 
