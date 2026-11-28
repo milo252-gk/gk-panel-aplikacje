@@ -567,6 +567,7 @@ EKRANY.trasy = {
         <button class="glowny" id="t-nowa">+ Nowa trasa</button>
         <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
         ${kontoBiura() ? `<button id="t-powtorz" title="Kopiuje trasy ostatniego dnia, w którym były, na ${polskaData(data)}">${ikonka('powtarzaj')}Powtórz wczoraj</button>` : ''}
+        ${przyciskCzyszczeniaTras()}
       </div>
       ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
       ${kierowcy.length ? '' : `<div class="wstega uwaga">
@@ -587,6 +588,7 @@ EKRANY.trasy = {
     pole.querySelector('#t-dzis').onclick = () => pokazEkran('trasy', { data: dzisiaj() });
     pole.querySelector('#t-nowa').onclick = () => oknoNowejTrasy(data, kierowcy);
     pole.querySelector('#t-import').onclick = () => pokazEkran('import');
+    podepnijCzyszczenieTras(pole);
     const powtorz = pole.querySelector('#t-powtorz');
     if (powtorz) powtorz.onclick = async () => {
       powtorz.disabled = true;
@@ -931,6 +933,7 @@ async function rysujListeTras(pole, data, kierowcy) {
       ${przelacznikWidokuTras('lista')}
       <button class="glowny" id="t-nowa">+ Nowa trasa</button>
       <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
+      ${przyciskCzyszczeniaTras()}
     </div>
     ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
     <div class="male slaby" style="margin-bottom:10px">Trasy od ${polskaData(od)} do ${polskaData(doDnia)}</div>
@@ -952,6 +955,7 @@ async function rysujListeTras(pole, data, kierowcy) {
   podepnijFiltry(pole, 'trasy', f, def, () => pokazEkran('trasy', { data, widok: 'lista' }));
   pole.querySelector('#t-nowa').onclick = () => oknoNowejTrasy(data, kierowcy);
   pole.querySelector('#t-import').onclick = () => pokazEkran('import');
+  podepnijCzyszczenieTras(pole);
   pole.querySelectorAll('[data-trasa]').forEach(b =>
     b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasa) }));
 }
@@ -989,6 +993,7 @@ async function rysujTydzienTras(pole, data, kierowcy) {
       <button id="t-wczoraj">${ikonka('strzalka-lewo')}Poprzedni tydzień</button><button id="t-jutro">Następny tydzień${ikonka('strzalka-prawo', 16, true)}</button>
       <button id="t-ten-tydzien">Ten tydzień</button>
       <button id="t-import">${ikonka('raporty')}Wczytaj z Excela</button>
+      ${przyciskCzyszczeniaTras()}
     </div>
     ${htmlFiltrow(f, def, widoczne.length, trasy.length)}
     <div class="male slaby" style="margin-bottom:10px">Tydzień ${polskaData(pon)} – ${polskaData(niedz)}</div>
@@ -1010,6 +1015,7 @@ async function rysujTydzienTras(pole, data, kierowcy) {
   pole.querySelector('#t-jutro').onclick = () => pokazEkran('trasy', { data: przesunDate(pon, 7), widok: 'tydzien' });
   pole.querySelector('#t-ten-tydzien').onclick = () => pokazEkran('trasy', { data: dzis, widok: 'tydzien' });
   pole.querySelector('#t-import').onclick = () => pokazEkran('import');
+  podepnijCzyszczenieTras(pole);
   pole.querySelectorAll('[data-nowa-na]').forEach(b => b.onclick = () => oknoNowejTrasy(b.dataset.nowaNa, kierowcy));
   pole.querySelectorAll('[data-trasa]').forEach(b =>
     b.onclick = () => pokazEkran('trasa', { id: Number(b.dataset.trasa) }));
@@ -3222,7 +3228,7 @@ function oknoKlienta(k) {
       ${nowy ? '' : `<label class="plaska"><input type="checkbox" id="kl-aktywny" ${k.aktywny ? 'checked' : ''}>
         Klient aktywny (odznacz, żeby schować z listy)</label>
         <div class="male slaby">Punkt na mapie: ${k.lat == null ? '<b>nie znaleziony</b>' : `${k.lat.toFixed(5)}, ${k.lon.toFixed(5)}`}</div>
-        <button class="maly" id="kl-geo" style="margin-top:6px">${ikonka('jakosc')}Znajdź adres na mapie</button>`}`,
+        <button class="maly" id="kl-geo" style="margin-top:6px">${ikonka('szukaj')}Znajdź adres na mapie</button>`}`,
     przyciski: [
       ...(nowy ? [] : [{ napis: 'Historia', klik: () => oknoHistoriiKlienta(k.id, k.nazwa) }]),
       ...(nowy ? [] : [{ napis: 'Przenieś do lokalizacji', ikona: 'fabryka', klik: async z => {
@@ -3531,7 +3537,7 @@ function godzinyMinuty(minuty) {
    bez zmian. Rola programu `admin` = Szef Sprzedaży (z roli huba trasy_admin) albo Menedżer (admin całego GK) — uprawnienia
    te same, ale konto Menedżera z Panelu serwer opisuje `etykieta_roli` = „Menedżer” („Rozróżnij w Trasach”,
    2026-11-19). Bez tego pola (starszy serwer) — nazwa roli z tej listy, jak dotąd. */
-const OPIS_ROLI = { admin: 'Szef Sprzedaży', biuro: 'Biuro', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd' };
+const OPIS_ROLI = { admin: 'Szef Sprzedaży', biuro: 'Biuro', kierowca: 'Kierowca', podglad: 'Podgląd' };
 function nazwaRoliKonta(x) {
   return (x && x.etykieta_roli) || OPIS_ROLI[x && x.rola] || (x && x.rola) || '';
 }
@@ -4151,7 +4157,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     // dopiero potem pytanie, inaczej sprawdzalibysmy stary klucz z bazy.
     pole.querySelector('#u-flotex-sprawdz').onclick = async () => {
       if (!val('u-flotex-klucz') && !ustawienia.flotex_klucz_ustawiony) {
-        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z GK Trasy)', 'blad');
+        komunikat('Wklej klucz z GK Flota (Ustawienia → Zaawansowane → Połączenie z Panelem Zarządczym SP)', 'blad');
         return;
       }
       const zapisane = await sprobuj(() => API.post('/api/ustawienia', {
@@ -4170,8 +4176,8 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
     };
     const flotexOdlacz = pole.querySelector('#u-flotex-zapomnij');
     if (flotexOdlacz) flotexOdlacz.onclick = async () => {
-      if (!await potwierdz('Odłączyć GK Trasy od GK Flota?',
-        'GK Trasy zapomni klucz. Kierowcy stracą „Moje auto”, a raporty przestaną iść do '
+      if (!await potwierdz('Odłączyć Panel Zarządczy SP od GK Flota?',
+        'Program zapomni klucz. Kierowcy stracą „Moje auto”, a raporty przestaną iść do '
         + 'GK Flota, dopóki nie wkleisz klucza ponownie.')) return;
       const w = await sprobuj(() => API.post('/api/flotex/zapomnij'), 'Odłączono');
       if (w) wrocDoUstawien();
@@ -4182,7 +4188,7 @@ async function rysujUstawieniaAdmina(pole, param, zakladka) {
       if (!w) return;
       komunikat(w.dodane
         ? `Dodano ${w.dodane} ${odmiana(w.dodane, 'auto', 'auta', 'aut')} z GK Flota`
-        : 'Wszystkie auta z GK Flota już są w programie GK Trasy', 'ok');
+        : 'Wszystkie auta z GK Flota już są w Panelu Zarządczym SP', 'ok');
       wrocDoUstawien();
     };
 
@@ -4280,20 +4286,23 @@ function kartaKontAdmina(ustawienia, u) {
 /* ===================================================== ADMINISTRACJA (administrator)
 
    Jedna pozycja menu administratora, wszędzie ta sama nazwa i ikona (STYL-GK §8), a w środku zakładki-pigułki jak w Panelu
-   Kierownika → Administracja: Konta · Dane i czyszczenie · Kody QR · Ustawienia. To jest nowe WEJŚCIE do istniejących
-   funkcji, nie nowe funkcje: Konta i Ustawienia rysuje ten sam kod co dotąd (rysujUstawieniaAdmina), czyszczenie tras to
-   to samo okno (oknoCzyszczeniaTras, /api/czyszczenie-tras), kody QR — to samo okno co w „Moje konto”. Stare wejścia
-   (#ustawienia, wstęgi alarmów) trafiają tu przez pokazEkran. Biuro nie ma tego ekranu — ma swoje „Ustawienia firmy”. */
+   Kierownika → Administracja: Pracownicy · Kody QR · Ustawienia. To jest nowe WEJŚCIE do istniejących funkcji, nie nowe
+   funkcje: Konta i Ustawienia rysuje ten sam kod co dotąd (rysujUstawieniaAdmina), kody QR — to samo okno co w „Moje konto”.
+   Stare wejścia (#ustawienia, wstęgi alarmów) trafiają tu przez pokazEkran. Biuro nie ma tego ekranu — ma swoje „Ustawienia firmy”.
+   Właściciel 2026-11-27 (jak w Panelu GK 26.11 bez chipu „Dane”): zakładki „Dane i czyszczenie” już nie ma — Czyszczenie tras
+   (to samo okno oknoCzyszczeniaTras, /api/czyszczenie-tras) otwiera przycisk „Czyszczenie” na ekranie Trasy. Stary parametr
+   { zakladka: 'dane' } trafia na pierwszą zakładkę. */
+// Przegląd UI 2026-11-27 (jak Panel, decyzja P3 z 27.11, STYL-GK §8): kolejność Pracownicy · części tej aplikacji · Kody QR ·
+// Role i uprawnienia · Ustawienia (techniczne) na końcu; każdy chip z ikoną liniową. Kody zakładek bez zmian.
 const ZAKLADKI_ADMINISTRACJI = [
-  { id: 'konta', napis: 'Pracownicy' },
-  { id: 'dane', napis: 'Dane i czyszczenie' },
-  { id: 'kody', napis: 'Kody QR' },
-  // Unifikacja E7 (2026-11-23): „Role i uprawnienia” jako chip-drzwi administratora (jak w Panelu) — otwiera to samo okno co „Moje konto”.
-  { id: 'role', napis: 'Role i uprawnienia', drzwi: true },
-  { id: 'ustawienia', napis: 'Ustawienia' },
+  { id: 'konta', napis: 'Pracownicy', ikona: 'konta' },
   // E6 (2026-11-24): dawne pozycje menu — chipy-drzwi do tych samych ekranów (widzi je całe biuro, jak dotąd).
-  { id: 'lokalizacje', napis: 'Miejsca wyjazdu', drzwi: true, ekran: 'lokalizacje' },
-  { id: 'zaproszenie', napis: 'Zaproś kierowcę', drzwi: true, ekran: 'zaproszenie' },
+  { id: 'zaproszenie', napis: 'Zaproś kierowcę', drzwi: true, ekran: 'zaproszenie', ikona: 'zaproszenie' },
+  { id: 'lokalizacje', napis: 'Miejsca wyjazdu', drzwi: true, ekran: 'lokalizacje', ikona: 'lokalizacje' },
+  { id: 'kody', napis: 'Kody QR', ikona: 'kody' },
+  // Unifikacja E7 (2026-11-23): „Role i uprawnienia” jako chip-drzwi administratora (jak w Panelu) — otwiera to samo okno co „Moje konto”.
+  { id: 'role', napis: 'Role i uprawnienia', drzwi: true, ikona: 'zamek' },
+  { id: 'ustawienia', napis: 'Ustawienia', ikona: 'ustawienia' },
 ];
 
 function kartaKodowQRAdmina() {
@@ -4316,7 +4325,7 @@ EKRANY.administracja = {
     stan.adminZakladka = zakladka;
     pole.innerHTML = `<div class="chipy" role="tablist" aria-label="Administracja">
         ${ZAKLADKI_ADMINISTRACJI.map(z => `<button type="button" class="chip ${z.id === zakladka ? 'wybrany' : ''}"
-          role="tab" aria-selected="${z.id === zakladka}" data-zakladka="${z.id}">${z.napis}</button>`).join('')}
+          role="tab" aria-selected="${z.id === zakladka}" data-zakladka="${z.id}">${ikonka(z.ikona)}${z.napis}</button>`).join('')}
       </div>
       <div id="admin-tresc"><div class="pusto">Wczytuję…</div></div>`;
     pole.querySelectorAll('[data-zakladka]').forEach(b =>
@@ -4330,10 +4339,7 @@ EKRANY.administracja = {
         if (b.dataset.zakladka !== stan.adminZakladka) pokazEkran('administracja', { zakladka: b.dataset.zakladka });
       });
     const tresc = pole.querySelector('#admin-tresc');
-    if (zakladka === 'dane') {
-      tresc.innerHTML = kartaCzyszczeniaTras();
-      podepnijCzyszczenieTras(tresc);
-    } else if (zakladka === 'kody') {
+    if (zakladka === 'kody') {
       tresc.innerHTML = kartaKodowQRAdmina();
       const b = tresc.querySelector('#a-kody-qr');
       if (b) b.onclick = oknoKodowAplikacji;
@@ -4404,7 +4410,7 @@ function oknoKonta_admin(k) {
                autocapitalize="none" placeholder="np. marek"></label>
       <label>Rola
         <select id="ko-rola" ${blok}>
-          <option value="kierowca" ${k.rola === 'kierowca' ? 'selected' : ''}>Kierowca GK Trasy — tylko swoje trasy i swój raport pracy</option>
+          <option value="kierowca" ${k.rola === 'kierowca' ? 'selected' : ''}>Kierowca — tylko swoje trasy i swój raport pracy</option>
           <option value="biuro" ${k.rola === 'biuro' ? 'selected' : ''}>Biuro — cała codzienna robota, bez Ustawień i kont</option>
           <option value="admin" ${k.rola === 'admin' ? 'selected' : ''}>Szef Sprzedaży — to co biuro, plus konta i Ustawienia</option>
           <option value="podglad" ${k.rola === 'podglad' ? 'selected' : ''}>Podgląd — tylko ogląda plan, niczego nie zmienia</option>
@@ -4454,7 +4460,7 @@ function oknoKontaZespolu(k) {
   const nowe = !k;
   k = k || { imie: '', telefon: '', aktywny: 1, role_zespolu: ['trasy_kierowca'] };
   const role = (stan.ustawienia.konta_zespolu || {}).role
-    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca GK Trasy' }, { kod: 'trasy_biuro', nazwa: 'Biuro' },
+    || [{ kod: 'trasy_kierowca', nazwa: 'Kierowca' }, { kod: 'trasy_biuro', nazwa: 'Biuro' },
         { kod: 'trasy_podglad', nazwa: 'Podgląd' }];
   const opisRoli = {
     trasy_kierowca: 'swoje trasy i raport pracy',
@@ -4556,7 +4562,7 @@ function oknoKontaZespolu(k) {
           baza: (document.getElementById('kz-baza') || {}).value || null,
         };
         if (!dane.nazwa) { pokazBlad('Podaj imię i nazwisko.'); return; }
-        if (!wybrane.length) { pokazBlad('Zaznacz rolę: Kierowca GK Trasy albo Biuro.'); return; }
+        if (!wybrane.length) { pokazBlad('Zaznacz rolę: Kierowca albo Biuro.'); return; }
         if (!nowe) dane.aktywny = document.getElementById('kz-aktywny').checked;
         // Zmieniona sama baza wyjazdowa — Panel nie ma tu nic do zapisania.
         const tylkoBaza = !nowe && dane.nazwa === k.imie && dane.telefon === (k.telefon || '')
@@ -4728,28 +4734,24 @@ function kartaKopii(u) {
     <p class="male slaby" style="margin-top:8px">Brak udanej kopii przez ponad dobę albo
       niedostępny folder włącza alarm: wstęgę na pulpicie i powiadomienie na telefonie
       administratora (najwyżej raz na 6 godzin). Jak przywrócić dane z kopii — instrukcja,
-      punkt 15.</p>`, 'u-kopie');
+      punkt 15.</p>
+    <p class="male slaby" id="u-czyszczenie-gdzie">Czyszczenie tras (usuwanie wybranych tras na stałe, z kopią bazy) jest
+      na ekranie <b>Trasy → Czyszczenie</b> — tylko dla Szefa Sprzedaży i Menedżera.</p>`, 'u-kopie');
 }
 
 /* Czyszczenie tras (administrator, 2026-11-04): jak „Czyszczenie zleceń” w Panelu Zarządczym GK — wybór konkretnych tras
-   z listy i usunięcie ich na stałe (z punktami, zdjęciami i podpisami). Serwer przed usunięciem robi kopię bazy. */
-function kartaCzyszczeniaTras() {
-  // Zakładka Administracja → Dane i czyszczenie: przycisk na wierzchu (nie w zwijanej sekcji pod „Zaawansowane”).
-  return `<div class="karta" id="u-czyszczenie-tras">
-    <h2>Czyszczenie tras</h2>
-    <p class="male slaby">Usuwa wybrane trasy <b>na stałe</b> — razem z punktami, zdjęciami i podpisami.</p>
-    <ul class="male slaby" style="margin:6px 0 12px;padding-left:20px">
-      <li>Przed usunięciem program robi pełną kopię bazy w folderze <code>kopie/</code> i trzyma ją 30 dni.</li>
-      <li><b>Kopia bazy nie zawiera zdjęć ani podpisów.</b> Usunięte pliki znikają też z archiwów zdjęć (<code>kopie/pliki-*.zip</code>)
-        i z kopii poza komputerem — nie da się ich odzyskać.</li>
-      <li>Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy, które już ruszyły.</li>
-    </ul>
-    <div class="przyciski"><button class="glowny" id="u-czysc-wybierz">Wybierz trasy do usunięcia…</button></div>
-  </div>`;
+   z listy i usunięcie ich na stałe (z punktami, zdjęciami i podpisami). Serwer przed usunięciem robi kopię bazy.
+   Od 2026-11-27 (właściciel; wzór: Panel GK → Zlecenia → Czyszczenie) jedynym wejściem jest przycisk „Czyszczenie” na górze
+   ekranu Trasy (każdy widok: dzień, tydzień, lista), widoczny tylko dla administratora programu (Szef Sprzedaży, Menedżer) —
+   dawna zakładka Administracja → „Dane i czyszczenie” zniknęła. Serwer bez zmian: /api/czyszczenie-tras z progiem „admin”. */
+function przyciskCzyszczeniaTras() {
+  return jestAdministratorem()
+    ? `<button id="t-czyszczenie" title="Usuń wybrane trasy na stałe (tylko Szef Sprzedaży i Menedżer)">${ikonka('czyszczenie')}Czyszczenie</button>`
+    : '';
 }
 
 function podepnijCzyszczenieTras(pole) {
-  const b = pole.querySelector('#u-czysc-wybierz');
+  const b = pole.querySelector('#t-czyszczenie');
   if (!b) return;
   b.onclick = async () => {
     const w = await sprobuj(() => API.post('/api/czyszczenie-tras', { lista: true }));
@@ -4761,14 +4763,22 @@ function oknoCzyszczeniaTras(trasy, ucieto) {
   const wiersz = t => `<label class="plaska" style="display:flex;gap:8px;align-items:flex-start;padding:4px 0">
       <input type="checkbox" data-trasa="${t.id}"> <span>${escHtml(t.data)} · ${escHtml(t.nazwa || 'bez nazwy')}
       <span class="slaby">· ${escHtml(t.kierowca_imie || 'bez kierowcy')} · ${t.ile_punktow} pkt · ${escHtml(etykietaStatusuTrasy(t.status))}</span></span></label>`;
+  // Opis skutków (dawniej na karcie w Administracji) — teraz na górze okna, bo okno otwiera się prosto z ekranu Trasy.
+  const opis = `<p class="male slaby" style="margin-top:0">Usuwa wybrane trasy <b>na stałe</b> — razem z punktami, zdjęciami i podpisami.</p>
+    <ul class="male slaby" id="cz-opis" style="margin:6px 0 12px;padding-left:20px">
+      <li>Przed usunięciem program robi pełną kopię bazy w folderze <code>kopie/</code> i trzyma ją 30 dni.</li>
+      <li><b>Kopia bazy nie zawiera zdjęć ani podpisów.</b> Usunięte pliki znikają też z archiwów zdjęć (<code>kopie/pliki-*.zip</code>)
+        i z kopii poza komputerem — nie da się ich odzyskać.</li>
+      <li>Zwykłe „Usuń trasę” przy trasie dalej tylko odwołuje trasy, które już ruszyły.</li>
+    </ul>`;
   okno({
     tytul: 'Czyszczenie tras',
     szerokie: true,
-    tresc: trasy.length
+    tresc: opis + (trasy.length
       ? `<label class="plaska"><input type="checkbox" id="cz-wszystkie"> <b>Zaznacz wszystkie (${trasy.length})</b></label>
          <div style="max-height:50vh;overflow:auto">${trasy.map(wiersz).join('')}</div>
          ${ucieto ? '<p class="male slaby">Pokazuję 500 najnowszych tras.</p>' : ''}`
-      : '<p class="slaby">Nie ma tras do wyboru.</p>',
+      : '<p class="slaby">Nie ma tras do wyboru.</p>'),
     przyciski: [
       { napis: 'Zamknij', klik: z => z() },
       ...(trasy.length ? [{ napis: 'Usuń zaznaczone', klasa: 'czerwony', klik: async z => {
@@ -5124,7 +5134,7 @@ function kartaFlotexu(u) {
         <input id="u-flotex-klucz" type="password" autocomplete="new-password"
                placeholder="${u.flotex_klucz_ustawiony
                  ? 'klucz jest zapisany — wklej nowy, żeby zmienić'
-                 : 'z GK Flota: Ustawienia → Zaawansowane → Połączenie z GK Trasy'}"></label>
+                 : 'z GK Flota: Ustawienia → Zaawansowane → Połączenie z Panelem Zarządczym SP'}"></label>
     </div>
     <div class="male ${u.flotex_klucz_ustawiony ? '' : 'slaby'}">
       ${u.flotex_klucz_ustawiony ? (ikonka('haczyk') + 'Klucz ustawiony') : 'Klucz nie jest ustawiony'}</div>
@@ -5321,7 +5331,7 @@ function podepnijKontaGK(pole, ustawienia) {
   };
   const odlacz = przycisk('u-hub-zapomnij');
   if (odlacz) odlacz.onclick = async () => {
-    if (!await potwierdz('Odłączyć GK Trasy od Panelu?',
+    if (!await potwierdz('Odłączyć Panel Zarządczy SP od Panelu Zarządczego GK?',
       'Program zapomni klucz Panelu i nie połączy się sam od nowa. Konta z Panelu zostają i działają, '
       + 'ale od teraz zmienia się je tutaj — Panel przestanie je aktualizować.')) return;
     const w = await sprobuj(() => API.post('/api/konta-gk/zapomnij'), 'Odłączono');

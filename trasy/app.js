@@ -1,7 +1,7 @@
 /* Rdzen aplikacji: logowanie, przelaczanie ekranow, rozmowa z serwerem
    i wysylanie kolejki offline.                                              */
 
-const WERSJA_SKRYPTU = 'trasex-7123d88a05e8';   // stempluje zbuduj.py
+const WERSJA_SKRYPTU = 'trasex-e43a8c0e5335';   // stempluje zbuduj.py
 
 /* Pamięć przeglądarki (localStorage) — wyłącznie przez Pamiec i ZAWSZE
    z przedrostkiem „gk-trasy.”.
@@ -1899,7 +1899,7 @@ function pokazLogowanie() {
   pokazInfoKont();
 }
 
-/* „Konto zakłada Szef Sprzedaży albo Menedżer (Panel Zarządczy GK → Administracja).” — tylko
+/* „Konto zakłada Menedżer w Panelu Zarządczym GK → Administracja.” (jak w Panelu i Flocie, STYL-GK §2) — tylko
    gdy konta naprawdę przychodzą z Panelu. Pyta /api/zyje (bez logowania);
    brak odpowiedzi = brak linii, logowanie na to nie czeka. Ta sama odpowiedź
    mówi, czy konta są już w D43 (stan.trybD43, klucz 'd43' w pamięci — bez zmian; pole logowania i tak „Hasło”). */
@@ -2078,7 +2078,7 @@ async function poZalogowaniuPonownie(poprzedni, ekran) {
 /* Nazwy ról widoczne w Moim koncie (decyzja właściciela 2026-11-19) — kody ról bez zmian. `admin` programu pochodzi z roli
    huba trasy_admin (Szef Sprzedaży) albo admin huba (Menedżer). Uprawnienia te same; nazwę KONTA podaje serwer
    (`etykieta_roli`: „Menedżer” dla Menedżera z Panelu). Bez niej (starszy serwer, profil sprzed zmiany) — ta lista. */
-const NAZWA_ROLI = { admin: 'Szef Sprzedaży', biuro: 'Biuro', kierowca: 'Kierowca GK Trasy', podglad: 'Podgląd' };
+const NAZWA_ROLI = { admin: 'Szef Sprzedaży', biuro: 'Biuro', kierowca: 'Kierowca', podglad: 'Podgląd' };
 function etykietaRoli(u) {
   return (u && u.etykieta_roli) || NAZWA_ROLI[u && u.rola] || (u && u.rola) || '';
 }
@@ -2161,6 +2161,8 @@ function pozycjaMenuEkranu(nazwa) {
 }
 
 async function pokazEkran(nazwa, parametry) {
+  // Dymek „i” (jak liczymy) nie zostaje nad innym ekranem po przejściu z Pulpitu albo Wskaźników (przegląd UI 2026-11-27).
+  if (typeof MiaryTras !== 'undefined') MiaryTras.zamknij();
   if (STARE_EKRANY[nazwa]) {          // „Terminowość planowania” jest sekcją Raportu pracy (2026-11-23)
     parametry = Object.assign({}, parametry, STARE_EKRANY[nazwa][1]);
     nazwa = STARE_EKRANY[nazwa][0];
@@ -2227,6 +2229,8 @@ function zamknijMenu() {
    magazynów biuro dalej widziało w trasie stan sprzed zmiany. Kopia w pamięci
    służy już tylko na wypadek braku sieci.                                     */
 async function odswiezLokalizacje() {
+  // Podgląd nie ma dostępu do miejsc wyjazdu (serwer: 403) — bez zapytania, bez błędu w konsoli (przegląd UI 2026-11-27).
+  if (jestPodgladem()) return (stan.lokalizacje = stan.lokalizacje || []);
   try {
     stan.lokalizacje = await API.get('/api/lokalizacje');
   } catch (e) {
@@ -2464,7 +2468,7 @@ function naKomputerze() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(min-width:821px)').matches;
 }
 function napisKodowQR() {
-  return naKomputerze() ? (ikonka('telefon') + 'Kody QR aplikacji') : (ikonka('telefon') + 'Aplikacje na telefon — kody QR');
+  return ikonka('telefon') + 'Kody QR aplikacji';     // jedna nazwa na telefonie i komputerze, jak w hali (przegląd 2026-11-27)
 }
 function maKodyQR() { return !!stan.uz && stan.uz.zrodlo === 'gk'; }
 
@@ -2516,10 +2520,10 @@ function drukujArkuszQR(html) {
 function oknoKodowAplikacji() {
   let lista = [];
   okno({
-    tytul: naKomputerze() ? 'Kody QR aplikacji' : 'Aplikacje na telefon', ikona: 'telefon',
+    tytul: 'Kody QR aplikacji', ikona: 'telefon',
     konto: true,
     tresc: `<p class="konto-drobne">Zeskanuj kod aparatem telefonu, otwórz stronę i dodaj ją do ekranu
-        głównego. Aplikacje hali, GK Trasy i GK Flota — konto GK (imię i nazwisko oraz hasło);
+        głównego. Aplikacje hali, Panel Zarządczy SP i GK Flota — konto GK (imię i nazwisko oraz hasło);
         inne logowanie jest opisane przy aplikacji.</p>
       <div class="kody-aplikacji" id="kody-aplikacji"><p class="konto-drobne">Wczytuję…</p></div>`,
     // Jak w każdym oknie GK (2026-10-16): drugorzędny „Zamknij” obrysowany po lewej,
@@ -2636,17 +2640,13 @@ function oknoKonta() {
     tytul: 'Moje konto',
     konto: true,
     tresc: `
-      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(etykietaRoli(stan.uz))}</span></p>
+      <p class="konto-kto"><b>${escHtml(stan.uz.imie)}</b><span>${escHtml(etykietaRoli(stan.uz))}</span><span class="konto-program">Panel Zarządczy SP</span></p>
       <fieldset><legend>Wygląd</legend>
         <div class="wybor-wygladu" role="group" aria-label="Wygląd">${wyborWygladu()}</div>
         <p class="konto-drobne">Dotyczy tego urządzenia, nie konta — zostaje po wylogowaniu.</p>
       </fieldset>
       ${trescZmianySekretu(zmien)}
       ${maKodyQR() ? `<button type="button" class="konto-aplikacje" id="btn-kody-qr">${napisKodowQR()}</button>` : ''}
-      <div class="przyciski-konta konto-pomoc">
-        <button type="button" id="btn-instrukcja">Instrukcja</button>
-        ${kontoBiura() ? '<button type="button" id="btn-role">Role i uprawnienia</button>' : ''}
-      </div>
       <fieldset><legend>Powiadomienia</legend>
         <p class="konto-drobne">${jestBiuro()
           ? 'Nieudana dostawa i raport z usterkami — od razu, także przy zamkniętej aplikacji.'
@@ -2654,6 +2654,11 @@ function oknoKonta() {
         <div id="push-konto" class="konto-push"><p class="konto-drobne">Sprawdzam…</p></div>
         ${poleDzwieku()}
       </fieldset>
+      <!-- Przegląd UI 2026-11-27: Instrukcja (i Role i uprawnienia) pod Powiadomieniami — ta sama kolejność co w Panelu Zarządczym GK. -->
+      <div class="przyciski-konta konto-pomoc">
+        <button type="button" id="btn-instrukcja">${ikonka('dokument')}Instrukcja</button>
+        ${kontoBiura() ? `<button type="button" id="btn-role">${ikonka('zamek')}Role i uprawnienia</button>` : ''}
+      </div>
       <fieldset><legend>Dane w tym urządzeniu</legend>
         ${kontoBiura() ? `<p class="konto-drobne">Gdy program w biurze nie odpowiada (np. trwa aktualizacja serwera), zmiany i niezapisane
             formularze czekają w tym komputerze, a po powrocie połączenia wysyłają się same. Nowych tras, punktów, klientów, aut
@@ -2775,11 +2780,15 @@ function odswiezPasekDzwieku() {
   pasek.dataset.stan = stanu;
   // Wspólny wzór paska (STYL-GK §6b): jedna linia, ikona, tekst, przycisk „Włącz”. Gdy dźwięk jest włączony w Moim koncie,
   // a przeglądarka czeka na dotknięcie, pasek nie może twierdzić, że jest wyłączony.
+  // Decyzja właściciela 2026-11-27 (P15): przy przeglądarce czekającej na gest — „Dotknij…” na ekranie dotykowym, „Kliknij…”
+  // przy myszce (komputer). Wykrycie jak w CSS: (pointer: coarse) = palec.
+  const dotyk = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   pasek.title = stanu === 'wylaczony'
     ? 'Dźwięk powiadomień jest wyłączony — nie usłyszysz nieudanej dostawy.'
-    : 'Przeglądarka jeszcze nie wpuściła dźwięku — dotknij, żeby go włączyć.';
+    : `Przeglądarka jeszcze nie wpuściła dźwięku — ${dotyk ? 'dotknij' : 'kliknij'}, żeby go włączyć.`;
   pasek.innerHTML = ikonka('glos-wyl')
-    + '<span class="baner-tekst">' + (stanu === 'wylaczony' ? 'Dźwięk wyłączony — włącz' : 'Dotknij, aby włączyć dźwięk') + '</span>'
+    + '<span class="baner-tekst">' + (stanu === 'wylaczony' ? 'Dźwięk wyłączony — włącz'
+      : (dotyk ? 'Dotknij, aby włączyć dźwięk' : 'Kliknij, aby włączyć dźwięk')) + '</span>'
     + '<button type="button" class="maly" id="btn-wlacz-dzwiek">Włącz</button>';
   pasek.querySelector('#btn-wlacz-dzwiek').onclick = () => {
     Dzwiek.ustaw(true);

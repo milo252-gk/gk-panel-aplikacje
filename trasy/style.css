@@ -13,7 +13,7 @@
 
 :root{
   color-scheme:light;
-  --wersja-arkusza:'trasex-7123d88a05e8';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
+  --wersja-arkusza:'trasex-e43a8c0e5335';   /* stempluje zbuduj.py — NIGDY dwa razy w tym pliku */
 
   /* ---- A) BARWY MARKI -------------------------------------------------
      Wzięte wprost z firmowych znaków — próbkowane z plików logo, nie dobrane
@@ -667,10 +667,17 @@ button.glowny.niszczacy,
 .konto-uwaga{font-size:14px; color:var(--zolty)}
 .konto-ok{font-size:14px; font-weight:600; color:var(--zielony)}
 .konto-push > * + *{margin-top:8px}
+/* Przegląd UI 2026-11-27 (jak hala.css): „Włącz powiadomienia” na pełną szerokość, jak „Sprawdź dźwięki” pod nim;
+   na telefonie trzy pigułki Wyglądu w jednym rzędzie (węższe dopełnienie; przy bardzo wąskim ekranie dalej się łamią);
+   trzecia linia nad oknem Moje konto — stała nazwa programu, jak w menu. */
+.konto-push > button{width:100%}
+.konto-kto .konto-program{font-size:12px; text-transform:uppercase; letter-spacing:.6px; opacity:.8}
 .wybor-wygladu{display:flex; flex-wrap:wrap; gap:8px}
 .wybor-wygladu button{min-height:44px; padding:0 14px; font-size:14px; border-radius:999px}
 .wybor-wygladu button[aria-pressed="true"]{background:var(--granat); border-color:var(--granat);
                                            color:var(--na-marce)}
+/* Przegląd UI 2026-11-27: na telefonie trzy pigułki Wyglądu w jednym rzędzie (375 px: 267 z 271 px; węższy ekran — łamie się). */
+@media (max-width:480px){.wybor-wygladu{gap:6px} .wybor-wygladu button{padding:0 6px}}
 
 /* --------------------------------------------------------------- podpis */
 /* Płótno podpisu jest KARTKĄ, nie elementem interfejsu — zostaje białe także

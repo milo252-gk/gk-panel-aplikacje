@@ -39,7 +39,7 @@ EKRANY.zaproszenie = {
         <b>Aplikacja otworzy się wszędzie, ale program w biurze nie ma teraz adresu
         w internecie.</b> Kierowca zobaczy ekran logowania i nic więcej, dopóki tunel
         nie ruszy (Ustawienia → Zaawansowane → Dostęp z internetu; zwykle wystarczy uruchomić
-        GK Trasy jeszcze raz).</div>` : ''}
+        program Panel Zarządczy SP jeszcze raz).</div>` : ''}
 
       ${naGithubie && daneWSwiat && z.pages && !z.pages.adres_aktualny ? `<div class="wstega uwaga">
         Panel Zarządczy GK jeszcze nie wpisał nowego adresu tunelu na GitHub Pages — zwykle
@@ -48,7 +48,7 @@ EKRANY.zaproszenie = {
 
       ${naGithubie && z.pages && z.pages.starsza && admin ? `<div class="wstega uwaga">
         Na GitHub Pages jest jeszcze starsza wersja aplikacji niż program w biurze — Panel
-        Kierownika wysyła nową sam. Jeśli to nie minie, sprawdź <b>Ustawienia → Zaawansowane → Adres dla telefonów</b>.</div>` : ''}
+        Zarządczy GK wysyła nową sam. Jeśli to nie minie, sprawdź <b>Ustawienia → Zaawansowane → Adres dla telefonów</b>.</div>` : ''}
 
       ${tunelowy && !z.adres_trwaly ? `<div class="wstega uwaga">
         <b>Ten adres zmieni się po ponownym uruchomieniu programu.</b> Nie drukuj tego

@@ -1,6 +1,6 @@
 {
   "name": "Panel Zarządczy SP",
-  "short_name": "GK Trasy",
+  "short_name": "Panel SP",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
